@@ -59,3 +59,16 @@ Thumbs.db
 .yarn/install-state.gz
 .pnp.*
 **/local.settings.json
+
+# Environment variables
+# Never commit environment files containing sensitive keys.
+.env
+.env.local
+.env.*.local
+
+data
+config.ini
+
+# TLS certificates and private keys generated at test runtime
+*.cert.pem
+*.key.pem
