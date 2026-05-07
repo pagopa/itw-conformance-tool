@@ -1,0 +1,52 @@
+import { logger } from '@itw-conformance-tool/logger';
+import closeWithGrace from 'close-with-grace';
+import Fastify from 'fastify';
+import fp from 'fastify-plugin';
+
+import bootstrap from './app.js';
+
+async function startServer() {
+  const app = Fastify({
+    loggerInstance: logger,
+    // Apply recommended timeouts to prevent slow or idle clients from holding connections open
+    connectionTimeout: 120_000,
+    requestTimeout: 60_000,
+    keepAliveTimeout: 10_000,
+    http: {
+      headersTimeout: 15_000
+    },
+    ajv: {
+      customOptions: {
+        coerceTypes: 'array', // change type of data to match type keyword
+        removeAdditional: 'all' // Remove additional body properties
+      }
+    }
+  });
+
+  app.register(fp(bootstrap));
+
+  closeWithGrace(async ({ signal, err }) => {
+    if (err) {
+      app.log.error({ err }, 'server closing with error');
+    } else {
+      app.log.info(`${signal} received, server closing`);
+    }
+    await app.close();
+  });
+
+  await app.ready();
+
+  // Start server
+  try {
+    await app.listen({
+      host: app.config.HOST,
+      port: app.config.PORT,
+      listenTextResolver: (address) => `IT Wallet Credential Issuer listening on ${address}`
+    });
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+
+startServer();

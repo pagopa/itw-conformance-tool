@@ -1,0 +1,31 @@
+{
+  "name": "itw-relying-party",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/main.js",
+  "imports": {
+    "#/*": "./dist/*"
+  },
+  "scripts": {
+    "clean": "rimraf dist out-tsc node_modules"
+  },
+  "dependencies": {
+    "@fastify/autoload": "catalog:fastify",
+    "@fastify/cors": "catalog:fastify",
+    "@fastify/env": "catalog:fastify",
+    "@fastify/helmet": "catalog:fastify",
+    "@fastify/sensible": "catalog:fastify",
+    "@fastify/swagger": "catalog:fastify",
+    "@fastify/swagger-ui": "catalog:fastify",
+    "@pagopa/io-wallet-oauth2": "catalog:pagopa",
+    "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
+    "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
+    "@pagopa/io-wallet-oid4vp": "catalog:pagopa",
+    "@pagopa/io-wallet-utils": "catalog:pagopa",
+    "@itw-conformance-tool/logger": "workspace:",
+    "close-with-grace": "^2.5.0",
+    "fastify": "catalog:fastify",
+    "fastify-plugin": "catalog:fastify",
+    "zod": "catalog:"
+  }
+}
