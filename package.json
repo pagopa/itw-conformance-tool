@@ -1,0 +1,14 @@
+{
+  "name": "itw-conformance-tool",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "devDependencies": {
+    "nx": "22.7.1",
+    "@changesets/cli": "^2.29.3",
+    "husky": "^9.1.7",
+    "prettier": "^3.8.1",
+    "rimraf": "catalog:",
+    "typescript": "catalog:"
+  }
+}
