@@ -47,6 +47,60 @@ Run tests:
 pnpm test
 ```
 
+## Commands
+
+All commands can be run from the workspace root. They delegate to **Nx** and operate on every project in the monorepo unless a filter is specified.
+
+### Root-level `pnpm` scripts
+
+| Command | Description |
+|---------|-------------|
+| `pnpm build` | Build all projects (respects Nx dependency order and cache) |
+| `pnpm start` | Start all runnable apps |
+| `pnpm test` | Run unit tests for all projects |
+| `pnpm test:e2e` | Run end-to-end tests for all projects |
+| `pnpm typecheck` | Type-check all projects with `tsc --noEmit` |
+| `pnpm lint` | Lint all projects with ESLint |
+| `pnpm format` | Format all projects with Prettier |
+| `pnpm clean` | Reset Nx cache and remove `node_modules` and `.nx` |
+
+### Targeting a single project with Nx
+
+Use `nx run <project>:<target>` to execute a target on a specific project, e.g.:
+
+```bash
+# Build only the credential issuer app
+nx run itw-credential-issuer:build
+
+# Run unit tests with watch mode
+nx run itw-credential-issuer:test --watch
+
+# Start the credential issuer locally
+nx run itw-credential-issuer:start
+```
+
+Or use the equivalent `pnpm --filter` syntax:
+
+```bash
+pnpm --filter itw-credential-issuer build
+pnpm --filter itw-credential-issuer test
+pnpm --filter itw-credential-issuer start
+```
+
+### Nx cache
+
+Nx caches build and test outputs automatically. To force a clean run without cache, append `--skip-nx-cache`:
+
+```bash
+nx run itw-credential-issuer:build --skip-nx-cache
+```
+
+To wipe the full Nx cache:
+
+```bash
+pnpm clean
+```
+
 ## Repository Structure
 
 This is a **pnpm + Nx monorepo**.

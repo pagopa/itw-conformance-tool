@@ -3,6 +3,17 @@
   "version": "0.0.1",
   "private": true,
   "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "start": "nx run-many -t start",
+    "build": "nx run-many -t build",
+    "typecheck": "nx run-many -t typecheck",
+    "format": "nx run-many -t format",
+    "lint": "nx run-many -t lint --",
+    "test": "nx run-many -t test",
+    "test:e2e": "nx run-many -t test:e2e",
+    "clean": "nx reset && rimraf node_modules .nx",
+    "prepare": "husky"
+  },
   "devDependencies": {
     "nx": "22.7.1",
     "@changesets/cli": "^2.29.3",
