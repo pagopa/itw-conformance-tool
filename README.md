@@ -149,6 +149,16 @@ The suite is built on PagoPA's own wallet protocol libraries:
 - [OpenID4VCI](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html)
 - [OpenID4VP](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
 
+## Git Hooks
+
+This repository uses [Husky](https://typicode.github.io/husky/) to run automated checks before commits are recorded.
+
+| Hook         | Command          | What it does                                           |
+| ------------ | ---------------- | ------------------------------------------------------ |
+| `pre-commit` | `pnpm pre-commit` | Runs lint and type-check on Nx-affected projects only |
+
+Hooks are installed automatically during `pnpm install` via the `prepare` lifecycle script. No manual setup is required.
+
 ## Contributing
 
 Contributions are welcome. Please open an issue or a pull request. See [CODEOWNERS](CODEOWNERS) for maintainers.
