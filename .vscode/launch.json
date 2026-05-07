@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug itw-credential-issuer with Nx",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "serve", "itw-credential-issuer"],
+      "env": {
+        "NODE_OPTIONS": "--inspect=9228"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/apps/itw-credential-issuer/dist/**/*.(m|c|)js", "!**/node_modules/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug itw-relying-party with Nx",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "serve", "itw-relying-party"],
+      "env": {
+        "NODE_OPTIONS": "--inspect=9229"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/apps/itw-relying-party/dist/**/*.(m|c|)js", "!**/node_modules/**"]
+    }
+  ]
+}
