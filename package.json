@@ -1,5 +1,5 @@
 {
-  "name": "@itw-conformance-tool/source",
+  "name": "itw-conformance-tool",
   "private": true,
   "type": "module",
   "scripts": {
