@@ -24,11 +24,11 @@ catalogs:
     fastify-plugin: '^5.0.1'
 
   pagopa:
-    '@pagopa/io-wallet-oauth2': '1.2.1'
-    '@pagopa/io-wallet-oid-federation': '1.2.1'
-    '@pagopa/io-wallet-oid4vci': '1.2.1'
-    '@pagopa/io-wallet-oid4vp': '1.2.1'
-    '@pagopa/io-wallet-utils': '1.2.1'
+    '@pagopa/io-wallet-oauth2': '1.4.0'
+    '@pagopa/io-wallet-oid-federation': '1.4.0'
+    '@pagopa/io-wallet-oid4vci': '1.4.0'
+    '@pagopa/io-wallet-oid4vp': '1.4.0'
+    '@pagopa/io-wallet-utils': '1.4.0'
 
 cleanupUnusedCatalogs: true
 linkWorkspacePackages: true
