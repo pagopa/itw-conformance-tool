@@ -1,6 +1,6 @@
 # ITW Conformance Tool
 
-An open-source conformance testing suite to verify that Wallet Solution implementations comply with the [Italian IT Wallet ecosystem](https://italia.github.io/eid-wallet-it-docs/versione-corrente/en). 
+An open-source conformance testing suite to verify that Wallet Solution implementations comply with the [Italian IT Wallet ecosystem](https://italia.github.io/eid-wallet-it-docs/versione-corrente/en).
 
 ## Overview
 
@@ -22,10 +22,10 @@ The tool operates by running a Credential Issuer or Relying Party instance that 
 
 ## Prerequisites
 
-| Tool | Version |
-|------|---------|
-| Node.js | see [`.node-version`](.node-version) |
-| pnpm | `10.30.3` |
+| Tool    | Version                |
+| ------- | ---------------------- |
+| Node.js | see [`.nvmrc`](.nvmrc) |
+| pnpm    | `10.30.3`              |
 
 ## Getting Started
 
@@ -41,58 +41,75 @@ Build all packages:
 pnpm build
 ```
 
-Run tests:
+Run type-checking, linting, and tests:
 
 ```bash
+pnpm typecheck
+pnpm lint
 pnpm test
+```
+
+Start the local apps:
+
+```bash
+# Credential Issuer
+pnpm issuer
+
+# Relying Party
+pnpm rp
 ```
 
 ## Commands
 
-All commands can be run from the workspace root. They delegate to **Nx** and operate on every project in the monorepo unless a filter is specified.
+All commands are run from the workspace root. Root-level scripts delegate to **Nx** where applicable and operate on projects that expose the requested target.
 
 ### Root-level `pnpm` scripts
 
-| Command | Description |
-|---------|-------------|
-| `pnpm build` | Build all projects (respects Nx dependency order and cache) |
-| `pnpm start` | Start all runnable apps |
-| `pnpm test` | Run unit tests for all projects |
-| `pnpm test:e2e` | Run end-to-end tests for all projects |
-| `pnpm typecheck` | Type-check all projects with `tsc --noEmit` |
-| `pnpm lint` | Lint all projects with ESLint |
-| `pnpm format` | Format all projects with Prettier |
-| `pnpm clean` | Reset Nx cache and remove `node_modules` and `.nx` |
+| Command           | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `pnpm build`      | Build all projects with a `build` target                              |
+| `pnpm start`      | Serve all runnable apps with a `serve` target                         |
+| `pnpm issuer`     | Serve `itw-credential-issuer`                                         |
+| `pnpm rp`         | Serve `itw-relying-party`                                             |
+| `pnpm test`       | Run Vitest for projects with a `test` target                          |
+| `pnpm typecheck`  | Type-check projects with a `typecheck` target                         |
+| `pnpm lint`       | Lint projects with a `lint` target                                    |
+| `pnpm format`     | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier |
+| `pnpm clean`      | Run project clean targets, then remove root `node_modules` and `.nx`  |
+| `pnpm pre-commit` | Run lint and type-check on affected projects                          |
 
 ### Targeting a single project with Nx
 
-Use `nx run <project>:<target>` to execute a target on a specific project, e.g.:
+Use `pnpm nx run <project>:<target>` to execute a target on a specific project:
 
 ```bash
 # Build only the credential issuer app
-nx run itw-credential-issuer:build
+pnpm nx run itw-credential-issuer:build
 
-# Run unit tests with watch mode
-nx run itw-credential-issuer:test --watch
+# Run credential issuer tests
+pnpm nx run itw-credential-issuer:test
 
-# Start the credential issuer locally
-nx run itw-credential-issuer:start
+# Serve the credential issuer locally
+pnpm nx run itw-credential-issuer:serve
+
+# Serve the relying party locally
+pnpm nx run itw-relying-party:serve
 ```
 
-Or use the equivalent `pnpm --filter` syntax:
+Current workspace projects include:
 
-```bash
-pnpm --filter itw-credential-issuer build
-pnpm --filter itw-credential-issuer test
-pnpm --filter itw-credential-issuer start
-```
+| Project                        | Path                         | Common targets                                |
+| ------------------------------ | ---------------------------- | --------------------------------------------- |
+| `itw-credential-issuer`        | `apps/itw-credential-issuer` | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `itw-relying-party`            | `apps/itw-relying-party`     | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `@itw-conformance-tool/logger` | `packages/logger`            | `build`, `typecheck`, `lint`                  |
 
 ### Nx cache
 
 Nx caches build and test outputs automatically. To force a clean run without cache, append `--skip-nx-cache`:
 
 ```bash
-nx run itw-credential-issuer:build --skip-nx-cache
+pnpm nx run itw-credential-issuer:build --skip-nx-cache
 ```
 
 To wipe the full Nx cache:
@@ -117,13 +134,13 @@ itw-conformance-tool/
 
 The suite is built on PagoPA's own wallet protocol libraries:
 
-| Package | Purpose |
-|---------|---------|
-| `@pagopa/io-wallet-oid4vci` | OpenID for Verifiable Credential Issuance |
-| `@pagopa/io-wallet-oid4vp` | OpenID for Verifiable Presentations |
-| `@pagopa/io-wallet-oauth2` | OAuth 2.0 flows |
-| `@pagopa/io-wallet-oid-federation` | OpenID Federation / Trust Chain |
-| `@pagopa/io-wallet-utils` | Shared utilities |
+| Package                            | Purpose                                   |
+| ---------------------------------- | ----------------------------------------- |
+| `@pagopa/io-wallet-oid4vci`        | OpenID for Verifiable Credential Issuance |
+| `@pagopa/io-wallet-oid4vp`         | OpenID for Verifiable Presentations       |
+| `@pagopa/io-wallet-oauth2`         | OAuth 2.0 flows                           |
+| `@pagopa/io-wallet-oid-federation` | OpenID Federation / Trust Chain           |
+| `@pagopa/io-wallet-utils`          | Shared utilities                          |
 
 ## Specifications
 
