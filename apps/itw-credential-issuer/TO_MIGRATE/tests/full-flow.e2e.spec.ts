@@ -2,7 +2,7 @@ import { DISABILITY_CARD_ID } from "@/domain/credentials/disability-card";
 import { clientAuthenticationWalletAttestationJwt } from "@pagopa/io-wallet-oauth2";
 import { beforeAll, describe, expect, test } from "vitest";
 
-import { callbacks, createAttestations } from "./e2e/client";
+import { callbacks, config, createAttestations } from "./e2e/client";
 import { E2EIssuingTestFlow, PID_CREDENTIAL_ID } from "./e2e/flow";
 
 describe("E2E Credentials Issuing Full Flow", () => {
@@ -16,6 +16,7 @@ describe("E2E Credentials Issuing Full Flow", () => {
 
     callbacks.clientAuthentication = clientAuthenticationWalletAttestationJwt({
       callbacks,
+      config,
       walletAttestationJwt: walletAttestation,
     });
   });

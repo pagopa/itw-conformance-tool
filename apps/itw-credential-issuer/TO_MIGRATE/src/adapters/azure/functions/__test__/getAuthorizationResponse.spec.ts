@@ -106,7 +106,6 @@ describe("GetAuthorizationResponse", () => {
       ]),
     } as unknown as HttpRequest;
 
-    // @ts-expect-error - partial mock of ParRequest
     vi.mocked(mockParRequestRepository.get).mockResolvedValue({
       authorization_details: [
         {
@@ -115,7 +114,13 @@ describe("GetAuthorizationResponse", () => {
         },
       ],
       client_id: "test_client",
+      code_challenge: "test_code_challenge",
+      code_challenge_method: "S256",
+      id: "test_id",
+      jti: "test_jti",
       redirect_uri: "https://example.com/callback",
+      request_uri: "test_request_uri",
+      response_type: "code",
       state: "test_state",
     });
     vi.mocked(mockParRequestRepository.update).mockResolvedValue();

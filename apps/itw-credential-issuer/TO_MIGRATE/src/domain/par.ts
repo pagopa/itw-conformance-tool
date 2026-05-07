@@ -10,7 +10,7 @@ import { randomUUID } from "crypto";
 
 import { getEntityConfigurationClaimsMetadata } from "./openid-federation";
 import { JwksRepository } from "./signer";
-import { ParRequest } from "./z-par";
+import { ParRequest, getPushedAuthorizationRequestSchema } from "./z-par";
 
 export class PostPushedAuthorizationError extends Error {
   constructor(message: string) {
@@ -75,12 +75,23 @@ export const verifyAndSaveParRequest = async (
     await parsePushedAuthorizationRequest({
       authorizationRequest: parRequestFormUrl,
       callbacks: options.callbacks,
+      config: options.config,
       request: {
         headers: options.parRequest.headers,
         method: options.parRequest.method,
         url: options.parRequest.url,
       },
     });
+
+  if (!authorizationRequestJwt) {
+    throw new PostPushedAuthorizationError(
+      "signed authorization request is required",
+    );
+  }
+
+  if (!clientAttestation) {
+    throw new PostPushedAuthorizationError("client attestation is required");
+  }
 
   // Reject replayed JWTs: a jti that has already been used must not be accepted
   const existingParByJti = await options.parRequestRepository
@@ -129,11 +140,14 @@ export const verifyAndSaveParRequest = async (
   });
 
   const requestUri = `urn:ietf:params:oauth:request_uri:${randomUUID()}`;
-  await options.parRequestRepository.insert({
+  const parSchema = getPushedAuthorizationRequestSchema(options.config);
+  const storedParRequest = parSchema.parse({
     ...authorizationRequest,
     id: randomUUID(),
     request_uri: requestUri,
   });
+
+  await options.parRequestRepository.insert(storedParRequest);
 
   return requestUri;
 };

@@ -10,7 +10,7 @@ import crypto from "crypto";
 import { CompactEncrypt, decodeJwt, importJWK } from "jose";
 import { expect } from "vitest";
 
-import { callbacks } from "./client";
+import { callbacks, getClientId } from "./client";
 import { BASE_URL } from "./env";
 import {
   dpopJwk,
@@ -167,8 +167,9 @@ export class E2EIssuingTestFlow {
   }
 
   async openid4vciAuthzRequest() {
+    const clientId = await getClientId();
     const response = await fetch(
-      `${this.authorizationServerMetadata.authorization_endpoint}?client_id=${dpopJwkPublic.kid}&request_uri=${this.requestUri}`,
+      `${this.authorizationServerMetadata.authorization_endpoint}?client_id=${clientId}&request_uri=${this.requestUri}`,
       {
         method: "GET",
         redirect: "manual",
@@ -189,8 +190,9 @@ export class E2EIssuingTestFlow {
   }
 
   async openid4vpAuthzRequest() {
+    const clientId = await getClientId();
     const response = await fetch(
-      `${this.authorizationServerMetadata.authorization_endpoint}?client_id=${dpopJwkPublic.kid}&request_uri=${this.requestUri}`,
+      `${this.authorizationServerMetadata.authorization_endpoint}?client_id=${clientId}&request_uri=${this.requestUri}`,
       {
         method: "GET",
       },
@@ -273,6 +275,7 @@ export class E2EIssuingTestFlow {
   }
 
   async pushedAuthorizationRequest(credentialConfigurationId: string) {
+    const clientId = await getClientId();
     this.pkceCode = "samplecodechallenge";
     const code_challenge_method = "S256";
     const code_challenge = crypto
@@ -294,7 +297,7 @@ export class E2EIssuingTestFlow {
           type: "openid_credential",
         },
       ],
-      client_id: dpopJwkPublic.kid,
+      client_id: clientId,
       code_challenge,
       code_challenge_method,
       nonce: "randomnoncevalue",
@@ -314,14 +317,14 @@ export class E2EIssuingTestFlow {
         aud: BASE_URL,
         exp: Math.floor(Date.now() / 1000) + 3600 * 24 * 60 * 60,
         iat: Math.floor(Date.now() / 1000),
-        iss: dpopJwkPublic.kid,
+        iss: clientId,
         jti: crypto.randomUUID(),
         ...parPayload,
       },
     });
 
     const parSignedPayload = {
-      client_id: dpopJwkPublic.kid,
+      client_id: clientId,
       request: requestJwt.jwt,
     };
 

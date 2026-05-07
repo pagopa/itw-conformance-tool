@@ -1,4 +1,3 @@
-import type { ParRequest } from "@/domain/z-par";
 import type { HttpHandler } from "@azure/functions";
 
 import { getFormPostFromRedirectUriAndJwt } from "@/domain/utils/form_post_jwt";
@@ -25,7 +24,7 @@ export const GetAuthorizationCodeJwtHandler: HttpHandler = async (
   }
 
   try {
-    const parRequest: ParRequest = await context.app.repository.par.get({
+    const parRequest = await context.app.repository.par.get({
       requestUri: request_uri,
     });
 

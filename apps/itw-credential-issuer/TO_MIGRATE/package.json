@@ -1,5 +1,5 @@
 {
-  "name": "io-wallet-issuer",
+  "name": "io-wallet-issuer-func",
   "version": "0.0.1",
   "description": "",
   "type": "module",
@@ -24,7 +24,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts --testTimeout=50000",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist .nx node_modules"
+    "clean": "rimraf dist .turbo node_modules"
   },
   "dependencies": {
     "@azure/cosmos": "^4.2.0",

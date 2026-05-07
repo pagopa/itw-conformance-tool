@@ -8,6 +8,7 @@ import {
   ItWalletSpecsVersion,
   addSecondsToDate,
 } from "@pagopa/io-wallet-utils";
+import { calculateJwkThumbprint } from "jose";
 
 import { BASE_URL } from "./env";
 import {
@@ -45,7 +46,11 @@ export async function createAttestations() {
   return { clientAttestationPoP, walletAttestation };
 }
 
+export const getClientId = async (): Promise<string> =>
+  calculateJwkThumbprint(dpopJwkPublic);
+
 async function createClientAttestationPoP() {
+  const clientId = await getClientId();
   const jwtSigner = {
     alg: "ES256",
     kid: dpopJwkPublic.kid,
@@ -62,7 +67,7 @@ async function createClientAttestationPoP() {
       aud: BASE_URL,
       exp: Math.floor(Date.now() / 1000) + 3600 * 24 * 60 * 60,
       iat: Math.floor(Date.now() / 1000),
-      iss: dpopJwkPublic.kid,
+      iss: clientId,
       jti: TEST_JTI,
     },
   });
@@ -70,7 +75,7 @@ async function createClientAttestationPoP() {
   return jwt;
 }
 
-const config = new IoWalletSdkConfig({
+export const config = new IoWalletSdkConfig({
   itWalletSpecsVersion: ItWalletSpecsVersion.V1_0,
 });
 

@@ -1,7 +1,7 @@
 import type { JwksRepository } from "@/domain/signer";
 import type {
   ItWalletEntityConfigurationClaimsOptions,
-  MetadataV1_3,
+  ItWalletMetadataV1_3,
 } from "@pagopa/io-wallet-oid-federation";
 
 import { itWalletMetadataV1_3 } from "@pagopa/io-wallet-oid-federation";
@@ -89,7 +89,7 @@ export const getEntityConfigurationClaimsMetadataV1_3 = (
         },
       },
     },
-  } satisfies MetadataV1_3;
+  } satisfies ItWalletMetadataV1_3;
 
   const parsedMetadata = itWalletMetadataV1_3.safeParse(metadata);
   if (!parsedMetadata.success) {
