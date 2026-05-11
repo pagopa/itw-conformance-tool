@@ -69,6 +69,9 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 | ----------------- | --------------------------------------------------------------------- |
 | `pnpm build`      | Build all projects with a `build` target                              |
 | `pnpm start`      | Serve all runnable apps with a `serve` target                         |
+| `pnpm conformance` | Run the headless conformance CLI (`issuance`/`presentation`)          |
+| `pnpm conformance:issuance` | Shortcut for issuance flow via CLI                          |
+| `pnpm conformance:presentation` | Shortcut for presentation flow via CLI                    |
 | `pnpm issuer`     | Serve `itw-credential-issuer`                                         |
 | `pnpm rp`         | Serve `itw-relying-party`                                             |
 | `pnpm test`       | Run Vitest for projects with a `test` target                          |
@@ -95,6 +98,10 @@ pnpm nx run itw-credential-issuer:serve
 # Serve the relying party locally
 pnpm nx run itw-relying-party:serve
 ```
+
+### Headless Conformance CLI
+
+All CLI details are documented in [apps/cli/README.md](apps/cli/README.md).
 
 Current workspace projects include:
 
