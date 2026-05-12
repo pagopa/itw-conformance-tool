@@ -148,10 +148,11 @@ pnpm conformance presentation --target test
 
 ## Output and exit codes
 
-The CLI writes JSON logs with these main events:
+The CLI writes JSON logs to stdout and captures Nx output as structured JSON events:
 
 - cli.runtime_config_resolved
 - cli.nx_command
+- cli.nx_output
 - cli.flow_completed
 - cli.flow_failed
 - cli.unhandled_error
@@ -160,9 +161,13 @@ Levels are assigned per event and filtered by --log-level:
 
 - cli.runtime_config_resolved: debug
 - cli.nx_command: debug
+- cli.nx_output (stdout): info
+- cli.nx_output (stderr): error
 - cli.flow_completed: info
 - cli.flow_failed: error
 - cli.unhandled_error: error
+
+This keeps the JSON stream parseable in CI because the delegated Nx output is no longer emitted as raw mixed stdout/stderr text.
 
 Exit codes:
 

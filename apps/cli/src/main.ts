@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 type Flow = 'issuance' | 'presentation';
@@ -139,11 +140,6 @@ function writeLog(level: LogLevel, event: string, details: Record<string, unknow
   };
 
   const text = JSON.stringify(payload);
-
-  if (level === 'error' || level === 'warn') {
-    process.stderr.write(`${text}\n`);
-    return;
-  }
 
   process.stdout.write(`${text}\n`);
 }
@@ -426,21 +422,64 @@ function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string)
   return env;
 }
 
-async function runCommand(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
-  return new Promise((resolveExitCode, reject) => {
-    const child = spawn('pnpm', args, {
-      stdio: 'inherit',
-      env
+function pipeChildOutput(
+  stream: NodeJS.ReadableStream,
+  level: LogLevel,
+  flow: Flow,
+  project: string,
+  target: NxTarget,
+  source: 'stdout' | 'stderr'
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const interfaceHandle = createInterface({ input: stream, crlfDelay: Infinity });
+
+    interfaceHandle.on('line', (line) => {
+      if (line.trim().length === 0) {
+        return;
+      }
+
+      writeLog(level, 'cli.nx_output', {
+        flow,
+        project,
+        source,
+        target,
+        line
+      });
     });
 
-    child.once('error', (error) => {
-      reject(error);
+    interfaceHandle.once('error', reject);
+    interfaceHandle.once('close', () => {
+      resolve();
     });
+  });
+}
 
+async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+  const child = spawn('pnpm', args, {
+    stdio: 'pipe',
+    env
+  });
+
+  if (child.stdout === null || child.stderr === null) {
+    throw new Error('Failed to capture Nx output streams');
+  }
+
+  const project = flowToProject[flow];
+
+  const exitCodePromise = new Promise<number>((resolveExitCode, reject) => {
+    child.once('error', reject);
     child.once('close', (code) => {
       resolveExitCode(code ?? 1);
     });
   });
+
+  const outputPromise = Promise.all([
+    pipeChildOutput(child.stdout, 'info', flow, project, runtimeConfig.target, 'stdout'),
+    pipeChildOutput(child.stderr, 'error', flow, project, runtimeConfig.target, 'stderr')
+  ]);
+
+  const [exitCode] = await Promise.all([exitCodePromise, outputPromise]);
+  return exitCode;
 }
 
 async function main(): Promise<void> {
@@ -487,7 +526,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const exitCode = await runCommand(nxArgs, env);
+  const exitCode = await runCommand(command, runtimeConfig, nxArgs, env);
 
   if (exitCode === 0) {
     writeLog('info', 'cli.flow_completed', {
