@@ -442,9 +442,14 @@ async function runCommand(args: string[], env: NodeJS.ProcessEnv): Promise<numbe
 async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv.slice(2));
 
-  if (flags.help || command === undefined || command === 'help') {
+  if (flags.help || command === 'help') {
     printHelp();
     process.exit(0);
+  }
+
+  if (command === undefined) {
+    printHelp();
+    process.exit(1);
   }
 
   if (!isFlow(command)) {
