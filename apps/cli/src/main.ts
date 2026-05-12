@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import { logger as baseLogger } from '@itw-conformance-tool/logger';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 type Flow = 'issuance' | 'presentation';
 type NxTarget = 'test' | 'serve';
@@ -90,6 +92,8 @@ const flowToProject: Record<Flow, string> = {
   presentation: 'itw-relying-party'
 };
 
+type CliLogger = typeof baseLogger;
+
 function printHelp(): void {
   process.stdout.write(`\n${cliName} - Headless CLI for ITW Conformance flows\n\n`);
   process.stdout.write('Usage:\n');
@@ -116,32 +120,34 @@ function printHelp(): void {
   process.stdout.write(`  ${cliName} presentation -c ./conformance.runtime.json --credential-types PID,MDL\n\n`);
 }
 
-const logLevelPriority: Record<LogLevel, number> = {
-  debug: 10,
-  info: 20,
-  warn: 30,
-  error: 40
-};
-
-function shouldWriteLog(eventLevel: LogLevel, threshold: LogLevel): boolean {
-  return logLevelPriority[eventLevel] >= logLevelPriority[threshold];
+function createCliLogger(level: LogLevel): CliLogger {
+  const logger = baseLogger.child({
+    service: 'itw-conformance-cli'
+  });
+  logger.level = level;
+  return logger;
 }
 
-function writeLog(level: LogLevel, event: string, details: Record<string, unknown>, threshold: LogLevel = 'debug'): void {
-  if (!shouldWriteLog(level, threshold)) {
-    return;
-  }
-
+function emitLog(logger: CliLogger, level: LogLevel, event: string, details: Record<string, unknown>): void {
   const payload = {
-    timestamp: new Date().toISOString(),
-    level,
     event,
     ...details
   };
 
-  const text = JSON.stringify(payload);
-
-  process.stdout.write(`${text}\n`);
+  switch (level) {
+    case 'debug':
+      logger.debug(payload, event);
+      break;
+    case 'info':
+      logger.info(payload, event);
+      break;
+    case 'warn':
+      logger.warn(payload, event);
+      break;
+    case 'error':
+      logger.error(payload, event);
+      break;
+  }
 }
 
 function parseBooleanFlag(current: boolean | undefined): boolean {
@@ -416,9 +422,6 @@ function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string)
   }
 
   if (runtimeConfig.tls.unsafe) {
-    console.warn(
-      '[warn] Unsafe TLS mode enabled: disabling TLS certificate verification for the delegated process by setting NODE_TLS_REJECT_UNAUTHORIZED=0.'
-    );
     env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
 
@@ -427,11 +430,8 @@ function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string)
 
 function pipeChildOutput(
   stream: NodeJS.ReadableStream,
-  level: LogLevel,
-  flow: Flow,
-  project: string,
-  target: NxTarget,
-  source: 'stdout' | 'stderr'
+  logger: CliLogger,
+  level: LogLevel
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const interfaceHandle = createInterface({ input: stream, crlfDelay: Infinity });
@@ -441,13 +441,7 @@ function pipeChildOutput(
         return;
       }
 
-      writeLog(level, 'cli.nx_output', {
-        flow,
-        project,
-        source,
-        target,
-        line
-      });
+      emitLog(logger, level, 'cli.nx_output', { line });
     });
 
     interfaceHandle.once('error', reject);
@@ -457,7 +451,7 @@ function pipeChildOutput(
   });
 }
 
-async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string[], env: NodeJS.ProcessEnv, logger: CliLogger): Promise<number> {
   const child = spawn('pnpm', args, {
     stdio: 'pipe',
     env
@@ -468,6 +462,11 @@ async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string
   }
 
   const project = flowToProject[flow];
+  const commandLogger = logger.child({
+    flow,
+    project,
+    target: runtimeConfig.target
+  });
 
   const exitCodePromise = new Promise<number>((resolveExitCode, reject) => {
     child.once('error', reject);
@@ -477,8 +476,8 @@ async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string
   });
 
   const outputPromise = Promise.all([
-    pipeChildOutput(child.stdout, 'info', flow, project, runtimeConfig.target, 'stdout'),
-    pipeChildOutput(child.stderr, 'error', flow, project, runtimeConfig.target, 'stderr')
+    pipeChildOutput(child.stdout, commandLogger.child({ source: 'stdout' }), 'info'),
+    pipeChildOutput(child.stderr, commandLogger.child({ source: 'stderr' }), 'error')
   ]);
 
   const [exitCode] = await Promise.all([exitCodePromise, outputPromise]);
@@ -507,11 +506,17 @@ async function main(): Promise<void> {
   const rawConfig = loadRawConfig(flags.configFile);
   const fileConfig = normalizeRawConfig(rawConfig);
   const runtimeConfig = mergeConfig(command, fileConfig, flags);
+  const logger = createCliLogger(runtimeConfig.logLevel);
+  const commandLogger = logger.child({
+    flow: command,
+    project: flowToProject[command],
+    target: runtimeConfig.target
+  });
 
   const env = buildEnv(command, runtimeConfig, flags.configFile);
   const nxArgs = buildNxArgs(command, runtimeConfig);
 
-  writeLog('debug', 'cli.runtime_config_resolved', {
+  emitLog(commandLogger, 'debug', 'cli.runtime_config_resolved', {
     flow: command,
     target: runtimeConfig.target,
     endpoint: runtimeConfig.endpoint,
@@ -519,36 +524,43 @@ async function main(): Promise<void> {
     tls: runtimeConfig.tls,
     skipNxCache: runtimeConfig.nx.skipCache,
     configFile: flags.configFile
-  }, runtimeConfig.logLevel);
+  });
 
-  writeLog('debug', 'cli.nx_command', {
+  emitLog(commandLogger, 'debug', 'cli.nx_command', {
     command: ['pnpm', ...nxArgs].join(' ')
-  }, runtimeConfig.logLevel);
+  });
+
+  if (runtimeConfig.tls.unsafe) {
+    emitLog(commandLogger, 'warn', 'cli.unsafe_tls_enabled', {
+      message: 'TLS certificate verification is disabled for the delegated process'
+    });
+  }
 
   if (flags.dryRun) {
     process.exit(0);
   }
 
-  const exitCode = await runCommand(command, runtimeConfig, nxArgs, env);
+  const exitCode = await runCommand(command, runtimeConfig, nxArgs, env, logger);
 
   if (exitCode === 0) {
-    writeLog('info', 'cli.flow_completed', {
+    emitLog(commandLogger, 'info', 'cli.flow_completed', {
       flow: command,
       exitCode
-    }, runtimeConfig.logLevel);
+    });
     process.exit(0);
   }
 
-  writeLog('error', 'cli.flow_failed', {
+  emitLog(commandLogger, 'error', 'cli.flow_failed', {
     flow: command,
     exitCode
-  }, runtimeConfig.logLevel);
+  });
   process.exit(exitCode);
 }
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  writeLog('error', 'cli.unhandled_error', {
+  const logger = createCliLogger('debug');
+  emitLog(logger, 'error', 'cli.unhandled_error', {
     message
   });
   process.exit(1);

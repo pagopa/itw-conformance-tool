@@ -6,5 +6,8 @@
   "main": "./dist/main.js",
   "scripts": {
     "clean": "rimraf dist out-tsc node_modules"
+  },
+  "dependencies": {
+    "@itw-conformance-tool/logger": "workspace:"
   }
 }
