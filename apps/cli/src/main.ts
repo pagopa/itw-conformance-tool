@@ -390,6 +390,8 @@ function buildNxArgs(flow: Flow, runtimeConfig: RuntimeConfig): string[] {
     args.push('--skip-nx-cache');
   }
 
+  // TODO(migration): map runtime options (endpoint, credential types, TLS settings) to real target inputs
+  // once issuer/relying-party apps consume CLI-provided configuration directly (Nx args or app env contract).
   if (runtimeConfig.nx.extraArgs.length > 0) {
     args.push(...runtimeConfig.nx.extraArgs);
   }
@@ -400,6 +402,8 @@ function buildNxArgs(flow: Flow, runtimeConfig: RuntimeConfig): string[] {
 function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    // TODO(migration): these ITW_CT_* variables are currently exported for downstream consumers only.
+    // Wire delegated targets to read them (or replace with target-specific Nx args) during migration.
     ITW_CT_FLOW: flow,
     ITW_CT_ENDPOINT: runtimeConfig.endpoint,
     ITW_CT_CREDENTIAL_TYPES: runtimeConfig.credentialTypes.join(','),
