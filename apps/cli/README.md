@@ -43,49 +43,49 @@ From the workspace root:
 
 - pnpm conformance help
 - pnpm conformance issuance [options]
-- pnpm conformance presentation [opzioni]
+- pnpm conformance presentation [options]
 
-Shortcut root:
+Root shortcuts:
 
-- pnpm conformance:issuance -- [opzioni]
-- pnpm conformance:presentation -- [opzioni]
+- pnpm conformance:issuance -- [options]
+- pnpm conformance:presentation -- [options]
 
-## Opzioni CLI
+## CLI options
 
 - -c, --config <file>
-  - File JSON di runtime
+  - Runtime JSON config file
 - -e, --endpoint <url>
-  - Override endpoint
+  - Endpoint override
 - --credential-types <csv>
-  - Tipi credenziali separati da virgola, esempio PID,MDL
+  - Comma-separated credential types, for example PID,MDL
 - --unsafe-tls
-  - Disabilita verifica certificato TLS (imposta NODE_TLS_REJECT_UNAUTHORIZED=0)
+  - Disable TLS certificate verification (sets NODE_TLS_REJECT_UNAUTHORIZED=0)
 - --tls-ca-file <path>
-  - Path CA custom
+  - Custom CA file path
 - --log-level <debug|info|warn|error>
-  - Soglia minima dei log stampati (debug mostra tutto, error solo errori)
+  - Minimum log threshold (debug shows everything, error shows only errors)
 - --target <test|serve>
-  - Target Nx da eseguire
+  - Nx target to execute
 - --skip-nx-cache
-  - Aggiunge --skip-nx-cache al comando Nx
+  - Adds --skip-nx-cache to the Nx command
 - --dry-run
-  - Mostra configurazione finale e comando Nx, non esegue
+  - Prints the final config and Nx command without executing
 - -h, --help
-  - Help
+  - Show help
 
-## Priorita' configurazione
+## Configuration priority
 
-Ordine reale di merge:
+Actual merge order:
 
-1. Default interni
-2. File JSON passato con --config
-3. Flag CLI
+1. Internal defaults
+2. JSON file passed with --config
+3. CLI flags
 
-Le flag CLI vincono sempre.
+CLI flags always take precedence.
 
-## Formato file config JSON
+## JSON config file format
 
-Esempio:
+Example:
 
 {
   "endpoint": "https://issuer.example.org",
@@ -102,7 +102,7 @@ Esempio:
   }
 }
 
-Campi supportati:
+Supported fields:
 
 - endpoint: string
 - credentialTypes: string[]
@@ -113,7 +113,7 @@ Campi supportati:
 - nx.skipCache: boolean
 - nx.extraArgs: string[]
 
-## Esempi pratici
+## Practical examples
 
 Help:
 
@@ -127,17 +127,17 @@ Dry-run presentation:
 
 pnpm conformance presentation --dry-run --target serve --log-level debug
 
-Run reale issuance:
+Actual issuance run:
 
 pnpm conformance issuance --target test
 
-Run reale presentation:
+Actual presentation run:
 
 pnpm conformance presentation --target test
 
-## Output e codici di uscita
+## Output and exit codes
 
-La CLI scrive log JSON con eventi principali:
+The CLI writes JSON logs with these main events:
 
 - cli.runtime_config_resolved
 - cli.nx_command
@@ -145,7 +145,7 @@ La CLI scrive log JSON con eventi principali:
 - cli.flow_failed
 - cli.unhandled_error
 
-I livelli sono assegnati per evento e filtrati da --log-level:
+Levels are assigned per event and filtered by --log-level:
 
 - cli.runtime_config_resolved: debug
 - cli.nx_command: debug
@@ -153,39 +153,39 @@ I livelli sono assegnati per evento e filtrati da --log-level:
 - cli.flow_failed: error
 - cli.unhandled_error: error
 
-Exit code:
+Exit codes:
 
-- 0: esecuzione OK
-- != 0: errore (parse, config, o target Nx fallito)
+- 0: successful execution
+- != 0: error (parse, config, or delegated Nx target failure)
 
-## Variabili ambiente esportate dalla CLI
+## Environment variables exported by the CLI
 
-Prima di delegare a Nx, la CLI esporta:
+Before delegating to Nx, the CLI exports:
 
 - ITW_CT_FLOW
 - ITW_CT_ENDPOINT
-- ITW_CT_CONFIG_FILE (se presente)
+- ITW_CT_CONFIG_FILE (if present)
 - ITW_CT_CREDENTIAL_TYPES
 - ITW_CT_UNSAFE_TLS
-- ITW_CT_TLS_CA_FILE (se presente)
+- ITW_CT_TLS_CA_FILE (if present)
 - ITW_CT_LOG_LEVEL
 
-## Relazione con pnpm test
+## Relationship with pnpm test
 
-Questa CLI non sostituisce pnpm test.
+This CLI does not replace pnpm test.
 
-- pnpm test = pipeline Vitest dei progetti configurati
-- pnpm conformance ... = orchestrazione runtime di un flusso via target Nx
+- pnpm test = Vitest pipeline for configured projects
+- pnpm conformance ... = runtime orchestration of a flow through an Nx target
 
-## Errori comuni e causa reale
+## Common errors and root cause
 
 - "This command must be run from the itw-conformance-tool workspace root"
-  - Stai lanciando la CLI nella cartella sbagliata
+  - You are running the CLI from the wrong folder
 - "Unknown option"
-  - Flag non supportata o typo
+  - Unsupported flag or typo
 - "Invalid target"
-  - target diverso da test o serve
+  - Target different from test or serve
 - "Invalid config ..."
-  - Valore non valido nel file JSON
+  - Invalid value in the JSON file
 - flow_failed
-  - Il target Nx delegato e' fallito, non e' un errore nascosto della CLI
+  - The delegated Nx target failed; this is not a hidden CLI error
