@@ -115,7 +115,22 @@ function printHelp(): void {
   process.stdout.write(`  ${cliName} presentation -c ./conformance.runtime.json --credential-types PID,MDL\n\n`);
 }
 
-function writeLog(level: LogLevel, event: string, details: Record<string, unknown>): void {
+const logLevelPriority: Record<LogLevel, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40
+};
+
+function shouldWriteLog(eventLevel: LogLevel, threshold: LogLevel): boolean {
+  return logLevelPriority[eventLevel] >= logLevelPriority[threshold];
+}
+
+function writeLog(level: LogLevel, event: string, details: Record<string, unknown>, threshold: LogLevel = 'debug'): void {
+  if (!shouldWriteLog(level, threshold)) {
+    return;
+  }
+
   const payload = {
     timestamp: new Date().toISOString(),
     level,
@@ -445,7 +460,7 @@ async function main(): Promise<void> {
   const env = buildEnv(command, runtimeConfig, flags.configFile);
   const nxArgs = buildNxArgs(command, runtimeConfig);
 
-  writeLog(runtimeConfig.logLevel, 'cli.runtime_config_resolved', {
+  writeLog('debug', 'cli.runtime_config_resolved', {
     flow: command,
     target: runtimeConfig.target,
     endpoint: runtimeConfig.endpoint,
@@ -453,11 +468,11 @@ async function main(): Promise<void> {
     tls: runtimeConfig.tls,
     skipNxCache: runtimeConfig.nx.skipCache,
     configFile: flags.configFile
-  });
+  }, runtimeConfig.logLevel);
 
-  writeLog(runtimeConfig.logLevel, 'cli.nx_command', {
+  writeLog('debug', 'cli.nx_command', {
     command: ['pnpm', ...nxArgs].join(' ')
-  });
+  }, runtimeConfig.logLevel);
 
   if (flags.dryRun) {
     process.exit(0);
@@ -466,17 +481,17 @@ async function main(): Promise<void> {
   const exitCode = await runCommand(nxArgs, env);
 
   if (exitCode === 0) {
-    writeLog(runtimeConfig.logLevel, 'cli.flow_completed', {
+    writeLog('info', 'cli.flow_completed', {
       flow: command,
       exitCode
-    });
+    }, runtimeConfig.logLevel);
     process.exit(0);
   }
 
   writeLog('error', 'cli.flow_failed', {
     flow: command,
     exitCode
-  });
+  }, runtimeConfig.logLevel);
   process.exit(exitCode);
 }
 

@@ -63,7 +63,7 @@ Shortcut root:
 - --tls-ca-file <path>
   - Path CA custom
 - --log-level <debug|info|warn|error>
-  - Livello log della CLI
+  - Soglia minima dei log stampati (debug mostra tutto, error solo errori)
 - --target <test|serve>
   - Target Nx da eseguire
 - --skip-nx-cache
@@ -144,6 +144,14 @@ La CLI scrive log JSON con eventi principali:
 - cli.flow_completed
 - cli.flow_failed
 - cli.unhandled_error
+
+I livelli sono assegnati per evento e filtrati da --log-level:
+
+- cli.runtime_config_resolved: debug
+- cli.nx_command: debug
+- cli.flow_completed: info
+- cli.flow_failed: error
+- cli.unhandled_error: error
 
 Exit code:
 
