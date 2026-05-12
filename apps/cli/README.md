@@ -73,6 +73,17 @@ Root shortcuts:
 - -h, --help
   - Show help
 
+## Temporary migration note
+
+This CLI already validates and accepts all runtime options, but some of them are not yet wired into the delegated
+issuer/relying-party flow behavior in this migration phase.
+
+- `--endpoint`, `--credential-types`, and `--tls-ca-file` are currently exported as `ITW_CT_*` environment variables.
+- At the moment, delegated targets do not consume these variables yet, so they do not change flow behavior by themselves.
+- `--target` and `--skip-nx-cache` already affect the delegated Nx command.
+
+These runtime options are intentionally kept now to preserve the CLI contract while migration of downstream consumers is completed.
+
 ## Configuration priority
 
 Actual merge order:
