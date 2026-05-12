@@ -7,7 +7,7 @@
     "build": "nx run-many -t build",
     "lint": "nx run-many -t lint",
     "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test --projects itw-credential-issuer,itw-relying-party",
+    "test": "nx run-many -t test",
     "conformance": "pnpm nx run itw-conformance-cli:build && node apps/cli/dist/main.js",
     "conformance:issuance": "pnpm conformance issuance",
     "conformance:presentation": "pnpm conformance presentation",
