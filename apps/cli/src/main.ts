@@ -416,6 +416,9 @@ function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string)
   }
 
   if (runtimeConfig.tls.unsafe) {
+    console.warn(
+      '[warn] Unsafe TLS mode enabled: disabling TLS certificate verification for the delegated process by setting NODE_TLS_REJECT_UNAUTHORIZED=0.'
+    );
     env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
 
