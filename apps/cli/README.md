@@ -1,48 +1,48 @@
 # ITW Conformance CLI
 
-Questa CLI e' un wrapper headless.
-Non implementa logica di protocollo.
-Non sostituisce i test Vitest.
+This CLI is a headless wrapper.
+It does not implement protocol logic.
+It does not replace Vitest tests.
 
-Fa tre cose:
+It does three things:
 
-1. Legge configurazione runtime (default, file JSON, flag CLI).
-2. Costruisce il comando Nx corretto per il flusso richiesto.
-3. Esegue il comando e restituisce exit code e log JSON.
+1. Reads runtime configuration (defaults, JSON file, CLI flags).
+2. Builds the correct Nx command for the requested flow.
+3. Executes the command and returns the exit code and JSON logs.
 
-Se il target Nx fallisce, la CLI fallisce.
-Se il target Nx passa, la CLI passa.
+If the Nx target fails, the CLI fails.
+If the Nx target passes, the CLI passes.
 
-## Cosa fa davvero
+## What it actually does
 
-- Comando issuance: delega a itw-credential-issuer:<target>
-- Comando presentation: delega a itw-relying-party:<target>
-- Comando help: stampa uso e opzioni
+- Issuance command: delegates to itw-credential-issuer:<target>
+- Presentation command: delegates to itw-relying-party:<target>
+- Help command: prints usage and options
 
-## Cosa NON fa
+## What it does NOT do
 
-- Non esegue direttamente test custom.
-- Non valida endpoint remoti.
-- Non genera report di conformita' propri.
-- Non corregge i problemi di configurazione dei target Nx.
+- It does not directly execute custom tests.
+- It does not validate remote endpoints.
+- It does not generate its own conformance reports.
+- It does not fix Nx target configuration problems.
 
-## Prerequisiti
+## Prerequisites
 
-- Eseguire dal root workspace itw-conformance-tool
+- Run from the itw-conformance-tool workspace root
 - Node 22
 - pnpm 10.30.3
 
-Consigliato in CI/non-interactive:
+Recommended in CI/non-interactive environments:
 
 - CI=1
 - NX_TUI=false
 
-## Comandi disponibili
+## Available commands
 
-Dal root del workspace:
+From the workspace root:
 
 - pnpm conformance help
-- pnpm conformance issuance [opzioni]
+- pnpm conformance issuance [options]
 - pnpm conformance presentation [opzioni]
 
 Shortcut root:
