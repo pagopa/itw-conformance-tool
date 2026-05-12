@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { parseArgs as parseNodeArgs } from 'node:util';
 
 import { logger as baseLogger } from '@itw-conformance-tool/logger';
 
@@ -150,10 +151,6 @@ function emitLog(logger: CliLogger, level: LogLevel, event: string, details: Rec
   }
 }
 
-function parseBooleanFlag(current: boolean | undefined): boolean {
-  return current ?? true;
-}
-
 function splitCsv(input: string): string[] {
   return input
     .split(',')
@@ -162,99 +159,94 @@ function splitCsv(input: string): string[] {
 }
 
 function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
+  const parsed = parseNodeArgs({
+    args: argv,
+    allowPositionals: true,
+    strict: true,
+    options: {
+      help: {
+        type: 'boolean',
+        short: 'h'
+      },
+      'dry-run': {
+        type: 'boolean'
+      },
+      'unsafe-tls': {
+        type: 'boolean'
+      },
+      'skip-nx-cache': {
+        type: 'boolean'
+      },
+      config: {
+        type: 'string',
+        short: 'c'
+      },
+      endpoint: {
+        type: 'string',
+        short: 'e'
+      },
+      'credential-types': {
+        type: 'string'
+      },
+      'log-level': {
+        type: 'string'
+      },
+      target: {
+        type: 'string'
+      },
+      'tls-ca-file': {
+        type: 'string'
+      }
+    }
+  });
+
+  const [command, ...unexpectedPositionals] = parsed.positionals;
+  if (unexpectedPositionals.length > 0) {
+    throw new Error(`Unexpected positional arguments: ${unexpectedPositionals.join(', ')}`);
+  }
+
   const flags: CliFlags = {
-    dryRun: false,
-    help: false
+    dryRun: parsed.values['dry-run'] ?? false,
+    help: parsed.values.help ?? false
   };
 
-  const [command, ...rest] = argv;
+  if (parsed.values['unsafe-tls']) {
+    flags.unsafeTls = true;
+  }
 
-  for (let index = 0; index < rest.length; index += 1) {
-    const arg = rest[index];
+  if (parsed.values['skip-nx-cache']) {
+    flags.skipNxCache = true;
+  }
 
-    if (arg === undefined) {
-      continue;
+  if (parsed.values.config !== undefined) {
+    flags.configFile = parsed.values.config;
+  }
+
+  if (parsed.values.endpoint !== undefined) {
+    flags.endpoint = parsed.values.endpoint;
+  }
+
+  if (parsed.values['credential-types'] !== undefined) {
+    flags.credentialTypes = splitCsv(parsed.values['credential-types']);
+  }
+
+  if (parsed.values['log-level'] !== undefined) {
+    const logLevel = parsed.values['log-level'];
+    if (!isLogLevel(logLevel)) {
+      throw new Error(`Invalid log level: ${logLevel}`);
     }
+    flags.logLevel = logLevel;
+  }
 
-    switch (arg) {
-      case '-h':
-      case '--help':
-        flags.help = true;
-        break;
-      case '--dry-run':
-        flags.dryRun = true;
-        break;
-      case '--unsafe-tls':
-        flags.unsafeTls = parseBooleanFlag(flags.unsafeTls);
-        break;
-      case '--skip-nx-cache':
-        flags.skipNxCache = parseBooleanFlag(flags.skipNxCache);
-        break;
-      case '-c':
-      case '--config': {
-        const value = rest[index + 1];
-        if (value === undefined) {
-          throw new Error(`${arg} requires a value`);
-        }
-        flags.configFile = value;
-        index += 1;
-        break;
-      }
-      case '-e':
-      case '--endpoint': {
-        const value = rest[index + 1];
-        if (value === undefined) {
-          throw new Error(`${arg} requires a value`);
-        }
-        flags.endpoint = value;
-        index += 1;
-        break;
-      }
-      case '--credential-types': {
-        const value = rest[index + 1];
-        if (value === undefined) {
-          throw new Error(`${arg} requires a value`);
-        }
-        flags.credentialTypes = splitCsv(value);
-        index += 1;
-        break;
-      }
-      case '--log-level': {
-        const value = rest[index + 1];
-        if (value === undefined) {
-          throw new Error(`${arg} requires a value`);
-        }
-        if (!isLogLevel(value)) {
-          throw new Error(`Invalid log level: ${value}`);
-        }
-        flags.logLevel = value;
-        index += 1;
-        break;
-      }
-      case '--target': {
-        const value = rest[index + 1];
-        if (value === undefined) {
-          throw new Error(`${arg} requires a value`);
-        }
-        if (!isNxTarget(value)) {
-          throw new Error(`Invalid target: ${value}`);
-        }
-        flags.target = value;
-        index += 1;
-        break;
-      }
-      case '--tls-ca-file': {
-        const value = rest[index + 1];
-        if (value === undefined) {
-          throw new Error(`${arg} requires a value`);
-        }
-        flags.tlsCaFile = value;
-        index += 1;
-        break;
-      }
-      default:
-        throw new Error(`Unknown option: ${arg}`);
+  if (parsed.values.target !== undefined) {
+    if (!isNxTarget(parsed.values.target)) {
+      throw new Error(`Invalid target: ${parsed.values.target}`);
     }
+    flags.target = parsed.values.target;
+  }
+
+  if (parsed.values['tls-ca-file'] !== undefined) {
+    flags.tlsCaFile = parsed.values['tls-ca-file'];
   }
 
   return { command, flags };
