@@ -53,7 +53,7 @@ interface CliFlags {
   help: boolean;
 }
 
-const cliName = 'itw-conformance';
+const cliName = 'pnpm conformance';
 
 const defaultConfigs: Record<Flow, RuntimeConfig> = {
   issuance: {
