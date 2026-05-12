@@ -33,21 +33,25 @@
         }
       }
     },
-    "serve": {
-      "continuous": true,
+    "run": {
       "executor": "@nx/js:node",
       "defaultConfiguration": "development",
-      "dependsOn": ["build"],
       "options": {
         "buildTarget": "itw-conformance-cli:build",
-        "runBuildTargetDependencies": false
+        "runBuildTargetDependencies": false,
+        "watch": false,
+        "inspect": false
       },
       "configurations": {
         "development": {
-          "buildTarget": "itw-conformance-cli:build:development"
+          "buildTarget": "itw-conformance-cli:build:development",
+          "watch": false,
+          "inspect": false
         },
         "production": {
-          "buildTarget": "itw-conformance-cli:build:production"
+          "buildTarget": "itw-conformance-cli:build:production",
+          "watch": false,
+          "inspect": false
         }
       }
     }
