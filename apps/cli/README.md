@@ -168,6 +168,7 @@ Levels are assigned per event and filtered by --log-level:
 - cli.unhandled_error: error
 
 This keeps the JSON stream parseable in CI because the delegated Nx output is no longer emitted as raw mixed stdout/stderr text.
+The CLI also forces JSON logger output regardless of `NODE_ENV`, so logs are not pretty-printed when running local development commands.
 
 Exit codes:
 

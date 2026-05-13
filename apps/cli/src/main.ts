@@ -4,7 +4,8 @@ import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
-import { logger as baseLogger } from '@itw-conformance-tool/logger';
+import { loggerOptions as sharedLoggerOptions } from '@itw-conformance-tool/logger';
+import pino, { type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 type Flow = 'issuance' | 'presentation';
@@ -93,7 +94,7 @@ const flowToProject: Record<Flow, string> = {
   presentation: 'itw-relying-party'
 };
 
-type CliLogger = typeof baseLogger;
+type CliLogger = PinoLogger;
 
 function printHelp(): void {
   process.stdout.write(`\n${cliName} - Headless CLI for ITW Conformance flows\n\n`);
@@ -122,11 +123,15 @@ function printHelp(): void {
 }
 
 function createCliLogger(level: LogLevel): CliLogger {
-  const logger = baseLogger.child({
+  const loggerOptions: LoggerOptions = {
+    ...sharedLoggerOptions,
+    level,
+    transport: undefined
+  };
+
+  return pino(loggerOptions).child({
     service: 'itw-conformance-cli'
   });
-  logger.level = level;
-  return logger;
 }
 
 function emitLog(logger: CliLogger, level: LogLevel, event: string, details: Record<string, unknown>): void {

@@ -8,6 +8,7 @@
     "clean": "rimraf dist out-tsc node_modules"
   },
   "dependencies": {
-    "@itw-conformance-tool/logger": "workspace:"
+    "@itw-conformance-tool/logger": "workspace:",
+    "pino": "^10.0.0"
   }
 }
