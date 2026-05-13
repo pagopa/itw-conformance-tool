@@ -87,6 +87,15 @@ importers:
         specifier: ~4.1.0
         version: 4.1.5(@types/node@22.19.17)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(yaml@2.8.3))
 
+  apps/cli:
+    dependencies:
+      '@itw-conformance-tool/logger':
+        specifier: 'workspace:'
+        version: link:../../packages/logger
+      pino:
+        specifier: catalog:node
+        version: 10.3.1
+
   apps/itw-credential-issuer:
     dependencies:
       '@faker-js/faker':

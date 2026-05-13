@@ -1,20 +1,11 @@
-import type { HttpHandler } from "@azure/functions";
-import type { HttpMethod } from "@pagopa/io-wallet-utils";
+import type { HttpHandler } from '@azure/functions';
+import type { HttpMethod } from '@pagopa/io-wallet-utils';
 
-import {
-  PostPushedAuthorizationError,
-  verifyAndSaveParRequest,
-} from "@/domain/par";
+import { PostPushedAuthorizationError, verifyAndSaveParRequest } from '@/domain/par';
 
-import {
-  createErrorResponse,
-  createGenericErrorResponse,
-} from "./errors/error";
+import { createErrorResponse, createGenericErrorResponse } from './errors/error';
 
-export const PostPushedAuthorizationRequestHandler: HttpHandler = async (
-  request,
-  context,
-) => {
+export const PostPushedAuthorizationRequestHandler: HttpHandler = async (request, context) => {
   const entries = Array.from(request.headers.entries());
   const domHeaders = new Headers(entries);
   const bodyString = await request.text();
@@ -29,29 +20,29 @@ export const PostPushedAuthorizationRequestHandler: HttpHandler = async (
         bodyString,
         headers: domHeaders,
         method: request.method as HttpMethod,
-        url: request.url,
+        url: request.url
       },
-      parRequestRepository: context.app.repository.par,
+      parRequestRepository: context.app.repository.par
     });
 
     return {
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json'
       },
       jsonBody: {
         expires_in: 60,
-        request_uri: requestUriUuid,
+        request_uri: requestUriUuid
       },
-      status: 201,
+      status: 201
     };
   } catch (err) {
-    context.error("Error: ", err.message);
+    context.error('Error: ', err.message);
 
     if (err instanceof PostPushedAuthorizationError) {
       return createErrorResponse({
-        error: "invalid_request",
+        error: 'invalid_request',
         error_description: err.message,
-        status: 400,
+        status: 400
       });
     }
 

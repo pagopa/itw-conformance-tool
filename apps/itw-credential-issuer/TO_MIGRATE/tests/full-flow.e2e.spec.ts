@@ -1,11 +1,11 @@
-import { DISABILITY_CARD_ID } from "@/domain/credentials/disability-card";
-import { clientAuthenticationWalletAttestationJwt } from "@pagopa/io-wallet-oauth2";
-import { beforeAll, describe, expect, test } from "vitest";
+import { DISABILITY_CARD_ID } from '@/domain/credentials/disability-card';
+import { clientAuthenticationWalletAttestationJwt } from '@pagopa/io-wallet-oauth2';
+import { beforeAll, describe, expect, test } from 'vitest';
 
-import { callbacks, config, createAttestations } from "./e2e/client";
-import { E2EIssuingTestFlow, PID_CREDENTIAL_ID } from "./e2e/flow";
+import { callbacks, config, createAttestations } from './e2e/client';
+import { E2EIssuingTestFlow, PID_CREDENTIAL_ID } from './e2e/flow';
 
-describe("E2E Credentials Issuing Full Flow", () => {
+describe('E2E Credentials Issuing Full Flow', () => {
   let walletAttestation: string;
   let clientAttestationPoP: string;
 
@@ -17,11 +17,11 @@ describe("E2E Credentials Issuing Full Flow", () => {
     callbacks.clientAuthentication = clientAuthenticationWalletAttestationJwt({
       callbacks,
       config,
-      walletAttestationJwt: walletAttestation,
+      walletAttestationJwt: walletAttestation
     });
   });
 
-  test("issuing verifiable credential with oid4vci", async () => {
+  test('issuing verifiable credential with oid4vci', async () => {
     const e2e = new E2EIssuingTestFlow()
       .withClientAttestationPoP(clientAttestationPoP)
       .withWalletAttestation(walletAttestation);
@@ -46,7 +46,7 @@ describe("E2E Credentials Issuing Full Flow", () => {
     expect(credential).toBeDefined();
   });
 
-  test("issuing verifiable credential with oid4vp", async () => {
+  test('issuing verifiable credential with oid4vp', async () => {
     const e2e = new E2EIssuingTestFlow()
       .withClientAttestationPoP(clientAttestationPoP)
       .withWalletAttestation(walletAttestation);

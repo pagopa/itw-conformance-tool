@@ -1,23 +1,17 @@
-import type {
-  Openid4vpAuthorizationRequestPayload,
-  ParseAuthorizationResponseResult,
-} from "@pagopa/io-wallet-oid4vp";
-import type { JwtPayload } from "@sd-jwt/types";
+import type { Openid4vpAuthorizationRequestPayload, ParseAuthorizationResponseResult } from '@pagopa/io-wallet-oid4vp';
+import type { JwtPayload } from '@sd-jwt/types';
 
-import { Verifier, base64url } from "@owf/mdoc";
-import { ES256, digest, generateSalt } from "@sd-jwt/crypto-nodejs";
-import { decodeSdJwt } from "@sd-jwt/decode";
-import {
-  SDJwtVcInstance,
-  VerificationResult as SDJwtVcVerificationResult,
-} from "@sd-jwt/sd-jwt-vc";
-import { DcqlQuery } from "dcql";
+import { Verifier, base64url } from '@owf/mdoc';
+import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
+import { decodeSdJwt } from '@sd-jwt/decode';
+import { SDJwtVcInstance, VerificationResult as SDJwtVcVerificationResult } from '@sd-jwt/sd-jwt-vc';
+import { DcqlQuery } from 'dcql';
 
-import type { JwkPublicKey } from "./z-jwk";
+import type { JwkPublicKey } from './z-jwk';
 
-import { getIssuerPublicKey } from "./crypto";
-import { mdocContext } from "./mdoc/context";
-import { createOid4VpSessionTranscript, pemToDer } from "./mdoc/utils";
+import { getIssuerPublicKey } from './crypto';
+import { mdocContext } from './mdoc/context';
+import { createOid4VpSessionTranscript, pemToDer } from './mdoc/utils';
 
 export interface SDJwtVcVerifierOptions {
   [key: string]: unknown;
@@ -30,21 +24,15 @@ export interface SDJwtVcVerifierOptions {
 export class LocalSDJwtVcInstance extends SDJwtVcInstance {
   public override async verify(
     encodedSDJwt: string,
-    options?: SDJwtVcVerifierOptions,
+    options?: SDJwtVcVerifierOptions
   ): Promise<SDJwtVcVerificationResult> {
     if (options?.verifyStatusList !== false) {
       return super.verify(encodedSDJwt, options);
     }
 
-    const baseVerifier = Object.getPrototypeOf(
-      SDJwtVcInstance.prototype,
-    ) as SDJwtVcInstance;
+    const baseVerifier = Object.getPrototypeOf(SDJwtVcInstance.prototype) as SDJwtVcInstance;
 
-    const result = (await baseVerifier.verify.call(
-      this,
-      encodedSDJwt,
-      options,
-    )) as SDJwtVcVerificationResult;
+    const result = (await baseVerifier.verify.call(this, encodedSDJwt, options)) as SDJwtVcVerificationResult;
 
     if (this.userConfig.loadTypeMetadataFormat) {
       result.typeMetadata = await this.getVct(encodedSDJwt);
@@ -88,50 +76,37 @@ export class VpTokenVerifier {
       return requestObject.response_uri;
     }
 
-    throw new Error(
-      "OID4VP request object is missing both redirect_uri and response_uri",
-    );
+    throw new Error('OID4VP request object is missing both redirect_uri and response_uri');
   }
 
-  private normalizeCredentialTokens(
-    credentialId: string,
-    token: unknown,
-  ): string[] {
-    if (typeof token === "string") {
+  private normalizeCredentialTokens(credentialId: string, token: unknown): string[] {
+    if (typeof token === 'string') {
       return [token];
     }
 
     if (Array.isArray(token)) {
       if (token.length === 0) {
-        throw new Error(
-          `Credential token array for ID ${credentialId} is empty`,
-        );
+        throw new Error(`Credential token array for ID ${credentialId} is empty`);
       }
 
-      if (!token.every((value) => typeof value === "string")) {
-        throw new Error(
-          `Credential token array for ID ${credentialId} contains non-string values`,
-        );
+      if (!token.every((value) => typeof value === 'string')) {
+        throw new Error(`Credential token array for ID ${credentialId} contains non-string values`);
       }
 
       return token;
     }
 
-    throw new Error(
-      `Credential token for ID ${credentialId} must be a string or an array of strings`,
-    );
+    throw new Error(`Credential token for ID ${credentialId} must be a string or an array of strings`);
   }
 
   private validateVpTokenStruct() {
     const vpToken = this.authResponse.authorizationResponsePayload.vp_token;
 
-    if (typeof vpToken !== "object" || Array.isArray(vpToken)) {
-      throw new Error("vp_token format is invalid");
+    if (typeof vpToken !== 'object' || Array.isArray(vpToken)) {
+      throw new Error('vp_token format is invalid');
     }
 
-    const dcqlQuery = DcqlQuery.parse(
-      this.requestObject.dcql_query as DcqlQuery.Input,
-    );
+    const dcqlQuery = DcqlQuery.parse(this.requestObject.dcql_query as DcqlQuery.Input);
 
     const dcqlCredentialsId = dcqlQuery.credentials.map((c) => c.id);
     const vpTokenCredentialsId = Object.keys(vpToken);
@@ -141,7 +116,7 @@ export class VpTokenVerifier {
       vpTokenCredentialsId.every((id) => dcqlCredentialsId.includes(id));
 
     if (!hasRequiredCredentials) {
-      throw new Error("vp_token does not contain the required credentials");
+      throw new Error('vp_token does not contain the required credentials');
     }
 
     return { dcqlQuery, vpToken };
@@ -157,16 +132,16 @@ export class VpTokenVerifier {
       clientId: this.requestObject.client_id,
       handoverUri: this.getHandoverUri(),
       nonce: this.authResponse.expectedNonce,
-      verifierEncryptionPublicJwk: this.verifierEncryptionPublicJwk,
+      verifierEncryptionPublicJwk: this.verifierEncryptionPublicJwk
     });
 
     await Verifier.verifyDeviceResponse(
       {
         deviceResponse: base64url.decode(token),
         sessionTranscript,
-        trustedCertificates: [pemToDer(this.iacaX509)],
+        trustedCertificates: [pemToDer(this.iacaX509)]
       },
-      mdocContext,
+      mdocContext
     );
   }
 
@@ -185,24 +160,18 @@ export class VpTokenVerifier {
 
     const holderPublicKey = payload.cnf?.jwk;
     if (!holderPublicKey) {
-      throw new Error(
-        "vp_token is missing 'jwk' in the 'cnf' (confirmation) claim",
-      );
+      throw new Error("vp_token is missing 'jwk' in the 'cnf' (confirmation) claim");
     }
 
-    if (!header.kid || typeof header.kid !== "string") {
-      throw new Error(
-        "vp_token header is missing 'kid' (key identifier) or it is invalid",
-      );
+    if (!header.kid || typeof header.kid !== 'string') {
+      throw new Error("vp_token header is missing 'kid' (key identifier) or it is invalid");
     }
 
     if (kbJwt.payload.aud !== this.requestObject.client_id) {
-      throw new Error(
-        "vp_token key binding 'aud' does not match the client_id in the request",
-      );
+      throw new Error("vp_token key binding 'aud' does not match the client_id in the request");
     }
 
-    if (kbJwt.header.typ !== "kb+jwt") {
+    if (kbJwt.header.typ !== 'kb+jwt') {
       throw new Error("vp_token key binding JWT 'typ' header is not 'kb+jwt'");
     }
 
@@ -212,22 +181,22 @@ export class VpTokenVerifier {
     // Create verifiers for both issuer signature and key binding
     const [issuerSignatureVerifier, keyBindingVerifier] = await Promise.all([
       ES256.getVerifier(issuerPublicKey),
-      ES256.getVerifier(holderPublicKey),
+      ES256.getVerifier(holderPublicKey)
     ]);
 
     const sdJwtVc = new LocalSDJwtVcInstance({
-      hashAlg: "sha-256",
+      hashAlg: 'sha-256',
       hasher: digest,
       kbSignAlg: ES256.alg,
       kbVerifier: keyBindingVerifier,
       saltGenerator: generateSalt,
       signAlg: ES256.alg,
-      verifier: issuerSignatureVerifier,
+      verifier: issuerSignatureVerifier
     });
 
     await sdJwtVc.verify(token, {
       keyBindingNonce: this.authResponse.expectedNonce,
-      verifyStatusList: false,
+      verifyStatusList: false
     });
   }
 
@@ -240,32 +209,23 @@ export class VpTokenVerifier {
     const verifications: Promise<void>[] = [];
 
     for (const [credentialId, token] of Object.entries(vpToken)) {
-      const credentialQuery = dcqlQuery.credentials.find(
-        (c) => c.id === credentialId,
-      );
+      const credentialQuery = dcqlQuery.credentials.find((c) => c.id === credentialId);
 
       if (!credentialQuery) {
-        throw new Error(
-          `No matching credential query found for credential ID: ${credentialId}`,
-        );
+        throw new Error(`No matching credential query found for credential ID: ${credentialId}`);
       }
 
-      const credentialTokens = this.normalizeCredentialTokens(
-        credentialId,
-        token,
-      );
+      const credentialTokens = this.normalizeCredentialTokens(credentialId, token);
 
       for (const credentialToken of credentialTokens) {
-        if (credentialQuery.format === "mso_mdoc") {
+        if (credentialQuery.format === 'mso_mdoc') {
           const verification = this.verifyMdocToken(credentialToken);
           verifications.push(verification);
-        } else if (credentialQuery.format === "dc+sd-jwt") {
+        } else if (credentialQuery.format === 'dc+sd-jwt') {
           const verification = this.verifySdJwtToken(credentialToken);
           verifications.push(verification);
         } else {
-          throw new Error(
-            `Unsupported credential format: ${credentialQuery.format}`,
-          );
+          throw new Error(`Unsupported credential format: ${credentialQuery.format}`);
         }
       }
     }

@@ -1,38 +1,32 @@
-import type { HttpHandler } from "@azure/functions";
+import type { HttpHandler } from '@azure/functions';
 
-import { getFormPostFromRedirectUriAndJwt } from "@/domain/utils/form_post_jwt";
-import { randomUUID } from "crypto";
-import { SignJWT, importJWK } from "jose";
+import { getFormPostFromRedirectUriAndJwt } from '@/domain/utils/form_post_jwt';
+import { randomUUID } from 'crypto';
+import { SignJWT, importJWK } from 'jose';
 
-import {
-  createErrorResponse,
-  createGenericErrorResponse,
-} from "./errors/error";
+import { createErrorResponse, createGenericErrorResponse } from './errors/error';
 
-export const GetAuthorizationCodeJwtHandler: HttpHandler = async (
-  request,
-  context,
-) => {
-  const request_uri = request.query.get("request_uri");
+export const GetAuthorizationCodeJwtHandler: HttpHandler = async (request, context) => {
+  const request_uri = request.query.get('request_uri');
 
   if (!request_uri) {
     return createErrorResponse({
-      error: "invalid_request",
-      error_description: "client_id and request_uri are required",
-      status: 400,
+      error: 'invalid_request',
+      error_description: 'client_id and request_uri are required',
+      status: 400
     });
   }
 
   try {
     const parRequest = await context.app.repository.par.get({
-      requestUri: request_uri,
+      requestUri: request_uri
     });
 
     if (!parRequest || !parRequest.redirect_uri) {
       return createErrorResponse({
-        error: "invalid_request",
-        error_description: "request_uri not found",
-        status: 400,
+        error: 'invalid_request',
+        error_description: 'request_uri not found',
+        status: 400
       });
     }
 
@@ -44,13 +38,13 @@ export const GetAuthorizationCodeJwtHandler: HttpHandler = async (
     const importSig = await importJWK(privateSig);
     const jwt = await new SignJWT({
       code: code,
-      ...(parRequest.state ? { state: parRequest.state } : {}),
+      ...(parRequest.state ? { state: parRequest.state } : {})
     })
       .setIssuer(context.app.config.baseURL)
       .setIssuedAt()
-      .setExpirationTime("5m")
+      .setExpirationTime('5m')
       .setProtectedHeader({
-        alg: "ES256",
+        alg: 'ES256'
       })
       .sign(importSig);
 
@@ -58,10 +52,10 @@ export const GetAuthorizationCodeJwtHandler: HttpHandler = async (
 
     return {
       body: getFormPostFromRedirectUriAndJwt(parRequest.redirect_uri, jwt),
-      status: 200,
+      status: 200
     };
   } catch (err) {
-    context.error("Error: ", err.message);
+    context.error('Error: ', err.message);
     return createGenericErrorResponse(err.message);
   }
 };

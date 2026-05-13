@@ -1,12 +1,12 @@
-import { defineConfig } from "tsup";
+import { defineConfig } from 'tsup';
 
 export default defineConfig({
   clean: true,
-  entry: ["./src/app/main.ts"],
-  format: ["esm"],
+  entry: ['./src/app/main.ts'],
+  format: ['esm'],
   minify: false,
-  platform: "node",
+  platform: 'node',
   sourcemap: true,
   splitting: false,
-  target: "node22",
+  target: 'node22'
 });

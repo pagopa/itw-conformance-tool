@@ -1,9 +1,9 @@
-import { JwksRepository } from "../../domain/signer";
-import { ECKey, ECPrivateKeyWithKid } from "../../domain/z-jwk";
+import { JwksRepository } from '../../domain/signer';
+import { ECKey, ECPrivateKeyWithKid } from '../../domain/z-jwk';
 
 const extractKeys = (jwk: readonly ECPrivateKeyWithKid[]) => {
   if (jwk.length === 0) {
-    throw new Error("Unable to find valid JWK key pair");
+    throw new Error('Unable to find valid JWK key pair');
   }
 
   //Extracting the d entry because typescript doesn't
@@ -14,11 +14,11 @@ const extractKeys = (jwk: readonly ECPrivateKeyWithKid[]) => {
   void d;
 
   const jwkKeyPair = {
-    private: { ...jwk[0], kty: "EC" } as {
+    private: { ...jwk[0], kty: 'EC' } as {
       kid: string;
-      readonly kty: "EC";
+      readonly kty: 'EC';
     } & ECPrivateKeyWithKid,
-    public: publicKey as { kid: string; readonly kty: "EC" } & ECKey,
+    public: publicKey as { kid: string; readonly kty: 'EC' } & ECKey
   };
 
   return jwkKeyPair;
@@ -27,9 +27,9 @@ const extractKeys = (jwk: readonly ECPrivateKeyWithKid[]) => {
 export const makeJwksRepository = (
   sigJwks: readonly ECPrivateKeyWithKid[],
   encJwks: readonly ECPrivateKeyWithKid[],
-  iacaX509: string,
+  iacaX509: string
 ): JwksRepository => ({
   getEncrypt: () => extractKeys(encJwks),
   getSign: () => extractKeys(sigJwks),
-  iacaX509: () => iacaX509,
+  iacaX509: () => iacaX509
 });

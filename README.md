@@ -65,18 +65,21 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 
 ### Root-level `pnpm` scripts
 
-| Command           | Description                                                           |
-| ----------------- | --------------------------------------------------------------------- |
-| `pnpm build`      | Build all projects with a `build` target                              |
-| `pnpm start`      | Serve all runnable apps with a `serve` target                         |
-| `pnpm issuer`     | Serve `itw-credential-issuer`                                         |
-| `pnpm rp`         | Serve `itw-relying-party`                                             |
-| `pnpm test`       | Run Vitest for projects with a `test` target                          |
-| `pnpm typecheck`  | Type-check projects with a `typecheck` target                         |
-| `pnpm lint`       | Lint projects with a `lint` target                                    |
-| `pnpm format`     | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier |
-| `pnpm clean`      | Run project clean targets, then remove root `node_modules` and `.nx`  |
-| `pnpm pre-commit` | Run lint and type-check on affected projects                          |
+| Command                         | Description                                                           |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `pnpm build`                    | Build all projects with a `build` target                              |
+| `pnpm start`                    | Serve all runnable apps with a `serve` target                         |
+| `pnpm conformance`              | Run the headless conformance CLI (`issuance`/`presentation`)          |
+| `pnpm conformance:issuance`     | Shortcut for issuance flow via CLI                                    |
+| `pnpm conformance:presentation` | Shortcut for presentation flow via CLI                                |
+| `pnpm issuer`                   | Serve `itw-credential-issuer`                                         |
+| `pnpm rp`                       | Serve `itw-relying-party`                                             |
+| `pnpm test`                     | Run Vitest for projects with a `test` target                          |
+| `pnpm typecheck`                | Type-check projects with a `typecheck` target                         |
+| `pnpm lint`                     | Lint projects with a `lint` target                                    |
+| `pnpm format`                   | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier |
+| `pnpm clean`                    | Run project clean targets, then remove root `node_modules` and `.nx`  |
+| `pnpm pre-commit`               | Run lint and type-check on affected projects                          |
 
 ### Targeting a single project with Nx
 
@@ -95,6 +98,10 @@ pnpm nx run itw-credential-issuer:serve
 # Serve the relying party locally
 pnpm nx run itw-relying-party:serve
 ```
+
+### Headless Conformance CLI
+
+All CLI details are documented in [apps/cli/README.md](apps/cli/README.md).
 
 Current workspace projects include:
 

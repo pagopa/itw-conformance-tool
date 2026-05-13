@@ -1,17 +1,17 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const ECKey = z.object({
   crv: z.string(),
   kid: z.string().optional(),
-  kty: z.literal("EC"),
-  use: z.enum(["enc", "sig"]).optional(),
+  kty: z.literal('EC'),
+  use: z.enum(['enc', 'sig']).optional(),
   x: z.string(),
-  y: z.string(),
+  y: z.string()
 });
 export type ECKey = z.infer<typeof ECKey>;
 
 export const ECPrivateKey = ECKey.extend({
-  d: z.string(),
+  d: z.string()
 });
 export type ECPrivateKey = z.infer<typeof ECPrivateKey>;
 
@@ -19,9 +19,9 @@ export const RSAKey = z.object({
   alg: z.string().optional(),
   e: z.string(),
   kid: z.string().optional(),
-  kty: z.literal("RSA"),
+  kty: z.literal('RSA'),
   n: z.string(),
-  use: z.enum(["enc", "sig"]).optional(),
+  use: z.enum(['enc', 'sig']).optional()
 });
 export type RSAKey = z.infer<typeof RSAKey>;
 
@@ -32,23 +32,20 @@ export const RSAPrivateKey = RSAKey.extend({
   p: z.string().optional(),
   q: z.string().optional(),
   qi: z.string().optional(),
-  u: z.string().optional(),
+  u: z.string().optional()
 });
 export type RSAPrivateKey = z.infer<typeof RSAPrivateKey>;
 
 /**
  * The Public Key JWK type. It could be either an ECKey or an RSAKey.
  */
-export const JwkPublicKey = z.discriminatedUnion("kty", [RSAKey, ECKey]);
+export const JwkPublicKey = z.discriminatedUnion('kty', [RSAKey, ECKey]);
 export type JwkPublicKey = z.infer<typeof JwkPublicKey>;
 
 /**
  * The Private Key JWK type. It could be either an ECPrivateKey or an RSAPrivateKey.
  */
-export const JwkPrivateKey = z.discriminatedUnion("kty", [
-  RSAPrivateKey,
-  ECPrivateKey,
-]);
+export const JwkPrivateKey = z.discriminatedUnion('kty', [RSAPrivateKey, ECPrivateKey]);
 export type JwkPrivateKey = z.infer<typeof JwkPrivateKey>;
 
 /**
@@ -58,11 +55,11 @@ export const Jwk = z.union([JwkPublicKey, JwkPrivateKey]);
 export type Jwk = z.infer<typeof Jwk>;
 
 export const JwksMetadata = z.object({
-  keys: z.array(JwkPublicKey),
+  keys: z.array(JwkPublicKey)
 });
 export type JwksMetadata = z.infer<typeof JwksMetadata>;
 
 export const ECPrivateKeyWithKidCodec = ECPrivateKey.extend({
-  kid: z.string(),
+  kid: z.string()
 });
 export type ECPrivateKeyWithKid = z.infer<typeof ECPrivateKeyWithKidCodec>;

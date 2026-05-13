@@ -1,4 +1,4 @@
-import { NotFoundError } from "./errors";
+import { NotFoundError } from './errors';
 
 interface Nonce {
   expiresAt: number;
@@ -10,9 +10,7 @@ export interface NonceRepository {
   insert: (nonce: string) => Promise<void>;
 }
 
-export const deleteExpiredNonces: (
-  nonceRepository: NonceRepository,
-) => Promise<void> = async (nonceRepository) => {
+export const deleteExpiredNonces: (nonceRepository: NonceRepository) => Promise<void> = async (nonceRepository) => {
   const now = Date.now();
   for (const { expiresAt, id } of nonces) {
     if (expiresAt < now) {
@@ -21,15 +19,11 @@ export const deleteExpiredNonces: (
   }
 };
 
-export const insertNonce: (
-  nonce: string,
-) => (nonceRepository: NonceRepository) => Promise<void> =
+export const insertNonce: (nonce: string) => (nonceRepository: NonceRepository) => Promise<void> =
   (nonce) => (nonceRepository) =>
     nonceRepository.insert(nonce);
 
-export const getNonce: (
-  nonceId: string,
-) => (nonceRepository: NonceRepository) => Promise<string> =
+export const getNonce: (nonceId: string) => (nonceRepository: NonceRepository) => Promise<string> =
   (nonceId) => async (nonceRepository) => {
     await nonceRepository.delete(nonceId);
     return nonceId;
@@ -56,8 +50,8 @@ export const nonceRepository: NonceRepository = {
     // we delete the nonce after 5 minutes (aligned with the request object TTL)
     nonces.push({
       expiresAt: Date.now() + 5 * 60 * 1000,
-      id: nonceId,
+      id: nonceId
     });
     return Promise.resolve(undefined);
-  },
+  }
 };

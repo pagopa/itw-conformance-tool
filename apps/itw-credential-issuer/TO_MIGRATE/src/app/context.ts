@@ -1,14 +1,14 @@
-import { AppRepository } from "@/app/repository";
+import { AppRepository } from '@/app/repository';
 import {
   getDecryptJweCallback,
   getEncryptJweCallback,
   getSignJwtCallback,
-  callbacks as partialCallbacks,
-} from "@/domain/crypto";
-import { CallbackContext } from "@pagopa/io-wallet-oauth2";
-import { type IoWalletSdkConfig } from "@pagopa/io-wallet-utils";
+  callbacks as partialCallbacks
+} from '@/domain/crypto';
+import { CallbackContext } from '@pagopa/io-wallet-oauth2';
+import { type IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
-import { type Config, config } from "./config";
+import { type Config, config } from './config';
 
 export class AppContext {
   public readonly callbacks: CallbackContext;
@@ -27,7 +27,7 @@ export class AppContext {
       decryptJwe: getDecryptJweCallback(encKeys.private),
       encryptJwe: getEncryptJweCallback(encKeys.public),
       fetch,
-      signJwt: getSignJwtCallback(signKeys),
+      signJwt: getSignJwtCallback(signKeys)
     } satisfies CallbackContext;
 
     this.callbacks = callbacks;
