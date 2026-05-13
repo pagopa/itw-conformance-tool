@@ -30,6 +30,15 @@ interface RuntimeConfig {
   nx: NxConfig;
 }
 
+interface NormalizedRuntimeConfig {
+  endpoint?: RuntimeConfig['endpoint'];
+  credentialTypes?: RuntimeConfig['credentialTypes'];
+  logLevel?: RuntimeConfig['logLevel'];
+  target?: RuntimeConfig['target'];
+  tls?: Partial<TlsConfig>;
+  nx?: Partial<NxConfig>;
+}
+
 interface RawConfig {
   endpoint?: unknown;
   credentialTypes?: unknown;
@@ -303,8 +312,8 @@ function loadRawConfig(filePath?: string): RawConfig {
   return parsed as RawConfig;
 }
 
-function normalizeRawConfig(raw: RawConfig): Partial<RuntimeConfig> {
-  const result: Partial<RuntimeConfig> = {};
+function normalizeRawConfig(raw: RawConfig): NormalizedRuntimeConfig {
+  const result: NormalizedRuntimeConfig = {};
 
   if (typeof raw.endpoint === 'string') {
     result.endpoint = raw.endpoint;
@@ -342,7 +351,7 @@ function normalizeRawConfig(raw: RawConfig): Partial<RuntimeConfig> {
   }
 
   if (Object.keys(normalizedTls).length > 0) {
-    result.tls = normalizedTls as TlsConfig;
+    result.tls = normalizedTls;
   }
 
   const normalizedNx: Partial<NxConfig> = {};
@@ -356,13 +365,13 @@ function normalizeRawConfig(raw: RawConfig): Partial<RuntimeConfig> {
   }
 
   if (Object.keys(normalizedNx).length > 0) {
-    result.nx = normalizedNx as NxConfig;
+    result.nx = normalizedNx;
   }
 
   return result;
 }
 
-function mergeConfig(flow: Flow, fileConfig: Partial<RuntimeConfig>, flags: CliFlags): RuntimeConfig {
+function mergeConfig(flow: Flow, fileConfig: NormalizedRuntimeConfig, flags: CliFlags): RuntimeConfig {
   const defaults = defaultConfigs[flow];
 
   const merged: RuntimeConfig = {
