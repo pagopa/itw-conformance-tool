@@ -28,10 +28,7 @@ describe('UserService', () => {
   });
 
   it('should throw on invalid input', async (t) => {
-    await t.assert.rejects(
-      () => service.create({ name: '' }),
-      { message: 'Name is required' }
-    );
+    await t.assert.rejects(() => service.create({ name: '' }), { message: 'Name is required' });
   });
 });
 ```
@@ -52,10 +49,7 @@ describe('EmailService', () => {
     await service.sendWelcome('user@example.com');
 
     t.assert.equal(sendMock.mock.calls.length, 1);
-    t.assert.deepEqual(sendMock.mock.calls[0].arguments, [
-      'user@example.com',
-      'Welcome!',
-    ]);
+    t.assert.deepEqual(sendMock.mock.calls[0].arguments, ['user@example.com', 'Welcome!']);
   });
 });
 ```
@@ -69,7 +63,7 @@ describe('UserController', () => {
   it('should fetch user from API', async (t) => {
     t.mock.method(globalThis, 'fetch', async () => ({
       ok: true,
-      json: async () => ({ id: '1', name: 'John' }),
+      json: async () => ({ id: '1', name: 'John' })
     }));
 
     const user = await fetchUser('1');

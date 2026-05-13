@@ -64,7 +64,7 @@ Fastify has built-in close-with-grace support:
 import Fastify from 'fastify';
 
 const app = Fastify({
-  logger: true,
+  logger: true
 });
 
 // Fastify automatically handles graceful shutdown

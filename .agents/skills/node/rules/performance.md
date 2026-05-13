@@ -45,7 +45,7 @@ export default function heavyComputation(data: { input: string }): string {
 import Piscina from 'piscina';
 
 const piscina = new Piscina({
-  filename: new URL('./worker.ts', import.meta.url).href,
+  filename: new URL('./worker.ts', import.meta.url).href
 });
 
 const result = await piscina.run({ input: 'data' });
@@ -63,7 +63,7 @@ import { Pool } from 'pg';
 const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 2000
 });
 
 async function query<T>(sql: string, params: unknown[]): Promise<T[]> {
@@ -93,7 +93,7 @@ import { LRUCache } from 'lru-cache';
 
 const cache = new LRUCache<string, unknown>({
   max: 500,
-  ttl: 1000 * 60 * 5,
+  ttl: 1000 * 60 * 5
 });
 
 // BAD - listener leak

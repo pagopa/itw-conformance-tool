@@ -21,25 +21,28 @@ const schema = Type.Object({
   HOST: Type.String({ default: '0.0.0.0' }),
   DATABASE_URL: Type.String(),
   JWT_SECRET: Type.String({ minLength: 32 }),
-  LOG_LEVEL: Type.Union([
-    Type.Literal('trace'),
-    Type.Literal('debug'),
-    Type.Literal('info'),
-    Type.Literal('warn'),
-    Type.Literal('error'),
-    Type.Literal('fatal'),
-  ], { default: 'info' }),
+  LOG_LEVEL: Type.Union(
+    [
+      Type.Literal('trace'),
+      Type.Literal('debug'),
+      Type.Literal('info'),
+      Type.Literal('warn'),
+      Type.Literal('error'),
+      Type.Literal('fatal')
+    ],
+    { default: 'info' }
+  )
 });
 
 type Config = Static<typeof schema>;
 
 const config = envSchema<Config>({
   schema,
-  dotenv: true, // Load from .env file
+  dotenv: true // Load from .env file
 });
 
 const app = Fastify({
-  logger: { level: config.LOG_LEVEL },
+  logger: { level: config.LOG_LEVEL }
 });
 
 app.decorate('config', config);
@@ -67,7 +70,7 @@ const schema = Type.Object({
   HOST: Type.String({ default: '0.0.0.0' }),
   DATABASE_URL: Type.String(),
   JWT_SECRET: Type.String({ minLength: 32 }),
-  LOG_LEVEL: Type.String({ default: 'info' }),
+  LOG_LEVEL: Type.String({ default: 'info' })
 });
 
 type Config = Static<typeof schema>;
@@ -78,16 +81,19 @@ declare module 'fastify' {
   }
 }
 
-export default fp(async function configPlugin(fastify) {
-  const config = envSchema<Config>({
-    schema,
-    dotenv: true,
-  });
+export default fp(
+  async function configPlugin(fastify) {
+    const config = envSchema<Config>({
+      schema,
+      dotenv: true
+    });
 
-  fastify.decorate('config', config);
-}, {
-  name: 'config',
-});
+    fastify.decorate('config', config);
+  },
+  {
+    name: 'config'
+  }
+);
 ```
 
 ## Secrets Management
@@ -99,8 +105,8 @@ Handle secrets securely:
 const app = Fastify({
   logger: {
     level: config.LOG_LEVEL,
-    redact: ['req.headers.authorization', '*.password', '*.secret', '*.apiKey'],
-  },
+    redact: ['req.headers.authorization', '*.password', '*.secret', '*.apiKey']
+  }
 });
 
 // For production, use secret managers (AWS Secrets Manager, Vault, etc.)
@@ -117,7 +123,7 @@ import { Type, type Static } from '@sinclair/typebox';
 const schema = Type.Object({
   // ... other config
   FEATURE_NEW_DASHBOARD: Type.Boolean({ default: false }),
-  FEATURE_BETA_API: Type.Boolean({ default: false }),
+  FEATURE_BETA_API: Type.Boolean({ default: false })
 });
 
 type Config = Static<typeof schema>;
@@ -147,6 +153,7 @@ const config = await import(`./config/${env}.js`);
 ```
 
 Configuration files lead to:
+
 - Security risks (secrets in files)
 - Deployment complexity
 - Environment drift
@@ -159,7 +166,7 @@ Configuration files lead to:
 const configs = {
   development: { logLevel: 'debug' },
   production: { logLevel: 'info' },
-  test: { logLevel: 'silent' },
+  test: { logLevel: 'silent' }
 };
 const config = configs[process.env.NODE_ENV];
 ```
@@ -192,7 +199,7 @@ interface DynamicConfig {
 
 let dynamicConfig: DynamicConfig = {
   rateLimit: 100,
-  maintenanceMode: false,
+  maintenanceMode: false
 };
 
 async function refreshConfig() {

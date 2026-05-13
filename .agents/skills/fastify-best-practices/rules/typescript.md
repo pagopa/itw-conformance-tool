@@ -93,8 +93,8 @@ app.get<{
   Params: UserParams;
   Querystring: UserQuery;
 }>('/users/:id', async (request) => {
-  const { id } = request.params;         // string
-  const { include } = request.query;      // string | undefined
+  const { id } = request.params; // string
+  const { include } = request.query; // string | undefined
   return { id, include };
 });
 
@@ -109,7 +109,7 @@ app.route<{
   url: '/users/:id',
   handler: async (request, reply) => {
     return { user: { id: request.params.id, name: request.body.name } };
-  },
+  }
 });
 ```
 
@@ -127,28 +127,32 @@ const app = Fastify().withTypeProvider<TypeBoxTypeProvider>();
 const UserSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
-  email: Type.String({ format: 'email' }),
+  email: Type.String({ format: 'email' })
 });
 
 const CreateUserSchema = Type.Object({
   name: Type.String({ minLength: 1 }),
-  email: Type.String({ format: 'email' }),
+  email: Type.String({ format: 'email' })
 });
 
-app.post('/users', {
-  schema: {
-    body: CreateUserSchema,
-    response: {
-      201: UserSchema,
-    },
+app.post(
+  '/users',
+  {
+    schema: {
+      body: CreateUserSchema,
+      response: {
+        201: UserSchema
+      }
+    }
   },
-}, async (request, reply) => {
-  // request.body is typed as { name: string; email: string }
-  const { name, email } = request.body;
+  async (request, reply) => {
+    // request.body is typed as { name: string; email: string }
+    const { name, email } = request.body;
 
-  reply.code(201);
-  return { id: 'generated', name, email };
-});
+    reply.code(201);
+    return { id: 'generated', name, email };
+  }
+);
 ```
 
 ## Typing Decorators
@@ -198,7 +202,7 @@ app.decorateReply('sendSuccess', function (data: unknown) {
 // Now fully typed
 app.get('/profile', async (request, reply) => {
   const user = request.user; // { id: string; email: string; role: string } | undefined
-  const config = app.config;  // { port: number; host: string }
+  const config = app.config; // { port: number; host: string }
 
   reply.sendSuccess({ user });
 });
@@ -226,17 +230,14 @@ declare module 'fastify' {
   }
 }
 
-const databasePlugin: FastifyPluginAsync<DatabasePluginOptions> = async (
-  fastify,
-  options,
-) => {
+const databasePlugin: FastifyPluginAsync<DatabasePluginOptions> = async (fastify, options) => {
   const { connectionString, poolSize = 10 } = options;
 
   const db = await createConnection(connectionString, poolSize);
 
   fastify.decorate('db', {
     query: (sql: string, params?: unknown[]) => db.query(sql, params),
-    close: () => db.end(),
+    close: () => db.end()
   });
 
   fastify.addHook('onClose', async () => {
@@ -245,7 +246,7 @@ const databasePlugin: FastifyPluginAsync<DatabasePluginOptions> = async (
 };
 
 export default fp(databasePlugin, {
-  name: 'database',
+  name: 'database'
 });
 ```
 
@@ -254,17 +255,9 @@ export default fp(databasePlugin, {
 Type hook functions:
 
 ```typescript
-import type {
-  FastifyRequest,
-  FastifyReply,
-  onRequestHookHandler,
-  preHandlerHookHandler,
-} from 'fastify';
+import type { FastifyRequest, FastifyReply, onRequestHookHandler, preHandlerHookHandler } from 'fastify';
 
-const authHook: preHandlerHookHandler = async (
-  request: FastifyRequest,
-  reply: FastifyReply,
-) => {
+const authHook: preHandlerHookHandler = async (request: FastifyRequest, reply: FastifyReply) => {
   const token = request.headers.authorization;
   if (!token) {
     reply.code(401).send({ error: 'Unauthorized' });
@@ -294,9 +287,9 @@ const userSchema = {
   properties: {
     id: { type: 'string' },
     name: { type: 'string' },
-    email: { type: 'string', format: 'email' },
+    email: { type: 'string', format: 'email' }
   },
-  required: ['id', 'name', 'email'],
+  required: ['id', 'name', 'email']
 } as const satisfies JSONSchema7;
 
 // Infer TypeScript type from schema
@@ -306,15 +299,19 @@ type User = {
   email: string;
 };
 
-app.get<{ Reply: User }>('/users/:id', {
-  schema: {
-    response: {
-      200: userSchema,
-    },
+app.get<{ Reply: User }>(
+  '/users/:id',
+  {
+    schema: {
+      response: {
+        200: userSchema
+      }
+    }
   },
-}, async (request) => {
-  return { id: '1', name: 'John', email: 'john@example.com' };
-});
+  async (request) => {
+    return { id: '1', name: 'John', email: 'john@example.com' };
+  }
+);
 ```
 
 ## Shared Types
@@ -387,21 +384,29 @@ function createCrudRoutes<T extends { id: string }>(
       update: (id: string, data: unknown) => Promise<T>;
       delete: (id: string) => Promise<void>;
     };
-  },
+  }
 ) {
   const { prefix, schema, handlers } = options;
 
-  fastify.get(`${prefix}`, {
-    schema: { response: { 200: { type: 'array', items: schema.item } } },
-  }, async () => handlers.list());
+  fastify.get(
+    `${prefix}`,
+    {
+      schema: { response: { 200: { type: 'array', items: schema.item } } }
+    },
+    async () => handlers.list()
+  );
 
-  fastify.get(`${prefix}/:id`, {
-    schema: { response: { 200: schema.item } },
-  }, async (request) => {
-    const item = await handlers.get((request.params as { id: string }).id);
-    if (!item) throw { statusCode: 404, message: 'Not found' };
-    return item;
-  });
+  fastify.get(
+    `${prefix}/:id`,
+    {
+      schema: { response: { 200: schema.item } }
+    },
+    async (request) => {
+      const item = await handlers.get((request.params as { id: string }).id);
+      if (!item) throw { statusCode: 404, message: 'Not found' };
+      return item;
+    }
+  );
 
   // ... more routes
 }
@@ -421,14 +426,14 @@ interface UserRequest {
 app.put<UserRequest>('/users/:id', handler);
 
 // AVOID - overly complex generic types
-type DeepPartial<T> = T extends object ? {
-  [P in keyof T]?: DeepPartial<T[P]>;
-} : T;
+type DeepPartial<T> = T extends object
+  ? {
+      [P in keyof T]?: DeepPartial<T[P]>;
+    }
+  : T;
 
 // AVOID - excessive type inference
-type InferSchemaType<T> = T extends { properties: infer P }
-  ? { [K in keyof P]: InferPropertyType<P[K]> }
-  : never;
+type InferSchemaType<T> = T extends { properties: infer P } ? { [K in keyof P]: InferPropertyType<P[K]> } : never;
 ```
 
 ## Type Checking Without Compilation

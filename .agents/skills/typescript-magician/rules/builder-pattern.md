@@ -16,10 +16,7 @@ The builder pattern uses a chain of method calls to incrementally build up a dat
 Each method returns a new or modified builder with updated type information:
 
 ```typescript
-new DbSeeder()
-  .addUser("matt", { name: "Matt" })
-  .addPost("post1", { title: "Hello" })
-  .transact();
+new DbSeeder().addUser('matt', { name: 'Matt' }).addPost('post1', { title: 'Hello' }).transact();
 // Each step updates the type to include what was added
 ```
 
@@ -50,22 +47,22 @@ interface DbShape {
 
 ```typescript
 export class DbSeeder<TDatabase extends DbShape> {
-  public users: DbShape["users"] = {};
-  public posts: DbShape["posts"] = {};
+  public users: DbShape['users'] = {};
+  public posts: DbShape['posts'] = {};
 
   // Each method returns DbSeeder with EXTENDED type information
   addUser = <Id extends string>(
     id: Id,
-    user: Omit<User, "id">,
-  ): DbSeeder<TDatabase & { users: TDatabase["users"] & Record<Id, User> }> => {
+    user: Omit<User, 'id'>
+  ): DbSeeder<TDatabase & { users: TDatabase['users'] & Record<Id, User> }> => {
     this.users[id] = { ...user, id };
     return this;
   };
 
   addPost = <Id extends string>(
     id: Id,
-    post: Omit<Post, "id">,
-  ): DbSeeder<TDatabase & { posts: TDatabase["posts"] & Record<Id, Post> }> => {
+    post: Omit<Post, 'id'>
+  ): DbSeeder<TDatabase & { posts: TDatabase['posts'] & Record<Id, Post> }> => {
     this.posts[id] = { ...post, id };
     return this;
   };
@@ -74,8 +71,8 @@ export class DbSeeder<TDatabase extends DbShape> {
   transact = async () => {
     // Actual database operations would go here
     return {
-      users: this.users as TDatabase["users"],
-      posts: this.posts as TDatabase["posts"],
+      users: this.users as TDatabase['users'],
+      posts: this.posts as TDatabase['posts']
     };
   };
 }
@@ -86,9 +83,9 @@ export class DbSeeder<TDatabase extends DbShape> {
 ```typescript
 const usage = async () => {
   const result = await new DbSeeder()
-    .addUser("matt", { name: "Matt" })
-    .addPost("post1", { authorId: "matt", title: "Hello" })
-    .addPost("post2", { authorId: "matt", title: "World" })
+    .addUser('matt', { name: 'Matt' })
+    .addPost('post1', { authorId: 'matt', title: 'Hello' })
+    .addPost('post2', { authorId: 'matt', title: 'World' })
     .transact();
 
   // result.users.matt is typed as User
@@ -136,7 +133,7 @@ addUser = <Id extends string>(
 Use `&` to add new type information while preserving existing:
 
 ```typescript
-TDatabase & { users: TDatabase["users"] & Record<Id, User> }
+TDatabase & { users: TDatabase['users'] & Record<Id, User> };
 ```
 
 ### 3. Cast in Terminal Methods
@@ -146,8 +143,8 @@ The runtime types don't match compile-time types, so cast in the final method:
 ```typescript
 transact = async () => {
   return {
-    users: this.users as TDatabase["users"],
-    posts: this.posts as TDatabase["posts"],
+    users: this.users as TDatabase['users'],
+    posts: this.posts as TDatabase['posts']
   };
 };
 ```
@@ -172,33 +169,25 @@ class QueryBuilder<TState extends QueryState> {
     return new QueryBuilder({
       table: null,
       columns: [],
-      whereClause: null,
+      whereClause: null
     });
   }
 
-  from<T extends string>(
-    table: T
-  ): QueryBuilder<TState & { table: T }> {
+  from<T extends string>(table: T): QueryBuilder<TState & { table: T }> {
     return new QueryBuilder({ ...this.state, table });
   }
 
-  select<C extends string[]>(
-    ...columns: C
-  ): QueryBuilder<TState & { columns: C }> {
+  select<C extends string[]>(...columns: C): QueryBuilder<TState & { columns: C }> {
     return new QueryBuilder({ ...this.state, columns });
   }
 
-  where<W extends string>(
-    clause: W
-  ): QueryBuilder<TState & { whereClause: W }> {
+  where<W extends string>(clause: W): QueryBuilder<TState & { whereClause: W }> {
     return new QueryBuilder({ ...this.state, whereClause: clause });
   }
 
   // Only allow build if table is set
   build(this: QueryBuilder<TState & { table: string }>): string {
-    const cols = this.state.columns.length
-      ? this.state.columns.join(", ")
-      : "*";
+    const cols = this.state.columns.length ? this.state.columns.join(', ') : '*';
     let sql = `SELECT ${cols} FROM ${this.state.table}`;
     if (this.state.whereClause) {
       sql += ` WHERE ${this.state.whereClause}`;
@@ -208,14 +197,10 @@ class QueryBuilder<TState extends QueryState> {
 }
 
 // Usage
-const query = QueryBuilder.create()
-  .from("users")
-  .select("id", "name")
-  .where("active = true")
-  .build();
+const query = QueryBuilder.create().from('users').select('id', 'name').where('active = true').build();
 
 // Error: Can't build without from()
-QueryBuilder.create().select("id").build(); // Type error!
+QueryBuilder.create().select('id').build(); // Type error!
 ```
 
 ## Pattern: Configuration Builder with Required Fields
@@ -228,7 +213,7 @@ interface ServerConfig {
   timeout?: number;
 }
 
-type RequiredFields = "host" | "port";
+type RequiredFields = 'host' | 'port';
 type ConfiguredFields<T> = { [K in keyof T]-?: K };
 
 class ConfigBuilder<TConfigured extends Partial<Record<keyof ServerConfig, true>>> {
@@ -250,22 +235,16 @@ class ConfigBuilder<TConfigured extends Partial<Record<keyof ServerConfig, true>
   }
 
   // Only allow build when required fields are set
-  build(
-    this: ConfigBuilder<{ host: true; port: true }>
-  ): ServerConfig {
+  build(this: ConfigBuilder<{ host: true; port: true }>): ServerConfig {
     return this.config as ServerConfig;
   }
 }
 
 // Usage
-const config = new ConfigBuilder()
-  .host("localhost")
-  .port(3000)
-  .ssl(true)
-  .build();
+const config = new ConfigBuilder().host('localhost').port(3000).ssl(true).build();
 
 // Error: Missing required fields
-new ConfigBuilder().host("localhost").build(); // Type error!
+new ConfigBuilder().host('localhost').build(); // Type error!
 ```
 
 ## Advanced: Default Values
@@ -277,8 +256,8 @@ export class DbSeeder<
     posts: {};
   }
 > {
-  public users: DbShape["users"] = {
-    defaultUser: { id: "default", name: "Default User" },
+  public users: DbShape['users'] = {
+    defaultUser: { id: 'default', name: 'Default User' }
   };
   // ...
 }
@@ -318,15 +297,15 @@ class DbSeeder<TDatabase extends DbShape> {
 transact = async () => {
   return {
     users: this.users, // Type: Record<string, User>, not TDatabase["users"]
-    posts: this.posts,
+    posts: this.posts
   };
 };
 
 // GOOD - cast to match accumulated type
 transact = async () => {
   return {
-    users: this.users as TDatabase["users"],
-    posts: this.posts as TDatabase["posts"],
+    users: this.users as TDatabase['users'],
+    posts: this.posts as TDatabase['posts']
   };
 };
 ```

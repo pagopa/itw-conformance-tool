@@ -124,8 +124,8 @@ app.setErrorHandler((error, request, reply) => {
   reply.status(statusCode).send({
     error: {
       code,
-      message: error.message,
-    },
+      message: error.message
+    }
   });
 });
 ```
