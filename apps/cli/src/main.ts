@@ -288,7 +288,13 @@ function loadRawConfig(filePath?: string): RawConfig {
 
   const resolvedPath = resolve(process.cwd(), filePath);
   const raw = readFileSync(resolvedPath, { encoding: 'utf8' });
-  const parsed = JSON.parse(raw) as unknown;
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new Error(`Failed to parse config file JSON: ${resolvedPath}`, { cause: error });
+  }
 
   if (parsed === null || typeof parsed !== 'object') {
     throw new Error(`Invalid config file format: ${resolvedPath}`);
