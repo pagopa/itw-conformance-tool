@@ -534,6 +534,15 @@ async function main(): Promise<void> {
   }
 
   if (flags.dryRun) {
+    const dryRunLogger = createCliLogger('info').child({
+      flow: command,
+      project: flowToProject[command],
+      target: runtimeConfig.target
+    });
+    emitLog(dryRunLogger, 'info', 'cli.dry_run_summary', {
+      runtimeConfig,
+      command: ['pnpm', ...nxArgs].join(' ')
+    });
     process.exit(0);
   }
 

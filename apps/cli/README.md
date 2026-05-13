@@ -152,6 +152,7 @@ The CLI writes JSON logs to stdout and captures Nx output as structured JSON eve
 
 - cli.runtime_config_resolved
 - cli.nx_command
+- cli.dry_run_summary
 - cli.nx_output
 - cli.flow_completed
 - cli.flow_failed
@@ -161,6 +162,7 @@ Levels are assigned per event and filtered by --log-level:
 
 - cli.runtime_config_resolved: debug
 - cli.nx_command: debug
+- cli.dry_run_summary: info (always emitted when `--dry-run` is set)
 - cli.nx_output (stdout): info
 - cli.nx_output (stderr): error
 - cli.flow_completed: info
