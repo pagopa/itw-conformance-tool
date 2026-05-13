@@ -61,7 +61,7 @@ Root shortcuts:
 - --unsafe-tls
   - Disable TLS certificate verification (sets NODE_TLS_REJECT_UNAUTHORIZED=0)
 - --tls-ca-file <path>
-  - Custom CA file path (currently export-only via ITW_CT_* env var; does not affect TLS handling yet)
+  - Custom CA file path (currently export-only via ITW*CT*\* env var; does not affect TLS handling yet)
 - --log-level <debug|info|warn|error>
   - Minimum log threshold (debug shows everything, error shows only errors)
 - --target <test|serve>

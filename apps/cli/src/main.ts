@@ -118,7 +118,9 @@ function printHelp(): void {
   process.stdout.write('  -e, --endpoint <url>                Endpoint override\n');
   process.stdout.write('  --credential-types <list>           Comma-separated credential types\n');
   process.stdout.write('  --unsafe-tls                        Disable TLS certificate verification\n');
-  process.stdout.write('  --tls-ca-file <path>                Export CA file path as ITW_CT_TLS_CA_FILE for downstream consumers (not wired into Node TLS here)\n');
+  process.stdout.write(
+    '  --tls-ca-file <path>                Export CA file path as ITW_CT_TLS_CA_FILE for downstream consumers (not wired into Node TLS here)\n'
+  );
   process.stdout.write('  --log-level <debug|info|warn|error> Log level for CLI logs\n');
   process.stdout.write('  --target <test|serve>               Nx target to execute (default: test)\n');
   process.stdout.write('  --skip-nx-cache                     Pass --skip-nx-cache to Nx\n');
@@ -303,10 +305,7 @@ function loadRawConfig(filePath?: string): RawConfig {
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
     const codeSuffix = typeof code === 'string' ? ` (${code})` : '';
-    throw new Error(
-      `Failed to read config file passed via --config: ${resolvedPath}${codeSuffix}`,
-      { cause: error },
-    );
+    throw new Error(`Failed to read config file passed via --config: ${resolvedPath}${codeSuffix}`, { cause: error });
   }
 
   let parsed: unknown;
@@ -452,11 +451,7 @@ function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string)
   return env;
 }
 
-function pipeChildOutput(
-  stream: NodeJS.ReadableStream,
-  logger: CliLogger,
-  level: LogLevel
-): Promise<void> {
+function pipeChildOutput(stream: NodeJS.ReadableStream, logger: CliLogger, level: LogLevel): Promise<void> {
   return new Promise((resolve, reject) => {
     const interfaceHandle = createInterface({ input: stream, crlfDelay: Infinity });
 
@@ -490,7 +485,13 @@ function resolveLocalNxCli(): string {
   throw new Error('Unable to locate the local Nx CLI in node_modules');
 }
 
-async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string[], env: NodeJS.ProcessEnv, logger: CliLogger): Promise<number> {
+async function runCommand(
+  flow: Flow,
+  runtimeConfig: RuntimeConfig,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  logger: CliLogger
+): Promise<number> {
   const nxCliPath = resolveLocalNxCli();
   const nxArgs = args[0] === 'nx' ? args.slice(1) : args;
   const child = spawn(process.execPath, [nxCliPath, ...nxArgs], {
