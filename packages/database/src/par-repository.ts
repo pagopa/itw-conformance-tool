@@ -30,10 +30,15 @@ export class SqlitePARRepository implements IPARRepository {
 
   async get(requestUri: string): Promise<PAREntry | undefined> {
     const row = this.db
-      .prepare('SELECT * FROM par_entries WHERE request_uri = ? AND expires_at >= unixepoch(\'now\') * 1000')
+      .prepare('SELECT * FROM par_entries WHERE request_uri = ?')
       .get(requestUri) as PARRow | undefined;
 
     if (!row) {
+      return undefined;
+    }
+
+    const nowMs = (this.db.prepare('SELECT unixepoch(\'now\') * 1000 AS now').get() as { now: number }).now;
+    if (row.expires_at < nowMs) {
       this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(requestUri);
       return undefined;
     }
