@@ -41,14 +41,14 @@ Recommended in CI/non-interactive environments:
 
 From the workspace root:
 
-- pnpm conformance help
-- pnpm conformance:issuance -- [options]
-- pnpm conformance:presentation -- [options]
+- pnpm conformance --args="help"
+- pnpm conformance --args="issuance [options]"
+- pnpm conformance --args="presentation [options]"
 
 Root shortcuts:
 
-- pnpm conformance:issuance -- [options]
-- pnpm conformance:presentation -- [options]
+- pnpm conformance:issuance
+- pnpm conformance:presentation
 
 ## CLI options
 
@@ -130,23 +130,23 @@ Supported fields:
 
 Help:
 
-pnpm conformance help
+pnpm conformance --args="help"
 
 Dry-run issuance:
 
-pnpm conformance issuance --dry-run --endpoint https://issuer.example.org --credential-types PID,MDL --skip-nx-cache
+pnpm conformance --args="issuance --dry-run --endpoint https://issuer.example.org --credential-types PID,MDL --skip-nx-cache"
 
 Dry-run presentation:
 
-pnpm conformance presentation --dry-run --target serve --log-level debug
+pnpm conformance --args="presentation --dry-run --target serve --log-level debug"
 
 Actual issuance run:
 
-pnpm conformance issuance --target test
+pnpm conformance:issuance
 
 Actual presentation run:
 
-pnpm conformance presentation --target test
+pnpm conformance:presentation
 
 ## Output and exit codes
 
