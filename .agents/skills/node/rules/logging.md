@@ -15,7 +15,7 @@ Use [pino](https://github.com/pinojs/pino) for fast, structured JSON logging:
 import pino from 'pino';
 
 const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || 'info'
 });
 
 logger.info({ userId: user.id }, 'User created');
@@ -61,9 +61,9 @@ const logger = pino({
   transport: {
     target: 'pino-pretty',
     options: {
-      colorize: true,
-    },
-  },
+      colorize: true
+    }
+  }
 });
 ```
 
@@ -80,15 +80,15 @@ const logger = pino({
       {
         target: 'pino-pretty',
         options: { colorize: true },
-        level: 'info',
+        level: 'info'
       },
       {
         target: 'pino/file',
         options: { destination: '/var/log/app.log' },
-        level: 'error',
-      },
-    ],
-  },
+        level: 'error'
+      }
+    ]
+  }
 });
 ```
 
@@ -106,7 +106,7 @@ Create child loggers with bound context:
 ```typescript
 const requestLogger = logger.child({
   requestId: req.id,
-  userId: req.user?.id,
+  userId: req.user?.id
 });
 
 requestLogger.info('Processing request');
@@ -124,9 +124,9 @@ const app = Fastify({
   logger: {
     level: 'info',
     transport: {
-      target: 'pino-pretty',
-    },
-  },
+      target: 'pino-pretty'
+    }
+  }
 });
 
 app.get('/', async (request) => {
@@ -141,7 +141,7 @@ Use pino's built-in redaction for sensitive fields:
 
 ```typescript
 const logger = pino({
-  redact: ['password', 'token', 'apiKey', 'req.headers.authorization'],
+  redact: ['password', 'token', 'apiKey', 'req.headers.authorization']
 });
 
 // Sensitive values are replaced with [Redacted]

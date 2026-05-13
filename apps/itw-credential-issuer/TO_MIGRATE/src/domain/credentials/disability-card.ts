@@ -1,21 +1,18 @@
-import type { JwksRepository } from "@/domain/signer";
-import type { JwkPublicKey } from "@/domain/z-jwk";
-import type { DisclosureFrame } from "@sd-jwt/types";
+import type { JwksRepository } from '@/domain/signer';
+import type { JwkPublicKey } from '@/domain/z-jwk';
+import type { DisclosureFrame } from '@sd-jwt/types';
 
-import { FakeUser } from "@/domain/faker";
-import { createSRIHash, createSignerVerifier } from "@/domain/sd-jwt";
-import { createBase64Portrait } from "@/domain/utils/portrait";
-import { STATUS_LIST_URI } from "@/domain/utils/status-list";
-import {
-  IoWalletSdkConfig,
-  ItWalletSpecsVersion,
-} from "@pagopa/io-wallet-utils";
-import { ES256, digest, generateSalt } from "@sd-jwt/crypto-nodejs";
-import { SDJwtVcInstance } from "@sd-jwt/sd-jwt-vc";
+import { FakeUser } from '@/domain/faker';
+import { createSRIHash, createSignerVerifier } from '@/domain/sd-jwt';
+import { createBase64Portrait } from '@/domain/utils/portrait';
+import { STATUS_LIST_URI } from '@/domain/utils/status-list';
+import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
+import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
+import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
 
-export const DISABILITY_CARD_SCOPE = "EuropeanDisabilityCard";
-export const DISABILITY_CARD_ID = "dc_sd_jwt_EuropeanDisabilityCard";
-export const DISABILITY_CARD_VCT = "urn:eu.europa.ec.eudi:edc:1";
+export const DISABILITY_CARD_SCOPE = 'EuropeanDisabilityCard';
+export const DISABILITY_CARD_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
+export const DISABILITY_CARD_VCT = 'urn:eu.europa.ec.eudi:edc:1';
 
 /**
  * European Disability Card Credential
@@ -29,23 +26,23 @@ export async function createDisabilityCardCredential(
   jwksRepository: JwksRepository,
   holderPublicKey: JwkPublicKey,
   config: IoWalletSdkConfig,
-  fakeUser: FakeUser,
+  fakeUser: FakeUser
 ): Promise<string> {
   const jwks = jwksRepository.getSign();
 
   const [signer, verifier] = await createSignerVerifier({
     privateKey: jwks.private,
-    publicKey: holderPublicKey,
+    publicKey: holderPublicKey
   });
 
   // Create SDJwt instance for use
   const sdjwt = new SDJwtVcInstance({
-    hashAlg: "sha-256",
+    hashAlg: 'sha-256',
     hasher: digest,
     saltGenerator: generateSalt,
     signAlg: ES256.alg,
     signer,
-    verifier,
+    verifier
   });
 
   const now = new Date();
@@ -58,26 +55,26 @@ export async function createDisabilityCardCredential(
     expiry_date: expiration.toISOString().slice(0, 10), // "YYYY-MM-DD"
     family_name: fakeUser.familyName,
     given_name: fakeUser.givenName,
-    issuing_authority: "PagoPA S.p.A.",
-    issuing_country: "IT",
+    issuing_authority: 'PagoPA S.p.A.',
+    issuing_country: 'IT',
     link_qr_code: `https://example.com/verify?vc=${fakeUser.documentNumber}`,
     personal_administrative_number: fakeUser.fiscalCode,
-    portrait: createBase64Portrait(),
+    portrait: createBase64Portrait()
   };
 
   // Issuer Define the disclosure frame to specify which claims can be disclosed
   const disclosureFrame: DisclosureFrame<typeof claims> = {
     _sd: [
-      "birth_date",
-      "constant_attendance_allowance",
-      "document_number",
-      "expiry_date",
-      "family_name",
-      "given_name",
-      "link_qr_code",
-      "personal_administrative_number",
-      "portrait",
-    ],
+      'birth_date',
+      'constant_attendance_allowance',
+      'document_number',
+      'expiry_date',
+      'family_name',
+      'given_name',
+      'link_qr_code',
+      'personal_administrative_number',
+      'portrait'
+    ]
   };
 
   const vctIntegrity = createSRIHash(DISABILITY_CARD_VCT);
@@ -92,28 +89,28 @@ export async function createDisabilityCardCredential(
       iss,
       status: {
         ...(config.isVersion(ItWalletSpecsVersion.V1_0) && {
-          status_assertion: { credential_hash_alg: "sha-256" },
+          status_assertion: { credential_hash_alg: 'sha-256' }
         }),
 
         status_list: {
           idx: 1,
-          uri: STATUS_LIST_URI(iss),
-        },
+          uri: STATUS_LIST_URI(iss)
+        }
       },
       sub: holderPublicKey.kid,
       vct: DISABILITY_CARD_VCT,
-      "vct#Integrity": vctIntegrity,
+      'vct#Integrity': vctIntegrity,
       // verification
-      ...claims,
+      ...claims
     },
     disclosureFrame,
     {
       header: {
         kid: jwks.private.kid,
-        typ: "dc+sd-jwt",
-        x5c: [jwksRepository.iacaX509()],
-      },
-    },
+        typ: 'dc+sd-jwt',
+        x5c: [jwksRepository.iacaX509()]
+      }
+    }
   );
 
   return credential;

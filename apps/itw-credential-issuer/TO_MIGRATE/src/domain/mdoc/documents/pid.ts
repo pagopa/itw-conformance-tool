@@ -1,20 +1,14 @@
-import { DateOnly } from "@owf/mdoc";
-import {
-  IoWalletSdkConfig,
-  ItWalletSpecsVersion,
-} from "@pagopa/io-wallet-utils";
+import { DateOnly } from '@owf/mdoc';
+import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 
-import type { FakeUser } from "../../faker";
-import type { MdocDocumentDefinition } from "./index";
+import type { FakeUser } from '../../faker';
+import type { MdocDocumentDefinition } from './index';
 
-export const PID_MDOC_NAMESPACE = "eu.europa.ec.eudi.pid.1";
-export const PID_MDOC_IT_NAMESPACE = "eu.europa.ec.eudi.pid.it.1";
-export const PID_MDOC_DOCTYPE = "eu.europa.ec.eudi.pid.1";
+export const PID_MDOC_NAMESPACE = 'eu.europa.ec.eudi.pid.1';
+export const PID_MDOC_IT_NAMESPACE = 'eu.europa.ec.eudi.pid.it.1';
+export const PID_MDOC_DOCTYPE = 'eu.europa.ec.eudi.pid.1';
 
-export const getPidMdocDocument = (
-  config: IoWalletSdkConfig,
-  fakeUser: FakeUser,
-): MdocDocumentDefinition => {
+export const getPidMdocDocument = (config: IoWalletSdkConfig, fakeUser: FakeUser): MdocDocumentDefinition => {
   const now = new Date();
   const expiration = new Date(now.getTime() + 24 * 60 * 60 * 1000 * 355); // plus 1 year
   const expiryDate = expiration.toISOString().slice(0, 10);
@@ -27,9 +21,9 @@ export const getPidMdocDocument = (
             personal_administrative_number: fakeUser.fiscalCode,
             sub: fakeUser.id,
             verification: {
-              assurance_level: "high",
-              trust_framework: "it_cie",
-            },
+              assurance_level: 'high',
+              trust_framework: 'it_cie'
+            }
           },
           [PID_MDOC_NAMESPACE]: {
             age_over_18: true,
@@ -37,19 +31,19 @@ export const getPidMdocDocument = (
             expiry_date: new DateOnly(expiryDate),
             family_name: fakeUser.familyName,
             given_name: fakeUser.givenName,
-            issuing_authority: "PagoPA S.p.A.",
-            issuing_country: "IT",
-            nationality: ["IT"],
+            issuing_authority: 'PagoPA S.p.A.',
+            issuing_country: 'IT',
+            nationality: ['IT'],
             place_of_birth: {
-              locality: "Roma",
-            },
-          },
+              locality: 'Roma'
+            }
+          }
         },
         validityInfo: {
           signed: now,
           validFrom: now,
-          validUntil: expiration,
-        },
+          validUntil: expiration
+        }
       }
     : {
         docType: PID_MDOC_DOCTYPE,
@@ -62,16 +56,16 @@ export const getPidMdocDocument = (
             family_name: fakeUser.familyName,
             given_name: fakeUser.givenName,
             issue_date: now,
-            issuing_authority: "PagoPA S.p.A.",
-            issuing_country: "IT",
-            nationalities: ["IT"],
-            personal_administrative_number: fakeUser.fiscalCode,
-          },
+            issuing_authority: 'PagoPA S.p.A.',
+            issuing_country: 'IT',
+            nationalities: ['IT'],
+            personal_administrative_number: fakeUser.fiscalCode
+          }
         },
         validityInfo: {
           signed: now,
           validFrom: now,
-          validUntil: expiration,
-        },
+          validUntil: expiration
+        }
       };
 };

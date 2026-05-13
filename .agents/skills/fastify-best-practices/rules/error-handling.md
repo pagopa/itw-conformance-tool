@@ -79,7 +79,7 @@ app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: Fastif
       statusCode: 400,
       error: 'Bad Request',
       message: 'Validation failed',
-      details: error.validation,
+      details: error.validation
     });
   }
 
@@ -88,14 +88,12 @@ app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: Fastif
   const code = error.code ?? 'INTERNAL_ERROR';
 
   // Don't expose internal error details in production
-  const message = statusCode >= 500 && process.env.NODE_ENV === 'production'
-    ? 'Internal Server Error'
-    : error.message;
+  const message = statusCode >= 500 && process.env.NODE_ENV === 'production' ? 'Internal Server Error' : error.message;
 
   return reply.code(statusCode).send({
     statusCode,
     error: code,
-    message,
+    message
   });
 });
 ```
@@ -118,29 +116,33 @@ app.addSchema({
         type: 'object',
         properties: {
           field: { type: 'string' },
-          message: { type: 'string' },
-        },
-      },
-    },
+          message: { type: 'string' }
+        }
+      }
+    }
   },
-  required: ['statusCode', 'error', 'message'],
+  required: ['statusCode', 'error', 'message']
 });
 
 // Use in route schemas
-app.get('/users/:id', {
-  schema: {
-    params: {
-      type: 'object',
-      properties: { id: { type: 'string' } },
-      required: ['id'],
-    },
-    response: {
-      200: { $ref: 'user#' },
-      404: { $ref: 'httpError#' },
-      500: { $ref: 'httpError#' },
-    },
+app.get(
+  '/users/:id',
+  {
+    schema: {
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id']
+      },
+      response: {
+        200: { $ref: 'user#' },
+        404: { $ref: 'httpError#' },
+        500: { $ref: 'httpError#' }
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## Reply Helpers with @fastify/sensible
@@ -247,18 +249,21 @@ app.setNotFoundHandler(async (request, reply) => {
   return reply.code(404).send({
     statusCode: 404,
     error: 'Not Found',
-    message: `Route ${request.method} ${request.url} not found`,
+    message: `Route ${request.method} ${request.url} not found`
   });
 });
 
 // With schema validation
-app.setNotFoundHandler({
-  preValidation: async (request, reply) => {
-    // Pre-validation hook for 404 handler
+app.setNotFoundHandler(
+  {
+    preValidation: async (request, reply) => {
+      // Pre-validation hook for 404 handler
+    }
   },
-}, async (request, reply) => {
-  return reply.code(404).send({ error: 'Not Found' });
-});
+  async (request, reply) => {
+    return reply.code(404).send({ error: 'Not Found' });
+  }
+);
 ```
 
 ## Error Wrapping
@@ -303,15 +308,15 @@ app.setErrorHandler((error, request, reply) => {
       return {
         field,
         message: err.message,
-        value: err.data,
+        value: err.data
       };
     });
 
     return reply.code(400).send({
       statusCode: 400,
       error: 'Validation Error',
-      message: `Invalid ${error.validationContext}: ${details.map(d => d.field).join(', ')}`,
-      details,
+      message: `Invalid ${error.validationContext}: ${details.map((d) => d.field).join(', ')}`,
+      details
     });
   }
 
@@ -344,7 +349,7 @@ app.setErrorHandler((error, request, reply) => {
     chain.push({
       message: current.message,
       code: current.code,
-      stack: current.stack,
+      stack: current.stack
     });
     current = current.cause;
   }
@@ -352,7 +357,7 @@ app.setErrorHandler((error, request, reply) => {
   request.log.error({ errorChain: chain }, 'Request failed');
 
   reply.code(error.statusCode || 500).send({
-    error: error.message,
+    error: error.message
   });
 });
 ```
@@ -362,23 +367,26 @@ app.setErrorHandler((error, request, reply) => {
 Set error handlers at the plugin level:
 
 ```typescript
-app.register(async function apiRoutes(fastify) {
-  // This error handler only applies to routes in this plugin
-  fastify.setErrorHandler((error, request, reply) => {
-    request.log.error({ err: error }, 'API error');
+app.register(
+  async function apiRoutes(fastify) {
+    // This error handler only applies to routes in this plugin
+    fastify.setErrorHandler((error, request, reply) => {
+      request.log.error({ err: error }, 'API error');
 
-    reply.code(error.statusCode || 500).send({
-      error: {
-        code: error.code || 'API_ERROR',
-        message: error.message,
-      },
+      reply.code(error.statusCode || 500).send({
+        error: {
+          code: error.code || 'API_ERROR',
+          message: error.message
+        }
+      });
     });
-  });
 
-  fastify.get('/data', async () => {
-    throw new Error('API-specific error');
-  });
-}, { prefix: '/api' });
+    fastify.get('/data', async () => {
+      throw new Error('API-specific error');
+    });
+  },
+  { prefix: '/api' }
+);
 ```
 
 ## Graceful Error Recovery
@@ -387,11 +395,7 @@ Handle errors gracefully without crashing:
 
 ```typescript
 app.get('/resilient', async (request, reply) => {
-  const results = await Promise.allSettled([
-    fetchPrimaryData(),
-    fetchSecondaryData(),
-    fetchOptionalData(),
-  ]);
+  const results = await Promise.allSettled([fetchPrimaryData(), fetchSecondaryData(), fetchOptionalData()]);
 
   const [primary, secondary, optional] = results;
 
@@ -404,9 +408,7 @@ app.get('/resilient', async (request, reply) => {
     data: primary.value,
     secondary: secondary.status === 'fulfilled' ? secondary.value : null,
     optional: optional.status === 'fulfilled' ? optional.value : null,
-    warnings: results
-      .filter((r) => r.status === 'rejected')
-      .map((r) => r.reason.message),
+    warnings: results.filter((r) => r.status === 'rejected').map((r) => r.reason.message)
   };
 });
 ```

@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import crypto from 'crypto';
 
 /**
  * Options for generating a nonce.
@@ -37,7 +37,7 @@ export interface NonceRepository {
  * @returns The generated nonce string.
  */
 export const generateNonce = (options: NonceOptions): Promise<string> => {
-  const nonce = crypto.randomBytes(32).toString("hex");
+  const nonce = crypto.randomBytes(32).toString('hex');
 
   return options.nonceRepository.insert(nonce);
 };

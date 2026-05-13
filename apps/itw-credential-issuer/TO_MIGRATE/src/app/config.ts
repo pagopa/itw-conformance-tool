@@ -1,7 +1,7 @@
-import { setGlobalConfig } from "@pagopa/io-wallet-utils";
-import { z } from "zod";
+import { setGlobalConfig } from '@pagopa/io-wallet-utils';
+import { z } from 'zod';
 
-import { ECPrivateKeyWithKid } from "../domain/z-jwk";
+import { ECPrivateKeyWithKid } from '../domain/z-jwk';
 
 export type Config = Readonly<{
   baseURL: string;
@@ -29,16 +29,15 @@ const EnvsCodec = z
     COSMOSDB_ENDPOINT: z.string(),
     COSMOSDB_KEY: z.string().optional(),
     IACA_X509_BASE64: z.string(),
-    NODE_ENV: z.literal("development").or(z.literal("production")),
-    SIGNER_JWK_LIST_BASE64: z.string(),
+    NODE_ENV: z.literal('development').or(z.literal('production')),
+    SIGNER_JWK_LIST_BASE64: z.string()
   })
   .superRefine((envs, ctx) => {
-    if (envs.NODE_ENV === "development" && !envs.COSMOSDB_KEY) {
+    if (envs.NODE_ENV === 'development' && !envs.COSMOSDB_KEY) {
       ctx.addIssue({
-        code: "custom",
-        message:
-          "COSMOSDB_KEY is required in non-production environments when not using Managed Identity.",
-        path: ["COSMOSDB_KEY"],
+        code: 'custom',
+        message: 'COSMOSDB_KEY is required in non-production environments when not using Managed Identity.',
+        path: ['COSMOSDB_KEY']
       });
     }
   });
@@ -51,30 +50,27 @@ const EnvsCodec = z
 const getConfigOrError = (envs: Record<string, string | undefined>): Config => {
   const envCodec = EnvsCodec.parse(envs);
 
-  const binary = Buffer.from(
-    envCodec.SIGNER_JWK_LIST_BASE64,
-    "base64",
-  ).toString("binary");
+  const binary = Buffer.from(envCodec.SIGNER_JWK_LIST_BASE64, 'base64').toString('binary');
 
   const jwks = JSON.parse(binary) as readonly ECPrivateKeyWithKid[];
 
   return {
     baseURL: envCodec.BASE_URL,
     cert: {
-      iacaX509: envCodec.IACA_X509_BASE64,
+      iacaX509: envCodec.IACA_X509_BASE64
     },
     cosmosdb: {
       databaseName: envCodec.COSMOSDB_DATABASE_NAME,
       endpoint: envCodec.COSMOSDB_ENDPOINT,
-      key: envCodec.COSMOSDB_KEY,
+      key: envCodec.COSMOSDB_KEY
     },
     encrypter: {
-      jwks: jwks.filter((key) => key.use === "enc"),
+      jwks: jwks.filter((key) => key.use === 'enc')
     },
-    isDevelopment: envCodec.NODE_ENV === "development",
+    isDevelopment: envCodec.NODE_ENV === 'development',
     signer: {
-      jwks: jwks.filter((key) => key.use === "sig"),
-    },
+      jwks: jwks.filter((key) => key.use === 'sig')
+    }
   };
 };
 
@@ -82,5 +78,5 @@ const getConfigOrError = (envs: Record<string, string | undefined>): Config => {
 export const config = getConfigOrError(process.env);
 
 setGlobalConfig({
-  allowInsecureUrls: config.isDevelopment,
+  allowInsecureUrls: config.isDevelopment
 });

@@ -31,9 +31,7 @@ export class SqliteSessionRepository implements ISessionRepository {
   }
 
   async get(id: string): Promise<SessionRecord | undefined> {
-    const row = this.db
-      .prepare('SELECT * FROM presentation_sessions WHERE id = ?')
-      .get(id) as SessionRow | undefined;
+    const row = this.db.prepare('SELECT * FROM presentation_sessions WHERE id = ?').get(id) as SessionRow | undefined;
 
     return row ? rowToRecord(row) : undefined;
   }
@@ -49,9 +47,7 @@ export class SqliteSessionRepository implements ISessionRepository {
 
   async update(id: string, state: SessionState, response?: string): Promise<void> {
     this.db
-      .prepare(
-        `UPDATE presentation_sessions SET state = ?, response = ? WHERE id = ?`
-      )
+      .prepare(`UPDATE presentation_sessions SET state = ?, response = ? WHERE id = ?`)
       .run(state, response ?? null, id);
   }
 }

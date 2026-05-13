@@ -10,6 +10,7 @@ metadata:
 ## Activation triggers (apply this rule immediately)
 
 Use this rule when prompts/logs include any of:
+
 - "`node --test` hangs" / "test run never exits"
 - "CI timed out" after tests appear done
 - "process is still running" / "did not exit cleanly"

@@ -1,5 +1,5 @@
-import { NotFoundError } from "./errors";
-import { DcqlPresentation, FlowType } from "./schemas";
+import { NotFoundError } from './errors';
+import { DcqlPresentation, FlowType } from './schemas';
 
 export interface RequestObject {
   expiresAt: number;
@@ -9,33 +9,27 @@ export interface RequestObject {
   id: string; // state
   jwt: string;
   redirectUri?: string;
-  status:
-    | "checking"
-    | "denied"
-    | "expired"
-    | "pending"
-    | "rejected"
-    | "verified";
+  status: 'checking' | 'denied' | 'expired' | 'pending' | 'rejected' | 'verified';
   values?: Record<string, null | string>[];
 }
 
 export interface RequestObjectRepository {
-  delete: (id: RequestObject["id"]) => Promise<void>;
-  get: (id: RequestObject["id"]) => Promise<RequestObject>;
+  delete: (id: RequestObject['id']) => Promise<void>;
+  get: (id: RequestObject['id']) => Promise<RequestObject>;
   insert: ({
     flowType,
     id,
-    jwt,
+    jwt
   }: {
     flowType: FlowType;
-    id: RequestObject["id"];
-    jwt: RequestObject["jwt"];
+    id: RequestObject['id'];
+    jwt: RequestObject['jwt'];
   }) => Promise<void>;
   update: (
-    id: RequestObject["id"],
-    status: "checking" | "denied" | "expired" | "rejected" | "verified",
+    id: RequestObject['id'],
+    status: 'checking' | 'denied' | 'expired' | 'rejected' | 'verified',
     redirectUri?: string,
-    values?: Record<string, null | string>[],
+    values?: Record<string, null | string>[]
   ) => Promise<void>;
 }
 
@@ -48,77 +42,63 @@ export const insertRequestObject: (requestObject: {
     requestObjectRepository.insert(requestObject);
 
 export const getRequestObject: (
-  id: string,
-) => (
-  requestObjectRepository: RequestObjectRepository,
-) => Promise<RequestObject> = (id) => async (requestObjectRepository) =>
-  requestObjectRepository.get(id);
+  id: string
+) => (requestObjectRepository: RequestObjectRepository) => Promise<RequestObject> =
+  (id) => async (requestObjectRepository) =>
+    requestObjectRepository.get(id);
 
-export const deleteRequestObject: (
-  id: string,
-) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
+export const deleteRequestObject: (id: string) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
   (id) => (requestObjectRepository) =>
     requestObjectRepository.delete(id);
 
 export const markRequestObjectAsDenied: (
-  id: string,
-) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
-  (id) => (requestObjectRepository) =>
-    requestObjectRepository.update(id, "denied");
+  id: string
+) => (requestObjectRepository: RequestObjectRepository) => Promise<void> = (id) => (requestObjectRepository) =>
+  requestObjectRepository.update(id, 'denied');
 
 export const markRequestObjectAsExpired: (
-  id: string,
-) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
-  (id) => (requestObjectRepository) =>
-    requestObjectRepository.update(id, "expired");
+  id: string
+) => (requestObjectRepository: RequestObjectRepository) => Promise<void> = (id) => (requestObjectRepository) =>
+  requestObjectRepository.update(id, 'expired');
 
 export const markRequestObjectAsChecking: (
-  id: string,
-) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
-  (id) => (requestObjectRepository) =>
-    requestObjectRepository.update(id, "checking");
+  id: string
+) => (requestObjectRepository: RequestObjectRepository) => Promise<void> = (id) => (requestObjectRepository) =>
+  requestObjectRepository.update(id, 'checking');
 
 export const markRequestObjectAsRejected: (
-  id: string,
-) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
-  (id) => (requestObjectRepository) =>
-    requestObjectRepository.update(id, "rejected");
+  id: string
+) => (requestObjectRepository: RequestObjectRepository) => Promise<void> = (id) => (requestObjectRepository) =>
+  requestObjectRepository.update(id, 'rejected');
 
 export const markRequestObjectAsVerified: (
   id: string,
   redirectUri?: string,
-  dcqlPresentation?: DcqlPresentation,
+  dcqlPresentation?: DcqlPresentation
 ) => (requestObjectRepository: RequestObjectRepository) => Promise<void> =
   (id, redirectUri, dcqlPresentation) => (requestObjectRepository) => {
     if (dcqlPresentation) {
       // is the upstream typing correct?
       const values = Object.values(dcqlPresentation).map((entry) => {
-        if (typeof entry.claims === "object" && entry.claims !== null) {
+        if (typeof entry.claims === 'object' && entry.claims !== null) {
           return Object.fromEntries(
             Object.entries(entry.claims).map(([key, value]) => {
-              if (typeof value === "object" && value !== null) {
+              if (typeof value === 'object' && value !== null) {
                 return [key, Object.keys(value)[0]];
               }
               return [key, null]; // fallback
-            }),
+            })
           );
         }
         return {};
       });
 
-      return requestObjectRepository.update(
-        id,
-        "verified",
-        redirectUri,
-        values,
-      );
+      return requestObjectRepository.update(id, 'verified', redirectUri, values);
     }
-    return requestObjectRepository.update(id, "verified", redirectUri);
+    return requestObjectRepository.update(id, 'verified', redirectUri);
   };
 
-export async function markAsExpired(
-  requestObjectRepository: RequestObjectRepository,
-): Promise<void> {
+export async function markAsExpired(requestObjectRepository: RequestObjectRepository): Promise<void> {
   const now = Date.now();
   for (const { expiresAt, id } of requestObjects) {
     if (expiresAt < now) {
@@ -132,9 +112,7 @@ export const requestObjects: RequestObject[] = [];
 
 export const requestObjectRepository: RequestObjectRepository = {
   delete: (requestObjectId) => {
-    const requestObject = requestObjects.find(
-      ({ id }) => id === requestObjectId,
-    );
+    const requestObject = requestObjects.find(({ id }) => id === requestObjectId);
     if (!requestObject) {
       return Promise.reject();
     }
@@ -145,9 +123,7 @@ export const requestObjectRepository: RequestObjectRepository = {
     return Promise.resolve(undefined);
   },
   get: (requestObjectId) => {
-    const requestObject = requestObjects.find(
-      ({ id }) => id === requestObjectId,
-    );
+    const requestObject = requestObjects.find(({ id }) => id === requestObjectId);
     if (!requestObject) {
       return Promise.reject(new NotFoundError());
     }
@@ -159,29 +135,22 @@ export const requestObjectRepository: RequestObjectRepository = {
       flowType,
       id,
       jwt,
-      status: "pending",
+      status: 'pending'
     });
     return Promise.resolve(undefined);
   },
-  update: (
-    requestObjectId,
-    status,
-    redirectUri,
-    values?: Record<string, null | string>[],
-  ) => {
-    const requestObject = requestObjects.find(
-      ({ id }) => id === requestObjectId,
-    );
+  update: (requestObjectId, status, redirectUri, values?: Record<string, null | string>[]) => {
+    const requestObject = requestObjects.find(({ id }) => id === requestObjectId);
     if (!requestObject) {
       return Promise.reject();
     }
-    requestObject["status"] = status;
-    if (status === "verified" && redirectUri) {
-      requestObject["redirectUri"] = redirectUri;
+    requestObject['status'] = status;
+    if (status === 'verified' && redirectUri) {
+      requestObject['redirectUri'] = redirectUri;
     }
     if (values) {
-      requestObject["values"] = values;
+      requestObject['values'] = values;
     }
     return Promise.resolve(undefined);
-  },
+  }
 };

@@ -19,7 +19,7 @@ const app = Fastify();
 // Decorate the Fastify instance
 app.decorate('utility', {
   formatDate: (date: Date) => date.toISOString(),
-  generateId: () => crypto.randomUUID(),
+  generateId: () => crypto.randomUUID()
 });
 
 // Use in routes
@@ -40,17 +40,18 @@ app.decorate('db', databaseConnection);
 app.decorate('cache', cacheClient);
 
 // Request decorator - available on each request
-app.decorateRequest('user', null);           // Object property
-app.decorateRequest('startTime', 0);         // Primitive
-app.decorateRequest('getData', function() {  // Method
+app.decorateRequest('user', null); // Object property
+app.decorateRequest('startTime', 0); // Primitive
+app.decorateRequest('getData', function () {
+  // Method
   return this.body;
 });
 
 // Reply decorator - available on each reply
-app.decorateReply('sendError', function(code: number, message: string) {
+app.decorateReply('sendError', function (code: number, message: string) {
   return this.code(code).send({ error: message });
 });
-app.decorateReply('success', function(data: unknown) {
+app.decorateReply('success', function (data: unknown) {
   return this.send({ success: true, data });
 });
 ```
@@ -90,7 +91,7 @@ declare module 'fastify' {
 // Register decorators
 app.decorate('config', {
   apiVersion: '1.0.0',
-  environment: process.env.NODE_ENV,
+  environment: process.env.NODE_ENV
 });
 
 app.decorateRequest('user', null);
@@ -121,7 +122,7 @@ app.addHook('onRequest', async (request) => {
   request.context = {
     traceId: request.headers['x-trace-id'] || crypto.randomUUID(),
     clientIp: request.ip,
-    userAgent: request.headers['user-agent'],
+    userAgent: request.headers['user-agent']
   };
 });
 ```
@@ -145,24 +146,25 @@ export default fp(async function databasePlugin(fastify, options) {
 });
 
 // User service plugin
-export default fp(async function userServicePlugin(fastify) {
-  // Depends on db decorator
-  if (!fastify.hasDecorator('db')) {
-    throw new Error('Database plugin must be registered first');
+export default fp(
+  async function userServicePlugin(fastify) {
+    // Depends on db decorator
+    if (!fastify.hasDecorator('db')) {
+      throw new Error('Database plugin must be registered first');
+    }
+
+    const userService = {
+      findById: (id: string) => fastify.db.query('SELECT * FROM users WHERE id = $1', [id]),
+      create: (data: CreateUserInput) =>
+        fastify.db.query('INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *', [data.name, data.email])
+    };
+
+    fastify.decorate('userService', userService);
+  },
+  {
+    dependencies: ['database-plugin']
   }
-
-  const userService = {
-    findById: (id: string) => fastify.db.query('SELECT * FROM users WHERE id = $1', [id]),
-    create: (data: CreateUserInput) => fastify.db.query(
-      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-      [data.name, data.email]
-    ),
-  };
-
-  fastify.decorate('userService', userService);
-}, {
-  dependencies: ['database-plugin'],
-});
+);
 
 // Use in routes
 app.get('/users/:id', async function (request) {
@@ -198,7 +200,7 @@ app.addHook('onRequest', async (request) => {
     user: null,
     permissions: new Set(),
     startTime: Date.now(),
-    metadata: new Map(),
+    metadata: new Map()
   };
 });
 
@@ -262,7 +264,7 @@ app.decorateReply('badRequest', function (message: string, details?: unknown) {
     statusCode: 400,
     error: 'Bad Request',
     message,
-    details,
+    details
   });
 });
 
@@ -270,7 +272,7 @@ app.decorateReply('unauthorized', function (message = 'Authentication required')
   this.code(401).send({
     statusCode: 401,
     error: 'Unauthorized',
-    message,
+    message
   });
 });
 
@@ -278,7 +280,7 @@ app.decorateReply('notFound', function (resource = 'Resource') {
   this.code(404).send({
     statusCode: 404,
     error: 'Not Found',
-    message: `${resource} not found`,
+    message: `${resource} not found`
   });
 });
 
@@ -400,7 +402,7 @@ export default fp(async function asyncPlugin(fastify) {
   fastify.decorate('asyncService', {
     connection,
     cache,
-    query: async (sql: string) => connection.query(sql),
+    query: async (sql: string) => connection.query(sql)
   });
 
   fastify.addHook('onClose', async () => {

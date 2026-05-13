@@ -171,8 +171,8 @@ app.addHook('preSerialization', async (request, reply, payload) => {
       ...payload,
       _meta: {
         requestId: request.id,
-        timestamp: new Date().toISOString(),
-      },
+        timestamp: new Date().toISOString()
+      }
     };
   }
   return payload;
@@ -225,18 +225,21 @@ Execute after response is sent. Cannot modify response:
 app.addHook('onResponse', async (request, reply) => {
   // Log response time
   const responseTime = Date.now() - request.startTime;
-  request.log.info({
-    method: request.method,
-    url: request.url,
-    statusCode: reply.statusCode,
-    responseTime,
-  }, 'Request completed');
+  request.log.info(
+    {
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      responseTime
+    },
+    'Request completed'
+  );
 
   // Track metrics
   metrics.histogram('http_request_duration', responseTime, {
     method: request.method,
     route: request.routeOptions.url,
-    status: reply.statusCode,
+    status: reply.statusCode
   });
 });
 ```
@@ -248,17 +251,20 @@ Execute when an error is thrown:
 ```typescript
 app.addHook('onError', async (request, reply, error) => {
   // Log error details
-  request.log.error({
-    err: error,
-    url: request.url,
-    method: request.method,
-    body: request.body,
-  }, 'Request error');
+  request.log.error(
+    {
+      err: error,
+      url: request.url,
+      method: request.method,
+      body: request.body
+    },
+    'Request error'
+  );
 
   // Track error metrics
   metrics.increment('http_errors', {
     error: error.code || 'UNKNOWN',
-    route: request.routeOptions.url,
+    route: request.routeOptions.url
   });
 
   // Cleanup resources
@@ -274,14 +280,17 @@ Execute when request times out:
 
 ```typescript
 const app = Fastify({
-  connectionTimeout: 30000, // 30 seconds
+  connectionTimeout: 30000 // 30 seconds
 });
 
 app.addHook('onTimeout', async (request, reply) => {
-  request.log.warn({
-    url: request.url,
-    method: request.method,
-  }, 'Request timeout');
+  request.log.warn(
+    {
+      url: request.url,
+      method: request.method
+    },
+    'Request timeout'
+  );
 
   // Cleanup
   if (request.abortController) {
@@ -346,7 +355,7 @@ app.addHook('onRoute', (routeOptions) => {
   routes.push({
     method: routeOptions.method,
     url: routeOptions.url,
-    schema: routeOptions.schema,
+    schema: routeOptions.schema
   });
 });
 
@@ -366,18 +375,21 @@ app.addHook('onRequest', async (request) => {
   request.log.info('Global hook');
 });
 
-app.register(async function adminRoutes(fastify) {
-  // Only runs for routes in this plugin
-  fastify.addHook('onRequest', async (request, reply) => {
-    if (!request.user?.isAdmin) {
-      reply.code(403).send({ error: 'Admin only' });
-    }
-  });
+app.register(
+  async function adminRoutes(fastify) {
+    // Only runs for routes in this plugin
+    fastify.addHook('onRequest', async (request, reply) => {
+      if (!request.user?.isAdmin) {
+        reply.code(403).send({ error: 'Admin only' });
+      }
+    });
 
-  fastify.get('/admin/users', async () => {
-    return { users: [] };
-  });
-}, { prefix: '/admin' });
+    fastify.get('/admin/users', async () => {
+      return { users: [] };
+    });
+  },
+  { prefix: '/admin' }
+);
 ```
 
 ## Hook Execution Order
@@ -430,14 +442,14 @@ app.get('/admin/settings', {
   preHandler: [adminOnlyHook],
   handler: async (request) => {
     return { settings: {} };
-  },
+  }
 });
 
 // Multiple hooks
 app.post('/orders', {
   preValidation: [validateApiKey],
   preHandler: [loadUser, checkQuota, logOrder],
-  handler: createOrderHandler,
+  handler: createOrderHandler
 });
 ```
 

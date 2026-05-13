@@ -55,13 +55,13 @@ Enums require code transformation. Use const objects instead:
 // BAD - enums don't work with type stripping
 enum Status {
   Active = 'active',
-  Inactive = 'inactive',
+  Inactive = 'inactive'
 }
 
 // GOOD - const object with type
 const Status = {
   Active: 'active',
-  Inactive: 'inactive',
+  Inactive: 'inactive'
 } as const;
 
 type Status = (typeof Status)[keyof typeof Status];
@@ -92,7 +92,10 @@ Parameter properties require transformation:
 ```typescript
 // BAD - parameter properties don't work
 class User {
-  constructor(public name: string, private age: number) {}
+  constructor(
+    public name: string,
+    private age: number
+  ) {}
 }
 
 // GOOD - explicit property declaration
@@ -160,6 +163,7 @@ Configure TypeScript for development with type stripping:
 ```
 
 Key options:
+
 - `noEmit`: No compilation, Node.js runs TypeScript directly
 - `allowImportingTsExtensions`: Allow `.ts` imports
 - `verbatimModuleSyntax`: Enforces type-only imports
@@ -197,6 +201,7 @@ Create a separate config for building distributable packages:
 ```
 
 Key build options:
+
 - `rewriteRelativeImportExtensions`: Rewrites `.ts` imports to `.js` in output
 - `declaration`: Generates `.d.ts` type declaration files
 - `declarationMap`: Generates source maps for declarations

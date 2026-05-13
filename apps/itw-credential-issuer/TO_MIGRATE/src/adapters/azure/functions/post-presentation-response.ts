@@ -1,39 +1,33 @@
-import type { HttpHandler } from "@azure/functions";
+import type { HttpHandler } from '@azure/functions';
 
-import { getDecryptJweCallback } from "@/domain/crypto";
-import { VpTokenVerifier } from "@/domain/vp-token";
-import { parseAuthorizationResponse } from "@pagopa/io-wallet-oid4vp";
+import { getDecryptJweCallback } from '@/domain/crypto';
+import { VpTokenVerifier } from '@/domain/vp-token';
+import { parseAuthorizationResponse } from '@pagopa/io-wallet-oid4vp';
 
-import {
-  createErrorResponse,
-  createGenericErrorResponse,
-} from "./errors/error";
+import { createErrorResponse, createGenericErrorResponse } from './errors/error';
 
-export const PostPresentationResponseHandler: HttpHandler = async (
-  request,
-  context,
-) => {
+export const PostPresentationResponseHandler: HttpHandler = async (request, context) => {
   const body = await request.text();
-  const request_uri = request.query.get("request_uri");
+  const request_uri = request.query.get('request_uri');
 
   if (!request_uri) {
     return createErrorResponse({
-      error: "invalid_request",
-      error_description: "client_id and request_uri are required",
-      status: 400,
+      error: 'invalid_request',
+      error_description: 'client_id and request_uri are required',
+      status: 400
     });
   }
 
   try {
     const parRequest = await context.app.repository.par.get({
-      requestUri: request_uri,
+      requestUri: request_uri
     });
 
     if (!parRequest) {
       return createErrorResponse({
-        error: "invalid_request",
-        error_description: "request_uri not found",
-        status: 400,
+        error: 'invalid_request',
+        error_description: 'request_uri not found',
+        status: 400
       });
     }
 
@@ -43,14 +37,12 @@ export const PostPresentationResponseHandler: HttpHandler = async (
 
     const authResponse = await parseAuthorizationResponse({
       authorizationRequestPayload: requestObject,
-      authorizationResponse: Object.fromEntries(
-        new URLSearchParams(body).entries(),
-      ),
+      authorizationResponse: Object.fromEntries(new URLSearchParams(body).entries()),
       // @ts-expect-error verifyJwt callback is only required for signed JWT but
       // we are only dealing with encrypted JWTs here according to IT Wallet specs
       callbacks: {
-        decryptJwe: getDecryptJweCallback(encryptionKey),
-      },
+        decryptJwe: getDecryptJweCallback(encryptionKey)
+      }
     });
 
     // Verify all credentials according to their DCQL-specified format
@@ -58,20 +50,19 @@ export const PostPresentationResponseHandler: HttpHandler = async (
       authResponse,
       iacaX509,
       requestObject,
-      verifierEncryptionPublicJwk:
-        context.app.repository.jwks.getEncrypt().public,
+      verifierEncryptionPublicJwk: context.app.repository.jwks.getEncrypt().public
     });
 
     await verifier.verifyCredentials();
 
     return {
       jsonBody: {
-        redirect_uri: `${context.app.config.baseURL}/authorization-code?request_uri=${request_uri}`,
+        redirect_uri: `${context.app.config.baseURL}/authorization-code?request_uri=${request_uri}`
       },
-      status: 200,
+      status: 200
     };
   } catch (err) {
-    context.error("Error: ", err.message);
+    context.error('Error: ', err.message);
     return createGenericErrorResponse(err.message);
   }
 };

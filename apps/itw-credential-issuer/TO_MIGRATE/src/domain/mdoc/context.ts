@@ -1,22 +1,14 @@
-import type { DigestAlgorithm, MdocContext, Sign1 } from "@owf/mdoc";
+import type { DigestAlgorithm, MdocContext, Sign1 } from '@owf/mdoc';
 
-import { CoseKey } from "@owf/mdoc";
-import { X509Certificate } from "@peculiar/x509";
-import { exportJWK, importX509 } from "jose";
-import {
-  JsonWebKey,
-  createHash,
-  createPrivateKey,
-  createPublicKey,
-  randomBytes,
-  sign,
-  verify,
-} from "node:crypto";
+import { CoseKey } from '@owf/mdoc';
+import { X509Certificate } from '@peculiar/x509';
+import { exportJWK, importX509 } from 'jose';
+import { JsonWebKey, createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify } from 'node:crypto';
 
-import { getCertificateData, validateCertificateChain } from "../utils/x509";
+import { getCertificateData, validateCertificateChain } from '../utils/x509';
 
 const digestAlgorithmToNode = (digestAlgorithm: DigestAlgorithm): string =>
-  digestAlgorithm.replace("-", "").toLowerCase();
+  digestAlgorithm.replace('-', '').toLowerCase();
 
 const toNodeJwk = (key: CoseKey): JsonWebKey => {
   const { alg, crv, d, k, keyOps, kid, kty, x, y } = key.jwk;
@@ -31,8 +23,8 @@ const toNodeJwk = (key: CoseKey): JsonWebKey => {
       kid,
       kty,
       x,
-      y,
-    }).filter(([, value]) => value !== undefined),
+      y
+    }).filter(([, value]) => value !== undefined)
   ) as JsonWebKey;
 };
 
@@ -43,40 +35,33 @@ const toPublicNodeJwk = (key: CoseKey): JsonWebKey => {
   return publicJwk;
 };
 
-const getIssuerNameFieldMatches = (
-  issuerName: string,
-  field: string,
-): string[] => {
-  const pattern = new RegExp(`(?:^|,\\s*)${field}=([^,]+)`, "g");
+const getIssuerNameFieldMatches = (issuerName: string, field: string): string[] => {
+  const pattern = new RegExp(`(?:^|,\\s*)${field}=([^,]+)`, 'g');
   const matches = Array.from(issuerName.matchAll(pattern));
 
   return matches.map((match) => match[1].trim());
 };
 
-const getCertificateArrayBuffer = (certificate: Uint8Array): ArrayBuffer =>
-  Uint8Array.from(certificate).buffer;
+const getCertificateArrayBuffer = (certificate: Uint8Array): ArrayBuffer => Uint8Array.from(certificate).buffer;
 
 const unsupportedMacKeyCalculation = () => {
-  throw new Error("MAC-based mdoc flows are not supported");
+  throw new Error('MAC-based mdoc flows are not supported');
 };
 
-const verifySign1 = async (input: {
-  key: CoseKey;
-  sign1: Sign1;
-}): Promise<boolean> => {
+const verifySign1 = async (input: { key: CoseKey; sign1: Sign1 }): Promise<boolean> => {
   const publicKey = createPublicKey({
-    format: "jwk",
-    key: toPublicNodeJwk(input.key),
+    format: 'jwk',
+    key: toPublicNodeJwk(input.key)
   });
 
   return verify(
     null,
     input.sign1.toBeSigned,
     {
-      dsaEncoding: "ieee-p1363",
-      key: publicKey,
+      dsaEncoding: 'ieee-p1363',
+      key: publicKey
     },
-    input.sign1.signature,
+    input.sign1.signature
   );
 };
 
@@ -84,77 +69,67 @@ export const mdocContext: MdocContext = {
   cose: {
     mac0: {
       sign: unsupportedMacKeyCalculation,
-      verify: unsupportedMacKeyCalculation,
+      verify: unsupportedMacKeyCalculation
     },
     sign1: {
       sign: async ({ key, toBeSigned }) => {
         const privateKey = createPrivateKey({
-          format: "jwk",
-          key: toNodeJwk(key),
+          format: 'jwk',
+          key: toNodeJwk(key)
         });
 
         return sign(null, toBeSigned, {
-          dsaEncoding: "ieee-p1363",
-          key: privateKey,
+          dsaEncoding: 'ieee-p1363',
+          key: privateKey
         });
       },
-      verify: verifySign1,
-    },
+      verify: verifySign1
+    }
   },
   crypto: {
     calculateEphemeralMacKey: unsupportedMacKeyCalculation,
     digest: async ({ bytes, digestAlgorithm }) =>
       createHash(digestAlgorithmToNode(digestAlgorithm)).update(bytes).digest(),
-    random: (length) => randomBytes(length),
+    random: (length) => randomBytes(length)
   },
   x509: {
     getCertificateData: async ({ certificate }) =>
       await getCertificateData({
-        certificate: getCertificateArrayBuffer(certificate),
+        certificate: getCertificateArrayBuffer(certificate)
       }),
     getIssuerNameField: ({ certificate, field }) => {
-      const parsedCertificate = new X509Certificate(
-        getCertificateArrayBuffer(certificate),
-      );
+      const parsedCertificate = new X509Certificate(getCertificateArrayBuffer(certificate));
 
-      return getIssuerNameFieldMatches(
-        parsedCertificate.issuerName.toString(),
-        field,
-      );
+      return getIssuerNameFieldMatches(parsedCertificate.issuerName.toString(), field);
     },
     getPublicKey: async ({ alg, certificate }) => {
       const publicKey = await importX509(
-        new X509Certificate(getCertificateArrayBuffer(certificate)).toString(
-          "pem",
-        ),
+        new X509Certificate(getCertificateArrayBuffer(certificate)).toString('pem'),
         alg,
         {
-          extractable: true,
-        },
+          extractable: true
+        }
       );
 
-      return CoseKey.fromJwk(
-        (await exportJWK(publicKey)) as Record<string, unknown>,
-      );
+      return CoseKey.fromJwk((await exportJWK(publicKey)) as Record<string, unknown>);
     },
     verifyCertificateChain: async ({ now, trustedCertificates, x5chain }) => {
       if (trustedCertificates.length === 0) {
-        throw new Error("trustedCertificates must not be empty");
+        throw new Error('trustedCertificates must not be empty');
       }
 
       if (x5chain.length === 0) {
-        throw new Error("x5chain must not be empty");
+        throw new Error('x5chain must not be empty');
       }
 
       await validateCertificateChain({
         now,
-        trustedCertificates: trustedCertificates.map((certificate) =>
-          getCertificateArrayBuffer(certificate),
-        ) as [ArrayBuffer, ...ArrayBuffer[]],
-        x5chain: x5chain.map((certificate) =>
-          getCertificateArrayBuffer(certificate),
-        ) as [ArrayBuffer, ...ArrayBuffer[]],
+        trustedCertificates: trustedCertificates.map((certificate) => getCertificateArrayBuffer(certificate)) as [
+          ArrayBuffer,
+          ...ArrayBuffer[]
+        ],
+        x5chain: x5chain.map((certificate) => getCertificateArrayBuffer(certificate)) as [ArrayBuffer, ...ArrayBuffer[]]
       });
-    },
-  },
+    }
+  }
 };

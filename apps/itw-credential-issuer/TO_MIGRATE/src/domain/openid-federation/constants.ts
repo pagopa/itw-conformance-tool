@@ -1,1 +1,1 @@
-export { pidIdentification, verifierPublicKeys } from "./shared/constants";
+export { pidIdentification, verifierPublicKeys } from './shared/constants';

@@ -42,18 +42,21 @@ Use `fastify-plugin` when you need to share decorators, hooks, or plugins with t
 import fp from 'fastify-plugin';
 
 // This plugin's decorators will be available to the parent and siblings
-export default fp(async function databasePlugin(fastify, options) {
-  const db = await createConnection(options.connectionString);
+export default fp(
+  async function databasePlugin(fastify, options) {
+    const db = await createConnection(options.connectionString);
 
-  fastify.decorate('db', db);
+    fastify.decorate('db', db);
 
-  fastify.addHook('onClose', async () => {
-    await db.close();
-  });
-}, {
-  name: 'database-plugin',
-  dependencies: [], // List plugin dependencies
-});
+    fastify.addHook('onClose', async () => {
+      await db.close();
+    });
+  },
+  {
+    name: 'database-plugin',
+    dependencies: [] // List plugin dependencies
+  }
+);
 ```
 
 ## Plugin Registration Order
@@ -100,36 +103,39 @@ interface CachePluginOptions {
   prefix?: string;
 }
 
-export default fp<CachePluginOptions>(async function cachePlugin(fastify, options) {
-  const { ttl, maxSize = 1000, prefix = 'cache:' } = options;
+export default fp<CachePluginOptions>(
+  async function cachePlugin(fastify, options) {
+    const { ttl, maxSize = 1000, prefix = 'cache:' } = options;
 
-  if (typeof ttl !== 'number' || ttl <= 0) {
-    throw new Error('Cache plugin requires a positive ttl option');
+    if (typeof ttl !== 'number' || ttl <= 0) {
+      throw new Error('Cache plugin requires a positive ttl option');
+    }
+
+    const cache = new Map<string, { value: unknown; expires: number }>();
+
+    fastify.decorate('cache', {
+      get(key: string): unknown | undefined {
+        const item = cache.get(prefix + key);
+        if (!item) return undefined;
+        if (Date.now() > item.expires) {
+          cache.delete(prefix + key);
+          return undefined;
+        }
+        return item.value;
+      },
+      set(key: string, value: unknown): void {
+        if (cache.size >= maxSize) {
+          const firstKey = cache.keys().next().value;
+          cache.delete(firstKey);
+        }
+        cache.set(prefix + key, { value, expires: Date.now() + ttl });
+      }
+    });
+  },
+  {
+    name: 'cache-plugin'
   }
-
-  const cache = new Map<string, { value: unknown; expires: number }>();
-
-  fastify.decorate('cache', {
-    get(key: string): unknown | undefined {
-      const item = cache.get(prefix + key);
-      if (!item) return undefined;
-      if (Date.now() > item.expires) {
-        cache.delete(prefix + key);
-        return undefined;
-      }
-      return item.value;
-    },
-    set(key: string, value: unknown): void {
-      if (cache.size >= maxSize) {
-        const firstKey = cache.keys().next().value;
-        cache.delete(firstKey);
-      }
-      cache.set(prefix + key, { value, expires: Date.now() + ttl });
-    },
-  });
-}, {
-  name: 'cache-plugin',
-});
+);
 ```
 
 ## Plugin Factory Pattern
@@ -145,14 +151,17 @@ interface RateLimitOptions {
 }
 
 function createRateLimiter(defaults: Partial<RateLimitOptions> = {}) {
-  return fp<RateLimitOptions>(async function rateLimitPlugin(fastify, options) {
-    const config = { ...defaults, ...options };
+  return fp<RateLimitOptions>(
+    async function rateLimitPlugin(fastify, options) {
+      const config = { ...defaults, ...options };
 
-    // Implementation
-    fastify.decorate('rateLimit', config);
-  }, {
-    name: 'rate-limiter',
-  });
+      // Implementation
+      fastify.decorate('rateLimit', config);
+    },
+    {
+      name: 'rate-limiter'
+    }
+  );
 }
 
 // Usage
@@ -166,20 +175,23 @@ Declare dependencies to ensure proper load order:
 ```typescript
 import fp from 'fastify-plugin';
 
-export default fp(async function authPlugin(fastify) {
-  // This plugin requires 'database-plugin' to be loaded first
-  if (!fastify.hasDecorator('db')) {
-    throw new Error('Auth plugin requires database plugin');
-  }
+export default fp(
+  async function authPlugin(fastify) {
+    // This plugin requires 'database-plugin' to be loaded first
+    if (!fastify.hasDecorator('db')) {
+      throw new Error('Auth plugin requires database plugin');
+    }
 
-  fastify.decorate('authenticate', async (request) => {
-    const user = await fastify.db.users.findByToken(request.headers.authorization);
-    return user;
-  });
-}, {
-  name: 'auth-plugin',
-  dependencies: ['database-plugin'],
-});
+    fastify.decorate('authenticate', async (request) => {
+      const user = await fastify.db.users.findByToken(request.headers.authorization);
+      return user;
+    });
+  },
+  {
+    name: 'auth-plugin',
+    dependencies: ['database-plugin']
+  }
+);
 ```
 
 ## Scoped Plugins for Route Groups
@@ -259,8 +271,8 @@ export default fp(metricsPlugin, {
   decorators: {
     fastify: ['db'], // Required decorators
     request: [],
-    reply: [],
-  },
+    reply: []
+  }
 });
 ```
 
@@ -281,13 +293,13 @@ const app = Fastify();
 // Load all plugins from the plugins directory
 app.register(autoload, {
   dir: join(__dirname, 'plugins'),
-  options: { prefix: '/api' },
+  options: { prefix: '/api' }
 });
 
 // Load all routes from the routes directory
 app.register(autoload, {
   dir: join(__dirname, 'routes'),
-  options: { prefix: '/api' },
+  options: { prefix: '/api' }
 });
 ```
 

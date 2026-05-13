@@ -1,7 +1,4 @@
-export const getFormPostFromRedirectUriAndJwt = (
-  redirect_uri: string,
-  jwt: string,
-) => `
+export const getFormPostFromRedirectUriAndJwt = (redirect_uri: string, jwt: string) => `
   <html>
     <head>
       <title>Submit This Form</title>

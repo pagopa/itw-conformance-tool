@@ -49,8 +49,8 @@ export class DatabaseClient {
 
   /** Removes all expired rows from nonces and par_entries. */
   purgeExpired(): void {
-    this.db.exec('DELETE FROM nonces WHERE expires_at < unixepoch(\'now\') * 1000');
-    this.db.exec('DELETE FROM par_entries WHERE expires_at < unixepoch(\'now\') * 1000');
+    this.db.exec("DELETE FROM nonces WHERE expires_at < unixepoch('now') * 1000");
+    this.db.exec("DELETE FROM par_entries WHERE expires_at < unixepoch('now') * 1000");
   }
 
   close(): void {

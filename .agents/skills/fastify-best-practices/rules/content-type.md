@@ -37,24 +37,16 @@ Add parsers for additional content types:
 
 ```typescript
 // Parse application/x-www-form-urlencoded
-app.addContentTypeParser(
-  'application/x-www-form-urlencoded',
-  { parseAs: 'string' },
-  (request, body, done) => {
-    const parsed = new URLSearchParams(body);
-    done(null, Object.fromEntries(parsed));
-  },
-);
+app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (request, body, done) => {
+  const parsed = new URLSearchParams(body);
+  done(null, Object.fromEntries(parsed));
+});
 
 // Async parser
-app.addContentTypeParser(
-  'application/x-www-form-urlencoded',
-  { parseAs: 'string' },
-  async (request, body) => {
-    const parsed = new URLSearchParams(body);
-    return Object.fromEntries(parsed);
-  },
-);
+app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, async (request, body) => {
+  const parsed = new URLSearchParams(body);
+  return Object.fromEntries(parsed);
+});
 ```
 
 ## XML Parsing
@@ -66,24 +58,16 @@ import { XMLParser } from 'fast-xml-parser';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
-  attributeNamePrefix: '@_',
+  attributeNamePrefix: '@_'
 });
 
-app.addContentTypeParser(
-  'application/xml',
-  { parseAs: 'string' },
-  async (request, body) => {
-    return xmlParser.parse(body);
-  },
-);
+app.addContentTypeParser('application/xml', { parseAs: 'string' }, async (request, body) => {
+  return xmlParser.parse(body);
+});
 
-app.addContentTypeParser(
-  'text/xml',
-  { parseAs: 'string' },
-  async (request, body) => {
-    return xmlParser.parse(body);
-  },
-);
+app.addContentTypeParser('text/xml', { parseAs: 'string' }, async (request, body) => {
+  return xmlParser.parse(body);
+});
 
 app.post('/xml', async (request) => {
   // request.body is parsed XML as JavaScript object
@@ -101,18 +85,18 @@ import fastifyMultipart from '@fastify/multipart';
 app.register(fastifyMultipart, {
   // CRITICAL: Always set explicit limits
   limits: {
-    fieldNameSize: 100,      // Max field name size in bytes
-    fieldSize: 1024 * 1024,  // Max field value size (1MB)
-    fields: 10,              // Max number of non-file fields
+    fieldNameSize: 100, // Max field name size in bytes
+    fieldSize: 1024 * 1024, // Max field value size (1MB)
+    fields: 10, // Max number of non-file fields
     fileSize: 10 * 1024 * 1024, // Max file size (10MB)
-    files: 5,                // Max number of files
-    headerPairs: 2000,       // Max number of header pairs
-    parts: 1000,             // Max number of parts (fields + files)
+    files: 5, // Max number of files
+    headerPairs: 2000, // Max number of header pairs
+    parts: 1000 // Max number of parts (fields + files)
   },
   // IMPORTANT: Throw on limit exceeded (default is to truncate silently!)
   throwFileSizeLimit: true,
   // Attach all fields to request.body for easier access
-  attachFieldsToBody: true,
+  attachFieldsToBody: true
   // Only accept specific file types (security!)
   // onFile: async (part) => {
   //   if (!['image/jpeg', 'image/png'].includes(part.mimetype)) {
@@ -135,7 +119,7 @@ app.post('/upload', async (request, reply) => {
   return {
     filename: data.filename,
     mimetype: data.mimetype,
-    size: buffer.length,
+    size: buffer.length
   };
 });
 
@@ -148,7 +132,7 @@ app.post('/upload-multiple', async (request) => {
     files.push({
       filename: part.filename,
       mimetype: part.mimetype,
-      size: buffer.length,
+      size: buffer.length
     });
   }
 
@@ -183,12 +167,9 @@ import { pipeline } from 'node:stream/promises';
 import { createWriteStream } from 'node:fs';
 
 // Add parser that returns stream
-app.addContentTypeParser(
-  'application/octet-stream',
-  async (request, payload) => {
-    return payload; // Return stream directly
-  },
-);
+app.addContentTypeParser('application/octet-stream', async (request, payload) => {
+  return payload; // Return stream directly
+});
 
 app.post('/upload-stream', async (request, reply) => {
   const destination = createWriteStream('./upload.bin');
@@ -208,21 +189,17 @@ Replace the default JSON parser:
 app.removeContentTypeParser('application/json');
 
 // Add custom parser with error handling
-app.addContentTypeParser(
-  'application/json',
-  { parseAs: 'string' },
-  async (request, body) => {
-    try {
-      return JSON.parse(body);
-    } catch (error) {
-      throw {
-        statusCode: 400,
-        code: 'INVALID_JSON',
-        message: 'Invalid JSON payload',
-      };
-    }
-  },
-);
+app.addContentTypeParser('application/json', { parseAs: 'string' }, async (request, body) => {
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    throw {
+      statusCode: 400,
+      code: 'INVALID_JSON',
+      message: 'Invalid JSON payload'
+    };
+  }
+});
 ```
 
 ## Content Type with Parameters
@@ -231,22 +208,14 @@ Handle content types with parameters:
 
 ```typescript
 // Match content type with any charset
-app.addContentTypeParser(
-  'application/json; charset=utf-8',
-  { parseAs: 'string' },
-  async (request, body) => {
-    return JSON.parse(body);
-  },
-);
+app.addContentTypeParser('application/json; charset=utf-8', { parseAs: 'string' }, async (request, body) => {
+  return JSON.parse(body);
+});
 
 // Use regex for flexible matching
-app.addContentTypeParser(
-  /^application\/.*\+json$/,
-  { parseAs: 'string' },
-  async (request, body) => {
-    return JSON.parse(body);
-  },
-);
+app.addContentTypeParser(/^application\/.*\+json$/, { parseAs: 'string' }, async (request, body) => {
+  return JSON.parse(body);
+});
 ```
 
 ## Catch-All Parser
@@ -285,23 +254,31 @@ Configure body size limits:
 ```typescript
 // Global limit
 const app = Fastify({
-  bodyLimit: 1048576, // 1MB
+  bodyLimit: 1048576 // 1MB
 });
 
 // Per-route limit
-app.post('/large-upload', {
-  bodyLimit: 52428800, // 50MB for this route
-}, async (request) => {
-  return { size: JSON.stringify(request.body).length };
-});
+app.post(
+  '/large-upload',
+  {
+    bodyLimit: 52428800 // 50MB for this route
+  },
+  async (request) => {
+    return { size: JSON.stringify(request.body).length };
+  }
+);
 
 // Per content type limit
-app.addContentTypeParser('application/json', {
-  parseAs: 'string',
-  bodyLimit: 2097152, // 2MB for JSON
-}, async (request, body) => {
-  return JSON.parse(body);
-});
+app.addContentTypeParser(
+  'application/json',
+  {
+    parseAs: 'string',
+    bodyLimit: 2097152 // 2MB for JSON
+  },
+  async (request, body) => {
+    return JSON.parse(body);
+  }
+);
 ```
 
 ## Protocol Buffers
@@ -314,14 +291,10 @@ import protobuf from 'protobufjs';
 const root = await protobuf.load('./schema.proto');
 const MessageType = root.lookupType('package.MessageType');
 
-app.addContentTypeParser(
-  'application/x-protobuf',
-  { parseAs: 'buffer' },
-  async (request, body) => {
-    const message = MessageType.decode(body);
-    return MessageType.toObject(message);
-  },
-);
+app.addContentTypeParser('application/x-protobuf', { parseAs: 'buffer' }, async (request, body) => {
+  const message = MessageType.decode(body);
+  return MessageType.toObject(message);
+});
 ```
 
 ## Form Data with @fastify/formbody
@@ -369,19 +342,23 @@ app.post('/data', async (request, reply) => {
 Validate parsed content:
 
 ```typescript
-app.post('/users', {
-  schema: {
-    body: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', minLength: 1 },
-        email: { type: 'string', format: 'email' },
-      },
-      required: ['name', 'email'],
-    },
+app.post(
+  '/users',
+  {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          email: { type: 'string', format: 'email' }
+        },
+        required: ['name', 'email']
+      }
+    }
   },
-}, async (request) => {
-  // Body is parsed AND validated
-  return request.body;
-});
+  async (request) => {
+    // Body is parsed AND validated
+    return request.body;
+  }
+);
 ```

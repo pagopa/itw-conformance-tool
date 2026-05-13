@@ -1,16 +1,14 @@
-import * as x509 from "@peculiar/x509";
-import { X509Certificate } from "@peculiar/x509";
-import { exportJWK, importX509 } from "jose";
+import * as x509 from '@peculiar/x509';
+import { X509Certificate } from '@peculiar/x509';
+import { exportJWK, importX509 } from 'jose';
 
 /**
  * Extracts certificate details and metadata from a raw X.509 certificate.
  */
-export const getCertificateData = async (input: {
-  certificate: ArrayBuffer;
-}) => {
+export const getCertificateData = async (input: { certificate: ArrayBuffer }) => {
   const certificate = new X509Certificate(input.certificate);
   const thumbprint = await certificate.getThumbprint(crypto);
-  const thumbprintHex = Buffer.from(thumbprint).toString("hex");
+  const thumbprintHex = Buffer.from(thumbprint).toString('hex');
   return {
     issuerName: certificate.issuerName.toString(),
     notAfter: certificate.notAfter,
@@ -18,33 +16,26 @@ export const getCertificateData = async (input: {
     pem: certificate.toString(),
     serialNumber: certificate.serialNumber,
     subjectName: certificate.subjectName.toString(),
-    thumbprint: thumbprintHex,
+    thumbprint: thumbprintHex
   };
 };
 
 /**
  * Extracts the leaf public key in JWK format from an X.509 certificate chain.
  */
-export const getCertificateChainPublicKey = async (input: {
-  alg: string;
-  certificateChain: readonly unknown[];
-}) => {
+export const getCertificateChainPublicKey = async (input: { alg: string; certificateChain: readonly unknown[] }) => {
   const [leafCertificate] = input.certificateChain;
   if (leafCertificate === undefined) {
-    throw new Error("x5c certificate not found");
+    throw new Error('x5c certificate not found');
   }
 
-  if (typeof leafCertificate !== "string") {
-    throw new Error("Invalid x5c certificate format");
+  if (typeof leafCertificate !== 'string') {
+    throw new Error('Invalid x5c certificate format');
   }
 
-  const key = await importX509(
-    convertBase64DerToPem(leafCertificate),
-    input.alg,
-    {
-      extractable: true,
-    },
-  );
+  const key = await importX509(convertBase64DerToPem(leafCertificate), input.alg, {
+    extractable: true
+  });
 
   return await exportJWK(key);
 };
@@ -59,47 +50,39 @@ export const validateCertificateChain = async (input: {
 }) => {
   const { now, trustedCertificates, x5chain: certificateChain } = input;
   if (certificateChain.length === 0) {
-    throw new Error("Certificate chain is empty");
+    throw new Error('Certificate chain is empty');
   }
 
   const validationDate = now ?? new Date();
 
   const parsedLeafCertificate = new x509.X509Certificate(certificateChain[0]);
 
-  const parsedCertificates = certificateChain.map(
-    (c) => new x509.X509Certificate(c),
-  );
+  const parsedCertificates = certificateChain.map((c) => new x509.X509Certificate(c));
 
   const certificateChainBuilder = new x509.X509ChainBuilder({
-    certificates: parsedCertificates,
+    certificates: parsedCertificates
   });
 
   const chain = await certificateChainBuilder.build(parsedLeafCertificate);
 
   // The chain is reversed here as the `x5c` header (the expected input),
   // has the leaf certificate as the first entry, while the `x509` library expects this as the last
-  let parsedChain = chain
-    .map((c) => new x509.X509Certificate(c.rawData))
-    .reverse();
+  let parsedChain = chain.map((c) => new x509.X509Certificate(c.rawData)).reverse();
 
   if (parsedChain.length !== certificateChain.length) {
-    throw new Error(
-      "Could not parse the full chain. Likely due to incorrect ordering",
-    );
+    throw new Error('Could not parse the full chain. Likely due to incorrect ordering');
   }
 
   const parsedTrustedCertificates = trustedCertificates.map(
-    (trustedCertificate) => new x509.X509Certificate(trustedCertificate),
+    (trustedCertificate) => new x509.X509Certificate(trustedCertificate)
   );
 
   const trustedCertificateIndex = parsedChain.findIndex((cert) =>
-    parsedTrustedCertificates.some((tCert) => cert.equal(tCert)),
+    parsedTrustedCertificates.some((tCert) => cert.equal(tCert))
   );
 
   if (trustedCertificateIndex === -1) {
-    throw new Error(
-      "No trusted certificate was found while validating the X.509 chain",
-    );
+    throw new Error('No trusted certificate was found while validating the X.509 chain');
   }
 
   // Pop everything off above the index of the trusted as it is not relevant for validation
@@ -109,9 +92,7 @@ export const validateCertificateChain = async (input: {
   for (let i = 0; i < parsedChain.length; i++) {
     const cert = parsedChain[i];
     const previousCertificate = parsedChain[i - 1];
-    const publicKey = previousCertificate
-      ? previousCertificate.publicKey
-      : undefined;
+    const publicKey = previousCertificate ? previousCertificate.publicKey : undefined;
     await cert?.verify({ date: validationDate, publicKey });
   }
 };
