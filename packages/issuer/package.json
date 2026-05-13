@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@itw-conformance-tool/database": "workspace:*",
     "@faker-js/faker": "^10.4.0",
     "@pagopa/io-wallet-oauth2": "1.4.0",
     "@pagopa/io-wallet-oid-federation": "1.4.0",
