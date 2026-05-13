@@ -93,7 +93,7 @@ importers:
         specifier: 'workspace:'
         version: link:../../packages/logger
       pino:
-        specifier: ^10.0.0
+        specifier: catalog:node
         version: 10.3.1
 
   apps/itw-credential-issuer:
