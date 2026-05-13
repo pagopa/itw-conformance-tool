@@ -463,8 +463,25 @@ function pipeChildOutput(
   });
 }
 
+function resolveLocalNxCli(): string {
+  const candidatePaths = [
+    resolve(process.cwd(), 'node_modules', 'nx', 'bin', 'nx.js'),
+    resolve(process.cwd(), 'node_modules', 'nx', 'dist', 'bin', 'nx.js')
+  ];
+
+  for (const candidatePath of candidatePaths) {
+    if (existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+
+  throw new Error('Unable to locate the local Nx CLI in node_modules');
+}
+
 async function runCommand(flow: Flow, runtimeConfig: RuntimeConfig, args: string[], env: NodeJS.ProcessEnv, logger: CliLogger): Promise<number> {
-  const child = spawn('pnpm', args, {
+  const nxCliPath = resolveLocalNxCli();
+  const nxArgs = args[0] === 'nx' ? args.slice(1) : args;
+  const child = spawn(process.execPath, [nxCliPath, ...nxArgs], {
     stdio: 'pipe',
     env
   });
