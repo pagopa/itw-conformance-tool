@@ -24,7 +24,7 @@ describe('DatabaseClient cleanup interval', () => {
 
   it('purges expired rows after the cleanup interval fires', () => {
     // Use SQLite's notion of "now" so timestamps are consistent with purgeExpired()
-    const { now } = client.db.prepare('SELECT unixepoch(\'now\') * 1000 AS now').get() as { now: number };
+    const { now } = client.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number };
     const past = now - 2000;
     const future = now + 60_000;
 
@@ -35,8 +35,8 @@ describe('DatabaseClient cleanup interval', () => {
     vi.advanceTimersByTime(1_001);
 
     const rows = client.db.prepare('SELECT value FROM nonces').all() as { value: string }[];
-    expect(rows.map(r => r.value)).not.toContain('old');
-    expect(rows.map(r => r.value)).toContain('new');
+    expect(rows.map((r) => r.value)).not.toContain('old');
+    expect(rows.map((r) => r.value)).toContain('new');
   });
 
   it('close() stops the cleanup interval', () => {

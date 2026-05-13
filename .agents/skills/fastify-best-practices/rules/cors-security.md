@@ -27,7 +27,7 @@ app.register(cors, {
   allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['X-Total-Count'],
   credentials: true,
-  maxAge: 86400, // 24 hours
+  maxAge: 86400 // 24 hours
 });
 ```
 
@@ -44,11 +44,7 @@ app.register(cors, {
     }
 
     // Check against allowed origins
-    const allowedOrigins = [
-      'https://example.com',
-      'https://app.example.com',
-      /\.example\.com$/,
-    ];
+    const allowedOrigins = ['https://example.com', 'https://app.example.com', /\.example\.com$/];
 
     const isAllowed = allowedOrigins.some((allowed) => {
       if (allowed instanceof RegExp) {
@@ -63,7 +59,7 @@ app.register(cors, {
       callback(new Error('Not allowed by CORS'), false);
     }
   },
-  credentials: true,
+  credentials: true
 });
 ```
 
@@ -74,7 +70,7 @@ Configure CORS for specific routes:
 ```typescript
 app.register(cors, {
   origin: true, // Reflect request origin
-  credentials: true,
+  credentials: true
 });
 
 // Or disable CORS for specific routes
@@ -82,11 +78,11 @@ app.route({
   method: 'GET',
   url: '/internal',
   config: {
-    cors: false,
+    cors: false
   },
   handler: async () => {
     return { internal: true };
-  },
+  }
 });
 ```
 
@@ -104,10 +100,10 @@ app.register(helmet, {
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'https://api.example.com'],
-    },
+      connectSrc: ["'self'", 'https://api.example.com']
+    }
   },
-  crossOriginEmbedderPolicy: false, // Disable if embedding external resources
+  crossOriginEmbedderPolicy: false // Disable if embedding external resources
 });
 ```
 
@@ -121,20 +117,20 @@ app.register(helmet, {
   hsts: {
     maxAge: 31536000, // 1 year
     includeSubDomains: true,
-    preload: true,
+    preload: true
   },
 
   // Content Security Policy
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
-      'script-src': ["'self'", 'https://trusted-cdn.com'],
-    },
+      'script-src': ["'self'", 'https://trusted-cdn.com']
+    }
   },
 
   // X-Frame-Options
   frameguard: {
-    action: 'deny', // or 'sameorigin'
+    action: 'deny' // or 'sameorigin'
   },
 
   // X-Content-Type-Options
@@ -145,7 +141,7 @@ app.register(helmet, {
 
   // Referrer-Policy
   referrerPolicy: {
-    policy: 'strict-origin-when-cross-origin',
+    policy: 'strict-origin-when-cross-origin'
   },
 
   // X-Permitted-Cross-Domain-Policies
@@ -153,8 +149,8 @@ app.register(helmet, {
 
   // X-DNS-Prefetch-Control
   dnsPrefetchControl: {
-    allow: false,
-  },
+    allow: false
+  }
 });
 ```
 
@@ -172,26 +168,34 @@ app.register(rateLimit, {
     statusCode: 429,
     error: 'Too Many Requests',
     message: `Rate limit exceeded. Retry in ${context.after}`,
-    retryAfter: context.after,
-  }),
+    retryAfter: context.after
+  })
 });
 
 // Per-route rate limit
-app.get('/expensive', {
-  config: {
-    rateLimit: {
-      max: 10,
-      timeWindow: '1 minute',
-    },
+app.get(
+  '/expensive',
+  {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute'
+      }
+    }
   },
-}, handler);
+  handler
+);
 
 // Skip rate limit for certain routes
-app.get('/health', {
-  config: {
-    rateLimit: false,
+app.get(
+  '/health',
+  {
+    config: {
+      rateLimit: false
+    }
   },
-}, () => ({ status: 'ok' }));
+  () => ({ status: 'ok' })
+);
 ```
 
 ## Redis-Based Rate Limiting
@@ -212,7 +216,7 @@ app.register(rateLimit, {
   keyGenerator: (request) => {
     // Rate limit by user ID if authenticated, otherwise by IP
     return request.user?.id || request.ip;
-  },
+  }
 });
 ```
 
@@ -229,8 +233,8 @@ app.register(fastifyCsrf, {
   cookieOpts: {
     signed: true,
     httpOnly: true,
-    sameSite: 'strict',
-  },
+    sameSite: 'strict'
+  }
 });
 
 // Generate token
@@ -240,12 +244,16 @@ app.get('/csrf-token', async (request, reply) => {
 });
 
 // Protected route
-app.post('/transfer', {
-  preHandler: app.csrfProtection,
-}, async (request) => {
-  // CSRF token validated
-  return { success: true };
-});
+app.post(
+  '/transfer',
+  {
+    preHandler: app.csrfProtection
+  },
+  async (request) => {
+    // CSRF token validated
+    return { success: true };
+  }
+);
 ```
 
 ## Custom Security Headers
@@ -283,8 +291,8 @@ app.register(cookie, {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
-    maxAge: 3600, // 1 hour
-  },
+    maxAge: 3600 // 1 hour
+  }
 });
 
 // Set secure cookie
@@ -297,7 +305,7 @@ app.post('/login', async (request, reply) => {
     sameSite: 'strict',
     path: '/',
     maxAge: 86400,
-    signed: true,
+    signed: true
   });
 
   return { success: true };
@@ -322,28 +330,32 @@ Validate and sanitize input:
 
 ```typescript
 // Schema-based validation protects against injection
-app.post('/users', {
-  schema: {
-    body: {
-      type: 'object',
-      properties: {
-        email: {
-          type: 'string',
-          format: 'email',
-          maxLength: 254,
+app.post(
+  '/users',
+  {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          email: {
+            type: 'string',
+            format: 'email',
+            maxLength: 254
+          },
+          name: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 100,
+            pattern: '^[a-zA-Z\\s]+$' // Only letters and spaces
+          }
         },
-        name: {
-          type: 'string',
-          minLength: 1,
-          maxLength: 100,
-          pattern: '^[a-zA-Z\\s]+$', // Only letters and spaces
-        },
-      },
-      required: ['email', 'name'],
-      additionalProperties: false,
-    },
+        required: ['email', 'name'],
+        additionalProperties: false
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## IP Filtering
@@ -351,10 +363,7 @@ app.post('/users', {
 Restrict access by IP:
 
 ```typescript
-const allowedIps = new Set([
-  '192.168.1.0/24',
-  '10.0.0.0/8',
-]);
+const allowedIps = new Set(['192.168.1.0/24', '10.0.0.0/8']);
 
 app.addHook('onRequest', async (request, reply) => {
   if (request.url.startsWith('/admin')) {
@@ -381,19 +390,19 @@ Configure for reverse proxy environments:
 
 ```typescript
 const app = Fastify({
-  trustProxy: true, // Trust X-Forwarded-* headers
+  trustProxy: true // Trust X-Forwarded-* headers
 });
 
 // Or specific proxy configuration
 const app = Fastify({
-  trustProxy: ['127.0.0.1', '10.0.0.0/8'],
+  trustProxy: ['127.0.0.1', '10.0.0.0/8']
 });
 
 // Now request.ip returns the real client IP
 app.get('/ip', async (request) => {
   return {
     ip: request.ip,
-    ips: request.ips, // Array of all IPs in chain
+    ips: request.ips // Array of all IPs in chain
   };
 });
 ```
@@ -404,10 +413,7 @@ Force HTTPS in production:
 
 ```typescript
 app.addHook('onRequest', async (request, reply) => {
-  if (
-    process.env.NODE_ENV === 'production' &&
-    request.headers['x-forwarded-proto'] !== 'https'
-  ) {
+  if (process.env.NODE_ENV === 'production' && request.headers['x-forwarded-proto'] !== 'https') {
     const httpsUrl = `https://${request.hostname}${request.url}`;
     reply.redirect(301, httpsUrl);
   }
@@ -424,18 +430,18 @@ import rateLimit from '@fastify/rate-limit';
 
 const app = Fastify({
   trustProxy: true,
-  bodyLimit: 1048576, // 1MB max body
+  bodyLimit: 1048576 // 1MB max body
 });
 
 // Security plugins
 app.register(helmet);
 app.register(cors, {
   origin: process.env.ALLOWED_ORIGINS?.split(','),
-  credentials: true,
+  credentials: true
 });
 app.register(rateLimit, {
   max: 100,
-  timeWindow: '1 minute',
+  timeWindow: '1 minute'
 });
 
 // Validate all input with schemas

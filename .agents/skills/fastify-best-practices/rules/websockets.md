@@ -79,13 +79,13 @@ app.register(websocket, {
       zlibDeflateOptions: {
         chunkSize: 1024,
         memLevel: 7,
-        level: 3,
+        level: 3
       },
       zlibInflateOptions: {
-        chunkSize: 10 * 1024,
-      },
-    },
-  },
+        chunkSize: 10 * 1024
+      }
+    }
+  }
 });
 ```
 
@@ -262,30 +262,34 @@ setInterval(() => {
 Authenticate WebSocket connections:
 
 ```typescript
-app.get('/ws', {
-  websocket: true,
-  preValidation: async (request, reply) => {
-    // Authenticate via query parameter or header
-    const token = request.query.token || request.headers.authorization?.replace('Bearer ', '');
+app.get(
+  '/ws',
+  {
+    websocket: true,
+    preValidation: async (request, reply) => {
+      // Authenticate via query parameter or header
+      const token = request.query.token || request.headers.authorization?.replace('Bearer ', '');
 
-    if (!token) {
-      reply.code(401).send({ error: 'Token required' });
-      return;
-    }
+      if (!token) {
+        reply.code(401).send({ error: 'Token required' });
+        return;
+      }
 
-    try {
-      request.user = await verifyToken(token);
-    } catch {
-      reply.code(401).send({ error: 'Invalid token' });
+      try {
+        request.user = await verifyToken(token);
+      } catch {
+        reply.code(401).send({ error: 'Invalid token' });
+      }
     }
   },
-}, (socket, request) => {
-  console.log('Authenticated user:', request.user);
+  (socket, request) => {
+    console.log('Authenticated user:', request.user);
 
-  socket.on('message', (message) => {
-    // Handle authenticated messages
-  });
-});
+    socket.on('message', (message) => {
+      // Handle authenticated messages
+    });
+  }
+);
 ```
 
 ## Error Handling
@@ -305,10 +309,12 @@ app.get('/ws', { websocket: true }, (socket, request) => {
       socket.send(JSON.stringify({ success: true, result }));
     } catch (error) {
       request.log.error({ err: error }, 'Message processing error');
-      socket.send(JSON.stringify({
-        success: false,
-        error: error.message,
-      }));
+      socket.send(
+        JSON.stringify({
+          success: false,
+          error: error.message
+        })
+      );
     }
   });
 });
