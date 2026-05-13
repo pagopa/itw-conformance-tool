@@ -570,10 +570,21 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
   const logger = createCliLogger('debug');
-  emitLog(logger, 'error', 'cli.unhandled_error', {
-    message
-  });
+
+  if (error instanceof Error) {
+    emitLog(logger, 'error', 'cli.unhandled_error', {
+      message: error.message,
+      error,
+      stack: error.stack,
+      cause: error.cause
+    });
+  } else {
+    emitLog(logger, 'error', 'cli.unhandled_error', {
+      message: String(error),
+      thrown: error
+    });
+  }
+
   process.exit(1);
 });
