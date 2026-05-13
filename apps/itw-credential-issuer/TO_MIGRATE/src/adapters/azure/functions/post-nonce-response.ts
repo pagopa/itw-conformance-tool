@@ -1,8 +1,8 @@
-import type { HttpHandler } from "@azure/functions";
+import type { HttpHandler } from '@azure/functions';
 
-import { generateNonce } from "@/domain/nonce";
+import { generateNonce } from '@/domain/nonce';
 
-import { createGenericErrorResponse } from "./errors/error";
+import { createGenericErrorResponse } from './errors/error';
 
 /**
  * Azure Function handler for creating and returning a new nonce.
@@ -11,27 +11,24 @@ import { createGenericErrorResponse } from "./errors/error";
  * @param context - Azure function invocation context.
  * @returns HTTP response containing the nonce or an error message.
  */
-export const PostNonceResponseHandler: HttpHandler = async (
-  _request,
-  context,
-) => {
+export const PostNonceResponseHandler: HttpHandler = async (_request, context) => {
   try {
     const nonce = await generateNonce({
-      nonceRepository: context.app.repository.nonce,
+      nonceRepository: context.app.repository.nonce
     });
 
     return {
       body: JSON.stringify({
-        c_nonce: nonce,
+        c_nonce: nonce
       }),
       headers: {
-        "Cache-Control": "no-store",
-        "Content-Type": "application/json",
+        'Cache-Control': 'no-store',
+        'Content-Type': 'application/json'
       },
-      status: 200,
+      status: 200
     };
   } catch (err) {
-    context.error("Error: ", err.message);
+    context.error('Error: ', err.message);
     return createGenericErrorResponse(err.message);
   }
 };

@@ -1,15 +1,7 @@
-import {
-  RequestObjectRepository,
-  getRequestObject,
-  markRequestObjectAsChecking,
-} from "@/request-object";
+import { RequestObjectRepository, getRequestObject, markRequestObjectAsChecking } from '@/request-object';
 
 export const getAuthorizationRequest: {
-  handler: (
-    state: string,
-  ) => (dep: {
-    requestObjectRepository: RequestObjectRepository;
-  }) => Promise<string>;
+  handler: (state: string) => (dep: { requestObjectRepository: RequestObjectRepository }) => Promise<string>;
   path: string;
 } = {
   handler:
@@ -20,5 +12,5 @@ export const getAuthorizationRequest: {
       return jwt;
       // add 503 Service Unavailable
     },
-  path: "/auth/request/:state",
+  path: '/auth/request/:state'
 };

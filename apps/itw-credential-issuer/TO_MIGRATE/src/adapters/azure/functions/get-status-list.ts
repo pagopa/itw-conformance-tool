@@ -1,15 +1,7 @@
-import {
-  BITS,
-  LIST,
-  STATUS_LIST_URI,
-  createStatusList,
-} from "@/domain/utils/status-list";
-import { HttpHandler } from "@azure/functions";
-import {
-  type StatusListJWTHeaderParameters,
-  createHeaderAndPayload,
-} from "@sd-jwt/jwt-status-list";
-import { type JWTPayload, SignJWT, importJWK } from "jose";
+import { BITS, LIST, STATUS_LIST_URI, createStatusList } from '@/domain/utils/status-list';
+import { HttpHandler } from '@azure/functions';
+import { type StatusListJWTHeaderParameters, createHeaderAndPayload } from '@sd-jwt/jwt-status-list';
+import { type JWTPayload, SignJWT, importJWK } from 'jose';
 
 export const GetStatusListHandler: HttpHandler = async (_request, context) => {
   const baseURL = context.app.config.baseURL;
@@ -25,31 +17,29 @@ export const GetStatusListHandler: HttpHandler = async (_request, context) => {
     iss: baseURL,
     status_list: {
       bits: BITS,
-      lst,
+      lst
     },
     sub: STATUS_LIST_URI(baseURL),
-    ttl: 3000,
+    ttl: 3000
   };
 
   const { private: privateSig } = jwksRepository.getSign();
   const header: StatusListJWTHeaderParameters = {
-    alg: "ES256",
-    typ: "statuslist+jwt",
-    x5c: [jwksRepository.iacaX509()],
+    alg: 'ES256',
+    typ: 'statuslist+jwt',
+    x5c: [jwksRepository.iacaX509()]
   };
 
   const values = createHeaderAndPayload(statusList, payload, header);
   const signingKey = await importJWK(privateSig);
 
-  const jwt = await new SignJWT(values.payload)
-    .setProtectedHeader(values.header)
-    .sign(signingKey);
+  const jwt = await new SignJWT(values.payload).setProtectedHeader(values.header).sign(signingKey);
 
   return {
     body: jwt,
     headers: {
-      "Content-Type": "application/statuslist+jwt",
+      'Content-Type': 'application/statuslist+jwt'
     },
-    status: 200,
+    status: 200
   };
 };

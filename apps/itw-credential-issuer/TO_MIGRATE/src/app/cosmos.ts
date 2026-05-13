@@ -1,7 +1,7 @@
-import { CosmosClient } from "@azure/cosmos";
-import { DefaultAzureCredential } from "@azure/identity";
+import { CosmosClient } from '@azure/cosmos';
+import { DefaultAzureCredential } from '@azure/identity';
 
-import type { Config } from "./config";
+import type { Config } from './config';
 
 /**
  * Create and configure a CosmosClient based on the current environment.
@@ -15,7 +15,7 @@ export function createCosmosClient(config: Config): CosmosClient {
   if (config.isDevelopment) {
     return new CosmosClient({
       endpoint,
-      key,
+      key
     });
   }
 
@@ -23,6 +23,6 @@ export function createCosmosClient(config: Config): CosmosClient {
   const aadCredentials = new DefaultAzureCredential();
   return new CosmosClient({
     aadCredentials,
-    endpoint,
+    endpoint
   });
 }

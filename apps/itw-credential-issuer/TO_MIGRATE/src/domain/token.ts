@@ -1,26 +1,26 @@
 import type {
   ItWalletCredentialIssuerMetadata,
-  ItWalletCredentialIssuerMetadataV1_3,
-} from "@pagopa/io-wallet-oid-federation";
+  ItWalletCredentialIssuerMetadataV1_3
+} from '@pagopa/io-wallet-oid-federation';
 
-import { JwksRepository } from "@/domain/signer";
+import { JwksRepository } from '@/domain/signer';
 import {
   CallbackContext,
   PkceCodeChallengeMethod,
   createAccessTokenResponse,
   parseAccessTokenRequest,
-  verifyAccessTokenRequest,
-} from "@pagopa/io-wallet-oauth2";
-import { HttpMethod, IoWalletSdkConfig } from "@pagopa/io-wallet-utils";
+  verifyAccessTokenRequest
+} from '@pagopa/io-wallet-oauth2';
+import { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
-import { getEntityConfigurationClaimsMetadata } from "./openid-federation";
-import { ParRequestRepository } from "./par";
-import { ParRequest } from "./z-par";
+import { getEntityConfigurationClaimsMetadata } from './openid-federation';
+import { ParRequestRepository } from './par';
+import { ParRequest } from './z-par';
 
 export class CreateAccessTokenError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "CreateAccessTokenError";
+    this.name = 'CreateAccessTokenError';
 
     Object.setPrototypeOf(this, CreateAccessTokenError.prototype);
   }
@@ -35,7 +35,7 @@ export class CreateAccessTokenError extends Error {
 export class InvalidGrantError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "InvalidGrantError";
+    this.name = 'InvalidGrantError';
 
     Object.setPrototypeOf(this, InvalidGrantError.prototype);
   }
@@ -44,7 +44,7 @@ export class InvalidGrantError extends Error {
 export class UnsupportedGrantTypeError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "UnsupportedGrantTypeError";
+    this.name = 'UnsupportedGrantTypeError';
 
     Object.setPrototypeOf(this, UnsupportedGrantTypeError.prototype);
   }
@@ -55,10 +55,7 @@ export interface CreateAccessTokenOptions {
   baseURL: string;
 
   /* The Oauth2AuthorizationServer instance to use for creating the access token */
-  callbacks: Pick<
-    CallbackContext,
-    "generateRandom" | "hash" | "signJwt" | "verifyJwt"
-  >;
+  callbacks: Pick<CallbackContext, 'generateRandom' | 'hash' | 'signJwt' | 'verifyJwt'>;
 
   config: IoWalletSdkConfig;
 
@@ -89,9 +86,7 @@ export interface CreateAccessTokenOptions {
  * @throws {CreateAccessTokenError} For configuration or internal protocol errors.
  */
 export const createAccessToken = async (options: CreateAccessTokenOptions) => {
-  const tokenRequestFormUrl = Object.fromEntries(
-    new URLSearchParams(options.tokenRequest.bodyString),
-  );
+  const tokenRequestFormUrl = Object.fromEntries(new URLSearchParams(options.tokenRequest.bodyString));
 
   if (
     !tokenRequestFormUrl.code ||
@@ -99,44 +94,32 @@ export const createAccessToken = async (options: CreateAccessTokenOptions) => {
     !tokenRequestFormUrl.grant_type ||
     !tokenRequestFormUrl.redirect_uri
   ) {
-    throw new CreateAccessTokenError(
-      `code, code_verifier, grant_type and redirect_uri must be present!`,
-    );
+    throw new CreateAccessTokenError(`code, code_verifier, grant_type and redirect_uri must be present!`);
   }
 
-  const {
-    accessTokenRequest,
-    clientAttestation,
-    dpop,
-    grant,
-    pkceCodeVerifier,
-  } = parseAccessTokenRequest({
+  const { accessTokenRequest, clientAttestation, dpop, grant, pkceCodeVerifier } = parseAccessTokenRequest({
     accessTokenRequest: tokenRequestFormUrl,
-    request: options.tokenRequest,
+    request: options.tokenRequest
   });
 
   const parRequest = await options.parRequestRepository
     .get({ code: tokenRequestFormUrl.code })
     .catch((err: unknown) => {
-      throw new InvalidGrantError(
-        err instanceof Error ? err.message : String(err),
-      );
+      throw new InvalidGrantError(err instanceof Error ? err.message : String(err));
     });
 
   if (parRequest.redirect_uri !== tokenRequestFormUrl.redirect_uri) {
-    throw new InvalidGrantError("redirect_uri mismatch");
+    throw new InvalidGrantError('redirect_uri mismatch');
   }
 
-  if (grant.grantType !== "authorization_code") {
-    throw new UnsupportedGrantTypeError(
-      `Unsupported grant type: ${accessTokenRequest.grant_type}`,
-    );
+  if (grant.grantType !== 'authorization_code') {
+    throw new UnsupportedGrantTypeError(`Unsupported grant type: ${accessTokenRequest.grant_type}`);
   }
 
   const federationMetadata = getEntityConfigurationClaimsMetadata(
     options.baseURL,
     options.jwksRepository,
-    options.config,
+    options.config
   );
 
   const verifyAccessToken = await verifyAccessTokenRequest({
@@ -146,20 +129,19 @@ export const createAccessToken = async (options: CreateAccessTokenOptions) => {
     clientAttestation,
     config: options.config,
     dpop: {
-      jwt: dpop.jwt,
+      jwt: dpop.jwt
     },
     expectedCode: parRequest.code,
     grant: {
       code: tokenRequestFormUrl.code,
-      grantType: grant.grantType,
+      grantType: grant.grantType
     },
     pkce: {
       codeChallenge: parRequest.code_challenge,
-      codeChallengeMethod:
-        parRequest.code_challenge_method as PkceCodeChallengeMethod,
-      codeVerifier: pkceCodeVerifier,
+      codeChallengeMethod: parRequest.code_challenge_method as PkceCodeChallengeMethod,
+      codeVerifier: pkceCodeVerifier
     },
-    request: options.tokenRequest,
+    request: options.tokenRequest
   });
 
   // Consume the authorization code only after all validations succeed,
@@ -170,8 +152,8 @@ export const createAccessToken = async (options: CreateAccessTokenOptions) => {
     additionalPayload: {
       authorization_details: createAuthorizationDetails(
         parRequest.authorization_details,
-        federationMetadata.openid_credential_issuer,
-      ),
+        federationMetadata.openid_credential_issuer
+      )
     },
     audience: options.baseURL,
     authorizationServer: options.baseURL,
@@ -180,12 +162,12 @@ export const createAccessToken = async (options: CreateAccessTokenOptions) => {
     dpop: verifyAccessToken.dpop,
     expiresInSeconds: 300,
     signer: {
-      alg: "ES256",
-      method: "jwk",
-      publicJwk: options.jwksRepository.getSign().public,
+      alg: 'ES256',
+      method: 'jwk',
+      publicJwk: options.jwksRepository.getSign().public
     },
     subject: parRequest.client_id,
-    tokenType: "DPoP",
+    tokenType: 'DPoP'
   });
 
   return accessTokenResponse;
@@ -204,33 +186,25 @@ export const createAccessToken = async (options: CreateAccessTokenOptions) => {
  * @throws {CreateAccessTokenError} Throws an error if the credential configuration ID does not exist in issuer metadata.
  */
 const createAuthorizationDetails = (
-  authorizationDetails: ParRequest["authorization_details"],
-  issuerMetadata:
-    | ItWalletCredentialIssuerMetadata
-    | ItWalletCredentialIssuerMetadataV1_3,
-): { credential_identifiers: string[] }[] &
-  ParRequest["authorization_details"] =>
+  authorizationDetails: ParRequest['authorization_details'],
+  issuerMetadata: ItWalletCredentialIssuerMetadata | ItWalletCredentialIssuerMetadataV1_3
+): { credential_identifiers: string[] }[] & ParRequest['authorization_details'] =>
   authorizationDetails.map((item) => {
-    if (item.type !== "openid_credential") {
-      throw new CreateAccessTokenError(
-        `Unsupported authorization detail type: ${item.type}`,
-      );
+    if (item.type !== 'openid_credential') {
+      throw new CreateAccessTokenError(`Unsupported authorization detail type: ${item.type}`);
     }
 
-    const credentialConfig =
-      issuerMetadata.credential_configurations_supported[
-        item.credential_configuration_id
-      ];
+    const credentialConfig = issuerMetadata.credential_configurations_supported[item.credential_configuration_id];
 
     if (!credentialConfig) {
       throw new CreateAccessTokenError(
-        `No Credential configuration supported for id: ${item.credential_configuration_id}`,
+        `No Credential configuration supported for id: ${item.credential_configuration_id}`
       );
     }
 
     return {
       credential_configuration_id: item.credential_configuration_id,
       credential_identifiers: [item.credential_configuration_id],
-      type: item.type,
+      type: item.type
     };
   });

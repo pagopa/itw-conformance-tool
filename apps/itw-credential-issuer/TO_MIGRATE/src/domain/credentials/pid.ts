@@ -1,16 +1,13 @@
-import type { DisclosureFrame } from "@sd-jwt/types";
+import type { DisclosureFrame } from '@sd-jwt/types';
 
-import { FakeUser } from "@/domain/faker";
-import { createSRIHash, createSignerVerifier } from "@/domain/sd-jwt";
-import { JwksRepository } from "@/domain/signer";
-import { STATUS_LIST_URI } from "@/domain/utils/status-list";
-import { JwkPublicKey } from "@/domain/z-jwk";
-import {
-  IoWalletSdkConfig,
-  ItWalletSpecsVersion,
-} from "@pagopa/io-wallet-utils";
-import { ES256, digest, generateSalt } from "@sd-jwt/crypto-nodejs";
-import { SDJwtVcInstance } from "@sd-jwt/sd-jwt-vc";
+import { FakeUser } from '@/domain/faker';
+import { createSRIHash, createSignerVerifier } from '@/domain/sd-jwt';
+import { JwksRepository } from '@/domain/signer';
+import { STATUS_LIST_URI } from '@/domain/utils/status-list';
+import { JwkPublicKey } from '@/domain/z-jwk';
+import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
+import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
+import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
 
 /**
  * Creates a signed SD-JWT credential for the specified holder.
@@ -28,23 +25,23 @@ export const createPidCredential = async (
   jwksRepository: JwksRepository,
   holderPublicKey: JwkPublicKey,
   config: IoWalletSdkConfig,
-  fakeUser: FakeUser,
+  fakeUser: FakeUser
 ): Promise<string> => {
   const jwks = jwksRepository.getSign();
 
   const [signer, verifier] = await createSignerVerifier({
     privateKey: jwks.private,
-    publicKey: holderPublicKey,
+    publicKey: holderPublicKey
   });
 
   // Create SDJwt instance for use
   const sdjwt = new SDJwtVcInstance({
-    hashAlg: "sha-256",
+    hashAlg: 'sha-256',
     hasher: digest,
     saltGenerator: generateSalt,
     signAlg: ES256.alg,
     signer,
-    verifier,
+    verifier
   });
 
   const now = new Date();
@@ -55,10 +52,10 @@ export const createPidCredential = async (
     family_name: fakeUser.familyName,
     given_name: fakeUser.givenName,
     iat,
-    issuing_authority: "PagoPA S.p.A.",
-    issuing_country: "IT",
-    nationalities: ["IT"],
-    personal_administrative_number: fakeUser.fiscalCode,
+    issuing_authority: 'PagoPA S.p.A.',
+    issuing_country: 'IT',
+    nationalities: ['IT'],
+    personal_administrative_number: fakeUser.fiscalCode
   };
 
   const claims = config.isVersion(ItWalletSpecsVersion.V1_3)
@@ -67,63 +64,57 @@ export const createPidCredential = async (
         birthdate: fakeUser.birthDate,
         date_of_expiry: expiration.toISOString().slice(0, 10),
         place_of_birth: {
-          country: "IT",
-          locality: "Roma",
-          region: "Lazio",
+          country: 'IT',
+          locality: 'Roma',
+          region: 'Lazio'
         },
         sub: fakeUser.id,
         verification: {
-          assurance_level: "high",
-          trust_framework: "it_cie",
-        },
+          assurance_level: 'high',
+          trust_framework: 'it_cie'
+        }
       }
     : {
         ...baseClaims,
         birth_date: fakeUser.birthDate,
         birth_place: fakeUser.birthPlace,
-        expiry_date: expiration.toISOString().slice(0, 10),
+        expiry_date: expiration.toISOString().slice(0, 10)
       };
 
   // Issuer Define the disclosure frame to specify which claims can be disclosed
-  const disclosureFrame: DisclosureFrame<typeof claims> = config.isVersion(
-    ItWalletSpecsVersion.V1_3,
-  )
+  const disclosureFrame: DisclosureFrame<typeof claims> = config.isVersion(ItWalletSpecsVersion.V1_3)
     ? {
         _sd: [
-          "birthdate",
-          "place_of_birth",
-          "family_name",
-          "date_of_expiry",
-          "given_name",
-          "nationalities",
-          "personal_administrative_number",
-          "iat",
-          "sub",
-          "verification",
-        ],
+          'birthdate',
+          'place_of_birth',
+          'family_name',
+          'date_of_expiry',
+          'given_name',
+          'nationalities',
+          'personal_administrative_number',
+          'iat',
+          'sub',
+          'verification'
+        ]
       }
     : {
         _sd: [
-          "birth_date",
-          "birth_place",
-          "family_name",
-          "expiry_date",
-          "given_name",
-          "nationalities",
-          "personal_administrative_number",
-          "iat",
-        ],
+          'birth_date',
+          'birth_place',
+          'family_name',
+          'expiry_date',
+          'given_name',
+          'nationalities',
+          'personal_administrative_number',
+          'iat'
+        ]
       };
 
-  const vct = config.isVersion(ItWalletSpecsVersion.V1_3)
-    ? "urn:eudi:pid:it:1"
-    : "urn:eu.europa.ec.eudi:pid:1";
+  const vct = config.isVersion(ItWalletSpecsVersion.V1_3) ? 'urn:eudi:pid:it:1' : 'urn:eu.europa.ec.eudi:pid:1';
 
   const vctIntegrity = createSRIHash(vct);
   const credentialSubject =
-    config.isVersion(ItWalletSpecsVersion.V1_3) && "sub" in claims
-      ? claims.sub
-      : holderPublicKey.kid;
+    config.isVersion(ItWalletSpecsVersion.V1_3) && 'sub' in claims ? claims.sub : holderPublicKey.kid;
 
   // Issue a signed JWT credential with the specified claims and disclosures
   // Return a Encoded SD JWT. Issuer send the credential to the holder
@@ -135,27 +126,27 @@ export const createPidCredential = async (
       iss,
       status: {
         ...(config.isVersion(ItWalletSpecsVersion.V1_0) && {
-          status_assertion: { credential_hash_alg: "sha-256" },
+          status_assertion: { credential_hash_alg: 'sha-256' }
         }),
         status_list: {
           idx: 1,
-          uri: STATUS_LIST_URI(iss),
-        },
+          uri: STATUS_LIST_URI(iss)
+        }
       },
       sub: credentialSubject,
       vct,
-      "vct#integrity": vctIntegrity,
+      'vct#integrity': vctIntegrity,
       // verification
-      ...claims,
+      ...claims
     },
     disclosureFrame,
     {
       header: {
         kid: jwks.private.kid,
-        typ: "dc+sd-jwt",
-        x5c: [jwksRepository.iacaX509()],
-      },
-    },
+        typ: 'dc+sd-jwt',
+        x5c: [jwksRepository.iacaX509()]
+      }
+    }
   );
 
   return credential;

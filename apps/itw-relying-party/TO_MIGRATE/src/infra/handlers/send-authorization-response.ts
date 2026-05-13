@@ -1,27 +1,20 @@
-import { Config } from "@/config";
-import { NonceRepository, nonceRepository } from "@/nonce";
-import {
-  RequestObjectRepository,
-  markRequestObjectAsRejected,
-} from "@/request-object";
-import { ResponseBody } from "@/schemas";
-import { baz1 } from "@/use-cases/send-authorization-response";
+import { Config } from '@/config';
+import { NonceRepository, nonceRepository } from '@/nonce';
+import { RequestObjectRepository, markRequestObjectAsRejected } from '@/request-object';
+import { ResponseBody } from '@/schemas';
+import { baz1 } from '@/use-cases/send-authorization-response';
 
-function isAuthorizationResponse(
-  data: ResponseBody,
-): data is Required<Pick<ResponseBody, "response">> {
-  return "response" in data && typeof data.response === "string";
+function isAuthorizationResponse(data: ResponseBody): data is Required<Pick<ResponseBody, 'response'>> {
+  return 'response' in data && typeof data.response === 'string';
 }
 
-function isAuthorizationErrorResponse(
-  data: ResponseBody,
-): data is Required<Omit<ResponseBody, "response">> {
-  return "error" in data && "error_description" in data && "state" in data;
+function isAuthorizationErrorResponse(data: ResponseBody): data is Required<Omit<ResponseBody, 'response'>> {
+  return 'error' in data && 'error_description' in data && 'state' in data;
 }
 
 export const sendAuthorizationResponse: {
   handler: (
-    body: ResponseBody,
+    body: ResponseBody
   ) => (dep: {
     config: Config;
     nonceRepository: NonceRepository;
@@ -36,7 +29,7 @@ export const sendAuthorizationResponse: {
         return baz1(body.response)({
           config,
           nonceRepository,
-          requestObjectRepository,
+          requestObjectRepository
         });
       }
       if (isAuthorizationErrorResponse(body)) {
@@ -46,5 +39,5 @@ export const sendAuthorizationResponse: {
       }
       throw new Error();
     },
-  path: "/auth/response",
+  path: '/auth/response'
 };

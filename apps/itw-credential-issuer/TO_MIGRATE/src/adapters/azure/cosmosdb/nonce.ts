@@ -1,5 +1,5 @@
-import { NonceRepository } from "@/domain/nonce";
-import { Database } from "@azure/cosmos";
+import { NonceRepository } from '@/domain/nonce';
+import { Database } from '@azure/cosmos';
 
 /**
  * Creates a NonceRepository backed by Azure CosmosDB.
@@ -7,10 +7,7 @@ import { Database } from "@azure/cosmos";
  * @param containerName - (Optional) Name of the container to use. Defaults to "nonces".
  * @returns An implementation of NonceRepository.
  */
-export const makeNonceRepository = (
-  db: Database,
-  containerName = "nonces",
-): NonceRepository => {
+export const makeNonceRepository = (db: Database, containerName = 'nonces'): NonceRepository => {
   const container = db.container(containerName);
 
   return {
@@ -25,6 +22,6 @@ export const makeNonceRepository = (
     async insert(nonce: string): Promise<string> {
       await container.items.create({ id: nonce });
       return nonce;
-    },
+    }
   };
 };

@@ -1,0 +1,59 @@
+{
+  "name": "itw-conformance-cli",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "apps/cli/dist",
+        "format": ["esm"],
+        "bundle": false,
+        "main": "apps/cli/src/main.ts",
+        "tsConfig": "apps/cli/tsconfig.app.json",
+        "assets": [],
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "generateLockfile": true,
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "run": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "itw-conformance-cli:build",
+        "runBuildTargetDependencies": false,
+        "watch": false,
+        "inspect": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "itw-conformance-cli:build:development",
+          "watch": false,
+          "inspect": false
+        },
+        "production": {
+          "buildTarget": "itw-conformance-cli:build:production",
+          "watch": false,
+          "inspect": false
+        }
+      }
+    }
+  }
+}
