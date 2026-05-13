@@ -296,7 +296,19 @@ function loadRawConfig(filePath?: string): RawConfig {
   }
 
   const resolvedPath = resolve(process.cwd(), filePath);
-  const raw = readFileSync(resolvedPath, { encoding: 'utf8' });
+  let raw: string;
+
+  try {
+    raw = readFileSync(resolvedPath, { encoding: 'utf8' });
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    const codeSuffix = typeof code === 'string' ? ` (${code})` : '';
+    throw new Error(
+      `Failed to read config file passed via --config: ${resolvedPath}${codeSuffix}`,
+      { cause: error },
+    );
+  }
+
   let parsed: unknown;
 
   try {
