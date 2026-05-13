@@ -42,8 +42,8 @@ Recommended in CI/non-interactive environments:
 From the workspace root:
 
 - pnpm conformance help
-- pnpm conformance issuance [options]
-- pnpm conformance presentation [options]
+- pnpm conformance:issuance -- [options]
+- pnpm conformance:presentation -- [options]
 
 Root shortcuts:
 
