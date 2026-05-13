@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@itw-conformance-tool/logger": "workspace:",
-    "pino": "^10.0.0"
+    "pino": "catalog:node"
   }
 }
