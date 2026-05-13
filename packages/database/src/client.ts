@@ -64,6 +64,7 @@ export class DatabaseClient {
 
   private startCleanup(intervalMs: number): void {
     this.cleanupTimer = setInterval(() => {
+      if (!this.isOpen) return;
       this.purgeExpired();
     }, intervalMs);
     // Do not keep the process alive solely for cleanup

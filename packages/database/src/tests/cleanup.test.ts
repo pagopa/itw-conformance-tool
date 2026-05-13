@@ -23,8 +23,10 @@ describe('DatabaseClient cleanup interval', () => {
   });
 
   it('purges expired rows after the cleanup interval fires', () => {
-    const past = Date.now() - 2000;
-    const future = Date.now() + 60_000;
+    // Use SQLite's notion of "now" so timestamps are consistent with purgeExpired()
+    const { now } = client.db.prepare('SELECT unixepoch(\'now\') * 1000 AS now').get() as { now: number };
+    const past = now - 2000;
+    const future = now + 60_000;
 
     client.db.prepare('INSERT INTO nonces (value, expires_at) VALUES (?, ?)').run('old', past);
     client.db.prepare('INSERT INTO nonces (value, expires_at) VALUES (?, ?)').run('new', future);

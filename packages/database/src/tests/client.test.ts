@@ -30,16 +30,20 @@ describe('DatabaseClient', () => {
     expect(names).toContain('presentation_sessions');
   });
 
-  it('is idempotent — init twice does not throw', () => {
+  it('is idempotent — init twice on the same dataDir does not throw', () => {
+    const sharedDir = makeTmpDir();
+    const client1 = new DatabaseClient({ dataDir: sharedDir, cleanupIntervalMs: 999_999 });
+    client1.close();
     expect(() => {
-      const client2 = new DatabaseClient({ dataDir: makeTmpDir(), cleanupIntervalMs: 999_999 });
+      const client2 = new DatabaseClient({ dataDir: sharedDir, cleanupIntervalMs: 999_999 });
       client2.close();
     }).not.toThrow();
   });
 
   it('purgeExpired removes rows with past expires_at', () => {
-    const past = Date.now() - 1_000;
-    const future = Date.now() + 60_000;
+    const { now } = client.db.prepare('SELECT unixepoch(\'now\') * 1000 AS now').get() as { now: number };
+    const past = now - 1_000;
+    const future = now + 60_000;
     client.db.prepare('INSERT INTO nonces (value, expires_at) VALUES (?, ?)').run('expired', past);
     client.db.prepare('INSERT INTO nonces (value, expires_at) VALUES (?, ?)').run('valid', future);
 
