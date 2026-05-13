@@ -19,6 +19,18 @@ export * from './utils/form-post-jwt.js';
 
 // OpenID Federation
 export * from './openid-federation/index.js';
+
+// Models
+export * from './models/nonce.js';
+export * from './models/par-entry.js';
+export * from './models/credential.js';
+export * from './models/token.js';
+export * from './models/status-list.js';
+
 // Services
 export * from './services/status-list-service.js';
 export * from './services/code-jwt-service.js';
+export * from './services/nonce-service.js';
+export * from './services/par-service.js';
+export * from './services/token-service.js';
+export * from './services/federation-service.js';
