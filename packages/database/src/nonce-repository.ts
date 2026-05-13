@@ -13,14 +13,16 @@ export class SqliteNonceRepository implements INonceRepository {
   }
 
   async get(value: string): Promise<string | undefined> {
-    // Lazy expiry: remove stale rows before reading
-    this.db.exec('DELETE FROM nonces WHERE expires_at < unixepoch(\'now\') * 1000');
+    const row = this.db
+      .prepare('SELECT value FROM nonces WHERE value = ? AND expires_at >= unixepoch(\'now\') * 1000')
+      .get(value) as { value: string } | undefined;
 
-    const row = this.db.prepare('SELECT value FROM nonces WHERE value = ?').get(value) as
-      | { value: string }
-      | undefined;
+    if (!row) {
+      this.db.prepare('DELETE FROM nonces WHERE value = ?').run(value);
+      return undefined;
+    }
 
-    return row?.value;
+    return row.value;
   }
 
   async insert(value: string, expiresAtMs: number): Promise<void> {

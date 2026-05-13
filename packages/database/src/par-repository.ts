@@ -29,14 +29,16 @@ export class SqlitePARRepository implements IPARRepository {
   }
 
   async get(requestUri: string): Promise<PAREntry | undefined> {
-    // Lazy expiry
-    this.db.exec('DELETE FROM par_entries WHERE expires_at < unixepoch(\'now\') * 1000');
-
     const row = this.db
-      .prepare('SELECT * FROM par_entries WHERE request_uri = ?')
+      .prepare('SELECT * FROM par_entries WHERE request_uri = ? AND expires_at >= unixepoch(\'now\') * 1000')
       .get(requestUri) as PARRow | undefined;
 
-    return row ? rowToEntry(row) : undefined;
+    if (!row) {
+      this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(requestUri);
+      return undefined;
+    }
+
+    return rowToEntry(row);
   }
 
   async insert(entry: PAREntry): Promise<void> {

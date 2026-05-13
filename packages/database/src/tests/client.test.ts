@@ -56,7 +56,7 @@ describe('DatabaseClient', () => {
   it('close() can be called multiple times without error', () => {
     expect(() => {
       client.close();
-      // second close on a DatabaseSync instance would throw — we only call once
+      client.close();
     }).not.toThrow();
   });
 });
