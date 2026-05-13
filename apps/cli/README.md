@@ -98,6 +98,7 @@ CLI flags always take precedence.
 
 Example:
 
+```json
 {
   "endpoint": "https://issuer.example.org",
   "credentialTypes": ["PID", "MDL"],
@@ -112,6 +113,7 @@ Example:
     "extraArgs": ["--verbose"]
   }
 }
+```
 
 Supported fields:
 
