@@ -24,16 +24,16 @@ Protect your application from overload with `@fastify/under-pressure`:
 import underPressure from '@fastify/under-pressure';
 
 app.register(underPressure, {
-  maxEventLoopDelay: 1000,        // Max event loop delay in ms
-  maxHeapUsedBytes: 1000000000,   // Max heap used (~1GB)
-  maxRssBytes: 1500000000,        // Max RSS (~1.5GB)
+  maxEventLoopDelay: 1000, // Max event loop delay in ms
+  maxHeapUsedBytes: 1000000000, // Max heap used (~1GB)
+  maxRssBytes: 1500000000, // Max RSS (~1.5GB)
   maxEventLoopUtilization: 0.98, // Max event loop utilization
   pressureHandler: (request, reply, type, value) => {
     reply.code(503).send({
       error: 'Service Unavailable',
-      message: `Server under pressure: ${type}`,
+      message: `Server under pressure: ${type}`
     });
-  },
+  }
 });
 
 // Health check that respects pressure
@@ -48,25 +48,29 @@ Response schemas enable fast-json-stringify, which is significantly faster than 
 
 ```typescript
 // FAST - uses fast-json-stringify
-app.get('/users', {
-  schema: {
-    response: {
-      200: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            name: { type: 'string' },
-            email: { type: 'string' },
-          },
-        },
-      },
-    },
+app.get(
+  '/users',
+  {
+    schema: {
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              email: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
   },
-}, async () => {
-  return db.users.findAll();
-});
+  async () => {
+    return db.users.findAll();
+  }
+);
 
 // SLOW - uses JSON.stringify
 app.get('/users-slow', async () => {
@@ -103,8 +107,8 @@ import Fastify from 'fastify';
 // Set log level via environment variable
 const app = Fastify({
   logger: {
-    level: process.env.LOG_LEVEL || 'info',
-  },
+    level: process.env.LOG_LEVEL || 'info'
+  }
 });
 
 // Avoid logging large objects
@@ -130,7 +134,7 @@ import postgres from 'postgres';
 const sql = postgres(process.env.DATABASE_URL, {
   max: 20, // Maximum pool size
   idle_timeout: 20,
-  connect_timeout: 10,
+  connect_timeout: 10
 });
 
 app.decorate('db', sql);
@@ -150,7 +154,7 @@ import Piscina from 'piscina';
 import { join } from 'node:path';
 
 const piscina = new Piscina({
-  filename: join(import.meta.dirname, 'workers', 'compute.js'),
+  filename: join(import.meta.dirname, 'workers', 'compute.js')
 });
 
 app.post('/compute', async (request) => {
@@ -216,7 +220,7 @@ import { LRUCache } from 'lru-cache';
 
 const cache = new LRUCache<string, unknown>({
   max: 1000,
-  ttl: 60000, // 1 minute
+  ttl: 60000 // 1 minute
 });
 
 app.get('/expensive/:id', async (request) => {
@@ -251,7 +255,7 @@ import { createCache } from 'async-cache-dedupe';
 const cache = createCache({
   ttl: 60, // seconds
   stale: 5, // serve stale while revalidating
-  storage: { type: 'memory' },
+  storage: { type: 'memory' }
 });
 
 cache.define('fetchData', async (id: string) => {
@@ -276,7 +280,7 @@ const redis = new Redis(process.env.REDIS_URL);
 
 const cache = createCache({
   ttl: 60,
-  storage: { type: 'redis', options: { client: redis } },
+  storage: { type: 'redis', options: { client: redis } }
 });
 ```
 
@@ -288,13 +292,17 @@ Set appropriate payload limits:
 import Fastify from 'fastify';
 
 const app = Fastify({
-  bodyLimit: 1048576, // 1MB default
+  bodyLimit: 1048576 // 1MB default
 });
 
 // Per-route limit for file uploads
-app.post('/upload', {
-  bodyLimit: 10485760, // 10MB for this route
-}, uploadHandler);
+app.post(
+  '/upload',
+  {
+    bodyLimit: 10485760 // 10MB for this route
+  },
+  uploadHandler
+);
 ```
 
 ## Compression
@@ -307,13 +315,17 @@ import fastifyCompress from '@fastify/compress';
 app.register(fastifyCompress, {
   global: true,
   threshold: 1024, // Only compress responses > 1KB
-  encodings: ['gzip', 'deflate'],
+  encodings: ['gzip', 'deflate']
 });
 
 // Disable for specific route
-app.get('/already-compressed', {
-  compress: false,
-}, handler);
+app.get(
+  '/already-compressed',
+  {
+    compress: false
+  },
+  handler
+);
 ```
 
 ## Connection Timeouts
@@ -325,17 +337,21 @@ import Fastify from 'fastify';
 
 const app = Fastify({
   connectionTimeout: 30000, // 30 seconds
-  keepAliveTimeout: 5000,   // 5 seconds
+  keepAliveTimeout: 5000 // 5 seconds
 });
 
 // Per-route timeout
-app.get('/long-operation', {
-  config: {
-    timeout: 60000, // 60 seconds
+app.get(
+  '/long-operation',
+  {
+    config: {
+      timeout: 60000 // 60 seconds
+    }
   },
-}, async (request) => {
-  return longOperation();
-});
+  async (request) => {
+    return longOperation();
+  }
+);
 ```
 
 ## Disable Unnecessary Features
@@ -347,9 +363,9 @@ import Fastify from 'fastify';
 
 const app = Fastify({
   disableRequestLogging: true, // If you don't need request logs
-  trustProxy: false,           // If not behind proxy
-  caseSensitive: true,         // Enable for slight performance gain
-  ignoreDuplicateSlashes: false,
+  trustProxy: false, // If not behind proxy
+  caseSensitive: true, // Enable for slight performance gain
+  ignoreDuplicateSlashes: false
 });
 ```
 
@@ -379,7 +395,7 @@ const result = await autocannon({
   url: 'http://localhost:3000/api/users',
   connections: 100,
   duration: 30,
-  pipelining: 10,
+  pipelining: 10
 });
 
 console.log(autocannon.printResult(result));
@@ -408,8 +424,8 @@ app.get('/health', async () => {
     memory: {
       heapUsed: Math.round(memory.heapUsed / 1024 / 1024) + 'MB',
       heapTotal: Math.round(memory.heapTotal / 1024 / 1024) + 'MB',
-      rss: Math.round(memory.rss / 1024 / 1024) + 'MB',
-    },
+      rss: Math.round(memory.rss / 1024 / 1024) + 'MB'
+    }
   };
 });
 

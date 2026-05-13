@@ -29,15 +29,15 @@ export class SqlitePARRepository implements IPARRepository {
   }
 
   async get(requestUri: string): Promise<PAREntry | undefined> {
-    const row = this.db
-      .prepare('SELECT * FROM par_entries WHERE request_uri = ?')
-      .get(requestUri) as PARRow | undefined;
+    const row = this.db.prepare('SELECT * FROM par_entries WHERE request_uri = ?').get(requestUri) as
+      | PARRow
+      | undefined;
 
     if (!row) {
       return undefined;
     }
 
-    const nowMs = (this.db.prepare('SELECT unixepoch(\'now\') * 1000 AS now').get() as { now: number }).now;
+    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
     if (row.expires_at < nowMs) {
       this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(requestUri);
       return undefined;
@@ -59,9 +59,18 @@ export class SqlitePARRepository implements IPARRepository {
     const fields: string[] = [];
     const values: (string | number | null)[] = [];
 
-    if (data.clientId !== undefined) { fields.push('client_id = ?'); values.push(data.clientId); }
-    if (data.requestObject !== undefined) { fields.push('request_object = ?'); values.push(data.requestObject); }
-    if (data.expiresAt !== undefined) { fields.push('expires_at = ?'); values.push(data.expiresAt); }
+    if (data.clientId !== undefined) {
+      fields.push('client_id = ?');
+      values.push(data.clientId);
+    }
+    if (data.requestObject !== undefined) {
+      fields.push('request_object = ?');
+      values.push(data.requestObject);
+    }
+    if (data.expiresAt !== undefined) {
+      fields.push('expires_at = ?');
+      values.push(data.expiresAt);
+    }
 
     if (fields.length === 0) return;
 

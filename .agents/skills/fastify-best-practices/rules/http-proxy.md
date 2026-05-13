@@ -22,7 +22,7 @@ app.register(httpProxy, {
   upstream: 'http://backend-service:3001',
   prefix: '/api',
   rewritePrefix: '/v1',
-  http2: false,
+  http2: false
 });
 
 // With authentication
@@ -34,7 +34,7 @@ app.register(httpProxy, {
     if (!request.headers.authorization) {
       reply.code(401).send({ error: 'Unauthorized' });
     }
-  },
+  }
 });
 
 await app.listen({ port: 3000 });
@@ -52,7 +52,7 @@ const app = Fastify({ logger: true });
 
 app.register(replyFrom, {
   base: 'http://backend-service:3001',
-  http2: false,
+  http2: false
 });
 
 // Proxy with request/response manipulation
@@ -64,13 +64,13 @@ app.get('/users/:id', async (request, reply) => {
     rewriteRequestHeaders: (originalReq, headers) => ({
       ...headers,
       'x-request-id': request.id,
-      'x-forwarded-for': request.ip,
+      'x-forwarded-for': request.ip
     }),
     // Modify response before sending
     onResponse: (request, reply, res) => {
       reply.header('x-proxy', 'fastify');
       reply.send(res);
-    },
+    }
   });
 });
 
@@ -79,7 +79,7 @@ app.all('/api/*', async (request, reply) => {
   const upstream = selectUpstream(request);
 
   return reply.from(request.url, {
-    base: upstream,
+    base: upstream
   });
 });
 
@@ -106,37 +106,46 @@ const app = Fastify({ logger: true });
 const services = {
   users: 'http://users-service:3001',
   orders: 'http://orders-service:3002',
-  products: 'http://products-service:3003',
+  products: 'http://products-service:3003'
 };
 
 app.register(replyFrom);
 
 // Route to user service
-app.register(async function (fastify) {
-  fastify.all('/*', async (request, reply) => {
-    return reply.from(request.url.replace('/users', ''), {
-      base: services.users,
+app.register(
+  async function (fastify) {
+    fastify.all('/*', async (request, reply) => {
+      return reply.from(request.url.replace('/users', ''), {
+        base: services.users
+      });
     });
-  });
-}, { prefix: '/users' });
+  },
+  { prefix: '/users' }
+);
 
 // Route to orders service
-app.register(async function (fastify) {
-  fastify.all('/*', async (request, reply) => {
-    return reply.from(request.url.replace('/orders', ''), {
-      base: services.orders,
+app.register(
+  async function (fastify) {
+    fastify.all('/*', async (request, reply) => {
+      return reply.from(request.url.replace('/orders', ''), {
+        base: services.orders
+      });
     });
-  });
-}, { prefix: '/orders' });
+  },
+  { prefix: '/orders' }
+);
 
 // Route to products service
-app.register(async function (fastify) {
-  fastify.all('/*', async (request, reply) => {
-    return reply.from(request.url.replace('/products', ''), {
-      base: services.products,
+app.register(
+  async function (fastify) {
+    fastify.all('/*', async (request, reply) => {
+      return reply.from(request.url.replace('/products', ''), {
+        base: services.products
+      });
     });
-  });
-}, { prefix: '/products' });
+  },
+  { prefix: '/products' }
+);
 ```
 
 ## Request Body Handling
@@ -147,7 +156,7 @@ Handle request bodies when proxying:
 app.post('/api/data', async (request, reply) => {
   return reply.from('/data', {
     body: request.body,
-    contentType: request.headers['content-type'],
+    contentType: request.headers['content-type']
   });
 });
 
@@ -155,7 +164,7 @@ app.post('/api/data', async (request, reply) => {
 app.post('/upload', async (request, reply) => {
   return reply.from('/upload', {
     body: request.raw,
-    contentType: request.headers['content-type'],
+    contentType: request.headers['content-type']
   });
 });
 ```
@@ -172,9 +181,9 @@ app.register(replyFrom, {
     reply.log.error({ err: error }, 'Proxy error');
     reply.code(502).send({
       error: 'Bad Gateway',
-      message: 'Upstream service unavailable',
+      message: 'Upstream service unavailable'
     });
-  },
+  }
 });
 
 // Custom error handling per route
@@ -185,7 +194,7 @@ app.get('/data', async (request, reply) => {
     request.log.error({ err: error }, 'Failed to proxy request');
     return reply.code(503).send({
       error: 'Service Unavailable',
-      retryAfter: 30,
+      retryAfter: 30
     });
   }
 });
@@ -204,7 +213,7 @@ const app = Fastify({ logger: true });
 app.register(httpProxy, {
   upstream: 'http://ws-backend:3001',
   prefix: '/ws',
-  websocket: true,
+  websocket: true
 });
 ```
 
@@ -217,9 +226,9 @@ app.register(replyFrom, {
   base: 'http://backend:3001',
   http: {
     requestOptions: {
-      timeout: 30000, // 30 seconds
-    },
-  },
+      timeout: 30000 // 30 seconds
+    }
+  }
 });
 ```
 
@@ -232,7 +241,7 @@ import { createCache } from 'async-cache-dedupe';
 
 const cache = createCache({
   ttl: 60,
-  storage: { type: 'memory' },
+  storage: { type: 'memory' }
 });
 
 cache.define('proxyGet', async (url: string) => {

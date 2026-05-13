@@ -21,11 +21,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { createGzip } from 'node:zlib';
 
 async function compressFile(input: string, output: string): Promise<void> {
-  await pipeline(
-    createReadStream(input),
-    createGzip(),
-    createWriteStream(output)
-  );
+  await pipeline(createReadStream(input), createGzip(), createWriteStream(output));
 }
 ```
 
@@ -44,11 +40,7 @@ async function* toUpperCase(source: AsyncIterable<Buffer>): AsyncGenerator<strin
 }
 
 async function processFile(input: string, output: string): Promise<void> {
-  await pipeline(
-    createReadStream(input),
-    toUpperCase,
-    createWriteStream(output)
-  );
+  await pipeline(createReadStream(input), toUpperCase, createWriteStream(output));
 }
 ```
 
@@ -64,7 +56,7 @@ import { createCache } from 'async-cache-dedupe';
 const cache = createCache({
   ttl: 60,
   stale: 5,
-  storage: { type: 'memory' },
+  storage: { type: 'memory' }
 });
 
 cache.define('lookupPlan', async (planId: string) => {
@@ -94,11 +86,7 @@ async function* enrichCsvRows(source: AsyncIterable<Buffer>): AsyncGenerator<str
   }
 }
 
-await pipeline(
-  createReadStream('users.csv'),
-  enrichCsvRows,
-  createWriteStream('users-enriched.csv')
-);
+await pipeline(createReadStream('users.csv'), enrichCsvRows, createWriteStream('users-enriched.csv'));
 ```
 
 ### Multiple Transformations
@@ -129,12 +117,7 @@ async function* filterNonEmpty(source: AsyncIterable<string>): AsyncGenerator<st
   }
 }
 
-await pipeline(
-  createReadStream('input.txt'),
-  parseLines,
-  filterNonEmpty,
-  createWriteStream('output.txt')
-);
+await pipeline(createReadStream('input.txt'), parseLines, filterNonEmpty, createWriteStream('output.txt'));
 ```
 
 ## Async Iterators with Streams
@@ -149,7 +132,7 @@ async function processLines(filePath: string): Promise<void> {
   const fileStream = createReadStream(filePath);
   const rl = createInterface({
     input: fileStream,
-    crlfDelay: Infinity,
+    crlfDelay: Infinity
   });
 
   for await (const line of rl) {
@@ -182,10 +165,7 @@ Respect backpressure signals using `once` from events:
 import { Writable } from 'node:stream';
 import { once } from 'node:events';
 
-async function writeData(
-  writable: Writable,
-  data: string[]
-): Promise<void> {
+async function writeData(writable: Writable, data: string[]): Promise<void> {
   for (const chunk of data) {
     const canContinue = writable.write(chunk);
     if (!canContinue) {

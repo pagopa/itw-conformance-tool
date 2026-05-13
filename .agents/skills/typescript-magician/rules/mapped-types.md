@@ -94,7 +94,7 @@ interface User {
   age: number;
 }
 
-type PrefixedUser = Prefixed<User, "user_">;
+type PrefixedUser = Prefixed<User, 'user_'>;
 // { user_name: string; user_age: number }
 ```
 
@@ -105,7 +105,7 @@ type RemoveFields<T, K extends keyof T> = {
   [P in keyof T as P extends K ? never : P]: T[P];
 };
 
-type UserWithoutEmail = RemoveFields<User, "email">;
+type UserWithoutEmail = RemoveFields<User, 'email'>;
 // { id: string; name: string }
 ```
 
@@ -119,8 +119,8 @@ type RemoveMapsPrefixFromObj<T> = {
 type RemoveMaps<T> = T extends `maps:${infer Rest}` ? Rest : T;
 
 interface ApiData {
-  "maps:longitude": string;
-  "maps:latitude": string;
+  'maps:longitude': string;
+  'maps:latitude': string;
 }
 
 type CleanData = RemoveMapsPrefixFromObj<ApiData>;
@@ -216,9 +216,7 @@ Apply transformations recursively:
 
 ```typescript
 type DeepReadonly<T> = {
-  readonly [K in keyof T]: T[K] extends object
-    ? DeepReadonly<T[K]>
-    : T[K];
+  readonly [K in keyof T]: T[K] extends object ? DeepReadonly<T[K]> : T[K];
 };
 
 interface Nested {
@@ -270,10 +268,7 @@ type PersonSetters = Setters<Person>;
 
 ```typescript
 type EventHandlers<T> = {
-  [K in keyof T as `on${Capitalize<string & K>}Change`]: (
-    newValue: T[K],
-    oldValue: T[K]
-  ) => void;
+  [K in keyof T as `on${Capitalize<string & K>}Change`]: (newValue: T[K], oldValue: T[K]) => void;
 };
 
 interface State {
@@ -319,11 +314,7 @@ type PickAndTransform<T, K extends keyof T> = {
 
 ```typescript
 type Merge<A, B> = {
-  [K in keyof A | keyof B]: K extends keyof B
-    ? B[K]
-    : K extends keyof A
-    ? A[K]
-    : never;
+  [K in keyof A | keyof B]: K extends keyof B ? B[K] : K extends keyof A ? A[K] : never;
 };
 ```
 
@@ -335,7 +326,7 @@ type FromUnion<K extends string, V> = {
   [P in K]: V;
 };
 
-type Dict = FromUnion<"a" | "b" | "c", number>;
+type Dict = FromUnion<'a' | 'b' | 'c', number>;
 // { a: number; b: number; c: number }
 ```
 
@@ -384,9 +375,7 @@ type DeepReadonly<T> = {
 };
 
 // Add base case for primitives
-type DeepReadonlySafe<T> = T extends object
-  ? { readonly [K in keyof T]: DeepReadonlySafe<T[K]> }
-  : T;
+type DeepReadonlySafe<T> = T extends object ? { readonly [K in keyof T]: DeepReadonlySafe<T[K]> } : T;
 ```
 
 ## When to Use Mapped Types

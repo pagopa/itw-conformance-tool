@@ -15,7 +15,7 @@ Fastify uses Pino for high-performance logging:
 import Fastify from 'fastify';
 
 const app = Fastify({
-  logger: true, // Enable default logging
+  logger: true // Enable default logging
 });
 
 // Or with configuration
@@ -25,10 +25,10 @@ const app = Fastify({
     transport: {
       target: 'pino-pretty',
       options: {
-        colorize: true,
-      },
-    },
-  },
+        colorize: true
+      }
+    }
+  }
 });
 ```
 
@@ -72,17 +72,23 @@ Always use structured logging with objects:
 
 ```typescript
 // GOOD - structured, searchable
-request.log.info({
-  action: 'user_created',
-  userId: user.id,
-  email: user.email,
-}, 'User created successfully');
+request.log.info(
+  {
+    action: 'user_created',
+    userId: user.id,
+    email: user.email
+  },
+  'User created successfully'
+);
 
-request.log.error({
-  err: error,
-  userId: request.params.id,
-  operation: 'fetch_user',
-}, 'Failed to fetch user');
+request.log.error(
+  {
+    err: error,
+    userId: request.params.id,
+    operation: 'fetch_user'
+  },
+  'Failed to fetch user'
+);
 
 // BAD - unstructured, hard to parse
 request.log.info(`User ${user.id} created with email ${user.email}`);
@@ -95,7 +101,7 @@ request.log.error(`Failed to fetch user: ${error.message}`);
 function getLoggerConfig() {
   if (process.env.NODE_ENV === 'production') {
     return {
-      level: 'info',
+      level: 'info'
       // JSON output for log aggregation
     };
   }
@@ -112,14 +118,14 @@ function getLoggerConfig() {
       options: {
         colorize: true,
         translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      },
-    },
+        ignore: 'pid,hostname'
+      }
+    }
   };
 }
 
 const app = Fastify({
-  logger: getLoggerConfig(),
+  logger: getLoggerConfig()
 });
 ```
 
@@ -138,24 +144,24 @@ const app = Fastify({
         url: request.url,
         headers: {
           host: request.headers.host,
-          'user-agent': request.headers['user-agent'],
+          'user-agent': request.headers['user-agent']
         },
-        remoteAddress: request.ip,
+        remoteAddress: request.ip
       }),
 
       // Customize response serialization
       res: (response) => ({
-        statusCode: response.statusCode,
+        statusCode: response.statusCode
       }),
 
       // Custom serializer for users
       user: (user) => ({
         id: user.id,
-        email: user.email,
+        email: user.email
         // Exclude sensitive fields
-      }),
-    },
-  },
+      })
+    }
+  }
 });
 
 // Use custom serializer
@@ -180,11 +186,11 @@ const app = Fastify({
         'body.creditCard',
         '*.password',
         '*.secret',
-        '*.token',
+        '*.token'
       ],
-      censor: '[REDACTED]',
-    },
-  },
+      censor: '[REDACTED]'
+    }
+  }
 });
 ```
 
@@ -198,7 +204,7 @@ app.addHook('onRequest', async (request) => {
   if (request.user) {
     request.log = request.log.child({
       userId: request.user.id,
-      userRole: request.user.role,
+      userRole: request.user.role
     });
   }
 });
@@ -210,7 +216,7 @@ const userService = {
   async create(data) {
     this.log.info({ email: data.email }, 'Creating user');
     // ...
-  },
+  }
 };
 ```
 
@@ -221,23 +227,29 @@ Customize automatic request logging:
 ```typescript
 const app = Fastify({
   logger: true,
-  disableRequestLogging: true, // Disable default request/response logs
+  disableRequestLogging: true // Disable default request/response logs
 });
 
 // Custom request logging
 app.addHook('onRequest', async (request) => {
-  request.log.info({
-    method: request.method,
-    url: request.url,
-    query: request.query,
-  }, 'Request received');
+  request.log.info(
+    {
+      method: request.method,
+      url: request.url,
+      query: request.query
+    },
+    'Request received'
+  );
 });
 
 app.addHook('onResponse', async (request, reply) => {
-  request.log.info({
-    statusCode: reply.statusCode,
-    responseTime: reply.elapsedTime,
-  }, 'Request completed');
+  request.log.info(
+    {
+      statusCode: reply.statusCode,
+      responseTime: reply.elapsedTime
+    },
+    'Request completed'
+  );
 });
 ```
 
@@ -248,16 +260,19 @@ Properly log errors with stack traces:
 ```typescript
 app.setErrorHandler((error, request, reply) => {
   // Log error with full details
-  request.log.error({
-    err: error, // Pino serializes error objects properly
-    url: request.url,
-    method: request.method,
-    body: request.body,
-    query: request.query,
-  }, 'Request error');
+  request.log.error(
+    {
+      err: error, // Pino serializes error objects properly
+      url: request.url,
+      method: request.method,
+      body: request.body,
+      query: request.query
+    },
+    'Request error'
+  );
 
   reply.code(error.statusCode || 500).send({
-    error: error.message,
+    error: error.message
   });
 });
 
@@ -283,8 +298,8 @@ import { createWriteStream } from 'node:fs';
 const app = Fastify({
   logger: {
     level: 'info',
-    stream: createWriteStream('./app.log'),
-  },
+    stream: createWriteStream('./app.log')
+  }
 });
 
 // Multiple destinations with pino.multistream
@@ -293,11 +308,11 @@ import pino from 'pino';
 const streams = [
   { stream: process.stdout },
   { stream: createWriteStream('./app.log') },
-  { level: 'error', stream: createWriteStream('./error.log') },
+  { level: 'error', stream: createWriteStream('./error.log') }
 ];
 
 const app = Fastify({
-  logger: pino({ level: 'info' }, pino.multistream(streams)),
+  logger: pino({ level: 'info' }, pino.multistream(streams))
 });
 ```
 
@@ -315,17 +330,17 @@ Or configure programmatically:
 import { createStream } from 'rotating-file-stream';
 
 const stream = createStream('app.log', {
-  size: '10M',     // Rotate every 10MB
-  interval: '1d',  // Rotate daily
+  size: '10M', // Rotate every 10MB
+  interval: '1d', // Rotate daily
   compress: 'gzip',
-  path: './logs',
+  path: './logs'
 });
 
 const app = Fastify({
   logger: {
     level: 'info',
-    stream,
-  },
+    stream
+  }
 });
 ```
 
@@ -337,9 +352,9 @@ Format logs for aggregation services:
 // For ELK Stack, Datadog, etc. - use default JSON format
 const app = Fastify({
   logger: {
-    level: 'info',
+    level: 'info'
     // Default JSON output works with most log aggregators
-  },
+  }
 });
 
 // Add service metadata
@@ -349,9 +364,9 @@ const app = Fastify({
     base: {
       service: 'user-api',
       version: process.env.APP_VERSION,
-      environment: process.env.NODE_ENV,
-    },
-  },
+      environment: process.env.NODE_ENV
+    }
+  }
 });
 ```
 
@@ -366,7 +381,7 @@ const app = Fastify({
   genReqId: (request) => {
     // Generate ID if not provided
     return request.headers['x-request-id'] || crypto.randomUUID();
-  },
+  }
 });
 
 // Forward request ID to downstream services
@@ -377,8 +392,8 @@ app.addHook('onRequest', async (request) => {
 // Include in outgoing requests
 const response = await fetch('http://other-service/api', {
   headers: {
-    'x-request-id': request.id,
-  },
+    'x-request-id': request.id
+  }
 });
 ```
 

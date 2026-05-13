@@ -25,7 +25,7 @@ function identity<T>(value: T): T {
 }
 
 const num = identity(42); // Type: number (inferred)
-const str = identity("hello"); // Type: string (inferred)
+const str = identity('hello'); // Type: string (inferred)
 const explicit = identity<boolean>(true); // Type: boolean (explicit)
 ```
 
@@ -35,23 +35,21 @@ When the type of one parameter depends on another, use generics:
 
 ```typescript
 // The return type depends on what keys exist in the config
-const createComponent = <TConfig extends Record<string, string>>(
-  config: TConfig,
-) => {
+const createComponent = <TConfig extends Record<string, string>>(config: TConfig) => {
   return (variant: keyof TConfig, ...otherClasses: string[]): string => {
-    return config[variant] + " " + otherClasses.join(" ");
+    return config[variant] + ' ' + otherClasses.join(' ');
   };
 };
 
 // TConfig is inferred as { primary: string; secondary: string }
 const getButtonClasses = createComponent({
-  primary: "bg-blue-300",
-  secondary: "bg-green-300",
+  primary: 'bg-blue-300',
+  secondary: 'bg-green-300'
 });
 
 // variant must be "primary" | "secondary"
-getButtonClasses("primary", "px-4"); // OK
-getButtonClasses("tertiary", "px-4"); // Error: "tertiary" not in keys
+getButtonClasses('primary', 'px-4'); // OK
+getButtonClasses('tertiary', 'px-4'); // Error: "tertiary" not in keys
 ```
 
 ## Generic Constraints with `extends`
@@ -63,9 +61,7 @@ Constrain generics to ensure they have required properties:
 type WrapFunction<TFunc> = (...args: any[]) => any;
 
 // Constrained - TFunc must be a function
-type WrapFunction<TFunc extends (...args: any) => any> = (
-  ...args: Parameters<TFunc>
-) => ReturnType<TFunc>;
+type WrapFunction<TFunc extends (...args: any) => any> = (...args: Parameters<TFunc>) => ReturnType<TFunc>;
 ```
 
 ### Why Constraints Matter
@@ -81,7 +77,7 @@ function getLength<T extends { length: number }>(item: T): number {
   return item.length; // OK - we know T has length
 }
 
-getLength("hello"); // 5
+getLength('hello'); // 5
 getLength([1, 2, 3]); // 3
 getLength({ length: 10 }); // 10
 getLength(42); // Error: number doesn't have length
@@ -95,9 +91,7 @@ Provide defaults for optional type parameters:
 type WrapFunction<
   TFunc extends (...args: any) => any,
   TAdditional = {} // Default to empty object
-> = (
-  ...args: Parameters<TFunc>
-) => Promise<Awaited<ReturnType<TFunc>> & TAdditional>;
+> = (...args: Parameters<TFunc>) => Promise<Awaited<ReturnType<TFunc>> & TAdditional>;
 
 // Can use without TAdditional
 type BasicWrapper = WrapFunction<typeof fetchUser>;
@@ -118,8 +112,8 @@ const createComponent = <TConfig>(config: TConfig) => {
 
 // TConfig is inferred as { primary: string; secondary: string }
 const component = createComponent({
-  primary: "bg-blue-300",
-  secondary: "bg-green-300",
+  primary: 'bg-blue-300',
+  secondary: 'bg-green-300'
 });
 ```
 
@@ -134,9 +128,7 @@ const createComponent = <TConfig>(config: Record<string, string>) => {
 };
 
 // GOOD - TConfig IS the argument type
-const createComponent = <TConfig extends Record<string, string>>(
-  config: TConfig,
-) => {
+const createComponent = <TConfig extends Record<string, string>>(config: TConfig) => {
   // TConfig is inferred from what's passed
 };
 ```
@@ -146,15 +138,12 @@ const createComponent = <TConfig extends Record<string, string>>(
 Use multiple parameters for related but distinct types:
 
 ```typescript
-function map<TInput, TOutput>(
-  items: TInput[],
-  transform: (item: TInput) => TOutput
-): TOutput[] {
+function map<TInput, TOutput>(items: TInput[], transform: (item: TInput) => TOutput): TOutput[] {
   return items.map(transform);
 }
 
 // Both TInput and TOutput are inferred
-const numbers = map(["1", "2", "3"], (s) => parseInt(s));
+const numbers = map(['1', '2', '3'], (s) => parseInt(s));
 // TInput: string, TOutput: number, Result: number[]
 ```
 
@@ -163,17 +152,14 @@ const numbers = map(["1", "2", "3"], (s) => parseInt(s));
 Combine `keyof` with generics for type-safe property access:
 
 ```typescript
-function getProperty<TObj, TKey extends keyof TObj>(
-  obj: TObj,
-  key: TKey
-): TObj[TKey] {
+function getProperty<TObj, TKey extends keyof TObj>(obj: TObj, key: TKey): TObj[TKey] {
   return obj[key];
 }
 
-const user = { name: "Alice", age: 30 };
-const name = getProperty(user, "name"); // Type: string
-const age = getProperty(user, "age"); // Type: number
-const invalid = getProperty(user, "email"); // Error: "email" not in keyof
+const user = { name: 'Alice', age: 30 };
+const name = getProperty(user, 'name'); // Type: string
+const age = getProperty(user, 'age'); // Type: number
+const invalid = getProperty(user, 'email'); // Error: "email" not in keyof
 ```
 
 ## Generics in Classes
@@ -204,28 +190,26 @@ const strContainer = numContainer.map((n) => n.toString());
 
 ```typescript
 // A factory that creates type-safe component class generators
-export const createComponent = <TConfig extends Record<string, string>>(
-  config: TConfig,
-) => {
+export const createComponent = <TConfig extends Record<string, string>>(config: TConfig) => {
   // Return a function that requires valid variant keys
   return (variant: keyof TConfig, ...otherClasses: string[]): string => {
-    return config[variant] + " " + otherClasses.join(" ");
+    return config[variant] + ' ' + otherClasses.join(' ');
   };
 };
 
 // Usage
 const getButtonClasses = createComponent({
-  primary: "bg-blue-500 text-white",
-  secondary: "bg-gray-200 text-gray-800",
-  danger: "bg-red-500 text-white",
+  primary: 'bg-blue-500 text-white',
+  secondary: 'bg-gray-200 text-gray-800',
+  danger: 'bg-red-500 text-white'
 });
 
 // Type-safe: variant must be "primary" | "secondary" | "danger"
-const classes = getButtonClasses("primary", "px-4", "py-2");
+const classes = getButtonClasses('primary', 'px-4', 'py-2');
 // Result: "bg-blue-500 text-white px-4 py-2"
 
 // Type error on invalid variant
-getButtonClasses("invalid"); // Error!
+getButtonClasses('invalid'); // Error!
 ```
 
 ## When to Use Generics
@@ -256,9 +240,7 @@ function greet(name: string): string {
 
 ```typescript
 // BAD - overly specific constraint
-function process<T extends { id: string; name: string; email: string }>(
-  obj: T
-): void {}
+function process<T extends { id: string; name: string; email: string }>(obj: T): void {}
 
 // GOOD - only require what you actually use
 function process<T extends { id: string }>(obj: T): void {}

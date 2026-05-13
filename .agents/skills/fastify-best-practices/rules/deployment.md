@@ -35,7 +35,7 @@ closeWithGrace({ delay: 10000 }, async ({ signal, err }) => {
 // Start server
 await app.listen({
   port: parseInt(process.env.PORT || '3000', 10),
-  host: '0.0.0.0',
+  host: '0.0.0.0'
 });
 
 app.log.info(`Server listening on ${app.server.address()}`);
@@ -57,7 +57,7 @@ app.get('/health/live', async () => {
 app.get('/health/ready', async (request, reply) => {
   const checks = {
     database: false,
-    cache: false,
+    cache: false
   };
 
   try {
@@ -83,28 +83,32 @@ app.get('/health/ready', async (request, reply) => {
   return {
     status: allHealthy ? 'ok' : 'degraded',
     checks,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
   };
 });
 
 // Detailed health for monitoring
-app.get('/health/details', {
-  preHandler: [app.authenticate, app.requireAdmin],
-}, async () => {
-  const memory = process.memoryUsage();
+app.get(
+  '/health/details',
+  {
+    preHandler: [app.authenticate, app.requireAdmin]
+  },
+  async () => {
+    const memory = process.memoryUsage();
 
-  return {
-    status: 'ok',
-    uptime: process.uptime(),
-    memory: {
-      heapUsed: Math.round(memory.heapUsed / 1024 / 1024),
-      heapTotal: Math.round(memory.heapTotal / 1024 / 1024),
-      rss: Math.round(memory.rss / 1024 / 1024),
-    },
-    version: process.env.APP_VERSION,
-    nodeVersion: process.version,
-  };
-});
+    return {
+      status: 'ok',
+      uptime: process.uptime(),
+      memory: {
+        heapUsed: Math.round(memory.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memory.heapTotal / 1024 / 1024),
+        rss: Math.round(memory.rss / 1024 / 1024)
+      },
+      version: process.env.APP_VERSION,
+      nodeVersion: process.version
+    };
+  }
+);
 ```
 
 ## Docker Configuration
@@ -156,7 +160,7 @@ services:
   api:
     build: .
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgres://user:pass@db:5432/app
@@ -175,7 +179,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d app"]
+      test: ['CMD-SHELL', 'pg_isready -U user -d app']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -211,7 +215,7 @@ spec:
             - containerPort: 3000
           env:
             - name: NODE_ENV
-              value: "production"
+              value: 'production'
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -219,11 +223,11 @@ spec:
                   key: database-url
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: '256Mi'
+              cpu: '100m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
           livenessProbe:
             httpGet:
               path: /health/live
@@ -239,7 +243,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "sleep 5"]
+                command: ['/bin/sh', '-c', 'sleep 5']
 ---
 apiVersion: v1
 kind: Service
@@ -271,22 +275,16 @@ const app = Fastify({
         pid: bindings.pid,
         hostname: bindings.hostname,
         service: 'fastify-api',
-        version: process.env.APP_VERSION,
-      }),
+        version: process.env.APP_VERSION
+      })
     },
     timestamp: () => `,"time":"${new Date().toISOString()}"`,
     // Redact sensitive data
     redact: {
-      paths: [
-        'req.headers.authorization',
-        'req.headers.cookie',
-        '*.password',
-        '*.token',
-        '*.secret',
-      ],
-      censor: '[REDACTED]',
-    },
-  },
+      paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token', '*.secret'],
+      censor: '[REDACTED]'
+    }
+  }
 });
 ```
 
@@ -296,18 +294,22 @@ Configure appropriate timeouts:
 
 ```typescript
 const app = Fastify({
-  connectionTimeout: 30000,     // 30s connection timeout
-  keepAliveTimeout: 72000,      // 72s keep-alive (longer than ALB 60s)
-  requestTimeout: 30000,        // 30s request timeout
-  bodyLimit: 1048576,           // 1MB body limit
+  connectionTimeout: 30000, // 30s connection timeout
+  keepAliveTimeout: 72000, // 72s keep-alive (longer than ALB 60s)
+  requestTimeout: 30000, // 30s request timeout
+  bodyLimit: 1048576 // 1MB body limit
 });
 
 // Per-route timeout
-app.get('/long-operation', {
-  config: {
-    timeout: 60000, // 60s for this route
+app.get(
+  '/long-operation',
+  {
+    config: {
+      timeout: 60000 // 60s for this route
+    }
   },
-}, longOperationHandler);
+  longOperationHandler
+);
 ```
 
 ## Trust Proxy Settings
@@ -323,7 +325,7 @@ const app = Fastify({
   trustProxy: ['127.0.0.1', '10.0.0.0/8'],
 
   // Or number of proxies to trust
-  trustProxy: 1,
+  trustProxy: 1
 });
 
 // Now request.ip returns real client IP
@@ -343,7 +345,7 @@ app.register(fastifyStatic, {
   maxAge: '1d',
   immutable: true,
   etag: true,
-  lastModified: true,
+  lastModified: true
 });
 ```
 
@@ -357,7 +359,7 @@ import fastifyCompress from '@fastify/compress';
 app.register(fastifyCompress, {
   global: true,
   threshold: 1024, // Only compress > 1KB
-  encodings: ['gzip', 'deflate'],
+  encodings: ['gzip', 'deflate']
 });
 ```
 
@@ -374,13 +376,13 @@ const httpRequestDuration = new Histogram({
   name: 'http_request_duration_seconds',
   help: 'Duration of HTTP requests in seconds',
   labelNames: ['method', 'route', 'status'],
-  buckets: [0.01, 0.05, 0.1, 0.5, 1, 5],
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 5]
 });
 
 const httpRequestTotal = new Counter({
   name: 'http_requests_total',
   help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'status'],
+  labelNames: ['method', 'route', 'status']
 });
 
 app.addHook('onResponse', (request, reply, done) => {
@@ -388,7 +390,7 @@ app.addHook('onResponse', (request, reply, done) => {
   const labels = {
     method: request.method,
     route,
-    status: reply.statusCode,
+    status: reply.statusCode
   };
 
   httpRequestDuration.observe(labels, reply.elapsedTime / 1000);
@@ -422,4 +424,3 @@ closeWithGrace({ delay: 30000 }, async ({ signal }) => {
   app.log.info('Server closed');
 });
 ```
-

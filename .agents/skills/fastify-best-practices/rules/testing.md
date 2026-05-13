@@ -31,7 +31,7 @@ describe('User API', () => {
   it('should return users list', async (t) => {
     const response = await app.inject({
       method: 'GET',
-      url: '/users',
+      url: '/users'
     });
 
     t.assert.equal(response.statusCode, 200);
@@ -47,8 +47,8 @@ describe('User API', () => {
       url: '/users',
       payload: {
         name: 'John Doe',
-        email: 'john@example.com',
-      },
+        email: 'john@example.com'
+      }
     });
 
     t.assert.equal(response.statusCode, 201);
@@ -79,8 +79,8 @@ describe('Protected Routes', () => {
       url: '/auth/login',
       payload: {
         email: 'test@example.com',
-        password: 'password123',
-      },
+        password: 'password123'
+      }
     });
 
     authToken = loginResponse.json().token;
@@ -93,7 +93,7 @@ describe('Protected Routes', () => {
   it('should reject unauthenticated requests', async (t) => {
     const response = await app.inject({
       method: 'GET',
-      url: '/profile',
+      url: '/profile'
     });
 
     t.assert.equal(response.statusCode, 401);
@@ -104,8 +104,8 @@ describe('Protected Routes', () => {
       method: 'GET',
       url: '/profile',
       headers: {
-        authorization: `Bearer ${authToken}`,
-      },
+        authorization: `Bearer ${authToken}`
+      }
     });
 
     t.assert.equal(response.statusCode, 200);
@@ -126,8 +126,8 @@ it('should filter users by status', async (t) => {
     query: {
       status: 'active',
       page: '1',
-      limit: '10',
-    },
+      limit: '10'
+    }
   });
 
   t.assert.equal(response.statusCode, 200);
@@ -139,7 +139,7 @@ it('should filter users by status', async (t) => {
 it('should search users', async (t) => {
   const response = await app.inject({
     method: 'GET',
-    url: '/users?q=john&sort=name',
+    url: '/users?q=john&sort=name'
   });
 
   t.assert.equal(response.statusCode, 200);
@@ -156,7 +156,7 @@ it('should return user by id', async (t) => {
 
   const response = await app.inject({
     method: 'GET',
-    url: `/users/${userId}`,
+    url: `/users/${userId}`
   });
 
   t.assert.equal(response.statusCode, 200);
@@ -166,7 +166,7 @@ it('should return user by id', async (t) => {
 it('should return 404 for non-existent user', async (t) => {
   const response = await app.inject({
     method: 'GET',
-    url: '/users/non-existent',
+    url: '/users/non-existent'
   });
 
   t.assert.equal(response.statusCode, 404);
@@ -185,8 +185,8 @@ describe('Validation', () => {
       url: '/users',
       payload: {
         name: 'John',
-        email: 'not-an-email',
-      },
+        email: 'not-an-email'
+      }
     });
 
     t.assert.equal(response.statusCode, 400);
@@ -199,9 +199,9 @@ describe('Validation', () => {
       method: 'POST',
       url: '/users',
       payload: {
-        name: 'John',
+        name: 'John'
         // missing email
-      },
+      }
     });
 
     t.assert.equal(response.statusCode, 400);
@@ -210,7 +210,7 @@ describe('Validation', () => {
   it('should coerce query parameters', async (t) => {
     const response = await app.inject({
       method: 'GET',
-      url: '/items?limit=10&active=true',
+      url: '/items?limit=10&active=true'
     });
 
     t.assert.equal(response.statusCode, 200);
@@ -236,7 +236,7 @@ it('should upload file', async (t) => {
     method: 'POST',
     url: '/upload',
     payload: form,
-    headers: form.getHeaders(),
+    headers: form.getHeaders()
   });
 
   t.assert.equal(response.statusCode, 200);
@@ -252,7 +252,7 @@ Test streaming responses:
 it('should stream large file', async (t) => {
   const response = await app.inject({
     method: 'GET',
-    url: '/files/large-file',
+    url: '/files/large-file'
   });
 
   t.assert.equal(response.statusCode, 200);
@@ -276,14 +276,14 @@ describe('User Service', () => {
       users: {
         findAll: mock.fn(async () => [
           { id: '1', name: 'User 1' },
-          { id: '2', name: 'User 2' },
+          { id: '2', name: 'User 2' }
         ]),
         findById: mock.fn(async (id) => {
           if (id === '1') return { id: '1', name: 'User 1' };
           return null;
         }),
-        create: mock.fn(async (data) => ({ id: 'new-id', ...data })),
-      },
+        create: mock.fn(async (data) => ({ id: 'new-id', ...data }))
+      }
     };
 
     app = Fastify();
@@ -299,7 +299,7 @@ describe('User Service', () => {
   it('should call findAll', async (t) => {
     const response = await app.inject({
       method: 'GET',
-      url: '/users',
+      url: '/users'
     });
 
     t.assert.equal(response.statusCode, 200);
@@ -352,7 +352,7 @@ describe('Hooks', () => {
   it('should add request id header', async (t) => {
     const response = await app.inject({
       method: 'GET',
-      url: '/health',
+      url: '/health'
     });
 
     t.assert.ok(response.headers['x-request-id']);
@@ -364,9 +364,9 @@ describe('Hooks', () => {
       logger: {
         level: 'info',
         stream: {
-          write: (msg) => logs.push(JSON.parse(msg)),
-        },
-      },
+          write: (msg) => logs.push(JSON.parse(msg))
+        }
+      }
     });
 
     app.register(import('./app.js'));
@@ -400,12 +400,12 @@ interface TestContext {
 export async function buildTestApp(options = {}): Promise<TestContext> {
   const app = Fastify({
     logger: false, // Disable logging in tests
-    ...options,
+    ...options
   });
 
   // Register plugins
   app.register(import('../src/plugins/database.js'), {
-    connectionString: process.env.TEST_DATABASE_URL,
+    connectionString: process.env.TEST_DATABASE_URL
   });
   app.register(import('../src/routes/index.js'));
 
@@ -413,7 +413,7 @@ export async function buildTestApp(options = {}): Promise<TestContext> {
 
   return {
     app,
-    inject: app.inject.bind(app),
+    inject: app.inject.bind(app)
   };
 }
 
@@ -432,7 +432,7 @@ describe('API Tests', () => {
   it('should work', async (t) => {
     const response = await ctx.inject({
       method: 'GET',
-      url: '/health',
+      url: '/health'
     });
     t.assert.equal(response.statusCode, 200);
   });
@@ -470,7 +470,7 @@ describe('Database Integration', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/users',
-      payload: { name: 'Test', email: 'test@example.com' },
+      payload: { name: 'Test', email: 'test@example.com' }
     });
 
     t.assert.equal(response.statusCode, 201);

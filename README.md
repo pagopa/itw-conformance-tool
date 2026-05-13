@@ -153,8 +153,8 @@ The suite is built on PagoPA's own wallet protocol libraries:
 
 This repository uses [Husky](https://typicode.github.io/husky/) to run automated checks before commits are recorded.
 
-| Hook         | Command          | What it does                                           |
-| ------------ | ---------------- | ------------------------------------------------------ |
+| Hook         | Command           | What it does                                          |
+| ------------ | ----------------- | ----------------------------------------------------- |
 | `pre-commit` | `pnpm pre-commit` | Runs lint and type-check on Nx-affected projects only |
 
 Hooks are installed automatically during `pnpm install` via the `prepare` lifecycle script. No manual setup is required.

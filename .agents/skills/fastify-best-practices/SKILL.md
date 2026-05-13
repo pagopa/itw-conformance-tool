@@ -1,6 +1,6 @@
 ---
 name: fastify-best-practices
-description: "Guides development of Fastify Node.js backend servers and REST APIs using TypeScript or JavaScript. Use when building, configuring, or debugging a Fastify application — including defining routes, implementing plugins, setting up JSON Schema validation, handling errors, optimising performance, managing authentication, configuring CORS and security headers, integrating databases, working with WebSockets, and deploying to production. Covers the full Fastify request lifecycle (hooks, serialization, logging with Pino) and TypeScript integration via strip types. Trigger terms: Fastify, Node.js server, REST API, API routes, backend framework, fastify.config, server.ts, app.ts."
+description: 'Guides development of Fastify Node.js backend servers and REST APIs using TypeScript or JavaScript. Use when building, configuring, or debugging a Fastify application — including defining routes, implementing plugins, setting up JSON Schema validation, handling errors, optimising performance, managing authentication, configuring CORS and security headers, integrating databases, working with WebSockets, and deploying to production. Covers the full Fastify request lifecycle (hooks, serialization, logging with Pino) and TypeScript integration via strip types. Trigger terms: Fastify, Node.js server, REST API, API routes, backend framework, fastify.config, server.ts, app.ts.'
 metadata:
   tags: fastify, nodejs, typescript, backend, api, server, http
 ---
@@ -8,6 +8,7 @@ metadata:
 ## When to use
 
 Use this skill when you need to:
+
 - Develop backend applications using Fastify
 - Implement Fastify plugins and route handlers
 - Get guidance on Fastify architecture and patterns
@@ -20,18 +21,18 @@ Use this skill when you need to:
 A minimal, runnable Fastify server to get started immediately:
 
 ```ts
-import Fastify from 'fastify'
+import Fastify from 'fastify';
 
-const app = Fastify({ logger: true })
+const app = Fastify({ logger: true });
 
 app.get('/health', async (request, reply) => {
-  return { status: 'ok' }
-})
+  return { status: 'ok' };
+});
 
 const start = async () => {
-  await app.listen({ port: 3000, host: '0.0.0.0' })
-}
-start()
+  await app.listen({ port: 3000, host: '0.0.0.0' });
+};
+start();
 ```
 
 ## Recommended Reading Order for Common Scenarios

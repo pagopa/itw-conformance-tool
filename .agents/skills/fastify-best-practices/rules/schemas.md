@@ -21,14 +21,14 @@ const app = Fastify();
 const CreateUserBody = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 100 }),
   email: Type.String({ format: 'email' }),
-  age: Type.Optional(Type.Integer({ minimum: 0, maximum: 150 })),
+  age: Type.Optional(Type.Integer({ minimum: 0, maximum: 150 }))
 });
 
 const UserResponse = Type.Object({
   id: Type.String({ format: 'uuid' }),
   name: Type.String(),
   email: Type.String(),
-  createdAt: Type.String({ format: 'date-time' }),
+  createdAt: Type.String({ format: 'date-time' })
 });
 
 // TypeScript types are derived automatically
@@ -38,19 +38,23 @@ type UserResponseType = Static<typeof UserResponse>;
 app.post<{
   Body: CreateUserBodyType;
   Reply: UserResponseType;
-}>('/users', {
-  schema: {
-    body: CreateUserBody,
-    response: {
-      201: UserResponse,
-    },
+}>(
+  '/users',
+  {
+    schema: {
+      body: CreateUserBody,
+      response: {
+        201: UserResponse
+      }
+    }
   },
-}, async (request, reply) => {
-  // request.body is fully typed as CreateUserBodyType
-  const user = await createUser(request.body);
-  reply.code(201);
-  return user;
-});
+  async (request, reply) => {
+    // request.body is fully typed as CreateUserBodyType
+    const user = await createUser(request.body);
+    reply.code(201);
+    return user;
+  }
+);
 ```
 
 ## TypeBox Common Patterns
@@ -59,11 +63,7 @@ app.post<{
 import { Type, type Static } from '@sinclair/typebox';
 
 // Enums
-const Status = Type.Union([
-  Type.Literal('active'),
-  Type.Literal('inactive'),
-  Type.Literal('pending'),
-]);
+const Status = Type.Union([Type.Literal('active'), Type.Literal('inactive'), Type.Literal('pending')]);
 
 // Arrays
 const Tags = Type.Array(Type.String(), { minItems: 1, maxItems: 10 });
@@ -73,7 +73,7 @@ const Address = Type.Object({
   street: Type.String(),
   city: Type.String(),
   country: Type.String(),
-  zip: Type.Optional(Type.String()),
+  zip: Type.Optional(Type.String())
 });
 
 // References (reusable schemas)
@@ -82,7 +82,7 @@ const User = Type.Object({
   name: Type.String(),
   address: Address,
   tags: Tags,
-  status: Status,
+  status: Status
 });
 
 // Nullable
@@ -101,12 +101,12 @@ import { Type, type Static } from '@sinclair/typebox';
 const ErrorResponse = Type.Object({
   error: Type.String(),
   message: Type.String(),
-  statusCode: Type.Integer(),
+  statusCode: Type.Integer()
 });
 
 const PaginationQuery = Type.Object({
   page: Type.Integer({ minimum: 1, default: 1 }),
-  limit: Type.Integer({ minimum: 1, maximum: 100, default: 20 }),
+  limit: Type.Integer({ minimum: 1, maximum: 100, default: 20 })
 });
 
 // Register globally
@@ -114,14 +114,18 @@ app.addSchema(Type.Object({ $id: 'ErrorResponse', ...ErrorResponse }));
 app.addSchema(Type.Object({ $id: 'PaginationQuery', ...PaginationQuery }));
 
 // Reference in routes
-app.get('/items', {
-  schema: {
-    querystring: { $ref: 'PaginationQuery#' },
-    response: {
-      400: { $ref: 'ErrorResponse#' },
-    },
+app.get(
+  '/items',
+  {
+    schema: {
+      querystring: { $ref: 'PaginationQuery#' },
+      response: {
+        400: { $ref: 'ErrorResponse#' }
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## Plain JSON Schema (Alternative)
@@ -139,10 +143,10 @@ const createUserSchema = {
     properties: {
       name: { type: 'string', minLength: 1, maxLength: 100 },
       email: { type: 'string', format: 'email' },
-      age: { type: 'integer', minimum: 0, maximum: 150 },
+      age: { type: 'integer', minimum: 0, maximum: 150 }
     },
     required: ['name', 'email'],
-    additionalProperties: false,
+    additionalProperties: false
   },
   response: {
     201: {
@@ -151,10 +155,10 @@ const createUserSchema = {
         id: { type: 'string', format: 'uuid' },
         name: { type: 'string' },
         email: { type: 'string' },
-        createdAt: { type: 'string', format: 'date-time' },
-      },
-    },
-  },
+        createdAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  }
 };
 
 app.post('/users', { schema: createUserSchema }, async (request, reply) => {
@@ -174,9 +178,9 @@ const fullRequestSchema = {
   params: {
     type: 'object',
     properties: {
-      id: { type: 'string', format: 'uuid' },
+      id: { type: 'string', format: 'uuid' }
     },
-    required: ['id'],
+    required: ['id']
   },
 
   // Query string
@@ -184,27 +188,27 @@ const fullRequestSchema = {
     type: 'object',
     properties: {
       include: { type: 'string', enum: ['posts', 'comments', 'all'] },
-      limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
-    },
+      limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 }
+    }
   },
 
   // Request headers
   headers: {
     type: 'object',
     properties: {
-      'x-api-key': { type: 'string', minLength: 32 },
+      'x-api-key': { type: 'string', minLength: 32 }
     },
-    required: ['x-api-key'],
+    required: ['x-api-key']
   },
 
   // Request body
   body: {
     type: 'object',
     properties: {
-      data: { type: 'object' },
+      data: { type: 'object' }
     },
-    required: ['data'],
-  },
+    required: ['data']
+  }
 };
 
 app.put('/resources/:id', { schema: fullRequestSchema }, handler);
@@ -223,9 +227,9 @@ app.addSchema({
     id: { type: 'string', format: 'uuid' },
     name: { type: 'string' },
     email: { type: 'string', format: 'email' },
-    createdAt: { type: 'string', format: 'date-time' },
+    createdAt: { type: 'string', format: 'date-time' }
   },
-  required: ['id', 'name', 'email'],
+  required: ['id', 'name', 'email']
 });
 
 app.addSchema({
@@ -233,10 +237,10 @@ app.addSchema({
   type: 'object',
   properties: {
     name: { type: 'string', minLength: 1 },
-    email: { type: 'string', format: 'email' },
+    email: { type: 'string', format: 'email' }
   },
   required: ['name', 'email'],
-  additionalProperties: false,
+  additionalProperties: false
 });
 
 app.addSchema({
@@ -245,34 +249,42 @@ app.addSchema({
   properties: {
     statusCode: { type: 'integer' },
     error: { type: 'string' },
-    message: { type: 'string' },
-  },
+    message: { type: 'string' }
+  }
 });
 
 // Reference shared schemas
-app.post('/users', {
-  schema: {
-    body: { $ref: 'userCreate#' },
-    response: {
-      201: { $ref: 'user#' },
-      400: { $ref: 'error#' },
-    },
+app.post(
+  '/users',
+  {
+    schema: {
+      body: { $ref: 'userCreate#' },
+      response: {
+        201: { $ref: 'user#' },
+        400: { $ref: 'error#' }
+      }
+    }
   },
-}, handler);
+  handler
+);
 
-app.get('/users/:id', {
-  schema: {
-    params: {
-      type: 'object',
-      properties: { id: { type: 'string', format: 'uuid' } },
-      required: ['id'],
-    },
-    response: {
-      200: { $ref: 'user#' },
-      404: { $ref: 'error#' },
-    },
+app.get(
+  '/users/:id',
+  {
+    schema: {
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string', format: 'uuid' } },
+        required: ['id']
+      },
+      response: {
+        200: { $ref: 'user#' },
+        404: { $ref: 'error#' }
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## Array Schemas
@@ -286,28 +298,32 @@ app.addSchema({
   properties: {
     users: {
       type: 'array',
-      items: { $ref: 'user#' },
+      items: { $ref: 'user#' }
     },
     total: { type: 'integer' },
     page: { type: 'integer' },
-    pageSize: { type: 'integer' },
-  },
+    pageSize: { type: 'integer' }
+  }
 });
 
-app.get('/users', {
-  schema: {
-    querystring: {
-      type: 'object',
-      properties: {
-        page: { type: 'integer', minimum: 1, default: 1 },
-        pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+app.get(
+  '/users',
+  {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
       },
-    },
-    response: {
-      200: { $ref: 'userList#' },
-    },
+      response: {
+        200: { $ref: 'userList#' }
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## Custom Formats
@@ -322,10 +338,10 @@ const app = Fastify({
     customOptions: {
       formats: {
         'iso-country': /^[A-Z]{2}$/,
-        'phone': /^\+?[1-9]\d{1,14}$/,
-      },
-    },
-  },
+        phone: /^\+?[1-9]\d{1,14}$/
+      }
+    }
+  }
 });
 
 // Or add formats dynamically
@@ -335,8 +351,8 @@ app.addSchema({
   properties: {
     street: { type: 'string' },
     country: { type: 'string', format: 'iso-country' },
-    phone: { type: 'string', format: 'phone' },
-  },
+    phone: { type: 'string', format: 'phone' }
+  }
 });
 ```
 
@@ -361,24 +377,28 @@ const app = Fastify({
             }
             return true;
           },
-          errors: false,
-        },
-      ],
-    },
-  },
+          errors: false
+        }
+      ]
+    }
+  }
 });
 
 // Use custom keyword
-app.post('/numbers', {
-  schema: {
-    body: {
-      type: 'object',
-      properties: {
-        value: { type: 'integer', isEven: true },
-      },
-    },
+app.post(
+  '/numbers',
+  {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          value: { type: 'integer', isEven: true }
+        }
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## Coercion
@@ -389,21 +409,25 @@ Fastify coerces types by default for query strings and params:
 // Query string "?page=5&active=true" becomes:
 // { page: 5, active: true } (number and boolean, not strings)
 
-app.get('/items', {
-  schema: {
-    querystring: {
-      type: 'object',
-      properties: {
-        page: { type: 'integer' },      // "5" -> 5
-        active: { type: 'boolean' },    // "true" -> true
-        tags: {
-          type: 'array',
-          items: { type: 'string' },    // "a,b,c" -> ["a", "b", "c"]
-        },
-      },
-    },
+app.get(
+  '/items',
+  {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer' }, // "5" -> 5
+          active: { type: 'boolean' }, // "true" -> true
+          tags: {
+            type: 'array',
+            items: { type: 'string' } // "a,b,c" -> ["a", "b", "c"]
+          }
+        }
+      }
+    }
   },
-}, handler);
+  handler
+);
 ```
 
 ## Validation Error Handling
@@ -419,8 +443,8 @@ app.setErrorHandler((error, request, reply) => {
       details: error.validation.map((err) => ({
         field: err.instancePath || err.params?.missingProperty,
         message: err.message,
-        keyword: err.keyword,
-      })),
+        keyword: err.keyword
+      }))
     });
     return;
   }
@@ -428,7 +452,7 @@ app.setErrorHandler((error, request, reply) => {
   // Handle other errors
   reply.code(error.statusCode || 500).send({
     error: error.name,
-    message: error.message,
+    message: error.message
   });
 });
 ```
@@ -443,15 +467,15 @@ import Fastify from 'fastify';
 const app = Fastify({
   ajv: {
     customOptions: {
-      removeAdditional: 'all',   // Remove extra properties
-      useDefaults: true,         // Apply default values
-      coerceTypes: true,         // Coerce types
-      allErrors: true,           // Report all errors, not just first
+      removeAdditional: 'all', // Remove extra properties
+      useDefaults: true, // Apply default values
+      coerceTypes: true, // Coerce types
+      allErrors: true // Report all errors, not just first
     },
     plugins: [
-      require('ajv-formats'),    // Add format validators
-    ],
-  },
+      require('ajv-formats') // Add format validators
+    ]
+  }
 });
 ```
 
@@ -465,14 +489,11 @@ app.addSchema({
   type: 'object',
   properties: {
     name: { type: 'string' },
-    bio: { type: ['string', 'null'] },  // Can be string or null
+    bio: { type: ['string', 'null'] }, // Can be string or null
     avatar: {
-      oneOf: [
-        { type: 'string', format: 'uri' },
-        { type: 'null' },
-      ],
-    },
-  },
+      oneOf: [{ type: 'string', format: 'uri' }, { type: 'null' }]
+    }
+  }
 });
 ```
 
@@ -487,18 +508,18 @@ app.addSchema({
   properties: {
     method: { type: 'string', enum: ['card', 'bank'] },
     cardNumber: { type: 'string' },
-    bankAccount: { type: 'string' },
+    bankAccount: { type: 'string' }
   },
   required: ['method'],
   if: {
-    properties: { method: { const: 'card' } },
+    properties: { method: { const: 'card' } }
   },
   then: {
-    required: ['cardNumber'],
+    required: ['cardNumber']
   },
   else: {
-    required: ['bankAccount'],
-  },
+    required: ['bankAccount']
+  }
 });
 ```
 
@@ -515,8 +536,8 @@ export const schemas = [
     properties: {
       id: { type: 'string', format: 'uuid' },
       name: { type: 'string' },
-      email: { type: 'string', format: 'email' },
-    },
+      email: { type: 'string', format: 'email' }
+    }
   },
   {
     $id: 'error',
@@ -524,9 +545,9 @@ export const schemas = [
     properties: {
       statusCode: { type: 'integer' },
       error: { type: 'string' },
-      message: { type: 'string' },
-    },
-  },
+      message: { type: 'string' }
+    }
+  }
 ];
 
 // app.ts
@@ -549,13 +570,13 @@ app.register(fastifySwagger, {
   openapi: {
     info: {
       title: 'My API',
-      version: '1.0.0',
-    },
-  },
+      version: '1.0.0'
+    }
+  }
 });
 
 app.register(fastifySwaggerUi, {
-  routePrefix: '/docs',
+  routePrefix: '/docs'
 });
 
 // Schemas are automatically converted to OpenAPI definitions
@@ -567,16 +588,20 @@ Response schemas enable fast-json-stringify for serialization:
 
 ```typescript
 // With response schema - uses fast-json-stringify (faster)
-app.get('/users', {
-  schema: {
-    response: {
-      200: {
-        type: 'array',
-        items: { $ref: 'user#' },
-      },
-    },
+app.get(
+  '/users',
+  {
+    schema: {
+      response: {
+        200: {
+          type: 'array',
+          items: { $ref: 'user#' }
+        }
+      }
+    }
   },
-}, handler);
+  handler
+);
 
 // Without response schema - uses JSON.stringify (slower)
 app.get('/users-slow', handler);

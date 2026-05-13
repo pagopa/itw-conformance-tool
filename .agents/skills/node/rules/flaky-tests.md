@@ -58,8 +58,12 @@ describe('MyTests', () => {
   beforeEach((t) => console.log(`[BEFORE EACH] Starting: ${t.name}`));
   afterEach((t) => console.log(`[AFTER EACH] Finished: ${t.name}`));
 
-  it('test 1', () => { /* ... */ });
-  it('test 2', () => { /* ... */ });
+  it('test 1', () => {
+    /* ... */
+  });
+  it('test 2', () => {
+    /* ... */
+  });
 });
 ```
 
@@ -101,9 +105,11 @@ describe('Debug hanging tests', () => {
 // BAD - Race condition with setTimeout
 it('should process after delay', async (t) => {
   let processed = false;
-  processAsync(() => { processed = true; });
+  processAsync(() => {
+    processed = true;
+  });
 
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await new Promise((resolve) => setTimeout(resolve, 100));
   t.assert.equal(processed, true); // May fail if processing takes > 100ms
 });
 
@@ -353,7 +359,7 @@ it('should fetch user', async (t) => {
   // Mock fetch to avoid network flakiness
   t.mock.method(globalThis, 'fetch', async () => ({
     ok: true,
-    json: async () => ({ id: '1', name: 'John' }),
+    json: async () => ({ id: '1', name: 'John' })
   }));
 
   const user = await fetchUser('1');
@@ -365,7 +371,7 @@ it('should fetch user', async (t) => {
 
 ```typescript
 // BAD - Arbitrary timeout
-await new Promise(r => setTimeout(r, 1000));
+await new Promise((r) => setTimeout(r, 1000));
 
 // GOOD - Wait for specific condition
 await waitFor(() => element.isVisible());
@@ -375,7 +381,7 @@ async function waitFor(condition, timeout = 5000) {
   const start = Date.now();
   while (Date.now() - start < timeout) {
     if (await condition()) return;
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
   }
   throw new Error('Condition not met within timeout');
 }
