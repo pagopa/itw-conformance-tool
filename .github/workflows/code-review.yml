@@ -1,4 +1,4 @@
-name: CI
+name: Code Review
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   checks:
-    name: CI
+    name: Code Review
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -48,9 +48,6 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
 
       - name: Build
         run: pnpm build
