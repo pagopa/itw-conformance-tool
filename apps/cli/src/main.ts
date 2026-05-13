@@ -109,7 +109,7 @@ function printHelp(): void {
   process.stdout.write('  -e, --endpoint <url>                Endpoint override\n');
   process.stdout.write('  --credential-types <list>           Comma-separated credential types\n');
   process.stdout.write('  --unsafe-tls                        Disable TLS certificate verification\n');
-  process.stdout.write('  --tls-ca-file <path>                CA file path for TLS verification\n');
+  process.stdout.write('  --tls-ca-file <path>                Export CA file path as ITW_CT_TLS_CA_FILE for downstream consumers (not wired into Node TLS here)\n');
   process.stdout.write('  --log-level <debug|info|warn|error> Log level for CLI logs\n');
   process.stdout.write('  --target <test|serve>               Nx target to execute (default: test)\n');
   process.stdout.write('  --skip-nx-cache                     Pass --skip-nx-cache to Nx\n');
