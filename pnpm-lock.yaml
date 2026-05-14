@@ -194,9 +194,6 @@ importers:
       '@fastify/cors':
         specifier: catalog:fastify
         version: 11.2.0
-      '@fastify/env':
-        specifier: catalog:fastify
-        version: 6.0.0
       '@fastify/helmet':
         specifier: catalog:fastify
         version: 13.0.2
@@ -209,6 +206,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: catalog:fastify
         version: 5.2.6
+      '@itw-conformance-tool/database':
+        specifier: 'workspace:'
+        version: link:../../packages/database
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
