@@ -4,7 +4,8 @@ export const SPEC_VERSION_HEADER = 'X-Spec-Version';
 
 const SPEC_VERSION_BY_HEADER = {
   '1.0': ItWalletSpecsVersion.V1_0,
-  '1.3': ItWalletSpecsVersion.V1_3
+  '1.3': ItWalletSpecsVersion.V1_3,
+  '1.4': ItWalletSpecsVersion.V1_4
 } as const;
 
 type SupportedSpecVersionHeader = keyof typeof SPEC_VERSION_BY_HEADER;

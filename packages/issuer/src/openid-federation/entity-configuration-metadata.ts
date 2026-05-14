@@ -11,7 +11,7 @@ export const getEntityConfigurationClaimsMetadata = (
   jwksRepository: JwksRepository,
   config: IoWalletSdkConfig
 ): ItWalletEntityConfigurationClaimsOptions['metadata'] => {
-  if (config.isVersion(ItWalletSpecsVersion.V1_3)) {
+  if (config.isVersion(ItWalletSpecsVersion.V1_3) || config.isVersion(ItWalletSpecsVersion.V1_4)) {
     return getEntityConfigurationClaimsMetadataV1_3(baseURL, jwksRepository);
   }
   return getEntityConfigurationClaimsMetadataV1_0(baseURL, jwksRepository);

@@ -14,7 +14,7 @@ export const createCredentialIssuerMetadata = (
   jwksRepository: JwksRepository,
   config: IoWalletSdkConfig
 ): ItWalletCredentialIssuerMetadata | ItWalletCredentialIssuerMetadataV1_3 => {
-  if (config.isVersion(ItWalletSpecsVersion.V1_3)) {
+  if (config.isVersion(ItWalletSpecsVersion.V1_3) || config.isVersion(ItWalletSpecsVersion.V1_4)) {
     return createCredentialIssuerMetadataV1_3(baseURL, jwksRepository);
   }
   return createCredentialIssuerMetadataV1_0(baseURL, jwksRepository);

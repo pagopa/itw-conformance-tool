@@ -18,7 +18,7 @@ const validateRedirectUri = (redirectUri: string): string => {
     throw new Error('Invalid redirectUri protocol');
   }
 
-  return parsedUrl.toString();
+  return redirectUri;
 };
 
 export const getFormPostFromRedirectUriAndJwt = (redirectUri: string, jwt: string): string => {
