@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { parseArgs as parseNodeArgs } from 'node:util';
@@ -45,6 +45,11 @@ interface CliFlags {
   force?: boolean;
   dryRun: boolean;
   help: boolean;
+}
+
+interface StartServicePorts {
+  issuer: number;
+  rp: number;
 }
 
 const cliName = 'itw-conformance-tool';
@@ -341,6 +346,98 @@ function buildStartNxArgs(services: Service[], runtimeConfig: RuntimeConfig): st
   return args;
 }
 
+function stripIniComment(line: string): string {
+  const semicolonIndex = line.indexOf(';');
+  const hashIndex = line.indexOf('#');
+
+  if (semicolonIndex === -1 && hashIndex === -1) {
+    return line.trim();
+  }
+
+  if (semicolonIndex === -1) {
+    return line.slice(0, hashIndex).trim();
+  }
+
+  if (hashIndex === -1) {
+    return line.slice(0, semicolonIndex).trim();
+  }
+
+  return line.slice(0, Math.min(semicolonIndex, hashIndex)).trim();
+}
+
+function parseIni(rawConfig: string): Record<string, Record<string, string>> {
+  const parsedConfig: Record<string, Record<string, string>> = {};
+  let currentSection = '';
+
+  for (const rawLine of rawConfig.split(/\r?\n/u)) {
+    const line = stripIniComment(rawLine);
+    if (line.length === 0) {
+      continue;
+    }
+
+    if (line.startsWith('[') && line.endsWith(']')) {
+      currentSection = line.slice(1, -1).trim().toLowerCase();
+      if (currentSection.length > 0 && parsedConfig[currentSection] === undefined) {
+        parsedConfig[currentSection] = {};
+      }
+      continue;
+    }
+
+    if (currentSection.length === 0) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+    if (key.length === 0) {
+      continue;
+    }
+
+    parsedConfig[currentSection] ??= {};
+    parsedConfig[currentSection][key] = value;
+  }
+
+  return parsedConfig;
+}
+
+function parsePortValue(rawValue: string | undefined, fallback: number, fieldName: string): number {
+  if (rawValue === undefined || rawValue.length === 0) {
+    return fallback;
+  }
+
+  const parsedPort = Number(rawValue);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+    throw new Error(`Invalid ${fieldName} value: ${rawValue}`);
+  }
+
+  return parsedPort;
+}
+
+function resolveConfigPath(configFile?: string): string {
+  return resolve(process.cwd(), configFile ?? 'config.ini');
+}
+
+function resolveServicePorts(configPath: string): StartServicePorts {
+  if (!existsSync(configPath)) {
+    return {
+      issuer: 3000,
+      rp: 8080
+    };
+  }
+
+  const parsedConfig = parseIni(readFileSync(configPath, { encoding: 'utf8' }));
+
+  return {
+    issuer: parsePortValue(parsedConfig['itw-credential-issuer']?.port, 3000, '[itw-credential-issuer].port'),
+    rp: parsePortValue(parsedConfig.rp?.port, 8080, '[rp].port')
+  };
+}
+
 function getConfigIniTemplate(): string {
   return `[global]
 ; Local directory for keys, certificates, and generated data
@@ -405,16 +502,16 @@ function runInit(flags: CliFlags, logger: CliLogger): void {
   });
 }
 
-function buildEnv(runtimeConfig: RuntimeConfig, configFile?: string): NodeJS.ProcessEnv {
+function buildEnv(runtimeConfig: RuntimeConfig, configPath: string, servicePorts: StartServicePorts): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ITW_CT_LOG_LEVEL: runtimeConfig.logLevel,
-    ITW_CT_UNSAFE_TLS: runtimeConfig.tls.unsafe ? 'true' : 'false'
+    ITW_CT_UNSAFE_TLS: runtimeConfig.tls.unsafe ? 'true' : 'false',
+    ITW_CT_CONFIG_FILE: configPath,
+    ITW_CT_ISSUER_PORT: String(servicePorts.issuer),
+    ITW_CT_RP_PORT: String(servicePorts.rp)
   };
 
-  if (configFile !== undefined) {
-    env.ITW_CT_CONFIG_FILE = resolve(process.cwd(), configFile);
-  }
   if (runtimeConfig.tls.caFile !== undefined) {
     env.ITW_CT_TLS_CA_FILE = runtimeConfig.tls.caFile;
   }
@@ -499,14 +596,18 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const runtimeConfigPath = resolve(process.cwd(), flags.configFile ?? 'config.ini');
+  const runtimeConfigPath = resolveConfigPath(flags.configFile);
+  const servicePorts = resolveServicePorts(runtimeConfigPath);
   if (!existsSync(runtimeConfigPath)) {
-    emitLog(logger, 'error', 'cli.config_not_found', {
+    emitLog(logger, 'warn', 'cli.config_not_found_using_defaults', {
       command,
       configPath: runtimeConfigPath,
-      message: `Configuration file not found: ${runtimeConfigPath}. Copy config.example.ini to config.ini and customize it.`
+      defaultsApplied: {
+        issuerPort: servicePorts.issuer,
+        rpPort: servicePorts.rp
+      },
+      message: `Configuration file not found: ${runtimeConfigPath}. Starting with defaults. Run '${cliName} init' to generate a template.`
     });
-    process.exit(1);
   }
 
   const services = getStartServices(flags);
@@ -514,19 +615,21 @@ async function main(): Promise<void> {
   emitLog(logger, 'debug', 'cli.nx_command', {
     command,
     services,
-    nxCommand: ['pnpm', ...nxArgs].join(' ')
+    nxCommand: ['pnpm', ...nxArgs].join(' '),
+    servicePorts
   });
 
   if (flags.dryRun) {
     emitLog(logger, 'info', 'cli.dry_run_summary', {
       command,
       services,
-      nxCommand: ['pnpm', ...nxArgs].join(' ')
+      nxCommand: ['pnpm', ...nxArgs].join(' '),
+      servicePorts
     });
     process.exit(0);
   }
 
-  const env = buildEnv(runtimeConfig, flags.configFile);
+  const env = buildEnv(runtimeConfig, runtimeConfigPath, servicePorts);
   const exitCode = await runCommand(nxArgs, env);
   if (exitCode === 0) {
     emitLog(logger, 'info', 'cli.flow_completed', { command, services, exitCode });

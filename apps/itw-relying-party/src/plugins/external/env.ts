@@ -15,7 +15,24 @@ const schema = z.object({
   PORT: z.number().default(3000)
 });
 
+function resolvePortOverride(variableName: string): string | undefined {
+  const value = process.env[variableName];
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const parsedPort = Number(value);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+    throw new Error(`Invalid ${variableName} value: ${value}`);
+  }
+
+  return value;
+}
+
 export const autoConfig: FastifyEnvOptions = {
+  data: {
+    PORT: resolvePortOverride('ITW_CT_RP_PORT') ?? process.env.PORT
+  },
   schema: z.toJSONSchema(schema, { target: 'draft-07' })
 };
 
