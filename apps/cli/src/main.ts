@@ -502,7 +502,11 @@ function runInit(flags: CliFlags, logger: CliLogger): void {
   });
 }
 
-function buildEnv(runtimeConfig: RuntimeConfig, configPath: string, servicePorts: StartServicePorts): NodeJS.ProcessEnv {
+function buildEnv(
+  runtimeConfig: RuntimeConfig,
+  configPath: string,
+  servicePorts: StartServicePorts
+): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ITW_CT_LOG_LEVEL: runtimeConfig.logLevel,
