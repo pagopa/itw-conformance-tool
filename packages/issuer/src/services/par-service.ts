@@ -70,7 +70,7 @@ export class PARService {
     });
 
     await this.#parRepository.insert({
-      clientId,
+      clientId: storedParRequest.client_id,
       expiresAt: Date.now() + PAR_TTL_MS,
       requestObject: JSON.stringify(storedParRequest),
       requestUri
