@@ -8,6 +8,21 @@ export class SqliteNonceRepository implements INonceRepository {
     this.db = db;
   }
 
+  async consume(value: string): Promise<boolean> {
+    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
+    const result = this.db.prepare('DELETE FROM nonces WHERE value = ? AND expires_at >= ?').run(value, nowMs) as {
+      changes: number;
+    };
+
+    if (result.changes > 0) {
+      return true;
+    }
+
+    // Lazy cleanup for expired entries when consume fails.
+    this.db.prepare('DELETE FROM nonces WHERE value = ?').run(value);
+    return false;
+  }
+
   async delete(value: string): Promise<void> {
     this.db.prepare('DELETE FROM nonces WHERE value = ?').run(value);
   }
