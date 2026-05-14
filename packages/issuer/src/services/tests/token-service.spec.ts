@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CreateAccessTokenError, InvalidGrantError, TokenService, UnsupportedGrantTypeError } from '../token-service.js';
+import {
+  CreateAccessTokenError,
+  InvalidGrantError,
+  TokenService,
+  UnsupportedGrantTypeError
+} from '../token-service.js';
 
 import type { JwksRepository } from '../../signer.js';
 import type { ITokenParRepository } from '../token-service.js';
@@ -9,7 +14,7 @@ function makeParLookup(overrides: Partial<ITokenParRepository> = {}): ITokenParR
   return {
     consume: vi.fn().mockResolvedValue(undefined),
     getByCode: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -19,7 +24,7 @@ function makeJwksRepo(): JwksRepository {
   return {
     getEncrypt: vi.fn().mockReturnValue({ private: fakePrivKey, public: fakeKey }),
     getSign: vi.fn().mockReturnValue({ private: fakePrivKey, public: fakeKey }),
-    iacaX509: vi.fn().mockReturnValue(''),
+    iacaX509: vi.fn().mockReturnValue('')
   };
 }
 
@@ -33,8 +38,8 @@ describe('TokenService', () => {
           baseURL: 'https://example.com',
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
-          tokenRequest: { bodyString: 'grant_type=authorization_code' },
-        }),
+          tokenRequest: { bodyString: 'grant_type=authorization_code' }
+        })
       ).rejects.toBeInstanceOf(CreateAccessTokenError);
     });
 
@@ -46,8 +51,10 @@ describe('TokenService', () => {
           baseURL: 'https://example.com',
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
-          tokenRequest: { bodyString: 'code=abc&grant_type=refresh_token&redirect_uri=https%3A%2F%2Fclient.example.com' },
-        }),
+          tokenRequest: {
+            bodyString: 'code=abc&grant_type=refresh_token&redirect_uri=https%3A%2F%2Fclient.example.com'
+          }
+        })
       ).rejects.toBeInstanceOf(UnsupportedGrantTypeError);
     });
 
@@ -60,9 +67,9 @@ describe('TokenService', () => {
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=bad&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com',
-          },
-        }),
+            bodyString: 'code=bad&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com'
+          }
+        })
       ).rejects.toBeInstanceOf(InvalidGrantError);
     });
 
@@ -71,10 +78,10 @@ describe('TokenService', () => {
         authorization_details: [],
         client_id: 'client',
         redirect_uri: 'https://client.example.com/cb',
-        request_uri: 'urn:test',
+        request_uri: 'urn:test'
       };
       const lookup = makeParLookup({
-        getByCode: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' }),
+        getByCode: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' })
       });
       const svc = new TokenService(lookup, makeJwksRepo());
 
@@ -84,10 +91,9 @@ describe('TokenService', () => {
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString:
-              'code=good&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fwrong.example.com',
-          },
-        }),
+            bodyString: 'code=good&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fwrong.example.com'
+          }
+        })
       ).rejects.toBeInstanceOf(InvalidGrantError);
     });
   });

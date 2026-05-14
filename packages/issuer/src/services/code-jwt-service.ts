@@ -28,11 +28,7 @@ export class CodeJwtService {
   private readonly jwksRepository: JwksRepository;
   private readonly parRepository: ICodeJwtParRepository;
 
-  constructor(opts: {
-    baseURL: string;
-    jwksRepository: JwksRepository;
-    parRepository: ICodeJwtParRepository;
-  }) {
+  constructor(opts: { baseURL: string; jwksRepository: JwksRepository; parRepository: ICodeJwtParRepository }) {
     this.baseURL = opts.baseURL;
     this.jwksRepository = opts.jwksRepository;
     this.parRepository = opts.parRepository;
@@ -53,7 +49,7 @@ export class CodeJwtService {
 
     const jwt = await new SignJWT({
       code,
-      ...(parEntry.state ? { state: parEntry.state } : {}),
+      ...(parEntry.state ? { state: parEntry.state } : {})
     })
       .setIssuer(this.baseURL)
       .setIssuedAt()
@@ -65,7 +61,7 @@ export class CodeJwtService {
 
     return {
       formPost: getFormPostFromRedirectUriAndJwt(parEntry.redirectUri, jwt),
-      redirectUri: parEntry.redirectUri,
+      redirectUri: parEntry.redirectUri
     };
   }
 }

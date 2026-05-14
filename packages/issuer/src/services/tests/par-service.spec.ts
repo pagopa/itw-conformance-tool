@@ -11,7 +11,7 @@ function makeRepo(overrides: Partial<IPARRepository> = {}): IPARRepository {
     get: vi.fn().mockResolvedValue(undefined),
     insert: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -23,7 +23,7 @@ describe('PARService', () => {
         clientId: 'client',
         expiresAt: Date.now() + PAR_TTL_MS,
         requestObject: JSON.stringify(parRequest),
-        requestUri: 'urn:test',
+        requestUri: 'urn:test'
       };
       const repo = makeRepo({ get: vi.fn().mockResolvedValue(entry) });
       const svc = new PARService(repo);
@@ -49,7 +49,7 @@ describe('PARService', () => {
         clientId: 'client',
         expiresAt: Date.now() + PAR_TTL_MS,
         requestObject: JSON.stringify(parRequest),
-        requestUri: 'urn:test',
+        requestUri: 'urn:test'
       };
       const repo = makeRepo({ get: vi.fn().mockResolvedValue(entry) });
       const svc = new PARService(repo);

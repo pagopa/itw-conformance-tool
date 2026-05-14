@@ -81,17 +81,21 @@ export class TokenService {
       throw new InvalidGrantError('redirect_uri mismatch');
     }
 
-    const federationMetadata = getEntityConfigurationClaimsMetadata(options.baseURL, this.#jwksRepository, options.config);
+    const federationMetadata = getEntityConfigurationClaimsMetadata(
+      options.baseURL,
+      this.#jwksRepository,
+      options.config
+    );
 
     const signer: JwtSignerJwk = {
       alg: 'ES256',
       method: 'jwk',
-      publicJwk: this.#jwksRepository.getSign().public,
+      publicJwk: this.#jwksRepository.getSign().public
     };
 
     const accessTokenResponse = await createAccessTokenResponse({
       additionalPayload: {
-        authorization_details: createAuthorizationDetails(parRequest.authorization_details, federationMetadata),
+        authorization_details: createAuthorizationDetails(parRequest.authorization_details, federationMetadata)
       },
       audience: options.baseURL,
       authorizationServer: options.baseURL,
@@ -100,7 +104,7 @@ export class TokenService {
       expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
       signer,
       subject: parRequest.client_id,
-      tokenType: 'Bearer',
+      tokenType: 'Bearer'
     });
 
     // Consume code only after all validations succeed
@@ -112,7 +116,7 @@ export class TokenService {
 
 function createAuthorizationDetails(
   authorizationDetails: ParRequest['authorization_details'],
-  federationMetadata: ReturnType<typeof getEntityConfigurationClaimsMetadata>,
+  federationMetadata: ReturnType<typeof getEntityConfigurationClaimsMetadata>
 ): { credential_configuration_id: string; credential_identifiers: string[]; type: string }[] {
   if (!authorizationDetails) {
     return [];
@@ -131,13 +135,15 @@ function createAuthorizationDetails(
     const credentialConfig = issuerMetadata.credential_configurations_supported[item.credential_configuration_id];
 
     if (!credentialConfig) {
-      throw new CreateAccessTokenError(`No credential configuration supported for id: ${item.credential_configuration_id}`);
+      throw new CreateAccessTokenError(
+        `No credential configuration supported for id: ${item.credential_configuration_id}`
+      );
     }
 
     return {
       credential_configuration_id: item.credential_configuration_id,
       credential_identifiers: [item.credential_configuration_id],
-      type: item.type,
+      type: item.type
     };
   });
 }

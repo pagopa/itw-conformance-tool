@@ -53,8 +53,8 @@ export class PARService {
       request: {
         headers: options.parRequest.headers,
         method: options.parRequest.method,
-        url: options.parRequest.url,
-      },
+        url: options.parRequest.url
+      }
     });
 
     if (!authorizationRequestJwt) {
@@ -66,14 +66,14 @@ export class PARService {
     const storedParRequest = parSchema.parse({
       ...authorizationRequest,
       id: randomUUID(),
-      request_uri: requestUri,
+      request_uri: requestUri
     });
 
     await this.#parRepository.insert({
       clientId,
       expiresAt: Date.now() + PAR_TTL_MS,
       requestObject: JSON.stringify(storedParRequest),
-      requestUri,
+      requestUri
     });
 
     return requestUri;

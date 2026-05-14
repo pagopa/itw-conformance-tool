@@ -10,7 +10,7 @@ function makeRepo(overrides: Partial<INonceRepository> = {}): INonceRepository {
     delete: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(undefined),
     insert: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
+    ...overrides
   };
 }
 

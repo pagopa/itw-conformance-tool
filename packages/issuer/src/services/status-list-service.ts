@@ -23,14 +23,14 @@ export class StatusListService {
       iss: baseURL,
       status_list: { bits: STATUS_LIST_BITS, lst },
       sub: STATUS_LIST_URI(baseURL),
-      ttl: 3000,
+      ttl: 3000
     };
 
     const { private: privateSig } = this.jwksRepository.getSign();
     const header: StatusListJWTHeaderParameters = {
       alg: 'ES256',
       typ: 'statuslist+jwt',
-      x5c: [this.jwksRepository.iacaX509()],
+      x5c: [this.jwksRepository.iacaX509()]
     };
 
     const values = createHeaderAndPayload(statusList, payload, header);

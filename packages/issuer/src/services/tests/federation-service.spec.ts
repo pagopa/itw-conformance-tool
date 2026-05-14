@@ -14,7 +14,7 @@ async function makeJwksRepo(): Promise<JwksRepository> {
   return {
     getEncrypt: vi.fn().mockReturnValue({ private: kidPriv, public: kidPub }),
     getSign: vi.fn().mockReturnValue({ private: kidPriv, public: kidPub }),
-    iacaX509: vi.fn().mockReturnValue(''),
+    iacaX509: vi.fn().mockReturnValue('')
   };
 }
 
@@ -28,4 +28,3 @@ describe('FederationService', () => {
     expect(result).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
   });
 });
-
