@@ -2,6 +2,7 @@ import { decodeJwt, exportJWK, generateKeyPair } from 'jose';
 import { describe, expect, it, vi } from 'vitest';
 
 import { STATUS_LIST_TTL_SECONDS } from '../../models/status-list.js';
+import { STATUS_LIST_URI } from '../../utils/status-list.js';
 import { StatusListService } from '../status-list-service.js';
 
 import type { JwksRepository } from '../../signer.js';
@@ -29,7 +30,7 @@ describe('StatusListService', () => {
 
     const payload = decodeJwt(jwt) as Record<string, unknown>;
     expect(payload.iss).toBe(baseURL);
-    expect(payload.sub).toBe(`${baseURL}/status-list`);
+    expect(payload.sub).toBe(STATUS_LIST_URI(baseURL));
     expect(payload.ttl).toBe(STATUS_LIST_TTL_SECONDS);
 
     const iat = payload.iat as number;

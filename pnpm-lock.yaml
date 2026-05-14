@@ -261,10 +261,16 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database
+      '@owf/mdoc':
+        specifier: ^0.6.0
+        version: 0.6.0
       '@pagopa/io-wallet-oauth2':
         specifier: 1.4.0
         version: 1.4.0
       '@pagopa/io-wallet-oid-federation':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@pagopa/io-wallet-oid4vci':
         specifier: 1.4.0
         version: 1.4.0
       '@pagopa/io-wallet-oid4vp':
@@ -280,6 +286,9 @@ importers:
         specifier: ^0.19.0
         version: 0.19.0
       '@sd-jwt/jwt-status-list':
+        specifier: ^0.19.0
+        version: 0.19.0
+      '@sd-jwt/sd-jwt-vc':
         specifier: ^0.19.0
         version: 0.19.0
       '@sd-jwt/types':

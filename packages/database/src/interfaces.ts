@@ -9,6 +9,8 @@
 // ---------------------------------------------------------------------------
 
 export interface INonceRepository {
+  /** Atomically consumes a nonce if present and not expired. */
+  consume(value: string): Promise<boolean>;
   /** Removes a nonce so it cannot be used again. No-op if not found. */
   delete(value: string): Promise<void>;
   /** Returns the nonce string, or undefined if it does not exist or has expired. */

@@ -16,9 +16,18 @@ export * from './crypto.js';
 export * from './utils/status-list.js';
 export * from './utils/x509.js';
 export * from './utils/form-post-jwt.js';
+export * from './utils/portrait.js';
 
 // OpenID Federation
 export * from './openid-federation/index.js';
+export * from './openid-federation/shared/constants.js';
+
+// Mdoc
+export * from './mdoc/index.js';
+
+// Credentials
+export * from './credentials/pid.js';
+export { DISABILITY_CARD_ID, createDisabilityCardCredential } from './credentials/disability-card.js';
 
 // Models
 export * from './models/nonce.js';
@@ -34,3 +43,4 @@ export * from './services/nonce-service.js';
 export * from './services/par-service.js';
 export * from './services/token-service.js';
 export * from './services/federation-service.js';
+export * from './services/credential-service.js';

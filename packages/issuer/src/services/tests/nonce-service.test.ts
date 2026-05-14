@@ -7,6 +7,7 @@ import type { INonceRepository } from '@itw-conformance-tool/database';
 
 function makeRepo(overrides: Partial<INonceRepository> = {}): INonceRepository {
   return {
+    consume: vi.fn().mockResolvedValue(false),
     delete: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(undefined),
     insert: vi.fn().mockResolvedValue(undefined),
@@ -44,23 +45,22 @@ describe('NonceService', () => {
   });
 
   describe('consume', () => {
-    it('deletes the nonce when found', async () => {
+    it('consumes the nonce when found', async () => {
       const value = 'abc123';
-      const repo = makeRepo({ get: vi.fn().mockResolvedValue(value) });
+      const repo = makeRepo({ consume: vi.fn().mockResolvedValue(true) });
       const svc = new NonceService(repo);
 
       await svc.consume(value);
 
-      expect(repo.get).toHaveBeenCalledWith(value);
-      expect(repo.delete).toHaveBeenCalledWith(value);
+      expect(repo.consume).toHaveBeenCalledWith(value);
     });
 
     it('throws InvalidNonceError when nonce not found', async () => {
-      const repo = makeRepo({ get: vi.fn().mockResolvedValue(undefined) });
+      const repo = makeRepo({ consume: vi.fn().mockResolvedValue(false) });
       const svc = new NonceService(repo);
 
       await expect(svc.consume('unknown')).rejects.toBeInstanceOf(InvalidNonceError);
-      expect(repo.delete).not.toHaveBeenCalled();
+      expect(repo.consume).toHaveBeenCalledWith('unknown');
     });
   });
 });

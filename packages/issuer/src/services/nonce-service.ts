@@ -26,10 +26,9 @@ export class NonceService {
   }
 
   async consume(value: string): Promise<void> {
-    const found = await this.#nonceRepository.get(value);
-    if (!found) {
+    const consumed = await this.#nonceRepository.consume(value);
+    if (!consumed) {
       throw new InvalidNonceError(value);
     }
-    await this.#nonceRepository.delete(value);
   }
 }
