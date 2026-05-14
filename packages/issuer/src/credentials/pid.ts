@@ -21,7 +21,7 @@ export const createPidCredential = async (
 
   const [signer, verifier] = await createSignerVerifier({
     privateKey: jwks.private,
-    publicKey: holderPublicKey
+    publicKey: jwks.public
   });
 
   const sdjwt = new SDJwtVcInstance({

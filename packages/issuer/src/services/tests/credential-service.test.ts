@@ -36,6 +36,7 @@ vi.mock('jose', () => ({
 }));
 
 const mockNonceRepository: INonceRepository = {
+  consume: vi.fn(),
   delete: vi.fn(),
   get: vi.fn(),
   insert: vi.fn()
@@ -69,7 +70,7 @@ describe('CredentialService', () => {
       header: { jwk: { crv: 'P-256', kty: 'EC', x: 'x', y: 'y' } }
     });
     mocked.createCredentialResponse.mockResolvedValue({ credentials: [{ credential: 'signed-credential' }] });
-    (mockNonceRepository.get as ReturnType<typeof vi.fn>).mockResolvedValue('nonce-1');
+    (mockNonceRepository.consume as ReturnType<typeof vi.fn>).mockResolvedValue(true);
     (mockNonceRepository.delete as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
@@ -125,7 +126,7 @@ describe('CredentialService', () => {
         })
       ).rejects.toBeInstanceOf(CreateCredentialError);
 
-      expect(mockNonceRepository.delete).not.toHaveBeenCalled();
+      expect(mockNonceRepository.consume).not.toHaveBeenCalled();
     });
 
     it('does not consume nonce when proof verification fails', async () => {
@@ -140,7 +141,7 @@ describe('CredentialService', () => {
         })
       ).rejects.toThrow('invalid proof');
 
-      expect(mockNonceRepository.delete).not.toHaveBeenCalled();
+      expect(mockNonceRepository.consume).not.toHaveBeenCalled();
     });
 
     it('consumes nonce after successful proof verification', async () => {
@@ -154,7 +155,58 @@ describe('CredentialService', () => {
         })
       ).rejects.toBeInstanceOf(CreateCredentialError);
 
-      expect(mockNonceRepository.delete).toHaveBeenCalledWith('nonce-1');
+      expect(mockNonceRepository.consume).toHaveBeenCalledWith('nonce-1');
+    });
+
+    it('maps invalid DPoP header decode to InvalidProofError', async () => {
+      const service = makeService();
+      mocked.parseCredentialRequest.mockReturnValue(parsedRequest);
+      mocked.decodeProtectedHeader.mockImplementation(() => {
+        throw new Error('bad dpop');
+      });
+
+      await expect(
+        service.createCredential({
+          ...createBaseOptions(),
+          body: JSON.stringify({ any: 'payload' })
+        })
+      ).rejects.toBeInstanceOf(InvalidProofError);
+    });
+
+    it('maps invalid access token decode to CreateCredentialError', async () => {
+      const service = makeService();
+      mocked.parseCredentialRequest.mockReturnValue(parsedRequest);
+      mocked.decodeJwt.mockImplementation((token: string) => {
+        if (token === 'access-token') {
+          throw new Error('bad access token');
+        }
+        return { nonce: 'nonce-1' };
+      });
+
+      await expect(
+        service.createCredential({
+          ...createBaseOptions(),
+          body: JSON.stringify({ any: 'payload' })
+        })
+      ).rejects.toBeInstanceOf(CreateCredentialError);
+    });
+
+    it('maps invalid proof jwt decode to CreateCredentialError', async () => {
+      const service = makeService();
+      mocked.parseCredentialRequest.mockReturnValue(parsedRequest);
+      mocked.decodeJwt.mockImplementation((token: string) => {
+        if (token === 'proof-jwt') {
+          throw new Error('bad proof token');
+        }
+        return { cnf: { jkt: 'thumbprint' }, sub: 'subject-1' };
+      });
+
+      await expect(
+        service.createCredential({
+          ...createBaseOptions(),
+          body: JSON.stringify({ any: 'payload' })
+        })
+      ).rejects.toBeInstanceOf(CreateCredentialError);
     });
   });
 

@@ -17,9 +17,12 @@ describe('Nonce model', () => {
   });
 
   it('creates a nonce with custom TTL', () => {
+    const before = Date.now();
     const nonce = createNonce('xyz', 1000);
+    const after = Date.now();
     expect(nonce.value).toBe('xyz');
-    expect(nonce.expiresAt).toBeLessThanOrEqual(Date.now() + 1000 + 10);
+    expect(nonce.expiresAt).toBeGreaterThanOrEqual(before + 1000);
+    expect(nonce.expiresAt).toBeLessThanOrEqual(after + 1000);
   });
 
   it('NONCE_TTL_MS is 5 minutes', () => {

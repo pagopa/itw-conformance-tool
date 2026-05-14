@@ -93,12 +93,23 @@ export class CredentialService {
       throw new CreateCredentialError('Invalid credential request payload');
     }
 
-    const headerDpopProof = decodeProtectedHeader(dpopProof);
+    let headerDpopProof: ReturnType<typeof decodeProtectedHeader>;
+    try {
+      headerDpopProof = decodeProtectedHeader(dpopProof);
+    } catch {
+      throw new InvalidProofError('Invalid DPoP proof');
+    }
     if (!headerDpopProof.jwk || 'd' in headerDpopProof.jwk) {
       throw new CreateCredentialError('Private keys are not allowed in the DPoP Proof JWT!');
     }
 
-    const { cnf, sub } = decodeJwt<JwtPayload>(accessToken);
+    let accessTokenPayload: JwtPayload;
+    try {
+      accessTokenPayload = decodeJwt<JwtPayload>(accessToken);
+    } catch {
+      throw new CreateCredentialError('Invalid access token payload');
+    }
+    const { cnf, sub } = accessTokenPayload;
 
     if (!cnf) {
       throw new CreateCredentialError('Access token is missing cnf claim');
@@ -136,19 +147,22 @@ export class CredentialService {
       throw new CreateCredentialError('Missing proof JWT in credential request');
     }
 
-    const { nonce } = decodeJwt(jwt);
+    let proofPayload: ReturnType<typeof decodeJwt>;
+    try {
+      proofPayload = decodeJwt(jwt);
+    } catch {
+      throw new CreateCredentialError('Invalid proof JWT in credential request');
+    }
+    const { nonce } = proofPayload;
     if (typeof nonce !== 'string') {
       throw new CreateCredentialError('Missing nonce in credential request');
     }
 
-    const storedNonce = await this.#nonceRepository.get(nonce);
-    if (!storedNonce) {
+    const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
+    const consumedNonce = await this.#nonceRepository.consume(nonce);
+    if (!consumedNonce) {
       throw new CreateCredentialError('Expected nonce not found');
     }
-
-    const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
-
-    await this.#nonceRepository.delete(nonce);
 
     const holderPublicKey = JwkPublicKey.safeParse(proofResult.header.jwk);
     if (!holderPublicKey.success) {
