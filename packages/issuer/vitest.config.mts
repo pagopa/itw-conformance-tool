@@ -10,6 +10,8 @@ export default defineConfig(() => ({
     environment: 'node',
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}'],
     reporters: ['default'],
+    // node:sqlite requires --experimental-sqlite on Node.js 22
+    pool: 'forks',
     coverage: {
       reportsDirectory: './test-output/vitest/coverage',
       provider: 'v8' as const

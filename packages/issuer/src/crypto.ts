@@ -12,7 +12,7 @@ import {
   clientAuthenticationAnonymous
 } from '@pagopa/io-wallet-oauth2';
 import { decodeBase64, encodeToUtf8String } from '@pagopa/io-wallet-utils';
-import { FlattenedEncrypt, type JWK, SignJWT, compactDecrypt, decodeJwt, importJWK, jwtVerify } from 'jose';
+import { CompactEncrypt, type JWK, SignJWT, compactDecrypt, decodeJwt, importJWK, jwtVerify } from 'jose';
 
 import { getCertificateChainPublicKey } from './utils/x509.js';
 
@@ -28,7 +28,7 @@ export const callbacks = {
 
   verifyJwt: async (
     signer: Parameters<NonNullable<CallbackContext['verifyJwt']>>[0],
-    { compact, payload }: Parameters<NonNullable<CallbackContext['verifyJwt']>>[1]
+    { compact }: Parameters<NonNullable<CallbackContext['verifyJwt']>>[1]
   ) => {
     let jwk: JWK;
 
@@ -45,13 +45,7 @@ export const callbacks = {
         throw new Error('Trust chain not found');
       }
     } else {
-      if ((payload as { iss?: string }).iss) {
-        const result = await fetch(`${(payload as { iss: string }).iss}/.well-known/openid-federation`);
-        const resultBody = await result.text();
-        jwk = retrieveJwkFromEntityConf(resultBody, (signer as { kid?: string }).kid ?? '') as JWK;
-      } else {
-        throw new Error('Verifier method not supported');
-      }
+      throw new Error('Verifier method not supported');
     }
 
     const publicKey = await importJWK(jwk);
@@ -110,6 +104,11 @@ const retrieveJwkFromEntityConf = (entityStatementJwt: string, signerKid: string
   const decodedEntityConfig = decodeJwt<ItWalletEntityConfigurationClaims>(entityStatementJwt);
 
   const jwks: Jwk[] = [];
+  const topLevelJwks = (decodedEntityConfig as { jwks?: { keys?: Jwk[] } }).jwks?.keys;
+  if (Array.isArray(topLevelJwks)) {
+    jwks.push(...topLevelJwks);
+  }
+
   if (decodedEntityConfig.metadata) {
     for (const entry of Object.values(decodedEntityConfig.metadata)) {
       if (
@@ -135,13 +134,13 @@ const retrieveJwkFromEntityConf = (entityStatementJwt: string, signerKid: string
 export const getEncryptJweCallback =
   (publicKey: Jwk): EncryptJweCallback =>
   async (_: JweEncryptor, data: string) => {
-    const josePublicKey = await importJWK(publicKey, 'ES256');
+    const josePublicKey = await importJWK(publicKey, 'ECDH-ES');
 
-    const jwe = await new FlattenedEncrypt(new TextEncoder().encode(data))
-      .setProtectedHeader({ alg: 'ES256', kid: publicKey.kid, typ: 'oauth-authz-req+jwt' })
+    const jwe = await new CompactEncrypt(new TextEncoder().encode(data))
+      .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A128CBC-HS256', kid: publicKey.kid, typ: 'oauth-authz-req+jwt' })
       .encrypt(josePublicKey);
 
-    return { encryptionJwk: publicKey, jwe: jwe.ciphertext };
+    return { encryptionJwk: publicKey, jwe };
   };
 
 export const getDecryptJweCallback =

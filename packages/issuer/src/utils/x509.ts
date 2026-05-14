@@ -1,10 +1,12 @@
+import { webcrypto } from 'node:crypto';
+
 import * as x509 from '@peculiar/x509';
 import { X509Certificate } from '@peculiar/x509';
 import { exportJWK, importX509 } from 'jose';
 
 export const getCertificateData = async (input: { certificate: ArrayBuffer }) => {
   const certificate = new X509Certificate(input.certificate);
-  const thumbprint = await certificate.getThumbprint(crypto);
+  const thumbprint = await certificate.getThumbprint(webcrypto);
   const thumbprintHex = Buffer.from(thumbprint).toString('hex');
   return {
     issuerName: certificate.issuerName.toString(),
@@ -68,13 +70,12 @@ export const validateCertificateChain = async (input: {
     throw new Error('No trusted certificate was found while validating the X.509 chain');
   }
 
-  parsedChain = parsedChain.slice(0, trustedCertificateIndex);
+  parsedChain = parsedChain.slice(trustedCertificateIndex);
 
-  for (let i = 0; i < parsedChain.length; i++) {
+  for (let i = 1; i < parsedChain.length; i++) {
     const cert = parsedChain[i] as X509Certificate;
-    const previousCertificate = parsedChain[i - 1];
-    const publicKey = previousCertificate ? previousCertificate.publicKey : undefined;
-    await cert.verify({ date: validationDate, publicKey });
+    const issuerCertificate = parsedChain[i - 1] as X509Certificate;
+    await cert.verify({ date: validationDate, publicKey: issuerCertificate.publicKey });
   }
 };
 
