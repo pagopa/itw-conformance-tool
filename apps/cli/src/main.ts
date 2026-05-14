@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { createInterface } from 'node:readline';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
 import { loggerOptions as sharedLoggerOptions } from '@itw-conformance-tool/logger';
@@ -97,8 +96,7 @@ function printHelp(): void {
 function createCliLogger(level: LogLevel): CliLogger {
   const loggerOptions: LoggerOptions = {
     ...sharedLoggerOptions,
-    level,
-    transport: undefined
+    level
   };
 
   return pino(loggerOptions).child({
@@ -427,24 +425,6 @@ function buildEnv(runtimeConfig: RuntimeConfig, configFile?: string): NodeJS.Pro
   return env;
 }
 
-function pipeChildOutput(stream: NodeJS.ReadableStream, logger: CliLogger, level: LogLevel): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const interfaceHandle = createInterface({ input: stream, crlfDelay: Infinity });
-
-    interfaceHandle.on('line', (line) => {
-      if (line.trim().length === 0) {
-        return;
-      }
-      emitLog(logger, level, 'cli.nx_output', { line });
-    });
-
-    interfaceHandle.once('error', reject);
-    interfaceHandle.once('close', () => {
-      resolve();
-    });
-  });
-}
-
 function resolveLocalNxCli(): string {
   const candidatePaths = [
     resolve(process.cwd(), 'node_modules', 'nx', 'bin', 'nx.js'),
@@ -460,32 +440,20 @@ function resolveLocalNxCli(): string {
   throw new Error('Unable to locate the local Nx CLI in node_modules');
 }
 
-async function runCommand(args: string[], env: NodeJS.ProcessEnv, logger: CliLogger): Promise<number> {
+async function runCommand(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
   const nxCliPath = resolveLocalNxCli();
   const nxArgs = args[0] === 'nx' ? args.slice(1) : args;
   const child = spawn(process.execPath, [nxCliPath, ...nxArgs], {
-    stdio: 'pipe',
+    stdio: 'inherit',
     env
   });
 
-  if (child.stdout === null || child.stderr === null) {
-    throw new Error('Failed to capture Nx output streams');
-  }
-
-  const exitCodePromise = new Promise<number>((resolveExitCode, reject) => {
+  return new Promise<number>((resolveExitCode, reject) => {
     child.once('error', reject);
     child.once('close', (code) => {
       resolveExitCode(code ?? 1);
     });
   });
-
-  const outputPromise = Promise.all([
-    pipeChildOutput(child.stdout, logger.child({ source: 'stdout' }), 'info'),
-    pipeChildOutput(child.stderr, logger.child({ source: 'stderr' }), 'error')
-  ]);
-
-  const [exitCode] = await Promise.all([exitCodePromise, outputPromise]);
-  return exitCode;
 }
 
 async function main(): Promise<void> {
@@ -559,7 +527,7 @@ async function main(): Promise<void> {
   }
 
   const env = buildEnv(runtimeConfig, flags.configFile);
-  const exitCode = await runCommand(nxArgs, env, logger.child({ command, services }));
+  const exitCode = await runCommand(nxArgs, env);
   if (exitCode === 0) {
     emitLog(logger, 'info', 'cli.flow_completed', { command, services, exitCode });
     process.exit(0);
