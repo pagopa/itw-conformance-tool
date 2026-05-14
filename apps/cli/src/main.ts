@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -376,10 +376,25 @@ function runInit(flags: CliFlags, logger: CliLogger): void {
   mkdirSync(issuerDir, { recursive: true });
   mkdirSync(rpDir, { recursive: true });
 
-  const configExists = existsSync(configPath);
-  const shouldWriteConfig = !configExists || Boolean(flags.force);
-  if (shouldWriteConfig) {
-    writeFileSync(configPath, getConfigIniTemplate(), { encoding: 'utf8' });
+  let configWritten = false;
+  if (flags.force) {
+    writeFileSync(configPath, getConfigIniTemplate(), { encoding: 'utf8', flag: 'w' });
+    configWritten = true;
+  } else {
+    try {
+      const fileDescriptor = openSync(configPath, 'wx');
+      try {
+        writeFileSync(fileDescriptor, getConfigIniTemplate(), { encoding: 'utf8' });
+        configWritten = true;
+      } finally {
+        closeSync(fileDescriptor);
+      }
+    } catch (error) {
+      const errnoError = error as NodeJS.ErrnoException;
+      if (errnoError.code !== 'EEXIST') {
+        throw error;
+      }
+    }
   }
 
   emitLog(logger, 'info', 'cli.init_summary', {
@@ -387,7 +402,7 @@ function runInit(flags: CliFlags, logger: CliLogger): void {
     issuerDir,
     rpDir,
     configPath,
-    configWritten: shouldWriteConfig,
+    configWritten,
     force: Boolean(flags.force)
   });
 }
