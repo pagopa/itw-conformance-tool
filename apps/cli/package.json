@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "main": "./dist/main.js",
+  "bin": {
+    "itw-conformance-tool": "./dist/main.js",
+    "itwct": "./dist/main.js"
+  },
+  "imports": {
+    "#/*": "./dist/*"
+  },
   "scripts": {
     "clean": "rimraf dist out-tsc node_modules"
   },
