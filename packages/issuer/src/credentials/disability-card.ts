@@ -70,6 +70,10 @@ export async function createDisabilityCardCredential(
   };
 
   const vctIntegrity = createSRIHash(DISABILITY_CARD_VCT);
+  const subject = holderPublicKey.kid;
+  if (typeof subject !== 'string' || subject.trim() === '') {
+    throw new Error('Unable to issue disability card credential: missing subject identifier');
+  }
 
   const credential = await sdjwt.issue(
     {
@@ -86,9 +90,9 @@ export async function createDisabilityCardCredential(
           uri: STATUS_LIST_URI(iss)
         }
       },
-      sub: holderPublicKey.kid,
+      sub: subject,
       vct: DISABILITY_CARD_VCT,
-      'vct#Integrity': vctIntegrity,
+      'vct#integrity': vctIntegrity,
       ...claims
     },
     disclosureFrame,

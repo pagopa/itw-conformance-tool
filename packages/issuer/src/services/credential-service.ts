@@ -64,11 +64,34 @@ export class CredentialService {
   }
 
   async createCredential(options: CreateCredentialOptions): Promise<CreateCredentialResponseResult> {
-    const { accessToken, credentialRequest, dpopProof, proofs } = parseCredentialRequest({
-      config: options.config,
-      credentialRequest: JSON.parse(options.body) as CredentialRequestV1_0 | CredentialRequestV1_3,
-      headers: options.headers
-    });
+    let parsedCredentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
+    try {
+      parsedCredentialRequest = JSON.parse(options.body) as CredentialRequestV1_0 | CredentialRequestV1_3;
+    } catch {
+      throw new CreateCredentialError('Credential request body must be valid JSON');
+    }
+
+    let accessToken: string;
+    let credentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
+    let dpopProof: string;
+    let proofs: { jwt: string }[];
+    try {
+      ({ accessToken, credentialRequest, dpopProof, proofs } = parseCredentialRequest({
+        config: options.config,
+        credentialRequest: parsedCredentialRequest,
+        headers: options.headers
+      }) as {
+        accessToken: string;
+        credentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
+        dpopProof: string;
+        proofs: { jwt: string }[];
+      });
+    } catch (error) {
+      if (error instanceof CreateCredentialError) {
+        throw error;
+      }
+      throw new CreateCredentialError('Invalid credential request payload');
+    }
 
     const headerDpopProof = decodeProtectedHeader(dpopProof);
     if (!headerDpopProof.jwk || 'd' in headerDpopProof.jwk) {
@@ -108,7 +131,10 @@ export class CredentialService {
       throw new CreateCredentialError('Access token is missing sub claim');
     }
 
-    const jwt = proofs[0].jwt;
+    const jwt = proofs[0]?.jwt;
+    if (typeof jwt !== 'string' || jwt.length === 0) {
+      throw new CreateCredentialError('Missing proof JWT in credential request');
+    }
 
     const { nonce } = decodeJwt(jwt);
     if (typeof nonce !== 'string') {
@@ -120,9 +146,9 @@ export class CredentialService {
       throw new CreateCredentialError('Expected nonce not found');
     }
 
-    await this.#nonceRepository.delete(nonce);
-
     const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
+
+    await this.#nonceRepository.delete(nonce);
 
     const holderPublicKey = JwkPublicKey.safeParse(proofResult.header.jwk);
     if (!holderPublicKey.success) {

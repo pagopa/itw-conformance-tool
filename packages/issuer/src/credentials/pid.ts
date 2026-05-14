@@ -100,8 +100,12 @@ export const createPidCredential = async (
 
   const vct = config.isVersion(ItWalletSpecsVersion.V1_3) ? 'urn:eudi:pid:it:1' : 'urn:eu.europa.ec.eudi:pid:1';
   const vctIntegrity = createSRIHash(vct);
-  const credentialSubject =
+  const credentialSubjectCandidate =
     config.isVersion(ItWalletSpecsVersion.V1_3) && 'sub' in claims ? claims.sub : holderPublicKey.kid;
+  if (typeof credentialSubjectCandidate !== 'string' || credentialSubjectCandidate.trim() === '') {
+    throw new Error('Unable to issue PID credential: missing subject identifier');
+  }
+  const credentialSubject = credentialSubjectCandidate;
 
   const credential = await sdjwt.issue(
     {

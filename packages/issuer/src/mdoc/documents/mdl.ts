@@ -26,15 +26,15 @@ export const getMdlDocument = (fakeUser: FakeUser): MdocDocumentDefinition => {
         document_number: fakeUser.documentNumber,
         driving_privileges: [
           {
-            expiry_date: expiryDate,
-            issue_date: now.toISOString().slice(0, 10),
+            expiry_date: new DateOnly(expiryDate),
+            issue_date: new DateOnly(now.toISOString().slice(0, 10)),
             vehicle_category_code: 'B'
           }
         ],
         expiry_date: new DateOnly(expiryDate),
         family_name: fakeUser.familyName,
         given_name: fakeUser.givenName,
-        issue_date: now,
+        issue_date: new DateOnly(now.toISOString().slice(0, 10)),
         issuing_authority: 'PagoPA S.p.A.',
         issuing_country: 'IT',
         portrait: hex.decode(portrait),

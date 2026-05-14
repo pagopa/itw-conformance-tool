@@ -1,1 +1,1 @@
-export const pidIdentification = 'PersonIdentificationData';
+export { pidIdentification } from './credential-configurations.js';

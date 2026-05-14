@@ -11,6 +11,30 @@ import type { DigestAlgorithm, MdocContext, Sign1 } from '@owf/mdoc';
 const digestAlgorithmToNode = (digestAlgorithm: DigestAlgorithm): string =>
   digestAlgorithm.replace('-', '').toLowerCase();
 
+const keyToNodeDigestAlgorithm = (key: CoseKey): string => {
+  switch (key.jwk.alg) {
+    case 'ES256':
+      return 'sha256';
+    case 'ES384':
+      return 'sha384';
+    case 'ES512':
+      return 'sha512';
+    default:
+      break;
+  }
+
+  switch (key.jwk.crv) {
+    case 'P-256':
+      return 'sha256';
+    case 'P-384':
+      return 'sha384';
+    case 'P-521':
+      return 'sha512';
+    default:
+      throw new Error('Unsupported mdoc key algorithm for ECDSA signing');
+  }
+};
+
 const toNodeJwk = (key: CoseKey): JsonWebKey => {
   const { alg, crv, d, k, keyOps, kid, kty, x, y } = key.jwk;
 
@@ -56,7 +80,7 @@ const verifySign1 = async (input: { key: CoseKey; sign1: Sign1 }): Promise<boole
   });
 
   return verify(
-    null,
+    keyToNodeDigestAlgorithm(input.key),
     input.sign1.toBeSigned,
     {
       dsaEncoding: 'ieee-p1363',
@@ -79,7 +103,7 @@ export const mdocContext: MdocContext = {
           key: toNodeJwk(key)
         });
 
-        return sign(null, toBeSigned, {
+        return sign(keyToNodeDigestAlgorithm(key), toBeSigned, {
           dsaEncoding: 'ieee-p1363',
           key: privateKey
         });
