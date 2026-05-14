@@ -24,6 +24,7 @@ interface NxConfig {
 interface RuntimeConfig {
   endpoint: string;
   credentialTypes: string[];
+  init: boolean;
   logLevel: LogLevel;
   target: NxTarget;
   tls: TlsConfig;
@@ -33,6 +34,7 @@ interface RuntimeConfig {
 interface NormalizedRuntimeConfig {
   endpoint?: RuntimeConfig['endpoint'];
   credentialTypes?: RuntimeConfig['credentialTypes'];
+  init?: RuntimeConfig['init'];
   logLevel?: RuntimeConfig['logLevel'];
   target?: RuntimeConfig['target'];
   tls?: Partial<TlsConfig>;
@@ -42,6 +44,7 @@ interface NormalizedRuntimeConfig {
 interface RawConfig {
   endpoint?: unknown;
   credentialTypes?: unknown;
+  init?: unknown;
   logLevel?: unknown;
   target?: unknown;
   tls?: {
@@ -58,6 +61,7 @@ interface CliFlags {
   configFile?: string;
   endpoint?: string;
   credentialTypes?: string[];
+  init?: boolean;
   logLevel?: LogLevel;
   target?: NxTarget;
   unsafeTls?: boolean;
@@ -73,6 +77,7 @@ const defaultConfigs: Record<Flow, RuntimeConfig> = {
   issuance: {
     endpoint: 'http://localhost:3000',
     credentialTypes: ['PID'],
+    init: false,
     logLevel: 'info',
     target: 'test',
     tls: {
@@ -86,6 +91,7 @@ const defaultConfigs: Record<Flow, RuntimeConfig> = {
   presentation: {
     endpoint: 'http://localhost:3000',
     credentialTypes: ['PID'],
+    init: false,
     logLevel: 'info',
     target: 'test',
     tls: {
@@ -117,6 +123,7 @@ function printHelp(): void {
   process.stdout.write('  -c, --config <file>                 Runtime config file (JSON)\n');
   process.stdout.write('  -e, --endpoint <url>                Endpoint override\n');
   process.stdout.write('  --credential-types <list>           Comma-separated credential types\n');
+  process.stdout.write('  --init                              Enable init mode\n');
   process.stdout.write('  --unsafe-tls                        Disable TLS certificate verification\n');
   process.stdout.write(
     '  --tls-ca-file <path>                Export CA file path as ITW_CT_TLS_CA_FILE for downstream consumers (not wired into Node TLS here)\n'
@@ -174,9 +181,62 @@ function splitCsv(input: string): string[] {
     .filter((item) => item.length > 0);
 }
 
+function tokenizeArgString(argsString: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | undefined;
+
+  for (let index = 0; index < argsString.length; index += 1) {
+    const char = argsString[index];
+
+    if (quote !== undefined) {
+      if (char === '\\' && index + 1 < argsString.length) {
+        current += argsString[index + 1];
+        index += 1;
+        continue;
+      }
+
+      if (char === quote) {
+        quote = undefined;
+        continue;
+      }
+
+      current += char;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (quote !== undefined) {
+    throw new Error('Invalid --args payload: unmatched quote');
+  }
+
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
 function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
+  const normalizedArgv = argv.length === 1 && /\s/.test(argv[0]) ? tokenizeArgString(argv[0]) : argv;
+
   const parsed = parseNodeArgs({
-    args: argv,
+    args: normalizedArgv,
     allowPositionals: true,
     strict: true,
     options: {
@@ -203,6 +263,9 @@ function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
       },
       'credential-types': {
         type: 'string'
+      },
+      init: {
+        type: 'boolean'
       },
       'log-level': {
         type: 'string'
@@ -244,6 +307,10 @@ function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
 
   if (parsed.values['credential-types'] !== undefined) {
     flags.credentialTypes = splitCsv(parsed.values['credential-types']);
+  }
+
+  if (parsed.values.init) {
+    flags.init = true;
   }
 
   if (parsed.values['log-level'] !== undefined) {
@@ -351,6 +418,10 @@ function normalizeRawConfig(raw: RawConfig): NormalizedRuntimeConfig {
       .filter((value) => value.length > 0);
   }
 
+  if (typeof raw.init === 'boolean') {
+    result.init = raw.init;
+  }
+
   const normalizedTls: Partial<TlsConfig> = {};
   if (raw.tls !== undefined && typeof raw.tls === 'object' && raw.tls !== null) {
     if (typeof raw.tls.unsafe === 'boolean') {
@@ -388,6 +459,7 @@ function mergeConfig(flow: Flow, fileConfig: NormalizedRuntimeConfig, flags: Cli
   const merged: RuntimeConfig = {
     endpoint: flags.endpoint ?? fileConfig.endpoint ?? defaults.endpoint,
     credentialTypes: flags.credentialTypes ?? fileConfig.credentialTypes ?? defaults.credentialTypes,
+    init: flags.init ?? fileConfig.init ?? defaults.init,
     logLevel: flags.logLevel ?? fileConfig.logLevel ?? defaults.logLevel,
     target: flags.target ?? fileConfig.target ?? defaults.target,
     tls: {
@@ -432,6 +504,7 @@ function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string)
     ITW_CT_FLOW: flow,
     ITW_CT_ENDPOINT: runtimeConfig.endpoint,
     ITW_CT_CREDENTIAL_TYPES: runtimeConfig.credentialTypes.join(','),
+    ITW_CT_INIT: runtimeConfig.init ? 'true' : 'false',
     ITW_CT_LOG_LEVEL: runtimeConfig.logLevel,
     ITW_CT_UNSAFE_TLS: runtimeConfig.tls.unsafe ? 'true' : 'false'
   };
@@ -563,6 +636,7 @@ async function main(): Promise<void> {
     target: runtimeConfig.target,
     endpoint: runtimeConfig.endpoint,
     credentialTypes: runtimeConfig.credentialTypes,
+    init: runtimeConfig.init,
     tls: runtimeConfig.tls,
     skipNxCache: runtimeConfig.nx.skipCache,
     configFile: flags.configFile

@@ -58,6 +58,8 @@ Root shortcuts:
   - Endpoint override
 - --credential-types <csv>
   - Comma-separated credential types, for example PID,MDL
+- --init
+  - Enable init mode (exported as ITW_CT_INIT for downstream consumers)
 - --unsafe-tls
   - Disable TLS certificate verification (sets NODE_TLS_REJECT_UNAUTHORIZED=0)
 - --tls-ca-file <path>
@@ -119,6 +121,7 @@ Supported fields:
 
 - endpoint: string
 - credentialTypes: string[]
+- init: boolean
 - logLevel: debug|info|warn|error
 - target: test|serve
 - tls.unsafe: boolean
@@ -187,6 +190,7 @@ Before delegating to Nx, the CLI exports:
 - ITW_CT_ENDPOINT
 - ITW_CT_CONFIG_FILE (if present)
 - ITW_CT_CREDENTIAL_TYPES
+- ITW_CT_INIT
 - ITW_CT_UNSAFE_TLS
 - ITW_CT_TLS_CA_FILE (if present)
 - ITW_CT_LOG_LEVEL
