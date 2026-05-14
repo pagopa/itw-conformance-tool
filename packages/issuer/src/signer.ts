@@ -22,9 +22,7 @@ export const signJwtCallback: SignCallback = async ({ jwk, toBeSigned }) => {
   const alg = (jwk as { alg?: string }).alg ?? 'ES256';
   const key = await importJWK(jwk as unknown as JWK, alg);
 
-  const jws = await new CompactSign(toBeSigned)
-    .setProtectedHeader({ alg })
-    .sign(key);
+  const jws = await new CompactSign(toBeSigned).setProtectedHeader({ alg }).sign(key);
 
   const parts = jws.split('.');
   if (parts.length !== 3) {

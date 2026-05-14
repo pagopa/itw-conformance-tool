@@ -1,7 +1,4 @@
-import {
-  zAuthorizationRequestV1_0,
-  zAuthorizationRequestV1_3,
-} from '@pagopa/io-wallet-oauth2';
+import { zAuthorizationRequestV1_0, zAuthorizationRequestV1_3 } from '@pagopa/io-wallet-oauth2';
 import { zOpenid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import { z } from 'zod';
@@ -12,7 +9,7 @@ const WithCustomClaims = z.object({
   code_expires_at: z.number().optional(),
   id: z.string(),
   oid4vpRequestObject: zOpenid4vpAuthorizationRequestPayload.optional(),
-  request_uri: z.string(),
+  request_uri: z.string()
 });
 
 export const ParRequestV1_0 = zAuthorizationRequestV1_0.extend(WithCustomClaims.shape);

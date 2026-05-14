@@ -9,18 +9,10 @@ import {
   type JwtSigner,
   type SignJwtCallback,
   type VerifyJwtCallback,
-  clientAuthenticationAnonymous,
+  clientAuthenticationAnonymous
 } from '@pagopa/io-wallet-oauth2';
 import { decodeBase64, encodeToUtf8String } from '@pagopa/io-wallet-utils';
-import {
-  FlattenedEncrypt,
-  type JWK,
-  SignJWT,
-  compactDecrypt,
-  decodeJwt,
-  importJWK,
-  jwtVerify,
-} from 'jose';
+import { FlattenedEncrypt, type JWK, SignJWT, compactDecrypt, decodeJwt, importJWK, jwtVerify } from 'jose';
 
 import { getCertificateChainPublicKey } from './utils/x509.js';
 
@@ -32,23 +24,16 @@ export const callbacks = {
   generateRandom: async (bytes: number) => new Uint8Array(crypto.randomBytes(bytes)),
 
   hash: async (data: Uint8Array, alg: string) =>
-    new Uint8Array(
-      crypto
-        .createHash(alg.replace('-', '').toLowerCase())
-        .update(data)
-        .digest(),
-    ),
+    new Uint8Array(crypto.createHash(alg.replace('-', '').toLowerCase()).update(data).digest()),
 
   verifyJwt: async (
     signer: Parameters<NonNullable<CallbackContext['verifyJwt']>>[0],
-    { compact, payload }: Parameters<NonNullable<CallbackContext['verifyJwt']>>[1],
+    { compact, payload }: Parameters<NonNullable<CallbackContext['verifyJwt']>>[1]
   ) => {
     let jwk: JWK;
 
     if (signer.method === 'did') {
-      jwk = JSON.parse(
-        encodeToUtf8String(decodeBase64(signer.didUrl.split('#')[0].replace('did:jwk:', ''))),
-      ) as JWK;
+      jwk = JSON.parse(encodeToUtf8String(decodeBase64(signer.didUrl.split('#')[0].replace('did:jwk:', '')))) as JWK;
     } else if (signer.method === 'jwk') {
       jwk = signer.publicJwk as JWK;
     } else if (signer.method === 'x5c') {
@@ -77,7 +62,7 @@ export const callbacks = {
     } catch {
       return { verified: false as const };
     }
-  },
+  }
 };
 
 export const getSignJwtCallback =
@@ -86,15 +71,13 @@ export const getSignJwtCallback =
     let jwk: Jwk;
 
     if (signer.method === 'did') {
-      jwk = JSON.parse(
-        encodeToUtf8String(decodeBase64(signer.didUrl.split('#')[0].replace('did:jwk:', ''))),
-      ) as Jwk;
+      jwk = JSON.parse(encodeToUtf8String(decodeBase64(signer.didUrl.split('#')[0].replace('did:jwk:', '')))) as Jwk;
     } else if (signer.method === 'jwk') {
       jwk = signer.publicJwk;
     } else if (signer.method === 'x5c') {
       jwk = {
         ...(await getCertificateChainPublicKey({ alg: signer.alg, certificateChain: signer.x5c })),
-        kid: signer.kid,
+        kid: signer.kid
       } as Jwk;
     } else if (signer.method === 'federation') {
       if (signer.trustChain && signer.trustChain.length > 0) {
@@ -129,7 +112,10 @@ const retrieveJwkFromEntityConf = (entityStatementJwt: string, signerKid: string
   const jwks: Jwk[] = [];
   if (decodedEntityConfig.metadata) {
     for (const entry of Object.values(decodedEntityConfig.metadata)) {
-      if ((entry as { jwks?: { keys?: Jwk[] } }).jwks && Array.isArray((entry as { jwks: { keys: Jwk[] } }).jwks.keys)) {
+      if (
+        (entry as { jwks?: { keys?: Jwk[] } }).jwks &&
+        Array.isArray((entry as { jwks: { keys: Jwk[] } }).jwks.keys)
+      ) {
         jwks.push(...(entry as { jwks: { keys: Jwk[] } }).jwks.keys);
       }
     }
@@ -142,9 +128,7 @@ const retrieveJwkFromEntityConf = (entityStatementJwt: string, signerKid: string
 
   return {
     ...federationJwk,
-    ...(federationJwk.x5c
-      ? { x5c: Array.isArray(federationJwk.x5c) ? federationJwk.x5c : [federationJwk.x5c] }
-      : {}),
+    ...(federationJwk.x5c ? { x5c: Array.isArray(federationJwk.x5c) ? federationJwk.x5c : [federationJwk.x5c] } : {})
   } as Jwk;
 };
 
@@ -169,7 +153,7 @@ export const getDecryptJweCallback =
       return {
         decrypted: true as const,
         decryptionJwk: privateKey,
-        payload: new TextDecoder().decode(decrypted.plaintext),
+        payload: new TextDecoder().decode(decrypted.plaintext)
       };
     } catch {
       return { decrypted: false as const };

@@ -31,8 +31,6 @@ describe('resolveSpecVersionFromHeaders', () => {
   it('throws SpecVersionError with descriptive message', () => {
     const headers = new Headers({ [SPEC_VERSION_HEADER]: 'unsupported' });
 
-    expect(() => resolveSpecVersionFromHeaders(headers)).toThrow(
-      /Unsupported X-Spec-Version header value/,
-    );
+    expect(() => resolveSpecVersionFromHeaders(headers)).toThrow(/Unsupported X-Spec-Version header value/);
   });
 });

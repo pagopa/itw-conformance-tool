@@ -27,7 +27,7 @@ describe('generateFakeUser', () => {
       familyName: expect.any(String),
       fiscalCode: expect.stringMatching(/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/),
       givenName: expect.any(String),
-      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/)
     });
   });
 });
@@ -37,7 +37,7 @@ describe('generateFiscalCode', () => {
     const code = generateFiscalCode({
       birthDate: '1990-01-15',
       familyName: 'Rossi',
-      givenName: 'Mario',
+      givenName: 'Mario'
     });
 
     expect(code).toHaveLength(16);
@@ -54,7 +54,7 @@ describe('generateFiscalCode', () => {
     const code = generateFiscalCode({
       birthDate: '1975-03-10',
       familyName: 'Conté',
-      givenName: 'André',
+      givenName: 'André'
     });
 
     expect(code).toHaveLength(16);

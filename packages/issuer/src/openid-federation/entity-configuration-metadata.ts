@@ -9,7 +9,7 @@ import type { ItWalletEntityConfigurationClaimsOptions } from '@pagopa/io-wallet
 export const getEntityConfigurationClaimsMetadata = (
   baseURL: string,
   jwksRepository: JwksRepository,
-  config: IoWalletSdkConfig,
+  config: IoWalletSdkConfig
 ): ItWalletEntityConfigurationClaimsOptions['metadata'] => {
   if (config.isVersion(ItWalletSpecsVersion.V1_3)) {
     return getEntityConfigurationClaimsMetadataV1_3(baseURL, jwksRepository);

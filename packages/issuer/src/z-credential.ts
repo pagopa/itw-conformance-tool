@@ -17,7 +17,7 @@ export const SupportedCredentialsId = z.union([
   z.literal('mso_mdoc_CompanyBadge'),
   z.literal('mso_mdoc_PersonIdentificationData'),
   z.literal('mso_mdoc_mDL'),
-  z.literal('org.iso.18013.5.1.mDL'),
+  z.literal('org.iso.18013.5.1.mDL')
 ]);
 export type SupportedCredentialsId = z.infer<typeof SupportedCredentialsId>;
 

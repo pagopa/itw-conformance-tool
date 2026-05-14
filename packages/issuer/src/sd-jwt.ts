@@ -7,7 +7,7 @@ import type { Signer, Verifier } from '@sd-jwt/types';
 
 export async function createSignerVerifier({
   privateKey,
-  publicKey,
+  publicKey
 }: {
   privateKey: JwkPrivateKey;
   publicKey: JwkPublicKey;

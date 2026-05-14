@@ -5,14 +5,11 @@ import { pidIdentification } from '../shared/credential-configurations.js';
 import { createCredentialIssuerMetadataV1_0 } from './credential-issuer-metadata.js';
 
 import type { JwksRepository } from '../../signer.js';
-import type {
-  ItWalletEntityConfigurationClaimsOptions,
-  ItWalletMetadataV1_0,
-} from '@pagopa/io-wallet-oid-federation';
+import type { ItWalletEntityConfigurationClaimsOptions, ItWalletMetadataV1_0 } from '@pagopa/io-wallet-oid-federation';
 
 export const getEntityConfigurationClaimsMetadataV1_0 = (
   baseURL: string,
-  jwksRepository: JwksRepository,
+  jwksRepository: JwksRepository
 ): ItWalletEntityConfigurationClaimsOptions['metadata'] => {
   const verifierPublicKeys = [jwksRepository.getSign().public, jwksRepository.getEncrypt().public];
 
@@ -23,13 +20,13 @@ export const getEntityConfigurationClaimsMetadataV1_0 = (
       homepage_uri: 'https://io.italia.it',
       logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
       organization_name: 'PagoPa S.p.A.',
-      policy_uri: 'https://io.italia.it/privacy-policy',
+      policy_uri: 'https://io.italia.it/privacy-policy'
     },
     oauth_authorization_server: {
       acr_values_supported: [
         'https://trust-registry.eid-wallet.example.it/loa/low',
         'https://trust-registry.eid-wallet.example.it/loa/substantial',
-        'https://trust-registry.eid-wallet.example.it/loa/high',
+        'https://trust-registry.eid-wallet.example.it/loa/high'
       ],
       authorization_endpoint: `${baseURL}/authorize`,
       authorization_signing_alg_values_supported: ['ES256', 'ES384', 'ES512'],
@@ -45,11 +42,11 @@ export const getEntityConfigurationClaimsMetadataV1_0 = (
       scopes_supported: [pidIdentification],
       token_endpoint: `${baseURL}/token`,
       token_endpoint_auth_methods_supported: ['attest_jwt_client_auth'],
-      token_endpoint_auth_signing_alg_values_supported: ['ES256', 'ES384', 'ES512'],
+      token_endpoint_auth_signing_alg_values_supported: ['ES256', 'ES384', 'ES512']
     },
     openid_credential_issuer: {
       client_registration_types_supported: ['automatic'],
-      ...createCredentialIssuerMetadataV1_0(baseURL, jwksRepository),
+      ...createCredentialIssuerMetadataV1_0(baseURL, jwksRepository)
     },
     openid_credential_verifier: {
       application_type: 'web',
@@ -62,16 +59,16 @@ export const getEntityConfigurationClaimsMetadataV1_0 = (
       contacts: ['info@pagopa.it'],
       default_acr_values: [
         'https://trust-registry.eid-wallet.example.it/loa/substantial',
-        'https://trust-registry.eid-wallet.example.it/loa/high',
+        'https://trust-registry.eid-wallet.example.it/loa/high'
       ],
       jwks: { keys: verifierPublicKeys },
       request_object_signing_alg_values_supported: ['ES256', 'ES384', 'ES512'],
       request_uris: [`${baseURL}/authorize`],
       response_uris: [`${baseURL}/presentation-response`],
       vp_formats: {
-        'dc+sd-jwt': { 'sd-jwt_alg_values': ['ES256', 'ES384', 'ES512'] },
-      },
-    },
+        'dc+sd-jwt': { 'sd-jwt_alg_values': ['ES256', 'ES384', 'ES512'] }
+      }
+    }
   } satisfies ItWalletMetadataV1_0;
 
   const parsedMetadata = itWalletMetadataV1_0.safeParse(metadata);

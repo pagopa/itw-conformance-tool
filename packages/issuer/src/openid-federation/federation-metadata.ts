@@ -29,18 +29,14 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
         keys: [
           {
             ...options.jwksRepository.getSign().public,
-            x5c: [options.jwksRepository.iacaX509()],
-          },
-        ],
+            x5c: [options.jwksRepository.iacaX509()]
+          }
+        ]
       },
-      metadata: getEntityConfigurationClaimsMetadata(
-        options.baseURL,
-        options.jwksRepository,
-        options.config,
-      ),
-      sub: options.baseURL,
+      metadata: getEntityConfigurationClaimsMetadata(options.baseURL, options.jwksRepository, options.config),
+      sub: options.baseURL
     },
     header: { alg: 'ES256', kid: jwk.public.kid, typ: 'entity-statement+jwt' },
-    signJwtCallback: signCallback,
+    signJwtCallback: signCallback
   });
 };

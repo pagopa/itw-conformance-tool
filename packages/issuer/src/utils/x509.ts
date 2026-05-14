@@ -13,14 +13,11 @@ export const getCertificateData = async (input: { certificate: ArrayBuffer }) =>
     pem: certificate.toString(),
     serialNumber: certificate.serialNumber,
     subjectName: certificate.subjectName.toString(),
-    thumbprint: thumbprintHex,
+    thumbprint: thumbprintHex
   };
 };
 
-export const getCertificateChainPublicKey = async (input: {
-  alg: string;
-  certificateChain: readonly unknown[];
-}) => {
+export const getCertificateChainPublicKey = async (input: { alg: string; certificateChain: readonly unknown[] }) => {
   const [leafCertificate] = input.certificateChain;
   if (leafCertificate === undefined) {
     throw new Error('x5c certificate not found');
@@ -30,7 +27,7 @@ export const getCertificateChainPublicKey = async (input: {
   }
 
   const key = await importX509(convertBase64DerToPem(leafCertificate), input.alg, {
-    extractable: true,
+    extractable: true
   });
 
   return await exportJWK(key);
@@ -60,11 +57,11 @@ export const validateCertificateChain = async (input: {
   }
 
   const parsedTrustedCertificates = trustedCertificates.map(
-    (trustedCertificate) => new x509.X509Certificate(trustedCertificate),
+    (trustedCertificate) => new x509.X509Certificate(trustedCertificate)
   );
 
   const trustedCertificateIndex = parsedChain.findIndex((cert) =>
-    parsedTrustedCertificates.some((tCert) => cert.equal(tCert)),
+    parsedTrustedCertificates.some((tCert) => cert.equal(tCert))
   );
 
   if (trustedCertificateIndex === -1) {

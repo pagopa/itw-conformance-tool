@@ -8,12 +8,12 @@ const validECPublicKey = {
   kty: 'EC' as const,
   use: 'sig' as const,
   x: 'someX',
-  y: 'someY',
+  y: 'someY'
 };
 
 const validECPrivateKey = {
   ...validECPublicKey,
-  d: 'someD',
+  d: 'someD'
 };
 
 describe('ECKey', () => {
