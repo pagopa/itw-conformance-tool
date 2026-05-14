@@ -87,13 +87,13 @@ export class PARService {
     return JSON.parse(entry.requestObject) as ParRequest;
   }
 
-  async setCode(requestUri: string, code: string, codeExpiresAt: number): Promise<void> {
+  async setCode(requestUri: string, code: string, codeExpiresAtSeconds: number): Promise<void> {
     const entry = await this.#parRepository.get(requestUri);
     if (!entry) {
       throw new PostPushedAuthorizationError(`PAR entry not found for request_uri: ${requestUri}`);
     }
     const parRequest = JSON.parse(entry.requestObject) as ParRequest;
-    const updated = { ...parRequest, code, code_expires_at: codeExpiresAt };
+    const updated = { ...parRequest, code, code_expires_at: codeExpiresAtSeconds };
     await this.#parRepository.update(requestUri, { requestObject: JSON.stringify(updated) });
   }
 }

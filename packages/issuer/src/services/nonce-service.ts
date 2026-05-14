@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 
 import { NONCE_TTL_MS } from '../models/nonce.js';
 

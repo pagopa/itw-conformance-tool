@@ -1,6 +1,7 @@
 import { type StatusListJWTHeaderParameters, createHeaderAndPayload } from '@sd-jwt/jwt-status-list';
 import { type JWTPayload, SignJWT, importJWK } from 'jose';
 
+import { STATUS_LIST_TTL_SECONDS } from '../models/status-list.js';
 import { STATUS_LIST_BITS, STATUS_LIST_DEFAULT, STATUS_LIST_URI, createStatusList } from '../utils/status-list.js';
 
 import type { JwksRepository } from '../signer.js';
@@ -18,12 +19,12 @@ export class StatusListService {
 
     const now = Math.floor(Date.now() / 1000);
     const payload: JWTPayload = {
-      exp: now + 3600,
+      exp: now + STATUS_LIST_TTL_SECONDS,
       iat: now,
       iss: baseURL,
       status_list: { bits: STATUS_LIST_BITS, lst },
       sub: STATUS_LIST_URI(baseURL),
-      ttl: 3000
+      ttl: STATUS_LIST_TTL_SECONDS
     };
 
     const { private: privateSig } = this.jwksRepository.getSign();
