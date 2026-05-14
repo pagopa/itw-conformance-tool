@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
 import { loggerOptions as sharedLoggerOptions } from '@itw-conformance-tool/logger';
+import ini from 'ini';
 import pino, { type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -346,63 +347,22 @@ function buildStartNxArgs(services: Service[], runtimeConfig: RuntimeConfig): st
   return args;
 }
 
-function stripIniComment(line: string): string {
-  const semicolonIndex = line.indexOf(';');
-  const hashIndex = line.indexOf('#');
-
-  if (semicolonIndex === -1 && hashIndex === -1) {
-    return line.trim();
-  }
-
-  if (semicolonIndex === -1) {
-    return line.slice(0, hashIndex).trim();
-  }
-
-  if (hashIndex === -1) {
-    return line.slice(0, semicolonIndex).trim();
-  }
-
-  return line.slice(0, Math.min(semicolonIndex, hashIndex)).trim();
+interface IniGlobalSection {
+  data_dir?: string;
 }
 
-function parseIni(rawConfig: string): Record<string, Record<string, string>> {
-  const parsedConfig: Record<string, Record<string, string>> = {};
-  let currentSection = '';
+interface IniIssuerSection {
+  port?: string;
+}
 
-  for (const rawLine of rawConfig.split(/\r?\n/u)) {
-    const line = stripIniComment(rawLine);
-    if (line.length === 0) {
-      continue;
-    }
+interface IniRpSection {
+  port?: string;
+}
 
-    if (line.startsWith('[') && line.endsWith(']')) {
-      currentSection = line.slice(1, -1).trim().toLowerCase();
-      if (currentSection.length > 0 && parsedConfig[currentSection] === undefined) {
-        parsedConfig[currentSection] = {};
-      }
-      continue;
-    }
-
-    if (currentSection.length === 0) {
-      continue;
-    }
-
-    const separatorIndex = line.indexOf('=');
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex).trim().toLowerCase();
-    const value = line.slice(separatorIndex + 1).trim();
-    if (key.length === 0) {
-      continue;
-    }
-
-    parsedConfig[currentSection] ??= {};
-    parsedConfig[currentSection][key] = value;
-  }
-
-  return parsedConfig;
+interface ParsedIniConfig {
+  global?: IniGlobalSection;
+  'itw-credential-issuer'?: IniIssuerSection;
+  rp?: IniRpSection;
 }
 
 function parsePortValue(rawValue: string | undefined, fallback: number, fieldName: string): number {
@@ -430,7 +390,7 @@ function resolveServicePorts(configPath: string): StartServicePorts {
     };
   }
 
-  const parsedConfig = parseIni(readFileSync(configPath, { encoding: 'utf8' }));
+  const parsedConfig = ini.parse(readFileSync(configPath, { encoding: 'utf8' })) as ParsedIniConfig;
 
   return {
     issuer: parsePortValue(parsedConfig['itw-credential-issuer']?.port, 3000, '[itw-credential-issuer].port'),
