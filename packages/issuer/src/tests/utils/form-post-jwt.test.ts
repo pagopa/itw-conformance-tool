@@ -15,7 +15,7 @@ describe('getFormPostFromRedirectUriAndJwt', () => {
 
   it('escapes HTML attribute values for redirectUri and jwt', () => {
     const redirectUri = 'https://example.com/cb?state="x"&q=<tag>&s=\'a\'';
-    const jwt = 'jwt"<bad>&\'token\'';
+    const jwt = "jwt\"<bad>&'token'";
 
     const html = getFormPostFromRedirectUriAndJwt(redirectUri, jwt);
 
