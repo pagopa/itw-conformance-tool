@@ -1,143 +1,76 @@
+#!/usr/bin/env node
+
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { createInterface } from 'node:readline';
 import { parseArgs as parseNodeArgs } from 'node:util';
 
 import { loggerOptions as sharedLoggerOptions } from '@itw-conformance-tool/logger';
 import pino, { type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-type Flow = 'issuance' | 'presentation';
-type NxTarget = 'test' | 'serve';
-
-interface TlsConfig {
-  unsafe: boolean;
-  caFile?: string;
-}
-
-interface NxConfig {
-  skipCache: boolean;
-  extraArgs: string[];
-}
+type Command = 'init' | 'start';
+type LogLevel = 'debug' | 'error' | 'info' | 'warn';
+type Service = 'issuer' | 'rp';
 
 interface RuntimeConfig {
-  endpoint: string;
-  credentialTypes: string[];
+  dataDir: string;
+  issuerPort: number;
   logLevel: LogLevel;
-  target: NxTarget;
-  tls: TlsConfig;
-  nx: NxConfig;
-}
-
-interface NormalizedRuntimeConfig {
-  endpoint?: RuntimeConfig['endpoint'];
-  credentialTypes?: RuntimeConfig['credentialTypes'];
-  logLevel?: RuntimeConfig['logLevel'];
-  target?: RuntimeConfig['target'];
-  tls?: Partial<TlsConfig>;
-  nx?: Partial<NxConfig>;
-}
-
-interface RawConfig {
-  endpoint?: unknown;
-  credentialTypes?: unknown;
-  logLevel?: unknown;
-  target?: unknown;
-  tls?: {
-    unsafe?: unknown;
-    caFile?: unknown;
-  };
-  nx?: {
-    skipCache?: unknown;
-    extraArgs?: unknown;
-  };
+  rpPort: number;
 }
 
 interface CliFlags {
+  all: boolean;
   configFile?: string;
-  endpoint?: string;
-  credentialTypes?: string[];
-  logLevel?: LogLevel;
-  target?: NxTarget;
-  unsafeTls?: boolean;
-  tlsCaFile?: string;
-  skipNxCache?: boolean;
   dryRun: boolean;
+  force: boolean;
   help: boolean;
+  issuer: boolean;
+  logLevel?: LogLevel;
+  rp: boolean;
+  skipNxCache: boolean;
+  tlsCaFile?: string;
+  unsafeTls: boolean;
 }
-
-const cliName = 'pnpm conformance';
-
-const defaultConfigs: Record<Flow, RuntimeConfig> = {
-  issuance: {
-    endpoint: 'http://localhost:3000',
-    credentialTypes: ['PID'],
-    logLevel: 'info',
-    target: 'test',
-    tls: {
-      unsafe: false
-    },
-    nx: {
-      skipCache: false,
-      extraArgs: []
-    }
-  },
-  presentation: {
-    endpoint: 'http://localhost:3000',
-    credentialTypes: ['PID'],
-    logLevel: 'info',
-    target: 'test',
-    tls: {
-      unsafe: false
-    },
-    nx: {
-      skipCache: false,
-      extraArgs: []
-    }
-  }
-};
-
-const flowToProject: Record<Flow, string> = {
-  issuance: 'itw-credential-issuer',
-  presentation: 'itw-relying-party'
-};
 
 type CliLogger = PinoLogger;
 
+const cliName = 'itw-conformance-tool';
+const defaultDataDir = resolve(homedir(), '.itw-conformance-tool');
+const defaultRuntimeConfig: RuntimeConfig = {
+  dataDir: defaultDataDir,
+  issuerPort: 3000,
+  logLevel: 'info',
+  rpPort: 8080
+};
+
 function printHelp(): void {
-  process.stdout.write(`\n${cliName} - Headless CLI for ITW Conformance flows\n\n`);
+  process.stdout.write(`\n${cliName} - Local CLI for ITW Conformance Tool\n\n`);
   process.stdout.write('Usage:\n');
   process.stdout.write(`  ${cliName} <command> [options]\n\n`);
   process.stdout.write('Commands:\n');
-  process.stdout.write('  issuance       Run issuance flow against itw-credential-issuer Nx targets\n');
-  process.stdout.write('  presentation   Run presentation flow against itw-relying-party Nx targets\n');
+  process.stdout.write('  init           Initialize local data directory and config template\n');
+  process.stdout.write('  start          Start issuer and/or relying party via Nx\n');
   process.stdout.write('  help           Show this help\n\n');
   process.stdout.write('Options:\n');
-  process.stdout.write('  -c, --config <file>                 Runtime config file (JSON)\n');
-  process.stdout.write('  -e, --endpoint <url>                Endpoint override\n');
-  process.stdout.write('  --credential-types <list>           Comma-separated credential types\n');
-  process.stdout.write('  --unsafe-tls                        Disable TLS certificate verification\n');
-  process.stdout.write(
-    '  --tls-ca-file <path>                Export CA file path as ITW_CT_TLS_CA_FILE for downstream consumers (not wired into Node TLS here)\n'
-  );
+  process.stdout.write('  -c, --config <path>                 Config path (default: ./config.ini)\n');
+  process.stdout.write('  --all                               Start issuer and relying party (default)\n');
+  process.stdout.write('  --issuer                            Start only itw-credential-issuer\n');
+  process.stdout.write('  --rp                                Start only itw-relying-party\n');
+  process.stdout.write('  --force                             Overwrite generated files during init\n');
+  process.stdout.write('  --unsafe-tls                        Disable TLS verification for delegated process\n');
+  process.stdout.write('  --tls-ca-file <path>                Export CA path as ITW_CT_TLS_CA_FILE\n');
   process.stdout.write('  --log-level <debug|info|warn|error> Log level for CLI logs\n');
-  process.stdout.write('  --target <test|serve>               Nx target to execute (default: test)\n');
   process.stdout.write('  --skip-nx-cache                     Pass --skip-nx-cache to Nx\n');
-  process.stdout.write('  --dry-run                           Print computed command and stop\n');
+  process.stdout.write('  --dry-run                           Print action without executing\n');
   process.stdout.write('  -h, --help                          Show help\n\n');
-  process.stdout.write('Configuration priority:\n');
-  process.stdout.write('  defaults -> custom config file -> CLI flags\n\n');
-  process.stdout.write('Examples:\n');
-  process.stdout.write(`  ${cliName} issuance --target test --endpoint https://issuer.example.com --log-level debug\n`);
-  process.stdout.write(`  ${cliName} presentation -c ./conformance.runtime.json --credential-types PID,MDL\n\n`);
 }
 
 function createCliLogger(level: LogLevel): CliLogger {
   const loggerOptions: LoggerOptions = {
     ...sharedLoggerOptions,
-    level,
-    transport: undefined
+    level
   };
 
   return pino(loggerOptions).child({
@@ -167,52 +100,80 @@ function emitLog(logger: CliLogger, level: LogLevel, event: string, details: Rec
   }
 }
 
-function splitCsv(input: string): string[] {
-  return input
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+function tokenizeArgString(argsString: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | undefined;
+
+  for (let index = 0; index < argsString.length; index += 1) {
+    const char = argsString[index];
+
+    if (quote !== undefined) {
+      if (char === '\\' && index + 1 < argsString.length) {
+        current += argsString[index + 1];
+        index += 1;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+        continue;
+      }
+      current += char;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (quote !== undefined) {
+    throw new Error('Invalid --args payload: unmatched quote');
+  }
+
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
+function parseLogLevel(value: string): LogLevel {
+  if (value !== 'debug' && value !== 'info' && value !== 'warn' && value !== 'error') {
+    throw new Error(`Invalid log level: ${value}`);
+  }
+  return value;
 }
 
 function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
+  const normalizedArgv = argv.length === 1 && /\s/.test(argv[0]) ? tokenizeArgString(argv[0]) : argv;
   const parsed = parseNodeArgs({
-    args: argv,
+    args: normalizedArgv,
     allowPositionals: true,
     strict: true,
     options: {
-      help: {
-        type: 'boolean',
-        short: 'h'
-      },
-      'dry-run': {
-        type: 'boolean'
-      },
-      'unsafe-tls': {
-        type: 'boolean'
-      },
-      'skip-nx-cache': {
-        type: 'boolean'
-      },
-      config: {
-        type: 'string',
-        short: 'c'
-      },
-      endpoint: {
-        type: 'string',
-        short: 'e'
-      },
-      'credential-types': {
-        type: 'string'
-      },
-      'log-level': {
-        type: 'string'
-      },
-      target: {
-        type: 'string'
-      },
-      'tls-ca-file': {
-        type: 'string'
-      }
+      all: { type: 'boolean' },
+      config: { type: 'string', short: 'c' },
+      'dry-run': { type: 'boolean' },
+      force: { type: 'boolean' },
+      help: { type: 'boolean', short: 'h' },
+      issuer: { type: 'boolean' },
+      'log-level': { type: 'string' },
+      rp: { type: 'boolean' },
+      'skip-nx-cache': { type: 'boolean' },
+      'tls-ca-file': { type: 'string' },
+      'unsafe-tls': { type: 'boolean' }
     }
   });
 
@@ -221,253 +182,270 @@ function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
     throw new Error(`Unexpected positional arguments: ${unexpectedPositionals.join(', ')}`);
   }
 
-  const flags: CliFlags = {
-    dryRun: parsed.values['dry-run'] ?? false,
-    help: parsed.values.help ?? false
+  return {
+    command,
+    flags: {
+      all: parsed.values.all ?? false,
+      configFile: parsed.values.config,
+      dryRun: parsed.values['dry-run'] ?? false,
+      force: parsed.values.force ?? false,
+      help: parsed.values.help ?? false,
+      issuer: parsed.values.issuer ?? false,
+      logLevel: parsed.values['log-level'] !== undefined ? parseLogLevel(parsed.values['log-level']) : undefined,
+      rp: parsed.values.rp ?? false,
+      skipNxCache: parsed.values['skip-nx-cache'] ?? false,
+      tlsCaFile: parsed.values['tls-ca-file'],
+      unsafeTls: parsed.values['unsafe-tls'] ?? false
+    }
   };
-
-  if (parsed.values['unsafe-tls']) {
-    flags.unsafeTls = true;
-  }
-
-  if (parsed.values['skip-nx-cache']) {
-    flags.skipNxCache = true;
-  }
-
-  if (parsed.values.config !== undefined) {
-    flags.configFile = parsed.values.config;
-  }
-
-  if (parsed.values.endpoint !== undefined) {
-    flags.endpoint = parsed.values.endpoint;
-  }
-
-  if (parsed.values['credential-types'] !== undefined) {
-    flags.credentialTypes = splitCsv(parsed.values['credential-types']);
-  }
-
-  if (parsed.values['log-level'] !== undefined) {
-    const logLevel = parsed.values['log-level'];
-    if (!isLogLevel(logLevel)) {
-      throw new Error(`Invalid log level: ${logLevel}`);
-    }
-    flags.logLevel = logLevel;
-  }
-
-  if (parsed.values.target !== undefined) {
-    if (!isNxTarget(parsed.values.target)) {
-      throw new Error(`Invalid target: ${parsed.values.target}`);
-    }
-    flags.target = parsed.values.target;
-  }
-
-  if (parsed.values['tls-ca-file'] !== undefined) {
-    flags.tlsCaFile = parsed.values['tls-ca-file'];
-  }
-
-  return { command, flags };
 }
 
-function isLogLevel(value: string): value is LogLevel {
-  return value === 'debug' || value === 'info' || value === 'warn' || value === 'error';
-}
-
-function isNxTarget(value: string): value is NxTarget {
-  return value === 'test' || value === 'serve';
-}
-
-function isFlow(value: string): value is Flow {
-  return value === 'issuance' || value === 'presentation';
+function isCommand(value: string): value is Command {
+  return value === 'init' || value === 'start';
 }
 
 function resolveWorkspaceRoot(from: string): string {
   const workspaceRoot = resolve(from);
   const hasNx = existsSync(resolve(workspaceRoot, 'nx.json'));
-  const hasPackage = existsSync(resolve(workspaceRoot, 'package.json'));
+  const hasPackageJson = existsSync(resolve(workspaceRoot, 'package.json'));
 
-  if (!hasNx || !hasPackage) {
+  if (!hasNx || !hasPackageJson) {
     throw new Error('This command must be run from the itw-conformance-tool workspace root');
   }
 
   return workspaceRoot;
 }
 
-function loadRawConfig(filePath?: string): RawConfig {
-  if (filePath === undefined) {
-    return {};
+function stripIniComment(line: string): string {
+  const semicolonIndex = line.indexOf(';');
+  const hashIndex = line.indexOf('#');
+
+  if (semicolonIndex === -1 && hashIndex === -1) {
+    return line.trim();
   }
-
-  const resolvedPath = resolve(process.cwd(), filePath);
-  let raw: string;
-
-  try {
-    raw = readFileSync(resolvedPath, { encoding: 'utf8' });
-  } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
-    const codeSuffix = typeof code === 'string' ? ` (${code})` : '';
-    throw new Error(`Failed to read config file passed via --config: ${resolvedPath}${codeSuffix}`, { cause: error });
+  if (semicolonIndex === -1) {
+    return line.slice(0, hashIndex).trim();
   }
-
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch (error) {
-    throw new Error(`Failed to parse config file JSON: ${resolvedPath}`, { cause: error });
+  if (hashIndex === -1) {
+    return line.slice(0, semicolonIndex).trim();
   }
-
-  if (parsed === null || typeof parsed !== 'object') {
-    throw new Error(`Invalid config file format: ${resolvedPath}`);
-  }
-
-  return parsed as RawConfig;
+  return line.slice(0, Math.min(semicolonIndex, hashIndex)).trim();
 }
 
-function normalizeRawConfig(raw: RawConfig): NormalizedRuntimeConfig {
-  const result: NormalizedRuntimeConfig = {};
+function parseIni(iniRaw: string): Record<string, Record<string, string>> {
+  const parsedConfig: Record<string, Record<string, string>> = {};
+  let currentSection = '';
 
-  if (typeof raw.endpoint === 'string') {
-    result.endpoint = raw.endpoint;
-  }
-
-  if (typeof raw.logLevel === 'string') {
-    if (!isLogLevel(raw.logLevel)) {
-      throw new Error(`Invalid config logLevel: ${String(raw.logLevel)}`);
+  for (const rawLine of iniRaw.split(/\r?\n/u)) {
+    const line = stripIniComment(rawLine);
+    if (line.length === 0) {
+      continue;
     }
-    result.logLevel = raw.logLevel;
-  }
 
-  if (typeof raw.target === 'string') {
-    if (!isNxTarget(raw.target)) {
-      throw new Error(`Invalid config target: ${String(raw.target)}`);
+    if (line.startsWith('[') && line.endsWith(']')) {
+      currentSection = line.slice(1, -1).trim().toLowerCase();
+      if (currentSection.length > 0 && parsedConfig[currentSection] === undefined) {
+        parsedConfig[currentSection] = {};
+      }
+      continue;
     }
-    result.target = raw.target;
-  }
 
-  if (Array.isArray(raw.credentialTypes)) {
-    result.credentialTypes = raw.credentialTypes
-      .filter((value): value is string => typeof value === 'string')
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
-  }
-
-  const normalizedTls: Partial<TlsConfig> = {};
-  if (raw.tls !== undefined && typeof raw.tls === 'object' && raw.tls !== null) {
-    if (typeof raw.tls.unsafe === 'boolean') {
-      normalizedTls.unsafe = raw.tls.unsafe;
+    if (currentSection.length === 0) {
+      continue;
     }
-    if (typeof raw.tls.caFile === 'string') {
-      normalizedTls.caFile = raw.tls.caFile;
+
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex === -1) {
+      continue;
     }
-  }
 
-  if (Object.keys(normalizedTls).length > 0) {
-    result.tls = normalizedTls;
-  }
-
-  const normalizedNx: Partial<NxConfig> = {};
-  if (raw.nx !== undefined && typeof raw.nx === 'object' && raw.nx !== null) {
-    if (typeof raw.nx.skipCache === 'boolean') {
-      normalizedNx.skipCache = raw.nx.skipCache;
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+    if (key.length === 0) {
+      continue;
     }
-    if (Array.isArray(raw.nx.extraArgs)) {
-      normalizedNx.extraArgs = raw.nx.extraArgs.filter((value): value is string => typeof value === 'string');
-    }
+    parsedConfig[currentSection] ??= {};
+    parsedConfig[currentSection][key] = value;
   }
 
-  if (Object.keys(normalizedNx).length > 0) {
-    result.nx = normalizedNx;
-  }
-
-  return result;
+  return parsedConfig;
 }
 
-function mergeConfig(flow: Flow, fileConfig: NormalizedRuntimeConfig, flags: CliFlags): RuntimeConfig {
-  const defaults = defaultConfigs[flow];
+function expandHome(pathValue: string): string {
+  if (pathValue === '~') {
+    return homedir();
+  }
+  if (pathValue.startsWith('~/')) {
+    return resolve(homedir(), pathValue.slice(2));
+  }
+  return resolve(pathValue);
+}
 
-  const merged: RuntimeConfig = {
-    endpoint: flags.endpoint ?? fileConfig.endpoint ?? defaults.endpoint,
-    credentialTypes: flags.credentialTypes ?? fileConfig.credentialTypes ?? defaults.credentialTypes,
-    logLevel: flags.logLevel ?? fileConfig.logLevel ?? defaults.logLevel,
-    target: flags.target ?? fileConfig.target ?? defaults.target,
-    tls: {
-      unsafe: flags.unsafeTls ?? fileConfig.tls?.unsafe ?? defaults.tls.unsafe,
-      caFile: flags.tlsCaFile ?? fileConfig.tls?.caFile ?? defaults.tls.caFile
+function parsePortValue(rawValue: string | undefined, fallback: number, fieldName: string): number {
+  if (rawValue === undefined || rawValue.length === 0) {
+    return fallback;
+  }
+
+  const parsedPort = Number(rawValue);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65_535) {
+    throw new Error(`Invalid ${fieldName} value: ${rawValue}`);
+  }
+
+  return parsedPort;
+}
+
+function resolveConfigPath(configFile?: string): string {
+  return resolve(process.cwd(), configFile ?? 'config.ini');
+}
+
+function loadRuntimeConfig(configPath: string, flags: CliFlags): { config: RuntimeConfig; exists: boolean } {
+  if (!existsSync(configPath)) {
+    return {
+      config: {
+        ...defaultRuntimeConfig,
+        logLevel: flags.logLevel ?? defaultRuntimeConfig.logLevel
+      },
+      exists: false
+    };
+  }
+
+  const parsedConfig = parseIni(readFileSync(configPath, { encoding: 'utf8' }));
+  const globalSection = parsedConfig.global;
+  const issuerSection = parsedConfig['itw-credential-issuer'];
+  const rpSection = parsedConfig.rp;
+
+  const dataDirRaw = globalSection?.data_dir;
+  const dataDir =
+    dataDirRaw !== undefined && dataDirRaw.length > 0 ? expandHome(dataDirRaw) : defaultRuntimeConfig.dataDir;
+  const configuredLogLevel = globalSection?.log_level;
+  const logLevel =
+    flags.logLevel ??
+    (configuredLogLevel !== undefined && configuredLogLevel.length > 0
+      ? parseLogLevel(configuredLogLevel)
+      : defaultRuntimeConfig.logLevel);
+
+  return {
+    config: {
+      dataDir,
+      issuerPort: parsePortValue(issuerSection?.port, defaultRuntimeConfig.issuerPort, '[itw-credential-issuer].port'),
+      logLevel,
+      rpPort: parsePortValue(rpSection?.port, defaultRuntimeConfig.rpPort, '[rp].port')
     },
-    nx: {
-      skipCache: flags.skipNxCache ?? fileConfig.nx?.skipCache ?? defaults.nx.skipCache,
-      extraArgs: fileConfig.nx?.extraArgs ?? defaults.nx.extraArgs
-    }
+    exists: true
   };
-
-  if (merged.credentialTypes.length === 0) {
-    throw new Error('credentialTypes cannot be empty');
-  }
-
-  return merged;
 }
 
-function buildNxArgs(flow: Flow, runtimeConfig: RuntimeConfig): string[] {
-  const project = flowToProject[flow];
-  const args = ['nx', 'run', `${project}:${runtimeConfig.target}`];
-
-  if (runtimeConfig.nx.skipCache) {
-    args.push('--skip-nx-cache');
+function getStartServices(flags: CliFlags): Service[] {
+  const selectedServices: Service[] = [];
+  if (flags.issuer) {
+    selectedServices.push('issuer');
+  }
+  if (flags.rp) {
+    selectedServices.push('rp');
   }
 
-  // TODO(migration): map runtime options (endpoint, credential types, TLS settings) to real target inputs
-  // once issuer/relying-party apps consume CLI-provided configuration directly (Nx args or app env contract).
-  if (runtimeConfig.nx.extraArgs.length > 0) {
-    args.push(...runtimeConfig.nx.extraArgs);
+  if (flags.all || selectedServices.length === 0) {
+    return ['issuer', 'rp'];
+  }
+
+  return selectedServices;
+}
+
+function buildStartNxArgs(services: Service[], flags: CliFlags): string[] {
+  const args =
+    services.length === 2
+      ? ['nx', 'run-many', '-t', 'serve', '-p', 'itw-credential-issuer,itw-relying-party']
+      : ['nx', 'run', services[0] === 'issuer' ? 'itw-credential-issuer:serve' : 'itw-relying-party:serve'];
+
+  if (flags.skipNxCache) {
+    args.push('--skip-nx-cache');
   }
 
   return args;
 }
 
-function buildEnv(flow: Flow, runtimeConfig: RuntimeConfig, configFile?: string): NodeJS.ProcessEnv {
+function getConfigIniTemplate(): string {
+  return `[global]
+; Local directory for keys, certificates, and generated data
+; Default: ~/.itw-conformance-tool
+data_dir = ~/.itw-conformance-tool
+; Logging level: debug | info | warn | error
+; Default: info
+log_level = info
+
+[itw-credential-issuer]
+; HTTP port for the issuer service
+; Default: 3000
+port = 3000
+; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
+; Default: pid,mdl,badge,eaa
+credential_types = pid,mdl,badge,eaa
+
+[rp]
+; HTTP port for the itw-relying-party service
+; Default: 8080
+port = 8080
+`;
+}
+
+function runInit(configPath: string, runtimeConfig: RuntimeConfig, flags: CliFlags, logger: CliLogger): void {
+  const issuerDir = resolve(runtimeConfig.dataDir, 'issuer');
+  const rpDir = resolve(runtimeConfig.dataDir, 'rp');
+
+  mkdirSync(runtimeConfig.dataDir, { recursive: true });
+  mkdirSync(issuerDir, { recursive: true });
+  mkdirSync(rpDir, { recursive: true });
+
+  let configWritten = false;
+  if (flags.force) {
+    writeFileSync(configPath, getConfigIniTemplate(), { encoding: 'utf8', flag: 'w' });
+    configWritten = true;
+  } else {
+    try {
+      const fileDescriptor = openSync(configPath, 'wx');
+      try {
+        writeFileSync(fileDescriptor, getConfigIniTemplate(), { encoding: 'utf8' });
+        configWritten = true;
+      } finally {
+        closeSync(fileDescriptor);
+      }
+    } catch (error) {
+      const errnoError = error as NodeJS.ErrnoException;
+      if (errnoError.code !== 'EEXIST') {
+        throw error;
+      }
+    }
+  }
+
+  emitLog(logger, 'info', 'cli.init_summary', {
+    configPath,
+    configWritten,
+    dataDir: runtimeConfig.dataDir,
+    force: flags.force,
+    issuerDir,
+    rpDir
+  });
+}
+
+function buildEnv(runtimeConfig: RuntimeConfig, configPath: string, flags: CliFlags): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    // TODO(migration): these ITW_CT_* variables are currently exported for downstream consumers only.
-    // Wire delegated targets to read them (or replace with target-specific Nx args) during migration.
-    ITW_CT_FLOW: flow,
-    ITW_CT_ENDPOINT: runtimeConfig.endpoint,
-    ITW_CT_CREDENTIAL_TYPES: runtimeConfig.credentialTypes.join(','),
+    ITW_CT_CONFIG_FILE: configPath,
+    ITW_CT_DATA_DIR: runtimeConfig.dataDir,
+    ITW_CT_ISSUER_PORT: String(runtimeConfig.issuerPort),
     ITW_CT_LOG_LEVEL: runtimeConfig.logLevel,
-    ITW_CT_UNSAFE_TLS: runtimeConfig.tls.unsafe ? 'true' : 'false'
+    ITW_CT_RP_PORT: String(runtimeConfig.rpPort),
+    ITW_CT_UNSAFE_TLS: flags.unsafeTls ? 'true' : 'false'
   };
 
-  if (configFile !== undefined) {
-    env.ITW_CT_CONFIG_FILE = resolve(process.cwd(), configFile);
+  if (flags.tlsCaFile !== undefined) {
+    env.ITW_CT_TLS_CA_FILE = flags.tlsCaFile;
   }
-
-  if (runtimeConfig.tls.caFile !== undefined) {
-    env.ITW_CT_TLS_CA_FILE = runtimeConfig.tls.caFile;
-  }
-
-  if (runtimeConfig.tls.unsafe) {
+  if (flags.unsafeTls) {
     env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
 
   return env;
-}
-
-function pipeChildOutput(stream: NodeJS.ReadableStream, logger: CliLogger, level: LogLevel): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const interfaceHandle = createInterface({ input: stream, crlfDelay: Infinity });
-
-    interfaceHandle.on('line', (line) => {
-      if (line.trim().length === 0) {
-        return;
-      }
-
-      emitLog(logger, level, 'cli.nx_output', { line });
-    });
-
-    interfaceHandle.once('error', reject);
-    interfaceHandle.once('close', () => {
-      resolve();
-    });
-  });
 }
 
 function resolveLocalNxCli(): string {
@@ -485,45 +463,20 @@ function resolveLocalNxCli(): string {
   throw new Error('Unable to locate the local Nx CLI in node_modules');
 }
 
-async function runCommand(
-  flow: Flow,
-  runtimeConfig: RuntimeConfig,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  logger: CliLogger
-): Promise<number> {
+async function runCommand(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
   const nxCliPath = resolveLocalNxCli();
   const nxArgs = args[0] === 'nx' ? args.slice(1) : args;
   const child = spawn(process.execPath, [nxCliPath, ...nxArgs], {
-    stdio: 'pipe',
-    env
+    env,
+    stdio: 'inherit'
   });
 
-  if (child.stdout === null || child.stderr === null) {
-    throw new Error('Failed to capture Nx output streams');
-  }
-
-  const project = flowToProject[flow];
-  const commandLogger = logger.child({
-    flow,
-    project,
-    target: runtimeConfig.target
-  });
-
-  const exitCodePromise = new Promise<number>((resolveExitCode, reject) => {
+  return new Promise<number>((resolveExitCode, reject) => {
     child.once('error', reject);
     child.once('close', (code) => {
       resolveExitCode(code ?? 1);
     });
   });
-
-  const outputPromise = Promise.all([
-    pipeChildOutput(child.stdout, commandLogger.child({ source: 'stdout' }), 'info'),
-    pipeChildOutput(child.stderr, commandLogger.child({ source: 'stderr' }), 'error')
-  ]);
-
-  const [exitCode] = await Promise.all([exitCodePromise, outputPromise]);
-  return exitCode;
 }
 
 async function main(): Promise<void> {
@@ -539,72 +492,78 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (!isFlow(command)) {
+  if (!isCommand(command)) {
     throw new Error(`Unknown command: ${command}`);
   }
 
   resolveWorkspaceRoot(process.cwd());
 
-  const rawConfig = loadRawConfig(flags.configFile);
-  const fileConfig = normalizeRawConfig(rawConfig);
-  const runtimeConfig = mergeConfig(command, fileConfig, flags);
-  const logger = createCliLogger(runtimeConfig.logLevel);
-  const commandLogger = logger.child({
-    flow: command,
-    project: flowToProject[command],
-    target: runtimeConfig.target
-  });
+  const configPath = resolveConfigPath(flags.configFile);
+  const { config, exists } = loadRuntimeConfig(configPath, flags);
+  const logger = createCliLogger(config.logLevel);
 
-  const env = buildEnv(command, runtimeConfig, flags.configFile);
-  const nxArgs = buildNxArgs(command, runtimeConfig);
+  if (command === 'init') {
+    if (flags.dryRun) {
+      emitLog(logger, 'info', 'cli.dry_run_summary', {
+        command,
+        configPath,
+        dataDir: config.dataDir,
+        force: flags.force
+      });
+      process.exit(0);
+    }
 
-  emitLog(commandLogger, 'debug', 'cli.runtime_config_resolved', {
-    flow: command,
-    target: runtimeConfig.target,
-    endpoint: runtimeConfig.endpoint,
-    credentialTypes: runtimeConfig.credentialTypes,
-    tls: runtimeConfig.tls,
-    skipNxCache: runtimeConfig.nx.skipCache,
-    configFile: flags.configFile
-  });
+    runInit(configPath, config, flags, logger);
+    process.exit(0);
+  }
 
-  emitLog(commandLogger, 'debug', 'cli.nx_command', {
-    command: ['pnpm', ...nxArgs].join(' ')
-  });
-
-  if (runtimeConfig.tls.unsafe) {
-    emitLog(commandLogger, 'warn', 'cli.unsafe_tls_enabled', {
-      message: 'TLS certificate verification is disabled for the delegated process'
+  if (!exists) {
+    emitLog(logger, 'warn', 'cli.config_not_found_using_defaults', {
+      command,
+      configPath,
+      defaultsApplied: {
+        dataDir: config.dataDir,
+        issuerPort: config.issuerPort,
+        rpPort: config.rpPort
+      },
+      message: `Configuration file not found: ${configPath}. Starting with defaults. Run '${cliName} init' to generate it.`
     });
   }
+
+  const services = getStartServices(flags);
+  const nxArgs = buildStartNxArgs(services, flags);
+  const env = buildEnv(config, configPath, flags);
+
+  emitLog(logger, 'debug', 'cli.runtime_config_resolved', {
+    command,
+    configPath,
+    runtimeConfig: config,
+    services
+  });
+
+  emitLog(logger, 'debug', 'cli.nx_command', {
+    command: [process.execPath, resolveLocalNxCli(), ...(nxArgs[0] === 'nx' ? nxArgs.slice(1) : nxArgs)].join(' ')
+  });
 
   if (flags.dryRun) {
-    const dryRunLogger = createCliLogger('info').child({
-      flow: command,
-      project: flowToProject[command],
-      target: runtimeConfig.target
-    });
-    emitLog(dryRunLogger, 'info', 'cli.dry_run_summary', {
-      runtimeConfig,
-      command: ['pnpm', ...nxArgs].join(' ')
+    emitLog(logger, 'info', 'cli.dry_run_summary', {
+      command,
+      configPath,
+      nxCommand: ['pnpm', ...nxArgs].join(' '),
+      runtimeConfig: config,
+      services
     });
     process.exit(0);
   }
 
-  const exitCode = await runCommand(command, runtimeConfig, nxArgs, env, logger);
+  const exitCode = await runCommand(nxArgs, env);
 
   if (exitCode === 0) {
-    emitLog(commandLogger, 'info', 'cli.flow_completed', {
-      flow: command,
-      exitCode
-    });
+    emitLog(logger, 'info', 'cli.flow_completed', { command, exitCode, services });
     process.exit(0);
   }
 
-  emitLog(commandLogger, 'error', 'cli.flow_failed', {
-    flow: command,
-    exitCode
-  });
+  emitLog(logger, 'error', 'cli.flow_failed', { command, exitCode, services });
   process.exit(exitCode);
 }
 
@@ -613,10 +572,10 @@ main().catch((error: unknown) => {
 
   if (error instanceof Error) {
     emitLog(logger, 'error', 'cli.unhandled_error', {
-      message: error.message,
+      cause: error.cause,
       error,
-      stack: error.stack,
-      cause: error.cause
+      message: error.message,
+      stack: error.stack
     });
   } else {
     emitLog(logger, 'error', 'cli.unhandled_error', {

@@ -11,6 +11,7 @@ node_modules
 # dotenv environment variables file
 .env
 !.env.example
+config.ini
 
 # IDEs and editors
 /.idea

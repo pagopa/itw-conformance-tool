@@ -12,7 +12,6 @@
   "dependencies": {
     "@fastify/autoload": "catalog:fastify",
     "@fastify/cors": "catalog:fastify",
-    "@fastify/env": "catalog:fastify",
     "@fastify/helmet": "catalog:fastify",
     "@fastify/sensible": "catalog:fastify",
     "@fastify/swagger": "catalog:fastify",
@@ -22,6 +21,7 @@
     "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
     "@pagopa/io-wallet-oid4vp": "catalog:pagopa",
     "@pagopa/io-wallet-utils": "catalog:pagopa",
+    "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "close-with-grace": "^2.5.0",
     "fastify": "catalog:fastify",

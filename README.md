@@ -69,9 +69,11 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 | ------------------------------- | --------------------------------------------------------------------- |
 | `pnpm build`                    | Build all projects with a `build` target                              |
 | `pnpm start`                    | Serve all runnable apps with a `serve` target                         |
-| `pnpm conformance`              | Run the headless conformance CLI (`issuance`/`presentation`)          |
-| `pnpm conformance:issuance`     | Shortcut for issuance flow via CLI                                    |
-| `pnpm conformance:presentation` | Shortcut for presentation flow via CLI                                |
+| `pnpm conformance`              | Run the local CLI entrypoint                                           |
+| `pnpm conformance:init`         | Initialize local config/data directories                               |
+| `pnpm conformance:start`        | Start issuer + relying party (`start --all`)                           |
+| `pnpm conformance:start:issuer` | Start only `itw-credential-issuer`                                     |
+| `pnpm conformance:start:rp`     | Start only `itw-relying-party`                                         |
 | `pnpm issuer`                   | Serve `itw-credential-issuer`                                         |
 | `pnpm rp`                       | Serve `itw-relying-party`                                             |
 | `pnpm test`                     | Run Vitest for projects with a `test` target                          |
