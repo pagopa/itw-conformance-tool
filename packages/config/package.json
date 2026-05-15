@@ -1,11 +1,12 @@
 {
-  "name": "@itw-conformance-tool/config",
-  "version": "0.0.1",
-  "private": true,
-  "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "ini": "^7.0.0",
+    "zod": "catalog:",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/ini": "^4.1.1"
+  },
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -14,12 +15,11 @@
       "default": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "ini": "^7.0.0",
-    "zod": "catalog:",
-    "tslib": "^2.3.0"
-  },
-  "devDependencies": {
-    "@types/ini": "^4.1.1"
-  }
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "name": "@itw-conformance-tool/config",
+  "private": true,
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "version": "0.0.2"
 }

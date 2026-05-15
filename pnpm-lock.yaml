@@ -152,6 +152,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@itw-conformance-tool/config':
+        specifier: 'workspace:'
+        version: link:../../packages/config
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
