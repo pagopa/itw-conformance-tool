@@ -4,6 +4,7 @@
 dist
 tmp
 out-tsc
+*.tsbuildinfo
 
 # dependencies
 node_modules
@@ -11,6 +12,7 @@ node_modules
 # dotenv environment variables file
 .env
 !.env.example
+config.ini
 
 # IDEs and editors
 /.idea
@@ -48,3 +50,4 @@ Thumbs.db
 .claude/settings.local.json
 
 vitest.config.*.timestamp*
+config.ini

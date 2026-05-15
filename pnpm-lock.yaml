@@ -92,9 +92,16 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      ini:
+        specifier: ^5.0.0
+        version: 5.0.0
       pino:
         specifier: catalog:node
         version: 10.3.1
+    devDependencies:
+      '@types/ini':
+        specifier: ^4.1.1
+        version: 4.1.1
 
   apps/itw-credential-issuer:
     dependencies:
@@ -194,9 +201,6 @@ importers:
       '@fastify/cors':
         specifier: catalog:fastify
         version: 11.2.0
-      '@fastify/env':
-        specifier: catalog:fastify
-        version: 6.0.0
       '@fastify/helmet':
         specifier: catalog:fastify
         version: 13.0.2
@@ -209,6 +213,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: catalog:fastify
         version: 5.2.6
+      '@itw-conformance-tool/database':
+        specifier: 'workspace:'
+        version: link:../../packages/database
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
@@ -258,10 +265,19 @@ importers:
       '@faker-js/faker':
         specifier: ^10.4.0
         version: 10.4.0
+      '@itw-conformance-tool/database':
+        specifier: workspace:*
+        version: link:../database
+      '@owf/mdoc':
+        specifier: ^0.6.0
+        version: 0.6.0
       '@pagopa/io-wallet-oauth2':
         specifier: 1.4.0
         version: 1.4.0
       '@pagopa/io-wallet-oid-federation':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@pagopa/io-wallet-oid4vci':
         specifier: 1.4.0
         version: 1.4.0
       '@pagopa/io-wallet-oid4vp':
@@ -277,6 +293,9 @@ importers:
         specifier: ^0.19.0
         version: 0.19.0
       '@sd-jwt/jwt-status-list':
+        specifier: ^0.19.0
+        version: 0.19.0
+      '@sd-jwt/sd-jwt-vc':
         specifier: ^0.19.0
         version: 0.19.0
       '@sd-jwt/types':
@@ -1939,6 +1958,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  '@types/ini@4.1.1':
+    resolution: {integrity: sha512-MIyNUZipBTbyUNnhvuXJTY7B6qNI78meck9Jbv3wk0OgNwRyOOVEKDutAkOs1snB/tx0FafyR6/SN4Ps0hZPeg==}
+
   '@types/istanbul-lib-coverage@2.0.6':
     resolution: {integrity: sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w==}
 
@@ -2984,6 +3006,10 @@ packages:
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+
+  ini@5.0.0:
+    resolution: {integrity: sha512-+N0ngpO3e7cRUWOJAS7qw0IZIVc6XPrW4MlFBdD066F2L4k1L6ker3hLqSq7iXxU5tgS4WGkIUElWn5vogAEnw==}
+    engines: {node: ^18.17.0 || >=20.5.0}
 
   ip-regex@4.3.0:
     resolution: {integrity: sha512-B9ZWJxHHOHUhUjCPrMpLD4xEq35bUTClHM1S6CBU5ixQnkZmwipwgc96vAd7AAGM9TGHvJR+Uss+/Ak6UphK+Q==}
@@ -6242,6 +6268,8 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/ini@4.1.1': {}
+
   '@types/istanbul-lib-coverage@2.0.6': {}
 
   '@types/istanbul-lib-report@3.0.3':
@@ -7324,6 +7352,8 @@ snapshots:
       wrappy: 1.0.2
 
   inherits@2.0.4: {}
+
+  ini@5.0.0: {}
 
   ip-regex@4.3.0: {}
 
