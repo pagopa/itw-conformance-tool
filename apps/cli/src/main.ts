@@ -147,7 +147,7 @@ function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
       config: {
         type: 'string',
         short: 'c'
-      },
+      }
     }
   });
 
@@ -329,9 +329,10 @@ async function main(): Promise<void> {
 
   resolveWorkspaceRoot(process.cwd());
 
-  const configFilePath = (('configFile' in flags && typeof flags.configFile === 'string') && !flags.force) ? 
-    path.resolve(flags.configFile) : 
-    path.resolve(process.cwd(), 'config.ini');
+  const configFilePath =
+    'configFile' in flags && typeof flags.configFile === 'string' && !flags.force
+      ? path.resolve(flags.configFile)
+      : path.resolve(process.cwd(), 'config.ini');
 
   // If init with --force, recreate config file before parsing
   if (command === 'init' && flags.force) {
