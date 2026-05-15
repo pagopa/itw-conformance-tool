@@ -28,6 +28,12 @@
   "references": [
     {
       "path": "../../packages/logger/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/issuer/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/database/tsconfig.lib.json"
     }
   ]
 }
