@@ -1,3 +1,4 @@
+import { constants } from 'node:fs';
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -23,9 +24,11 @@ const REQUIRED_FILES = ['signing-keys.jwks.json', 'iaca-cert.pem', 'iaca-key.pem
 
 async function ensureReadable(filePath: string): Promise<void> {
   try {
-    await access(filePath);
-  } catch {
-    throw new Error(`Missing required key material file: ${filePath}`);
+    await access(filePath, constants.R_OK);
+  } catch (error) {
+    const errno = (error as NodeJS.ErrnoException).code;
+    const suffix = errno ? ` (${errno})` : '';
+    throw new Error(`Required key material file is missing or not readable: ${filePath}${suffix}`);
   }
 }
 
@@ -46,7 +49,7 @@ function parseJwks(content: string, filePath: string): SigningJwks {
 
 export default fp(
   async function keysPlugin(app) {
-    const keysDir = app.config.KEYS_DIR ?? path.join(import.meta.dirname, '..', 'assets');
+    const keysDir = app.config.KEYS_DIR ?? app.config.DATA_DIR;
     const filePaths = REQUIRED_FILES.map((fileName) => path.join(keysDir, fileName));
 
     await Promise.all(filePaths.map((filePath) => ensureReadable(filePath)));

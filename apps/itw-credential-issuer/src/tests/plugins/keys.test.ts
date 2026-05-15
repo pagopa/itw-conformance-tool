@@ -51,6 +51,6 @@ describe('keys plugin', () => {
     const app = Fastify();
     await app.register(configPlugin);
 
-    await expect(app.register(keysPlugin)).rejects.toThrow('Missing required key material file:');
+    await expect(app.register(keysPlugin)).rejects.toThrow('Required key material file is missing or not readable:');
   });
 });
