@@ -21,14 +21,18 @@ describe('keys plugin', () => {
     cleanupEnv();
   });
 
-  it('loads jwks and pem files into fastify instance', async () => {
-    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-'));
-    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'test-kid' }] }));
+  function writePemFiles(keysDir: string): void {
     writeFileSync(
       path.join(keysDir, 'iaca-cert.pem'),
       '-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----\n'
     );
     writeFileSync(path.join(keysDir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n');
+  }
+
+  it('loads jwks and pem files into fastify instance', async () => {
+    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-'));
+    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'test-kid' }] }));
+    writePemFiles(keysDir);
     process.env.KEYS_DIR = keysDir;
 
     const app = Fastify();
@@ -52,5 +56,29 @@ describe('keys plugin', () => {
     await app.register(configPlugin);
 
     await expect(app.register(keysPlugin)).rejects.toThrow('Required key material file is missing or not readable:');
+  });
+
+  it('fails with a clear error when signing-keys.jwks.json is not valid JSON', async () => {
+    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-invalid-json-'));
+    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), '{ not-valid-json');
+    writePemFiles(keysDir);
+    process.env.KEYS_DIR = keysDir;
+
+    const app = Fastify();
+    await app.register(configPlugin);
+
+    await expect(app.register(keysPlugin)).rejects.toThrow('Invalid JSON in');
+  });
+
+  it('fails when signing-keys.jwks.json does not contain a keys array', async () => {
+    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-invalid-jwks-'));
+    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ foo: 'bar' }));
+    writePemFiles(keysDir);
+    process.env.KEYS_DIR = keysDir;
+
+    const app = Fastify();
+    await app.register(configPlugin);
+
+    await expect(app.register(keysPlugin)).rejects.toThrow('expected an object with a keys array');
   });
 });

@@ -64,4 +64,11 @@ describe('config plugin', () => {
 
     await expect(app.register(configPlugin)).rejects.toThrow('Invalid ITW_CT_ISSUER_PORT value: 0');
   });
+
+  it('throws when PORT is out of valid TCP range', async () => {
+    process.env.PORT = '70000';
+    const app = Fastify();
+
+    await expect(app.register(configPlugin)).rejects.toThrow();
+  });
 });

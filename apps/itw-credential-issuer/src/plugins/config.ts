@@ -18,7 +18,7 @@ declare module 'fastify' {
 
 const schema = z.object({
   HOST: z.string().default('localhost'),
-  PORT: z.coerce.number().int().positive().default(3000),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATA_DIR: z.string().default(path.join(process.cwd(), '.data', 'itw-credential-issuer')),
   DB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   KEYS_DIR: z.string().optional()
