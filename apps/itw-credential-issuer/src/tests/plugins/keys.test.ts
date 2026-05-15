@@ -81,4 +81,16 @@ describe('keys plugin', () => {
 
     await expect(app.register(keysPlugin)).rejects.toThrow('expected an object with a keys array');
   });
+
+  it('fails when signing-keys.jwks.json has an empty keys array', async () => {
+    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-empty-jwks-'));
+    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [] }));
+    writePemFiles(keysDir);
+    process.env.KEYS_DIR = keysDir;
+
+    const app = Fastify();
+    await app.register(configPlugin);
+
+    await expect(app.register(keysPlugin)).rejects.toThrow('keys array must not be empty');
+  });
 });

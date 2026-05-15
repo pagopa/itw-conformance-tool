@@ -30,7 +30,7 @@ export default fp(
     app.decorate('sessionRepository', new SqliteSessionRepository(dbClient.db));
 
     app.addHook('onClose', async () => {
-      dbClient.close();
+      await dbClient.close();
     });
   },
   { name: 'db', dependencies: ['config'] }

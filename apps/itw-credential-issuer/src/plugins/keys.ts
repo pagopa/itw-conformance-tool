@@ -44,6 +44,10 @@ function parseJwks(content: string, filePath: string): SigningJwks {
     throw new Error(`Invalid JWKS in ${filePath}: expected an object with a keys array`);
   }
 
+  if (parsed.keys.length === 0) {
+    throw new Error(`Invalid JWKS in ${filePath}: keys array must not be empty`);
+  }
+
   return parsed as SigningJwks;
 }
 
