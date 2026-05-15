@@ -54,6 +54,26 @@ describe('SqliteNonceRepository', () => {
     await expect(repo.delete('ghost')).resolves.not.toThrow();
   });
 
+  it('consume returns true and removes a valid nonce', async () => {
+    const future = Date.now() + 60_000;
+    await repo.insert('to-consume', future);
+
+    await expect(repo.consume('to-consume')).resolves.toBe(true);
+    await expect(repo.get('to-consume')).resolves.toBeUndefined();
+  });
+
+  it('consume returns false for expired nonce and removes it', async () => {
+    const past = Date.now() - 2000;
+    await repo.insert('expired-consume', past);
+
+    await expect(repo.consume('expired-consume')).resolves.toBe(false);
+    await expect(repo.get('expired-consume')).resolves.toBeUndefined();
+  });
+
+  it('consume returns false for unknown nonce', async () => {
+    await expect(repo.consume('missing-consume')).resolves.toBe(false);
+  });
+
   it('insert twice with same value replaces the row', async () => {
     const future = Date.now() + 60_000;
     await repo.insert('dup', future);

@@ -4,6 +4,7 @@
 dist
 tmp
 out-tsc
+*.tsbuildinfo
 
 # dependencies
 node_modules
@@ -49,3 +50,4 @@ Thumbs.db
 .claude/settings.local.json
 
 vitest.config.*.timestamp*
+config.ini
