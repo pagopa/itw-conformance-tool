@@ -155,9 +155,16 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      ini:
+        specifier: ^5.0.0
+        version: 5.0.0
       pino:
         specifier: catalog:node
         version: 10.3.1
+    devDependencies:
+      '@types/ini':
+        specifier: ^4.1.1
+        version: 4.1.1
 
   apps/itw-credential-issuer:
     dependencies:
@@ -3110,6 +3117,10 @@ packages:
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+
+  ini@5.0.0:
+    resolution: {integrity: sha512-+N0ngpO3e7cRUWOJAS7qw0IZIVc6XPrW4MlFBdD066F2L4k1L6ker3hLqSq7iXxU5tgS4WGkIUElWn5vogAEnw==}
+    engines: {node: ^18.17.0 || >=20.5.0}
 
   ini@7.0.0:
     resolution: {integrity: sha512-ifK0CgjALofS5bkrcTy4RaQ9Vx2Knf/eLeIO+NaswQEpH1UblrtTSCIvN71qQDMq0PeQ/SSPojvEJp9vvvfr+w==}
@@ -7397,6 +7408,8 @@ snapshots:
       wrappy: 1.0.2
 
   inherits@2.0.4: {}
+
+  ini@5.0.0: {}
 
   ini@7.0.0: {}
 
