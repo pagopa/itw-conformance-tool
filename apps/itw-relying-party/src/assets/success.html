@@ -392,10 +392,17 @@
 
               const row = document.createElement('div');
               row.classList.add('claim-row');
-              row.innerHTML = `
-                <span class="claim-key">${formattedKey}</span>
-                <span class="claim-value">${value}</span>
-              `;
+
+              const keySpan = document.createElement('span');
+              keySpan.classList.add('claim-key');
+              keySpan.textContent = formattedKey;
+
+              const valueSpan = document.createElement('span');
+              valueSpan.classList.add('claim-value');
+              valueSpan.textContent = String(value);
+
+              row.appendChild(keySpan);
+              row.appendChild(valueSpan);
               claims.appendChild(row);
             });
 
