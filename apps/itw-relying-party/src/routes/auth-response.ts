@@ -1,7 +1,6 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
-import { compactDecrypt, importPKCS8 } from 'jose';
-import jwt from 'jsonwebtoken';
+import { compactDecrypt, importJWK, importPKCS8, jwtVerify, type JWK } from 'jose';
 import { z } from 'zod';
 
 import type { PresentationValues } from '@itw-conformance-tool/rp';
@@ -56,31 +55,57 @@ function decodeDisclosureValues(vpToken: Record<string, string>): PresentationVa
   return values;
 }
 
-function extractLocalNonces(vpToken: Record<string, string>): string[] {
-  const localNonces: string[] = [];
+async function verifyAndExtractKbJwtClaims(
+  kbJwt: string,
+  sdJwt: string,
+  expectedAudience?: string
+): Promise<{ nonce: string; sd_hash: string }> {
+  const header = JSON.parse(
+    Buffer.from(kbJwt.split('.')[0], 'base64').toString('utf8')
+  ) as { jwk?: JWK };
 
-  for (const sdJwt of Object.values(vpToken)) {
-    const parts = sdJwt.split('~');
-    const kbJwt = parts[parts.length - 1];
-    const decodedKbJwt = jwt.decode(kbJwt);
-    if (decodedKbJwt && typeof decodedKbJwt !== 'string' && typeof decodedKbJwt.nonce === 'string') {
-      localNonces.push(decodedKbJwt.nonce);
+  if (!header.jwk) {
+    throw new Error('KB-JWT header missing required "jwk" claim');
+  }
+
+  const holderPublicKey = await importJWK(header.jwk);
+
+  const payload = await jwtVerify(kbJwt, holderPublicKey, { clockTolerance: 300 });
+
+  const claims = payload.payload as Record<string, unknown>;
+
+  if (typeof claims.nonce !== 'string') {
+    throw new Error('KB-JWT missing required "nonce" claim');
+  }
+
+  if (typeof claims.sd_hash !== 'string') {
+    throw new Error('KB-JWT missing required "sd_hash" claim');
+  }
+
+  if (expectedAudience && claims.aud) {
+    if (typeof claims.aud === 'string' && claims.aud !== expectedAudience) {
+      throw new Error(
+        `KB-JWT audience mismatch: expected "${expectedAudience}", got "${claims.aud}"`
+      );
+    } else if (Array.isArray(claims.aud) && !claims.aud.includes(expectedAudience)) {
+      throw new Error(`KB-JWT audience does not include "${expectedAudience}"`);
     }
   }
 
-  return localNonces;
-}
+  // Verify sd_hash matches the SD-JWT disclosure digest
+  const disclosures = sdJwt.split('~').slice(1, -1).join('~');
+  const expectedSdHash = Buffer.from(
+    createHash('sha256').update(disclosures).digest()
+  ).toString('base64url');
 
-function assertNonceConsistency(localNonces: string[]): string | undefined {
-  if (localNonces.length === 0) {
-    return undefined;
+  if (claims.sd_hash !== expectedSdHash) {
+    throw new Error('KB-JWT sd_hash does not match SD-JWT disclosures');
   }
-  const firstNonce = localNonces[0];
-  const allEqual = localNonces.every((nonce) => nonce === firstNonce);
-  if (!allEqual) {
-    throw new Error('Nonce mismatch across credentials');
-  }
-  return firstNonce;
+
+  return {
+    nonce: claims.nonce,
+    sd_hash: claims.sd_hash
+  };
 }
 
 async function decryptAuthorizationResponse(
@@ -122,13 +147,37 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
         );
         state = parsedState;
 
-        const localNonces = extractLocalNonces(vpToken);
-        const localNonce = assertNonceConsistency(localNonces);
-        if (localNonce === undefined) {
-          throw new Error('The authorization response is missing the nonce provided in the request object');
+        // Verify KB-JWT signatures and extract nonces for each credential
+        const verifiedNonces: string[] = [];
+        for (const [credentialName, sdJwt] of Object.entries(vpToken)) {
+          const parts = sdJwt.split('~');
+          const kbJwt = parts[parts.length - 1];
+
+          try {
+            const { nonce } = await verifyAndExtractKbJwtClaims(
+              kbJwt,
+              sdJwt,
+              app.rp.clientId
+            );
+            verifiedNonces.push(nonce);
+          } catch (error) {
+            throw new Error(
+              `KB-JWT verification failed for credential "${credentialName}": ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
         }
 
-        const consumed = await app.rp.nonceRepository.consume(localNonce);
+        // Ensure all nonces are consistent
+        if (verifiedNonces.length === 0) {
+          throw new Error('No key-binding nonce found in presented credentials');
+        }
+        const firstNonce = verifiedNonces[0];
+        if (!verifiedNonces.every((nonce) => nonce === firstNonce)) {
+          throw new Error('Nonce mismatch across credentials');
+        }
+
+        // Consume the verified nonce
+        const consumed = await app.rp.nonceRepository.consume(firstNonce);
         if (!consumed) {
           throw new Error('The nonce does not match with the one provided in the request object');
         }
