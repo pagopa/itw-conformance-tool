@@ -53,7 +53,7 @@ export class DatabaseClient {
     this.db.exec("DELETE FROM par_entries WHERE expires_at < unixepoch('now') * 1000");
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (!this.isOpen) return;
     this.isOpen = false;
     if (this.cleanupTimer !== undefined) {
