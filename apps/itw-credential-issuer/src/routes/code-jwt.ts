@@ -5,16 +5,11 @@ import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from
 import type { FastifyPluginAsync } from 'fastify';
 
 const codeJwtRoute: FastifyPluginAsync = async (app) => {
+  const rateLimit = app.rateLimit({ max: 30, timeWindow: '1 minute' });
   app.route({
     url: '/code/jwt',
     method: 'GET',
-    config: {
-      rateLimit: {
-        max: 30,
-        timeWindow: '1 minute'
-      }
-    },
-    preHandler: app.rateLimit({ max: 30, timeWindow: '1 minute' }),
+    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {

@@ -6,16 +6,11 @@ import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';
 
 const credentialRoute: FastifyPluginAsync = async (app) => {
+  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/credential',
     method: 'POST',
-    config: {
-      rateLimit: {
-        max: 100,
-        timeWindow: '15 minutes'
-      }
-    },
-    preHandler: app.rateLimit({ max: 100, timeWindow: '15 minutes' }),
+    onRequest: [rateLimit],
     schema: {
       tags: ['Credential']
     },

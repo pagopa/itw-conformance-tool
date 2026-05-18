@@ -5,16 +5,11 @@ import { makeJwksRepository, makeOauthCallbacks } from '../plugins/issuer-runtim
 import type { FastifyPluginAsync } from 'fastify';
 
 const authorizeRoute: FastifyPluginAsync = async (app) => {
+  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/authorize',
     method: 'GET',
-    config: {
-      rateLimit: {
-        max: 100,
-        timeWindow: '15 minutes'
-      }
-    },
-    preHandler: app.rateLimit({ max: 100, timeWindow: '15 minutes' }),
+    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {
