@@ -27,6 +27,10 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ message: 'Session not found' });
       }
 
+      if (session.state === 'expired') {
+        return reply.code(404).send({ message: 'Session not found' });
+      }
+
       await app.rp.sessionService.update(state, 'checking');
 
       return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(session.jwt);
