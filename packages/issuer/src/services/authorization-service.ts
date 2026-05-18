@@ -55,12 +55,22 @@ export class AuthorizationService {
     }
 
     if (!Array.isArray(parRequest.authorization_details) || parRequest.authorization_details.length === 0) {
-      throw new AuthorizationRequestError('missing authorization_details', 400, parRequest.redirect_uri, parRequest.state);
+      throw new AuthorizationRequestError(
+        'missing authorization_details',
+        400,
+        parRequest.redirect_uri,
+        parRequest.state
+      );
     }
 
     const firstDetail = parRequest.authorization_details[0];
     if (firstDetail?.type !== 'openid_credential') {
-      throw new AuthorizationRequestError('unsupported credential type', 400, parRequest.redirect_uri, parRequest.state);
+      throw new AuthorizationRequestError(
+        'unsupported credential type',
+        400,
+        parRequest.redirect_uri,
+        parRequest.state
+      );
     }
 
     const credentialConfigurationId = firstDetail.credential_configuration_id;

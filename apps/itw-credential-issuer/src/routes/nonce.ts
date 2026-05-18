@@ -14,10 +14,13 @@ const nonceRoute: FastifyPluginAsync = async (app) => {
         const service = new NonceService(app.nonceRepository);
         const nonce = await service.generate();
 
-        return reply.code(200).headers({
-          'Cache-Control': 'no-store',
-          'Content-Type': 'application/json'
-        }).send({ c_nonce: nonce });
+        return reply
+          .code(200)
+          .headers({
+            'Cache-Control': 'no-store',
+            'Content-Type': 'application/json'
+          })
+          .send({ c_nonce: nonce });
       } catch (error) {
         app.log.error({ err: error }, 'Nonce generation failed');
         return reply.code(500).send({ error: 'internal_server_error' });

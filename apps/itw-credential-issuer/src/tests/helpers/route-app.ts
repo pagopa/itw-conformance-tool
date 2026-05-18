@@ -49,17 +49,14 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     update: async () => undefined
   });
 
-  app.decorate(
-    'dbClient',
-    {
-      db: {
-        prepare: () => ({
-          get: () => undefined,
-          run: () => ({ changes: 0, lastInsertRowid: 0 })
-        })
-      }
-    } as never
-  );
+  app.decorate('dbClient', {
+    db: {
+      prepare: () => ({
+        get: () => undefined,
+        run: () => ({ changes: 0, lastInsertRowid: 0 })
+      })
+    }
+  } as never);
 
   await app.register(route);
   await app.ready();

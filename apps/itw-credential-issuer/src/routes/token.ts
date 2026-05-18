@@ -35,10 +35,13 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
           }
         });
 
-        return reply.code(200).headers({
-          'Cache-Control': 'no-store',
-          'Content-Type': 'application/json'
-        }).send(response);
+        return reply
+          .code(200)
+          .headers({
+            'Cache-Control': 'no-store',
+            'Content-Type': 'application/json'
+          })
+          .send(response);
       } catch (error) {
         if (error instanceof CreateAccessTokenError) {
           return reply.code(400).send({ error: 'invalid_request', error_description: error.message });

@@ -18,10 +18,7 @@ const federationRoute: FastifyPluginAsync = async (app) => {
         const service = new FederationService(makeJwksRepository(app));
         const statement = await service.getEntityConfiguration(baseURL, sdkConfig);
 
-        return reply
-          .code(200)
-          .header('Content-Type', 'application/entity-statement+jwt')
-          .send(statement);
+        return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(statement);
       } catch (error) {
         request.log.error({ err: error }, 'OpenID federation metadata generation failed');
         return reply.code(500).send({ error: 'internal_server_error' });
