@@ -1,0 +1,43 @@
+{
+  "name": "@itw-conformance-tool/rp",
+  "version": "0.0.1",
+  "description": "IT Wallet Relying Party domain layer",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
+    },
+    "./models": {
+      "types": "./dist/models/index.d.ts",
+      "default": "./dist/models/index.js"
+    },
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "default": "./dist/services/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.lib.json",
+    "typecheck": "tsc --build tsconfig.json --emitDeclarationOnly",
+    "test": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "zod": "^3.22.4",
+    "jose": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.5"
+  }
+}

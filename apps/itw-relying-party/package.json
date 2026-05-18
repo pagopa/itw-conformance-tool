@@ -23,9 +23,14 @@
     "@pagopa/io-wallet-utils": "catalog:pagopa",
     "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
+    "@itw-conformance-tool/rp": "workspace:",
+    "better-sqlite3": "^11.10.0",
     "close-with-grace": "^2.5.0",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11"
   }
 }

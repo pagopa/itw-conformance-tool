@@ -28,6 +28,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/rp/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
