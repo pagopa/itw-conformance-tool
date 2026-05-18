@@ -8,7 +8,6 @@ import { parseArgs as parseNodeArgs } from 'node:util';
 
 import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 import { loggerOptions as sharedLoggerOptions } from '@itw-conformance-tool/logger';
-import ini from 'ini';
 import pino, { type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
 type Service = 'issuer' | 'rp';
