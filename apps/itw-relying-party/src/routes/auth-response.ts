@@ -124,11 +124,13 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
 
         const localNonces = extractLocalNonces(vpToken);
         const localNonce = assertNonceConsistency(localNonces);
-        if (localNonce !== undefined) {
-          const consumed = await app.rp.nonceRepository.consume(localNonce);
-          if (!consumed) {
-            throw new Error('The nonce does not match with the one provided in the request object');
-          }
+        if (localNonce === undefined) {
+          throw new Error('The authorization response is missing the nonce provided in the request object');
+        }
+
+        const consumed = await app.rp.nonceRepository.consume(localNonce);
+        if (!consumed) {
+          throw new Error('The nonce does not match with the one provided in the request object');
         }
 
         const values = decodeDisclosureValues(vpToken);
