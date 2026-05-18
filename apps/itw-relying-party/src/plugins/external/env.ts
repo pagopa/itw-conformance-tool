@@ -1,168 +1,76 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
+import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
+import { DEFAULT_DATA_DIR, DEFAULT_PORT, loadRpConfig, type RpConfig } from '@itw-conformance-tool/rp';
+import { SessionService } from '@itw-conformance-tool/rp';
 import fp from 'fastify-plugin';
 
-interface RpRuntimeConfig {
-  host: string;
-  port: number;
-  baseUrl: string;
-  dataDir: string;
-  configFilePath: string;
+interface RpRuntimeContext {
+  authRequestPrivateKeyPem: string;
+  authResponsePrivateKeyPem: string;
+  basePath: string;
+  clientId: string;
+  nonceRepository: SqliteNonceRepository;
+  sessionService: SessionService;
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
-    config: RpRuntimeConfig;
+    config: RpConfig;
+    rp: RpRuntimeContext;
   }
 }
 
-type IniConfig = Record<string, Record<string, string>>;
-
-const defaultHost = '0.0.0.0';
-const defaultPort = 8080;
-const defaultDataDir = resolve(homedir(), '.itw-conformance-tool');
-
-function stripComment(input: string): string {
-  const semicolonIndex = input.indexOf(';');
-  const hashIndex = input.indexOf('#');
-
-  if (semicolonIndex === -1 && hashIndex === -1) {
-    return input.trim();
+function normalizePrivateKey(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.includes('-----BEGIN')) {
+    return trimmed;
   }
-
-  if (semicolonIndex === -1) {
-    return input.slice(0, hashIndex).trim();
-  }
-
-  if (hashIndex === -1) {
-    return input.slice(0, semicolonIndex).trim();
-  }
-
-  return input.slice(0, Math.min(semicolonIndex, hashIndex)).trim();
+  return Buffer.from(trimmed, 'base64').toString('utf8').trim();
 }
 
-function parseIni(iniRaw: string): IniConfig {
-  const config: IniConfig = {};
-  let currentSection = '';
+function readRequiredKey(dataDir: string, fileName: string): string {
+  const candidates = [join(dataDir, 'rp', fileName), join(dataDir, fileName)];
 
-  for (const rawLine of iniRaw.split(/\r?\n/u)) {
-    const line = stripComment(rawLine);
-    if (line.length === 0) {
-      continue;
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return normalizePrivateKey(readFileSync(candidate, { encoding: 'utf8' }));
     }
-
-    if (line.startsWith('[') && line.endsWith(']')) {
-      currentSection = line.slice(1, -1).trim().toLowerCase();
-      if (currentSection.length > 0 && config[currentSection] === undefined) {
-        config[currentSection] = {};
-      }
-      continue;
-    }
-
-    const separatorIndex = line.indexOf('=');
-    if (separatorIndex === -1 || currentSection.length === 0) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex).trim().toLowerCase();
-    const value = line.slice(separatorIndex + 1).trim();
-    if (key.length === 0) {
-      continue;
-    }
-
-    config[currentSection] ??= {};
-    config[currentSection][key] = value;
   }
 
-  return config;
-}
-
-function parsePort(value: string | undefined, source: string): number {
-  if (value === undefined || value.length === 0) {
-    return defaultPort;
-  }
-
-  const port = Number(value);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error(`Invalid rp.port value in ${source}: ${value}`);
-  }
-
-  return port;
-}
-
-function parsePortOverride(variableName: string): number | undefined {
-  const value = process.env[variableName];
-  if (value === undefined || value.trim().length === 0) {
-    return undefined;
-  }
-
-  const parsedPort = Number(value);
-  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-    throw new Error(`Invalid ${variableName} value: ${value}`);
-  }
-
-  return parsedPort;
-}
-
-function expandHome(pathValue: string): string {
-  if (pathValue === '~') {
-    return homedir();
-  }
-
-  if (pathValue.startsWith('~/')) {
-    return resolve(homedir(), pathValue.slice(2));
-  }
-
-  return resolve(pathValue);
-}
-
-function loadConfigFile(configFilePath: string): IniConfig | undefined {
-  if (!existsSync(configFilePath)) {
-    return undefined;
-  }
-
-  const rawConfig = readFileSync(configFilePath, { encoding: 'utf8' });
-  return parseIni(rawConfig);
-}
-
-function buildRuntimeConfig(configFilePath: string): RpRuntimeConfig {
-  const iniConfig = loadConfigFile(configFilePath);
-  const rpSection = iniConfig?.rp;
-  const globalSection = iniConfig?.global;
-
-  const port = parsePortOverride('ITW_CT_RP_PORT') ?? parsePort(rpSection?.port, configFilePath);
-  const dataDirOverride = process.env.ITW_CT_DATA_DIR;
-  const dataDirValue = globalSection?.data_dir;
-  const dataDir =
-    dataDirOverride !== undefined && dataDirOverride.trim().length > 0
-      ? expandHome(dataDirOverride.trim())
-      : dataDirValue !== undefined && dataDirValue.trim().length > 0
-        ? expandHome(dataDirValue.trim())
-        : defaultDataDir;
-
-  return {
-    host: defaultHost,
-    port,
-    baseUrl: `http://localhost:${port}`,
-    dataDir,
-    configFilePath
-  };
+  throw new Error(`Missing required key file "${fileName}" in ${candidates.join(' or ')}`);
 }
 
 const envPlugin = fp(async (app) => {
   const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
-  const runtimeConfig = buildRuntimeConfig(configFilePath);
+  const { config, configFileFound } = loadRpConfig({ configFilePath });
 
-  if (!existsSync(configFilePath)) {
+  if (!configFileFound) {
     app.log.warn(
-      { configFile: configFilePath, defaultsApplied: { port: defaultPort, dataDir: defaultDataDir } },
+      { configFile: configFilePath, defaultsApplied: { port: DEFAULT_PORT, dataDir: DEFAULT_DATA_DIR } },
       'config.ini not found, using defaults'
     );
   }
 
-  app.decorate('config', runtimeConfig);
+  const databaseClient = new DatabaseClient({ dataDir: config.dataDir });
+  const sessionRepository = new SqliteSessionRepository(databaseClient.db);
+  const nonceRepository = new SqliteNonceRepository(databaseClient.db);
+
+  const rp: RpRuntimeContext = {
+    authRequestPrivateKeyPem: readRequiredKey(config.dataDir, 'auth-request-private-key.pem'),
+    authResponsePrivateKeyPem: readRequiredKey(config.dataDir, 'auth-response-private-key.pem'),
+    basePath: config.baseUrl,
+    clientId: config.baseUrl,
+    nonceRepository,
+    sessionService: new SessionService(sessionRepository)
+  };
+
+  app.decorate('config', config);
+  app.decorate('rp', rp);
+  app.addHook('onClose', async () => {
+    databaseClient.close();
+  });
 });
 
 export default envPlugin;

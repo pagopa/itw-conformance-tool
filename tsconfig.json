@@ -20,6 +20,9 @@
     },
     {
       "path": "./packages/issuer"
+    },
+    {
+      "path": "./packages/rp"
     }
   ]
 }
