@@ -60,9 +60,7 @@ async function verifyAndExtractKbJwtClaims(
   sdJwt: string,
   expectedAudience?: string
 ): Promise<{ nonce: string; sd_hash: string }> {
-  const header = JSON.parse(
-    Buffer.from(kbJwt.split('.')[0], 'base64').toString('utf8')
-  ) as { jwk?: JWK };
+  const header = JSON.parse(Buffer.from(kbJwt.split('.')[0], 'base64').toString('utf8')) as { jwk?: JWK };
 
   if (!header.jwk) {
     throw new Error('KB-JWT header missing required "jwk" claim');
@@ -84,9 +82,7 @@ async function verifyAndExtractKbJwtClaims(
 
   if (expectedAudience && claims.aud) {
     if (typeof claims.aud === 'string' && claims.aud !== expectedAudience) {
-      throw new Error(
-        `KB-JWT audience mismatch: expected "${expectedAudience}", got "${claims.aud}"`
-      );
+      throw new Error(`KB-JWT audience mismatch: expected "${expectedAudience}", got "${claims.aud}"`);
     } else if (Array.isArray(claims.aud) && !claims.aud.includes(expectedAudience)) {
       throw new Error(`KB-JWT audience does not include "${expectedAudience}"`);
     }
@@ -94,9 +90,7 @@ async function verifyAndExtractKbJwtClaims(
 
   // Verify sd_hash matches the SD-JWT disclosure digest
   const disclosures = sdJwt.split('~').slice(1, -1).join('~');
-  const expectedSdHash = Buffer.from(
-    createHash('sha256').update(disclosures).digest()
-  ).toString('base64url');
+  const expectedSdHash = Buffer.from(createHash('sha256').update(disclosures).digest()).toString('base64url');
 
   if (claims.sd_hash !== expectedSdHash) {
     throw new Error('KB-JWT sd_hash does not match SD-JWT disclosures');
@@ -154,11 +148,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
           const kbJwt = parts[parts.length - 1];
 
           try {
-            const { nonce } = await verifyAndExtractKbJwtClaims(
-              kbJwt,
-              sdJwt,
-              app.rp.clientId
-            );
+            const { nonce } = await verifyAndExtractKbJwtClaims(kbJwt, sdJwt, app.rp.clientId);
             verifiedNonces.push(nonce);
           } catch (error) {
             throw new Error(
