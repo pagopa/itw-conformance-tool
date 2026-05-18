@@ -25,7 +25,6 @@ export function parseINI(iniPath: string): ParseINIReturn {
     const parsedConfig = parse(rawConfigContent);
 
     const result = ConfigSchema.safeParse(parsedConfig);
-
     if (!result.success) {
       throw new Error(result.error.message);
     }

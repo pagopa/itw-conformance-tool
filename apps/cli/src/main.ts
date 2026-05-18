@@ -27,7 +27,30 @@ const serviceToProject: Record<Service, string> = {
   rp: 'itw-relying-party'
 };
 
+const configIniTemplate = `[global]
+; Local directory for keys, certificates, and generated data
+; Default: ~/.itw-conformance-tool
+data_dir = ~/.itw-conformance-tool
+; Logging level: debug | info | warn | error
+; Default: info
+log_level = info
+
+[itw-credential-issuer]
+; HTTP port for the issuer service
+; Default: 3000
+port = 3000
+; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
+; Default: pid,mdl,badge,eaa
+credential_types = pid,mdl,badge,eaa
+
+[rp]
+; HTTP port for the itw-relying-party service
+; Default: 8080
+port = 8080
+`;
+
 type CliLogger = PinoLogger;
+type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
 function printHelp(): void {
   process.stdout.write(`\n${cliName} - Local CLI for ITW Conformance flows\n\n`);
@@ -50,10 +73,10 @@ function printHelp(): void {
   process.stdout.write(`  ${cliName} start --issuer\n\n`);
 }
 
-function createCliLogger(): CliLogger {
+function createCliLogger(logLevel: LogLevel): CliLogger {
   const loggerOptions: LoggerOptions = {
     ...sharedLoggerOptions,
-    level: 'info'
+    level: logLevel
   };
 
   return pino(loggerOptions).child({
@@ -61,13 +84,13 @@ function createCliLogger(): CliLogger {
   });
 }
 
-function emitLog(logger: CliLogger, event: string, details: Record<string, unknown>): void {
+function emitLog(logger: CliLogger, event: string, details: Record<string, unknown>, type: LogLevel = 'debug'): void {
   const payload = {
     event,
     ...details
   };
 
-  logger.info(payload, event);
+  logger[type](payload, event);
 }
 
 function tokenizeArgString(argsString: string): string[] {
@@ -173,7 +196,7 @@ function parseArgs(argv: string[]): { command?: string; flags: CliFlags } {
     flags.force = true;
   }
   if (parsed.values.config !== undefined) {
-    flags.configFile = parsed.values.config;
+    flags.configFile = parsed.values.config.trim();
   }
 
   return { command, flags };
@@ -221,31 +244,7 @@ function buildStartNxArgs(services: Service[]): string[] {
   return args;
 }
 
-function getConfigIniTemplate(): string {
-  return `[global]
-; Local directory for keys, certificates, and generated data
-; Default: ~/.itw-conformance-tool
-data_dir = ~/.itw-conformance-tool
-; Logging level: debug | info | warn | error
-; Default: info
-log_level = info
-
-[itw-credential-issuer]
-; HTTP port for the issuer service
-; Default: 3000
-port = 3000
-; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
-; Default: pid,mdl,badge,eaa
-credential_types = pid,mdl,badge,eaa
-
-[rp]
-; HTTP port for the itw-relying-party service
-; Default: 8080
-port = 8080
-`;
-}
-
-function runInit(flags: CliFlags, logger: CliLogger, configFilePath: string, configFileFound: boolean): void {
+function runInit(flags: CliFlags, configFilePath: string): void {
   const dataDir = resolve(homedir(), '.itw-conformance-tool');
   const issuerDir = resolve(dataDir, 'issuer');
   const rpDir = resolve(dataDir, 'rp');
@@ -253,18 +252,20 @@ function runInit(flags: CliFlags, logger: CliLogger, configFilePath: string, con
   mkdirSync(issuerDir, { recursive: true });
   mkdirSync(rpDir, { recursive: true });
 
-  if (flags.force || !configFileFound) {
+  const configFileExists = existsSync(configFilePath);
+  if (flags.force || !configFileExists) {
     configFilePath = resolve(process.cwd(), 'config.ini');
-    writeFileSync(configFilePath, getConfigIniTemplate(), { encoding: 'utf8', flag: 'w' });
+    writeFileSync(configFilePath, configIniTemplate, { encoding: 'utf8', flag: 'w' });
   }
 
+  const logger = createCliLogger('debug');
   emitLog(logger, 'cli.init_summary', {
     dataDir,
     issuerDir,
     rpDir,
     configFilePath,
-    configGenerated: flags.force || !configFileFound,
-    force: Boolean(flags.force)
+    configGenerated: flags.force || !configFileExists,
+    force: flags.force
   });
 }
 
@@ -311,7 +312,6 @@ async function runCommand(args: string[], env: NodeJS.ProcessEnv): Promise<numbe
 
 async function main(): Promise<void> {
   const { command, flags } = parseArgs(process.argv.slice(2));
-  const logger = createCliLogger();
 
   if (flags.help || command === 'help') {
     printHelp();
@@ -334,42 +334,40 @@ async function main(): Promise<void> {
       ? path.resolve(flags.configFile)
       : path.resolve(process.cwd(), 'config.ini');
 
-  // If init with --force, recreate config file before parsing
-  if (command === 'init' && flags.force) {
-    runInit(flags, logger, configFilePath, true);
+  if (command === 'init') {
+    runInit(flags, configFilePath);
     process.exit(0);
   }
 
   const isINIparsed = parseINI(configFilePath);
   const configs = isINIparsed.data;
 
-  if (!isINIparsed.ok) {
-    emitLog(logger, 'cli.config_parse_warning', {
-      message: isINIparsed.error,
-      configPath: configFilePath,
-      usingDefaults: true
-    });
-  }
+  const logger = createCliLogger(configs.global.log_level);
 
-  emitLog(logger, 'cli.runtime_config_resolved', {
-    command,
-    flags,
-    configs
-  });
-
-  if (command === 'init') {
-    runInit(flags, logger, configFilePath, isINIparsed.ok);
-    process.exit(0);
-  }
+  emitLog(
+    logger,
+    'cli.runtime_config_resolved',
+    {
+      command,
+      flags,
+      configs
+    },
+    'debug'
+  );
 
   const services = getStartServices(flags);
   const nxArgs = buildStartNxArgs(services);
 
-  emitLog(logger, 'cli.nx_command', {
-    command,
-    services,
-    nxCommand: ['pnpm', ...nxArgs].join(' ')
-  });
+  emitLog(
+    logger,
+    'cli.nx_command',
+    {
+      command,
+      services,
+      nxCommand: ['pnpm', ...nxArgs].join(' ')
+    },
+    'debug'
+  );
 
   const env = buildEnv(configs);
 
@@ -379,25 +377,35 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  emitLog(logger, 'cli.flow_failed', { command, services, exitCode });
+  emitLog(logger, 'cli.flow_failed', { command, services, exitCode }, 'error');
   process.exit(exitCode);
 }
 
 main().catch((error: unknown) => {
-  const logger = createCliLogger();
+  const logger = createCliLogger('trace');
 
   if (error instanceof Error) {
-    emitLog(logger, 'cli.unhandled_error', {
-      message: error.message,
-      error,
-      stack: error.stack,
-      cause: error.cause
-    });
+    emitLog(
+      logger,
+      'cli.unhandled_error',
+      {
+        message: error.message,
+        error,
+        stack: error.stack,
+        cause: error.cause
+      },
+      'error'
+    );
   } else {
-    emitLog(logger, 'cli.unhandled_error', {
-      message: String(error),
-      thrown: error
-    });
+    emitLog(
+      logger,
+      'cli.unhandled_error',
+      {
+        message: String(error),
+        thrown: error
+      },
+      'error'
+    );
   }
 
   process.exit(1);
