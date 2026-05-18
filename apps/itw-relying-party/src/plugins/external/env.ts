@@ -1,12 +1,45 @@
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
+import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
 import { DEFAULT_DATA_DIR, DEFAULT_PORT, loadRpConfig, type RpConfig } from '@itw-conformance-tool/rp';
+import { SessionService } from '@itw-conformance-tool/rp';
 import fp from 'fastify-plugin';
+
+interface RpRuntimeContext {
+  authRequestPrivateKeyPem: string;
+  authResponsePrivateKeyPem: string;
+  basePath: string;
+  clientId: string;
+  nonceRepository: SqliteNonceRepository;
+  sessionService: SessionService;
+}
 
 declare module 'fastify' {
   interface FastifyInstance {
     config: RpConfig;
+    rp: RpRuntimeContext;
   }
+}
+
+function normalizePrivateKey(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.includes('-----BEGIN')) {
+    return trimmed;
+  }
+  return Buffer.from(trimmed, 'base64').toString('utf8').trim();
+}
+
+function readRequiredKey(dataDir: string, fileName: string): string {
+  const candidates = [join(dataDir, 'rp', fileName), join(dataDir, fileName)];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return normalizePrivateKey(readFileSync(candidate, { encoding: 'utf8' }));
+    }
+  }
+
+  throw new Error(`Missing required key file "${fileName}" in ${candidates.join(' or ')}`);
 }
 
 const envPlugin = fp(async (app) => {
@@ -20,7 +53,24 @@ const envPlugin = fp(async (app) => {
     );
   }
 
+  const databaseClient = new DatabaseClient({ dataDir: config.dataDir });
+  const sessionRepository = new SqliteSessionRepository(databaseClient.db);
+  const nonceRepository = new SqliteNonceRepository(databaseClient.db);
+
+  const rp: RpRuntimeContext = {
+    authRequestPrivateKeyPem: readRequiredKey(config.dataDir, 'auth-request-private-key.pem'),
+    authResponsePrivateKeyPem: readRequiredKey(config.dataDir, 'auth-response-private-key.pem'),
+    basePath: config.baseUrl,
+    clientId: config.baseUrl,
+    nonceRepository,
+    sessionService: new SessionService(sessionRepository)
+  };
+
   app.decorate('config', config);
+  app.decorate('rp', rp);
+  app.addHook('onClose', async () => {
+    databaseClient.close();
+  });
 });
 
 export default envPlugin;

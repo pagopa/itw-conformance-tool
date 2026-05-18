@@ -60,20 +60,12 @@ describe('RequestObjectService', () => {
 
   describe('validate', () => {
     it('accepts a request object with alg, client_id, and nonce', () => {
-      const requestObject = createRequestObject(
-        'h.p.s',
-        { client_id: 'rp.example', nonce: 'n-123' },
-        { alg: 'ES256' }
-      );
+      const requestObject = createRequestObject('h.p.s', { client_id: 'rp.example', nonce: 'n-123' }, { alg: 'ES256' });
       expect(service.validate(requestObject)).toBe(true);
     });
 
     it('rejects when the JWT has fewer than three segments', () => {
-      const requestObject = createRequestObject(
-        'h.p',
-        { client_id: 'rp.example', nonce: 'n-123' },
-        { alg: 'ES256' }
-      );
+      const requestObject = createRequestObject('h.p', { client_id: 'rp.example', nonce: 'n-123' }, { alg: 'ES256' });
       expect(service.validate(requestObject)).toBe(false);
     });
 

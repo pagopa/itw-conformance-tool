@@ -137,7 +137,8 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
   const globalSection = ini?.global;
 
   const port =
-    parsePortOverride(env, 'ITW_CT_RP_PORT') ?? parsePortFromString(rpSection?.port, input.configFilePath, DEFAULT_PORT);
+    parsePortOverride(env, 'ITW_CT_RP_PORT') ??
+    parsePortFromString(rpSection?.port, input.configFilePath, DEFAULT_PORT);
 
   const dataDirOverride = env.ITW_CT_DATA_DIR;
   const dataDirFromIni = globalSection?.data_dir;

@@ -1,5 +1,3 @@
-import { sessionService } from '../domain/request-object.js';
-
 import type { FastifyPluginAsync } from 'fastify';
 
 interface StatusParams {
@@ -24,7 +22,7 @@ const statusRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const { state } = request.params;
-      const session = await sessionService.get(state);
+      const session = await app.rp.sessionService.get(state);
       if (session === undefined) {
         return reply.code(404).send({ message: 'Session not found' });
       }
@@ -33,7 +31,7 @@ const statusRoute: FastifyPluginAsync = async (app) => {
 
       if (rpState === 'verified') {
         if (redirectUri === null) {
-          await sessionService.delete(state);
+          await app.rp.sessionService.delete(state);
           return { redirect_uri: 'error.html?response_code=unexpected' };
         }
         return {
@@ -43,17 +41,17 @@ const statusRoute: FastifyPluginAsync = async (app) => {
       }
 
       if (rpState === 'rejected') {
-        await sessionService.delete(state);
+        await app.rp.sessionService.delete(state);
         return { redirect_uri: 'rejected-error.html?response_code=rejected' };
       }
 
       if (rpState === 'denied') {
-        await sessionService.delete(state);
+        await app.rp.sessionService.delete(state);
         return { redirect_uri: 'error.html?response_code=denied' };
       }
 
       if (rpState === 'expired') {
-        await sessionService.delete(state);
+        await app.rp.sessionService.delete(state);
         return { redirect_uri: 'timeout.html?response_code=expired' };
       }
 

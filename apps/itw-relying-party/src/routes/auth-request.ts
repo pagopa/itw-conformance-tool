@@ -1,5 +1,3 @@
-import { sessionService } from '../domain/request-object.js';
-
 import type { FastifyPluginAsync } from 'fastify';
 
 interface AuthRequestParams {
@@ -24,12 +22,12 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const { state } = request.params;
-      const session = await sessionService.get(state);
+      const session = await app.rp.sessionService.get(state);
       if (session === undefined) {
         return reply.code(404).send({ message: 'Session not found' });
       }
 
-      await sessionService.update(state, 'checking');
+      await app.rp.sessionService.update(state, 'checking');
 
       return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(session.jwt);
     }

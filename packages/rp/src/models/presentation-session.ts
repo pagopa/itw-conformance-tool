@@ -1,12 +1,6 @@
 import type { SessionRecord, SessionState } from '@itw-conformance-tool/database';
 
-export type PresentationSessionState =
-  | 'checking'
-  | 'denied'
-  | 'expired'
-  | 'pending'
-  | 'rejected'
-  | 'verified';
+export type PresentationSessionState = 'checking' | 'denied' | 'expired' | 'pending' | 'rejected' | 'verified';
 
 export type PresentationFlowType = 'cross-device' | 'same-device';
 
@@ -31,12 +25,7 @@ interface PersistedDetails {
   expiresAt: number;
 }
 
-const TERMINAL_STATES: ReadonlySet<PresentationSessionState> = new Set([
-  'verified',
-  'rejected',
-  'denied',
-  'expired'
-]);
+const TERMINAL_STATES: ReadonlySet<PresentationSessionState> = new Set(['verified', 'rejected', 'denied', 'expired']);
 
 export function isTerminalState(state: PresentationSessionState): boolean {
   return TERMINAL_STATES.has(state);

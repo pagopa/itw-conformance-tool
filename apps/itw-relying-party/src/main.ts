@@ -4,7 +4,6 @@ import Fastify from 'fastify';
 import fp from 'fastify-plugin';
 
 import bootstrap from './app.js';
-import { closeSessionStorage } from './domain/request-object.js';
 
 async function startServer() {
   const app = Fastify({
@@ -32,7 +31,6 @@ async function startServer() {
     } else {
       app.log.info(`${signal} received, server closing`);
     }
-    closeSessionStorage();
     await app.close();
   });
 
