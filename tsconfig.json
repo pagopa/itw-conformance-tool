@@ -16,6 +16,9 @@
       "path": "./packages/logger"
     },
     {
+      "path": "./packages/config"
+    },
+    {
       "path": "./packages/database"
     },
     {

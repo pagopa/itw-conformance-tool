@@ -27,6 +27,8 @@
     "@pagopa/io-wallet-utils": "catalog:pagopa",
     "@panva/hkdf": "^1.2.1",
     "@peculiar/x509": "^1.12.4",
+    "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/issuer": "workspace:*",
     "@itw-conformance-tool/logger": "workspace:",
     "@sd-jwt/crypto-nodejs": "^0.19.0",
     "@sd-jwt/decode": "^0.19.0",
