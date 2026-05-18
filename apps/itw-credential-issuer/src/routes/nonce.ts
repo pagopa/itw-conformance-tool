@@ -6,6 +6,12 @@ const nonceRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/nonce',
     method: 'POST',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Credential']
     },

@@ -9,6 +9,12 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/credential',
     method: 'POST',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Credential']
     },

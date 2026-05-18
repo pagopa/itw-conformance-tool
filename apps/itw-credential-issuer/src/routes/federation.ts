@@ -8,6 +8,12 @@ const federationRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/.well-known/openid-federation',
     method: 'GET',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Federation']
     },

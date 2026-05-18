@@ -9,6 +9,12 @@ const parRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/as/par',
     method: 'POST',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Authorization']
     },

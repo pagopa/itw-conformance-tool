@@ -8,6 +8,12 @@ const presentationResponseRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/presentation-response',
     method: 'POST',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Authorization'],
       querystring: {

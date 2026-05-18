@@ -8,6 +8,12 @@ const statusListRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/statuslist/1',
     method: 'GET',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Credential']
     },

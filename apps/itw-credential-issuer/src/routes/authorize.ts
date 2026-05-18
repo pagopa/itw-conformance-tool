@@ -8,6 +8,12 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/authorize',
     method: 'GET',
+    config: {
+      rateLimit: {
+        max: 100,
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['Authorization'],
       querystring: {

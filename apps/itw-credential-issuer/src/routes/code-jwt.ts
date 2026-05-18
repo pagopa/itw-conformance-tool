@@ -8,6 +8,12 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/code/jwt',
     method: 'GET',
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute'
+      }
+    },
     schema: {
       tags: ['Authorization'],
       querystring: {
