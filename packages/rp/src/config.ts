@@ -26,9 +26,7 @@ export interface LoadRpConfigResult {
 /**
  * Load RP configuration from ini file or environment variables
  */
-export async function loadRpConfig({
-  env = process.env
-}: LoadRpConfigInput = {}): Promise<LoadRpConfigResult> {
+export async function loadRpConfig({ env = process.env }: LoadRpConfigInput = {}): Promise<LoadRpConfigResult> {
   const host = env.ITW_CT_RP_HOST || DEFAULT_HOST;
   const port = env.ITW_CT_RP_PORT ? parseInt(env.ITW_CT_RP_PORT, 10) : DEFAULT_PORT;
   const dataDir = env.ITW_CT_DATA_DIR || DEFAULT_DATA_DIR;
