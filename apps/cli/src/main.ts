@@ -329,10 +329,12 @@ async function main(): Promise<void> {
 
   resolveWorkspaceRoot(process.cwd());
 
-  const configFilePath =
-    'configFile' in flags && typeof flags.configFile === 'string' && !flags.force
-      ? path.resolve(flags.configFile)
-      : path.resolve(process.cwd(), 'config.ini');
+  let configFilePath: string;
+  if ('configFile' in flags && typeof flags.configFile === 'string' && !flags.force) {
+    configFilePath = path.resolve(flags.configFile);
+  } else {
+    configFilePath = path.resolve(process.cwd(), 'config.ini');
+  }
 
   if (command === 'init') {
     runInit(flags, configFilePath);
