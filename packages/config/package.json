@@ -1,0 +1,26 @@
+{
+  "dependencies": {
+    "ini": "^7.0.0",
+    "zod": "catalog:",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/ini": "^4.1.1",
+    "vitest": "~4.1.0"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "name": "@itw-conformance-tool/config",
+  "private": true,
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "version": "0.0.2"
+}

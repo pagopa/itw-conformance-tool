@@ -2,6 +2,7 @@
   "compilerOptions": {
     "composite": true,
     "paths": {
+      "@itw-conformance-tool/config": ["./packages/config/src/index.ts"],
       "@itw-conformance-tool/issuer": ["./packages/issuer/src/index.ts"],
       "@itw-conformance-tool/logger": ["./packages/logger/src/index.ts"],
       "@itw-conformance-tool/database": ["./packages/database/src/index.ts"]
