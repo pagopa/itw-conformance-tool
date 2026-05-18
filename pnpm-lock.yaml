@@ -158,16 +158,9 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
-      ini:
-        specifier: ^5.0.0
-        version: 5.0.0
       pino:
         specifier: catalog:node
         version: 10.3.1
-    devDependencies:
-      '@types/ini':
-        specifier: ^4.1.1
-        version: 4.1.1
 
   apps/itw-credential-issuer:
     dependencies:
@@ -327,9 +320,6 @@ importers:
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
-      vitest:
-        specifier: ~4.1.0
-        version: 4.1.5(@types/node@22.19.17)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(yaml@2.8.3))
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -337,6 +327,9 @@ importers:
       '@types/ini':
         specifier: ^4.1.1
         version: 4.1.1
+      vitest:
+        specifier: ~4.1.0
+        version: 4.1.5(@types/node@22.19.17)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(yaml@2.8.3))
 
   packages/database:
     dependencies:
@@ -3129,10 +3122,6 @@ packages:
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
-
-  ini@5.0.0:
-    resolution: {integrity: sha512-+N0ngpO3e7cRUWOJAS7qw0IZIVc6XPrW4MlFBdD066F2L4k1L6ker3hLqSq7iXxU5tgS4WGkIUElWn5vogAEnw==}
-    engines: {node: ^18.17.0 || >=20.5.0}
 
   ini@7.0.0:
     resolution: {integrity: sha512-ifK0CgjALofS5bkrcTy4RaQ9Vx2Knf/eLeIO+NaswQEpH1UblrtTSCIvN71qQDMq0PeQ/SSPojvEJp9vvvfr+w==}
@@ -7420,8 +7409,6 @@ snapshots:
       wrappy: 1.0.2
 
   inherits@2.0.4: {}
-
-  ini@5.0.0: {}
 
   ini@7.0.0: {}
 

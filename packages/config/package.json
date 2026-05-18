@@ -2,11 +2,11 @@
   "dependencies": {
     "ini": "^7.0.0",
     "zod": "catalog:",
-    "tslib": "^2.3.0",
-    "vitest": "~4.1.0"
+    "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@types/ini": "^4.1.1"
+    "@types/ini": "^4.1.1",
+    "vitest": "~4.1.0"
   },
   "exports": {
     "./package.json": "./package.json",

@@ -13,10 +13,6 @@
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
-    "ini": "^5.0.0",
     "pino": "catalog:node"
-  },
-  "devDependencies": {
-    "@types/ini": "^4.1.1"
   }
 }

@@ -244,7 +244,7 @@ function buildStartNxArgs(services: Service[]): string[] {
   return args;
 }
 
-function runInit(flags: CliFlags, configFilePath: string): void {
+function runInit(flags: CliFlags, configFilePath: string, configFileExists: boolean): void {
   const dataDir = resolve(homedir(), '.itw-conformance-tool');
   const issuerDir = resolve(dataDir, 'issuer');
   const rpDir = resolve(dataDir, 'rp');
@@ -252,10 +252,9 @@ function runInit(flags: CliFlags, configFilePath: string): void {
   mkdirSync(issuerDir, { recursive: true });
   mkdirSync(rpDir, { recursive: true });
 
-  const configFileExists = existsSync(configFilePath);
   if (flags.force || !configFileExists) {
     configFilePath = resolve(process.cwd(), 'config.ini');
-    writeFileSync(configFilePath, configIniTemplate, { encoding: 'utf8', flag: 'w' });
+    writeFileSync(configFilePath, configIniTemplate, { encoding: 'utf8', flag: 'wx' });
   }
 
   const logger = createCliLogger('debug');
@@ -272,6 +271,7 @@ function runInit(flags: CliFlags, configFilePath: string): void {
 function buildEnv(config: ConfigType): NodeJS.ProcessEnv {
   return {
     ...process.env,
+    ITW_CT_DATA_DIR: config.global.data_dir,
     ITW_CT_LOG_LEVEL: config.global.log_level,
     ITW_CT_ISSUER_PORT: String(config['itw-credential-issuer'].port),
     ITW_CT_ISSUER_CREDENTIAL_TYPES: String(config['itw-credential-issuer'].credential_types),
@@ -336,8 +336,10 @@ async function main(): Promise<void> {
     configFilePath = path.resolve(process.cwd(), 'config.ini');
   }
 
+  const configFileExists = existsSync(configFilePath);
+
   if (command === 'init') {
-    runInit(flags, configFilePath);
+    runInit(flags, configFilePath, configFileExists);
     process.exit(0);
   }
 
@@ -345,6 +347,10 @@ async function main(): Promise<void> {
   const configs = isINIparsed.data;
 
   const logger = createCliLogger(configs.global.log_level);
+
+  if (command === 'start' && !configFileExists) {
+    emitLog(logger, "There wasn't a config file found. Use the 'init --force' command to create one.", {}, 'warn');
+  }
 
   emitLog(
     logger,
