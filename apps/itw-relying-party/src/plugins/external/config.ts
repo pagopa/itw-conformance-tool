@@ -74,4 +74,3 @@ const configPlugin = fp(async (app) => {
 });
 
 export default configPlugin;
-
