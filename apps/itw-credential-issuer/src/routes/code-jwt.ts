@@ -14,6 +14,7 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
         timeWindow: '1 minute'
       }
     },
+    preHandler: app.rateLimit({ max: 30, timeWindow: '1 minute' }),
     schema: {
       tags: ['Authorization'],
       querystring: {

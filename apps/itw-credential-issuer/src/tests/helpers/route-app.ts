@@ -1,3 +1,4 @@
+import FastifyRateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -58,6 +59,7 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     }
   } as never);
 
+  await app.register(FastifyRateLimit, { global: false });
   await app.register(route);
   await app.ready();
 

@@ -14,6 +14,7 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
         timeWindow: '15 minutes'
       }
     },
+    preHandler: app.rateLimit({ max: 100, timeWindow: '15 minutes' }),
     schema: {
       tags: ['Authorization'],
       querystring: {

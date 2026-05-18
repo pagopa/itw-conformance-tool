@@ -19,6 +19,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
         timeWindow: '15 minutes'
       }
     },
+    preHandler: app.rateLimit({ max: 100, timeWindow: '15 minutes' }),
     schema: {
       tags: ['Authorization']
     },
