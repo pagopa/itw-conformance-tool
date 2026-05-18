@@ -1,4 +1,4 @@
-import { requestObjectRepository } from '../domain/request-object.js';
+import { sessionService } from '../domain/request-object.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -22,13 +22,18 @@ const statusRoute: FastifyPluginAsync = async (app) => {
         }
       }
     },
-    handler: async (request) => {
+    handler: async (request, reply) => {
       const { state } = request.params;
-      const { redirectUri, status, values } = await requestObjectRepository.get(state);
+      const session = await sessionService.get(state);
+      if (session === undefined) {
+        return reply.code(404).send({ message: 'Session not found' });
+      }
 
-      if (status === 'verified') {
-        if (redirectUri === undefined) {
-          await requestObjectRepository.delete(state);
+      const { redirectUri, state: rpState, values } = session;
+
+      if (rpState === 'verified') {
+        if (redirectUri === null) {
+          await sessionService.delete(state);
           return { redirect_uri: 'error.html?response_code=unexpected' };
         }
         return {
@@ -37,22 +42,22 @@ const statusRoute: FastifyPluginAsync = async (app) => {
         };
       }
 
-      if (status === 'rejected') {
-        await requestObjectRepository.delete(state);
+      if (rpState === 'rejected') {
+        await sessionService.delete(state);
         return { redirect_uri: 'rejected-error.html?response_code=rejected' };
       }
 
-      if (status === 'denied') {
-        await requestObjectRepository.delete(state);
+      if (rpState === 'denied') {
+        await sessionService.delete(state);
         return { redirect_uri: 'error.html?response_code=denied' };
       }
 
-      if (status === 'expired') {
-        await requestObjectRepository.delete(state);
+      if (rpState === 'expired') {
+        await sessionService.delete(state);
         return { redirect_uri: 'timeout.html?response_code=expired' };
       }
 
-      if (status === 'checking') {
+      if (rpState === 'checking') {
         return { redirect_uri: '?response_code=checking' };
       }
 

@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import fp from 'fastify-plugin';
 
 import bootstrap from './app.js';
-import { closeRequestObjectStorage, markAsExpired } from './domain/request-object.js';
+import { closeSessionStorage } from './domain/request-object.js';
 
 async function startServer() {
   const app = Fastify({
@@ -32,15 +32,11 @@ async function startServer() {
     } else {
       app.log.info(`${signal} received, server closing`);
     }
-    closeRequestObjectStorage();
+    closeSessionStorage();
     await app.close();
   });
 
   await app.ready();
-
-  setInterval(async () => {
-    await markAsExpired();
-  }, 10_000);
 
   // Start server
   try {

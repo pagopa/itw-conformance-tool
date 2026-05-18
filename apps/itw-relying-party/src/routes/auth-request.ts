@@ -1,4 +1,4 @@
-import { requestObjectRepository } from '../domain/request-object.js';
+import { sessionService } from '../domain/request-object.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -24,9 +24,14 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const { state } = request.params;
-      const requestObject = await requestObjectRepository.get(state);
-      await requestObjectRepository.update(state, 'checking');
-      return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(requestObject.jwt);
+      const session = await sessionService.get(state);
+      if (session === undefined) {
+        return reply.code(404).send({ message: 'Session not found' });
+      }
+
+      await sessionService.update(state, 'checking');
+
+      return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(session.jwt);
     }
   });
 };
