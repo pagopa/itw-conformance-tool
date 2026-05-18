@@ -23,8 +23,8 @@ const responseBodySchema = z
     response: z.string().optional(),
     state: z.string().optional()
   })
-  .refine((data) => data.response !== undefined || (data.error && data.error_description && data.state), {
-    message: "Either 'response' or 'error, error_description, state' must be present"
+  .refine((data) => data.response !== undefined || (data.error && data.state), {
+    message: "Either 'response' or 'error, state' must be present"
   });
 
 const decryptedAuthorizationResponseSchema = z.object({
