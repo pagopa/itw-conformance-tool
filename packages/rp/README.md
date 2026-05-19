@@ -125,14 +125,12 @@ Load configuration from environment variables or ini file:
 
 ```typescript
 const result = await loadRpConfig({
-  configFile: './config.ini',
+  configFilePath: './config.ini',
   env: process.env
 });
 
-// Environment variables take precedence:
-// - ITW_CT_RP_HOST (default: "localhost")
+// Supported environment variables take precedence:
 // - ITW_CT_RP_PORT (default: 8080)
-// - ITW_CT_RP_BASE_URL (optional, derives from host:port)
 // - ITW_CT_DATA_DIR (default: "./data")
 ```
 
