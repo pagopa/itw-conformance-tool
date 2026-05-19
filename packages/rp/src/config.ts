@@ -46,7 +46,7 @@ function stripComment(input: string): string {
 }
 
 export function parseIni(iniRaw: string): IniConfig {
-  const config: IniConfig = {};
+  const config = Object.create(null) as IniConfig;
   let currentSection = '';
 
   for (const rawLine of iniRaw.split(/\r?\n/u)) {
@@ -58,7 +58,7 @@ export function parseIni(iniRaw: string): IniConfig {
     if (line.startsWith('[') && line.endsWith(']')) {
       currentSection = line.slice(1, -1).trim().toLowerCase();
       if (currentSection.length > 0 && config[currentSection] === undefined) {
-        config[currentSection] = {};
+        config[currentSection] = Object.create(null);
       }
       continue;
     }
@@ -74,7 +74,7 @@ export function parseIni(iniRaw: string): IniConfig {
       continue;
     }
 
-    config[currentSection] ??= {};
+    config[currentSection] ??= Object.create(null);
     config[currentSection][key] = value;
   }
 
