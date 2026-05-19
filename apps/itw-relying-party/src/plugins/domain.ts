@@ -46,8 +46,8 @@ const domainPlugin = fp(
   },
   {
     name: 'domain',
-    dependencies: ['config'],
-  },
+    dependencies: ['config']
+  }
 );
 
 export default domainPlugin;
