@@ -1,68 +1,96 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { RequestObjectService, InvalidRequestObjectJwtError } from '../../services/request-object-service.js';
+import { createRequestObject } from '../../models/request-object.js';
+import { InvalidRequestObjectJwtError, RequestObjectService } from '../../services/request-object-service.js';
+
+function b64url(value: object): string {
+  return Buffer.from(JSON.stringify(value), 'utf-8').toString('base64url');
+}
+
+function makeJwt(header: object, payload: object, signature = 'sig'): string {
+  return `${b64url(header)}.${b64url(payload)}.${signature}`;
+}
 
 describe('RequestObjectService', () => {
-  const service = new RequestObjectService();
+  let service: RequestObjectService;
 
-  describe('decodeAndValidate', () => {
-    it('should decode a valid request object JWT', () => {
-      const now = Math.floor(Date.now() / 1000);
-      const payload = {
-        iss: 'https://rp.example.com',
-        aud: 'wallet',
-        client_id: 'rp.example.com',
+  beforeEach(() => {
+    service = new RequestObjectService();
+  });
+
+  describe('parse', () => {
+    it('decodes the header and payload of a well-formed JWT', () => {
+      const jwt = makeJwt(
+        { alg: 'ES256', typ: 'oauth-authz-req+jwt', kid: 'k-1' },
+        { client_id: 'rp.example', nonce: 'n-123', state: 's-456', aud: 'wallet' }
+      );
+
+      const result = service.parse(jwt);
+
+      expect(result.jwt).toBe(jwt);
+      expect(result.header).toEqual({ alg: 'ES256', typ: 'oauth-authz-req+jwt', kid: 'k-1' });
+      expect(result.claims).toMatchObject({
+        client_id: 'rp.example',
         nonce: 'n-123',
         state: 's-456',
-        iat: now,
-        exp: now + 300
-      };
-
-      // Manually create a JWT without signature verification (for testing)
-      const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
-      const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-      const jwt = `${header}.${body}.`;
-
-      const result = service.decodeAndValidate(jwt);
-
-      expect(result.iss).toBe('https://rp.example.com');
-      expect(result.client_id).toBe('rp.example.com');
-      expect(result.nonce).toBe('n-123');
+        aud: 'wallet'
+      });
     });
 
-    it('should throw on empty JWT', () => {
-      expect(() => service.decodeAndValidate('')).toThrow(InvalidRequestObjectJwtError);
+    it('throws when the JWT does not have three segments', () => {
+      expect(() => service.parse('header.payload')).toThrow(InvalidRequestObjectJwtError);
+      expect(() => service.parse('header.payload.signature.extra')).toThrow(InvalidRequestObjectJwtError);
     });
 
-    it('should throw on invalid JWT format', () => {
-      expect(() => service.decodeAndValidate('invalid.jwt')).toThrow(InvalidRequestObjectJwtError);
+    it('throws when the header segment is not valid JSON', () => {
+      const jwt = `${Buffer.from('not-json', 'utf-8').toString('base64url')}.${b64url({ x: 1 })}.sig`;
+      expect(() => service.parse(jwt)).toThrow(/Cannot decode JWT header/);
     });
 
-    it('should throw on invalid payload structure', () => {
-      const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
-      const body = Buffer.from(JSON.stringify({ invalid: 'payload' })).toString('base64url');
-      const jwt = `${header}.${body}.`;
-
-      expect(() => service.decodeAndValidate(jwt)).toThrow(InvalidRequestObjectJwtError);
+    it('throws when the payload segment is not valid JSON', () => {
+      const jwt = `${b64url({ alg: 'ES256' })}.${Buffer.from('not-json', 'utf-8').toString('base64url')}.sig`;
+      expect(() => service.parse(jwt)).toThrow(/Cannot decode JWT payload/);
     });
 
-    it('should throw on expired request object', () => {
-      const now = Math.floor(Date.now() / 1000);
-      const payload = {
-        iss: 'https://rp.example.com',
-        aud: 'wallet',
-        client_id: 'rp.example.com',
-        nonce: 'n-123',
-        state: 's-456',
-        iat: now - 600,
-        exp: now - 300
-      };
+    it('throws when a segment decodes to a non-object value', () => {
+      const jwt = `${b64url({ alg: 'ES256' } as object)}.${Buffer.from(JSON.stringify([1, 2, 3]), 'utf-8').toString('base64url')}.sig`;
+      expect(() => service.parse(jwt)).toThrow(/Cannot decode JWT payload/);
+    });
+  });
 
-      const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
-      const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-      const jwt = `${header}.${body}.`;
+  describe('validate', () => {
+    it('accepts a request object with alg, client_id, and nonce', () => {
+      const requestObject = createRequestObject('h.p.s', { client_id: 'rp.example', nonce: 'n-123' }, { alg: 'ES256' });
+      expect(service.validate(requestObject)).toBe(true);
+    });
 
-      expect(() => service.decodeAndValidate(jwt)).toThrow(InvalidRequestObjectJwtError);
+    it('rejects when the JWT has fewer than three segments', () => {
+      const requestObject = createRequestObject('h.p', { client_id: 'rp.example', nonce: 'n-123' }, { alg: 'ES256' });
+      expect(service.validate(requestObject)).toBe(false);
+    });
+
+    it.each([
+      ['missing alg', { client_id: 'rp', nonce: 'n' }, {}],
+      ['missing client_id', { nonce: 'n' }, { alg: 'ES256' }],
+      ['missing nonce', { client_id: 'rp' }, { alg: 'ES256' }],
+      ['empty alg', { client_id: 'rp', nonce: 'n' }, { alg: '' }],
+      ['empty client_id', { client_id: '', nonce: 'n' }, { alg: 'ES256' }],
+      ['empty nonce', { client_id: 'rp', nonce: '' }, { alg: 'ES256' }]
+    ] as const)('rejects when %s', (_label, claims, header) => {
+      const requestObject = createRequestObject('h.p.s', claims, header);
+      expect(service.validate(requestObject)).toBe(false);
+    });
+  });
+
+  describe('parse + validate (round-trip)', () => {
+    it('parses a well-formed JWT into a structure that passes validate()', () => {
+      const jwt = makeJwt(
+        { alg: 'ES256', typ: 'oauth-authz-req+jwt' },
+        { client_id: 'rp.example', nonce: 'n-123', aud: 'wallet' }
+      );
+
+      const requestObject = service.parse(jwt);
+      expect(service.validate(requestObject)).toBe(true);
     });
   });
 });

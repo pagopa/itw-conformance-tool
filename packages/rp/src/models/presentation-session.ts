@@ -1,87 +1,105 @@
-export type PresentationSessionState = 'pending' | 'verified' | 'rejected' | 'expired' | 'denied';
+import type { SessionRecord, SessionState } from '@itw-conformance-tool/database';
 
-export type PresentationFlowType = 'presentation';
+export type PresentationSessionState = 'checking' | 'denied' | 'expired' | 'pending' | 'rejected' | 'verified';
 
-export type PresentationValues = Array<Record<string, string | null>>;
+export type PresentationFlowType = 'cross-device' | 'same-device';
+
+export type PresentationValues = Record<string, null | string>[];
 
 export interface PresentationSession {
-  sessionId: string;
+  id: string;
   state: PresentationSessionState;
   flowType: PresentationFlowType;
-  requestUri?: string;
-  redirectUri?: string;
-  values: PresentationValues;
-  createdAt: Date;
-  expiresAt: Date;
-  verifiedAt?: Date;
+  jwt: string;
+  redirectUri: string | null;
+  values: PresentationValues | null;
+  expiresAt: number;
+  createdAt: number;
 }
 
-export interface PresentationSessionDetails {
-  redirectUri?: string;
-  values: PresentationValues;
+interface PersistedDetails {
+  rpState: PresentationSessionState;
+  flowType: PresentationFlowType;
+  redirectUri: string | null;
+  values: PresentationValues | null;
+  expiresAt: number;
 }
+
+const TERMINAL_STATES: ReadonlySet<PresentationSessionState> = new Set(['verified', 'rejected', 'denied', 'expired']);
 
 export function isTerminalState(state: PresentationSessionState): boolean {
-  return ['verified', 'rejected', 'expired', 'denied'].includes(state);
+  return TERMINAL_STATES.has(state);
 }
 
-export function isExpiredNow(expiresAt: Date): boolean {
-  return new Date() > expiresAt;
-}
-
-export function mapToDbState(state: PresentationSessionState): string {
-  const stateMap: Record<PresentationSessionState, string> = {
-    pending: 'pending',
-    verified: 'verified',
-    rejected: 'rejected',
-    expired: 'expired',
-    denied: 'denied'
-  };
-  return stateMap[state];
-}
-
-export function createPresentationSession(sessionId: string, ttlSeconds = 300): PresentationSession {
-  const now = new Date();
-  return {
-    sessionId,
-    state: 'pending',
-    flowType: 'presentation',
-    values: [],
-    createdAt: now,
-    expiresAt: new Date(now.getTime() + ttlSeconds * 1000)
-  };
-}
-
-export function recordToPresentationSession(record: Record<string, unknown>): PresentationSession {
-  const detailsStr = record.details ? String(record.details) : '{"redirectUri":"","values":[]}';
-  let details: PresentationSessionDetails;
-
-  try {
-    details = JSON.parse(detailsStr) as PresentationSessionDetails;
-  } catch {
-    details = { redirectUri: '', values: [] };
+// Maps the rich RP state machine (6 values) onto the database's reduced one (3 values),
+// because @itw-conformance-tool/database persists only 'pending' | 'completed' | 'failed'.
+export function mapToDbState(state: PresentationSessionState): SessionState {
+  if (state === 'verified') {
+    return 'completed';
   }
-
-  return {
-    sessionId: String(record.id),
-    state: String(record.state) as PresentationSessionState,
-    flowType: 'presentation',
-    redirectUri: details.redirectUri,
-    values: details.values,
-    createdAt: new Date(String(record.created_at)),
-    expiresAt: new Date(String(record.expires_at)),
-    verifiedAt: record.verified_at ? new Date(String(record.verified_at)) : undefined
-  };
+  if (state === 'rejected' || state === 'denied' || state === 'expired') {
+    return 'failed';
+  }
+  return 'pending';
 }
 
-export function serializeDetails(details: PresentationSessionDetails): string {
+export function serializeDetails(details: PersistedDetails): string {
   return JSON.stringify(details);
 }
 
-export function parseDetails(detailsStr: string): PresentationSessionDetails {
-  try {
-    return JSON.parse(detailsStr) as PresentationSessionDetails;
-  } catch {
-    return { redirectUri: '', values: [] };
+export function parseDetails(response: string | null): PersistedDetails | undefined {
+  if (response === null) {
+    return undefined;
   }
+  return JSON.parse(response) as PersistedDetails;
+}
+
+export function recordToPresentationSession(record: SessionRecord): PresentationSession {
+  const details = parseDetails(record.response);
+  if (details === undefined) {
+    throw new Error(`Session ${record.id} has no persisted details`);
+  }
+  if (record.requestObject === null) {
+    throw new Error(`Session ${record.id} has no JWT`);
+  }
+  return {
+    id: record.id,
+    state: details.rpState,
+    flowType: details.flowType,
+    jwt: record.requestObject,
+    redirectUri: details.redirectUri,
+    values: details.values,
+    expiresAt: details.expiresAt,
+    createdAt: record.createdAt
+  };
+}
+
+export function isExpiredNow(
+  session: Pick<PresentationSession, 'expiresAt' | 'state'>,
+  nowMs: number = Date.now()
+): boolean {
+  if (isTerminalState(session.state)) {
+    return false;
+  }
+  return session.expiresAt < nowMs;
+}
+
+export function createPresentationSession(input: {
+  id: string;
+  jwt: string;
+  flowType: PresentationFlowType;
+  ttlMs: number;
+  createdAtMs?: number;
+}): PresentationSession {
+  const createdAt = input.createdAtMs ?? Date.now();
+  return {
+    id: input.id,
+    state: 'pending',
+    flowType: input.flowType,
+    jwt: input.jwt,
+    redirectUri: null,
+    values: null,
+    expiresAt: createdAt + input.ttlMs,
+    createdAt
+  };
 }

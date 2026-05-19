@@ -1,16 +1,7 @@
-import type { PresentationSession, PresentationSessionDetails, PresentationSessionState } from './models/index.js';
+import type { INonceRepository, ISessionRepository } from '@itw-conformance-tool/database';
 
-export interface SessionRepository {
-  create(session: PresentationSession): Promise<void>;
-  findById(sessionId: string): Promise<PresentationSession | null>;
-  update(sessionId: string, state: PresentationSessionState, details?: PresentationSessionDetails): Promise<void>;
-  delete(sessionId: string): Promise<void>;
-}
-
-export interface NonceRepository {
-  store(nonce: string, ttlSeconds: number): Promise<void>;
-  consume(nonce: string): Promise<boolean>;
-}
+export type SessionRepository = ISessionRepository;
+export type NonceRepository = INonceRepository;
 
 export interface RequestObjectServiceConfig {
   clientId: string;

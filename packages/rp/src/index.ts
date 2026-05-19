@@ -1,21 +1,4 @@
-/**
- * RP Domain Public API
- *
- * This is the primary export point for the Relying Party domain layer.
- * Consumers should import from this index rather than internal paths.
- *
- * @example
- * ```ts
- * import {
- *   loadRpConfig,
- *   SessionService,
- *   PresentationSession,
- *   createPresentationSession
- * } from '@itw-conformance-tool/rp';
- * ```
- */
-
-// Configuration
+// Config
 export {
   DEFAULT_DATA_DIR,
   DEFAULT_HOST,
@@ -23,13 +6,13 @@ export {
   deriveBaseUrl,
   loadRpConfig,
   parseIni,
-  rpConfigSchema_export as rpConfigSchema,
+  rpConfigSchema,
   type LoadRpConfigInput,
   type LoadRpConfigResult,
   type RpConfig
 } from './config.js';
 
-// Models - Public domain types
+// Models
 export {
   createPresentationSession,
   isExpiredNow,
@@ -40,41 +23,23 @@ export {
   serializeDetails,
   type PresentationFlowType,
   type PresentationSession,
-  type PresentationSessionDetails,
   type PresentationSessionState,
   type PresentationValues
 } from './models/presentation-session.js';
+export * from './models/request-object.js';
+export * from './models/auth-response.js';
 
-export {
-  isRequestObjectExpired,
-  validateRequestObject,
-  requestObjectSchema,
-  type RequestObject
-} from './models/request-object.js';
-
-export {
-  isAuthResponseError,
-  isAuthResponseSuccess,
-  type AuthResponse,
-  type AuthResponseError,
-  type AuthResponseErrorCode,
-  type AuthResponseSuccess
-} from './models/auth-response.js';
-
-// Services - Public use case implementations
+// Services
 export {
   SessionService,
   type CreateSessionInput,
   type SessionUpdateOptions,
-  type TransitionalState,
-  type SessionRepository
+  type TransitionalState
 } from './services/session-service.js';
-
 export { InvalidRequestObjectJwtError, RequestObjectService } from './services/request-object-service.js';
 
-// Repository interfaces - Wiring contracts for DI
 export {
   type NonceRepository,
   type RequestObjectServiceConfig,
-  type SessionRepository as ISessionRepository
+  type SessionRepository
 } from './repositories.js';

@@ -1,80 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { validateRequestObject, isRequestObjectExpired } from '../../models/request-object.js';
+import { createRequestObject } from '../../models/request-object.js';
 
-describe('RequestObject Model', () => {
-  describe('validateRequestObject', () => {
-    it('should validate a correct request object', () => {
-      const obj = {
-        iss: 'https://rp.example.com',
-        aud: 'wallet',
-        client_id: 'rp.example.com',
-        nonce: 'n-123',
-        state: 's-456',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 300
-      };
+describe('createRequestObject', () => {
+  it('returns an object with empty header and claims when only the JWT is provided', () => {
+    const jwt = 'header.payload.signature';
+    const obj = createRequestObject(jwt);
 
-      const result = validateRequestObject(obj);
-
-      expect(result.iss).toBe('https://rp.example.com');
-      expect(result.client_id).toBe('rp.example.com');
-      expect(result.nonce).toBe('n-123');
-    });
-
-    it('should reject invalid request objects', () => {
-      const invalid = {
-        iss: 'not-a-url',
-        aud: 'wallet'
-      };
-
-      expect(() => validateRequestObject(invalid)).toThrow();
-    });
-
-    it('should allow optional presentation_definition', () => {
-      const obj = {
-        iss: 'https://rp.example.com',
-        aud: 'wallet',
-        client_id: 'rp.example.com',
-        nonce: 'n-123',
-        state: 's-456',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 300,
-        presentation_definition: { id: 'test', input_descriptors: [] }
-      };
-
-      const result = validateRequestObject(obj);
-      expect(result.presentation_definition).toBeDefined();
-    });
+    expect(obj.jwt).toBe(jwt);
+    expect(obj.header).toEqual({});
+    expect(obj.claims).toEqual({});
   });
 
-  describe('isRequestObjectExpired', () => {
-    it('should detect expired request objects', () => {
-      const obj = {
-        iss: 'https://rp.example.com',
-        aud: 'wallet',
-        client_id: 'rp.example.com',
-        nonce: 'n-123',
-        state: 's-456',
-        iat: Math.floor(Date.now() / 1000) - 600,
-        exp: Math.floor(Date.now() / 1000) - 1
-      };
+  it('preserves the provided claims and header', () => {
+    const jwt = 'h.p.s';
+    const claims = { client_id: 'rp.example', nonce: 'n-123' };
+    const header = { alg: 'ES256', typ: 'oauth-authz-req+jwt' };
 
-      expect(isRequestObjectExpired(obj)).toBe(true);
-    });
+    const obj = createRequestObject(jwt, claims, header);
 
-    it('should detect non-expired request objects', () => {
-      const obj = {
-        iss: 'https://rp.example.com',
-        aud: 'wallet',
-        client_id: 'rp.example.com',
-        nonce: 'n-123',
-        state: 's-456',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 300
-      };
-
-      expect(isRequestObjectExpired(obj)).toBe(false);
-    });
+    expect(obj.claims).toEqual(claims);
+    expect(obj.header).toEqual(header);
   });
 });

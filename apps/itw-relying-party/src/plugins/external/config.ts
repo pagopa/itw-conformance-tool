@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { loadRpConfig } from '@itw-conformance-tool/rp';
+import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
+import { loadRpConfig, SessionService } from '@itw-conformance-tool/rp';
 import fp from 'fastify-plugin';
 
 interface RpConfig {
@@ -17,6 +18,14 @@ interface RpConfig {
 declare module 'fastify' {
   interface FastifyInstance {
     config: RpConfig;
+    rp: {
+      authRequestPrivateKeyPem: string;
+      authResponsePrivateKeyPem: string;
+      basePath: string;
+      clientId: string;
+      nonceRepository: SqliteNonceRepository;
+      sessionService: SessionService;
+    };
   }
 }
 
@@ -44,7 +53,7 @@ const configPlugin = fp(async (app) => {
   const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
 
   // Load base RP config
-  const loadResult = await loadRpConfig({ configFile: configFilePath });
+  const loadResult = await loadRpConfig({ configFilePath });
   const rpConfigFromLib = loadResult.config;
   const dataDir = rpConfigFromLib.dataDir;
 
@@ -63,14 +72,31 @@ const configPlugin = fp(async (app) => {
   const runtimeConfig: RpConfig = {
     host: rpConfigFromLib.host,
     port: rpConfigFromLib.port,
-    baseUrl: rpConfigFromLib.baseUrl ?? loadResult.baseUrl,
+    baseUrl: rpConfigFromLib.baseUrl,
     dataDir: rpConfigFromLib.dataDir,
     configFilePath,
     authRequestPrivateKey,
     authResponsePrivateKey
   };
 
+  const databaseClient = new DatabaseClient({ dataDir: runtimeConfig.dataDir });
+  const sessionRepository = new SqliteSessionRepository(databaseClient.db);
+  const nonceRepository = new SqliteNonceRepository(databaseClient.db);
+
+  const rp = {
+    authRequestPrivateKeyPem: runtimeConfig.authRequestPrivateKey,
+    authResponsePrivateKeyPem: runtimeConfig.authResponsePrivateKey,
+    basePath: runtimeConfig.baseUrl,
+    clientId: runtimeConfig.baseUrl,
+    nonceRepository,
+    sessionService: new SessionService(sessionRepository)
+  };
+
   app.decorate('config', runtimeConfig);
+  app.decorate('rp', rp);
+  app.addHook('onClose', async () => {
+    databaseClient.close();
+  });
 });
 
 export default configPlugin;

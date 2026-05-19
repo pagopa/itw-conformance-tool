@@ -1,90 +1,153 @@
-import { describe, it, expect } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { loadRpConfig, deriveBaseUrl, parseIni } from '../config.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-describe('Config', () => {
-  describe('loadRpConfig', () => {
-    it('should use default values when no env vars set', async () => {
-      const result = await loadRpConfig({ env: {} });
+import {
+  DEFAULT_DATA_DIR,
+  DEFAULT_HOST,
+  DEFAULT_PORT,
+  deriveBaseUrl,
+  loadRpConfig,
+  parseIni,
+  rpConfigSchema
+} from '../config.js';
 
-      expect(result.config.host).toBe('localhost');
-      expect(result.config.port).toBe(8080);
-      expect(result.baseUrl).toBe('http://localhost:8080');
-    });
+describe('parseIni', () => {
+  it('parses sections, keys, and ignores comments + blank lines', () => {
+    const raw = [
+      '; full-line comment',
+      '# another comment',
+      '',
+      '[Global]',
+      '  data_dir = ~/somewhere ; trailing comment',
+      '',
+      '[rp]',
+      'port = 9090',
+      'invalid line without equals'
+    ].join('\n');
 
-    it('should override from env vars', async () => {
-      const result = await loadRpConfig({
-        env: {
-          ITW_CT_RP_HOST: 'example.com',
-          ITW_CT_RP_PORT: '9000',
-          ITW_CT_DATA_DIR: '/custom/data'
-        }
-      });
+    const parsed = parseIni(raw);
 
-      expect(result.config.host).toBe('example.com');
-      expect(result.config.port).toBe(9000);
-      expect(result.config.dataDir).toBe('/custom/data');
-      expect(result.baseUrl).toBe('http://example.com:9000');
-    });
-
-    it('should use custom base URL if provided', async () => {
-      const result = await loadRpConfig({
-        env: {
-          ITW_CT_RP_BASE_URL: 'https://custom.example.com'
-        }
-      });
-
-      expect(result.baseUrl).toBe('https://custom.example.com');
-    });
+    expect(parsed.global?.data_dir).toBe('~/somewhere');
+    expect(parsed.rp?.port).toBe('9090');
   });
 
-  describe('deriveBaseUrl', () => {
-    it('should derive base URL from host and port', () => {
-      const url = deriveBaseUrl('localhost', 8080);
-      expect(url).toBe('http://localhost:8080');
-    });
+  it('lowercases section and key names', () => {
+    const parsed = parseIni('[GLOBAL]\nDATA_DIR=/tmp');
+    expect(parsed.global?.data_dir).toBe('/tmp');
+  });
+});
 
-    it('should work with different host and port', () => {
-      const url = deriveBaseUrl('rp.example.com', 3000);
-      expect(url).toBe('http://rp.example.com:3000');
-    });
+describe('deriveBaseUrl', () => {
+  it('uses localhost when host is 0.0.0.0', () => {
+    expect(deriveBaseUrl({ host: '0.0.0.0', port: 8080 })).toBe('http://localhost:8080');
   });
 
-  describe('parseIni', () => {
-    it('should parse simple ini format', () => {
-      const ini = `[rp]
-host=localhost
-port=8080
+  it('uses the configured host otherwise', () => {
+    expect(deriveBaseUrl({ host: 'rp.example.com', port: 8080 })).toBe('http://rp.example.com:8080');
+  });
+});
 
-[issuer]
-url=http://issuer.example.com`;
+describe('rpConfigSchema', () => {
+  it('accepts a valid config', () => {
+    const parsed = rpConfigSchema.safeParse({
+      host: '0.0.0.0',
+      port: 8080,
+      baseUrl: 'http://localhost:8080',
+      dataDir: '/tmp/itw',
+      configFilePath: '/tmp/config.ini'
+    });
+    expect(parsed.success).toBe(true);
+  });
 
-      const result = parseIni(ini);
+  it('rejects out-of-range ports', () => {
+    const parsed = rpConfigSchema.safeParse({
+      host: '0.0.0.0',
+      port: 99999,
+      baseUrl: 'http://localhost:99999',
+      dataDir: '/tmp',
+      configFilePath: '/tmp/c.ini'
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
 
-      expect(result.rp).toEqual({ host: 'localhost', port: '8080' });
-      expect(result.issuer).toEqual({ url: 'http://issuer.example.com' });
+describe('loadRpConfig', () => {
+  let workDir: string;
+
+  beforeEach(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'itw-rp-config-'));
+  });
+
+  afterEach(() => {
+    rmSync(workDir, { recursive: true, force: true });
+  });
+
+  it('returns defaults when no config file exists', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {}
     });
 
-    it('should ignore comments and empty lines', () => {
-      const ini = `; This is a comment
-[rp]
-; Another comment
-host=localhost
+    expect(result.configFileFound).toBe(false);
+    expect(result.config.host).toBe(DEFAULT_HOST);
+    expect(result.config.port).toBe(DEFAULT_PORT);
+    expect(result.config.dataDir).toBe(DEFAULT_DATA_DIR);
+    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+  });
 
-port=8080`;
+  it('reads [rp].port and [global].data_dir from the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, '[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\n');
 
-      const result = parseIni(ini);
+    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
 
-      expect(result.rp).toEqual({ host: 'localhost', port: '8080' });
+    expect(result.configFileFound).toBe(true);
+    expect(result.config.port).toBe(9090);
+    expect(result.config.dataDir).toBe('/opt/itw-data');
+    expect(result.config.baseUrl).toBe('http://localhost:9090');
+    expect(result.config.configFilePath).toBe(cfgPath);
+  });
+
+  it('env override ITW_CT_RP_PORT wins over the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, '[rp]\nport = 9090\n');
+
+    const result = loadRpConfig({
+      configFilePath: cfgPath,
+      env: { ITW_CT_RP_PORT: '12345' }
     });
 
-    it('should handle values with equals signs', () => {
-      const ini = `[section]
-key=value=with=equals`;
+    expect(result.config.port).toBe(12345);
+  });
 
-      const result = parseIni(ini);
+  it('env override ITW_CT_DATA_DIR wins over the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, '[global]\ndata_dir = /from/ini\n');
 
-      expect(result.section.key).toBe('value=with=equals');
+    const result = loadRpConfig({
+      configFilePath: cfgPath,
+      env: { ITW_CT_DATA_DIR: '/from/env' }
     });
+
+    expect(result.config.dataDir).toBe('/from/env');
+  });
+
+  it('rejects an invalid port in the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, '[rp]\nport = 99999\n');
+
+    expect(() => loadRpConfig({ configFilePath: cfgPath, env: {} })).toThrow(/Invalid rp\.port/);
+  });
+
+  it('rejects an invalid port in the env override', () => {
+    expect(() =>
+      loadRpConfig({
+        configFilePath: join(workDir, 'missing.ini'),
+        env: { ITW_CT_RP_PORT: 'not-a-port' }
+      })
+    ).toThrow(/Invalid ITW_CT_RP_PORT/);
   });
 });

@@ -4,100 +4,173 @@ import {
   createPresentationSession,
   isExpiredNow,
   isTerminalState,
-  recordToPresentationSession,
-  serializeDetails,
+  mapToDbState,
   parseDetails,
-  type PresentationSessionDetails
+  recordToPresentationSession,
+  serializeDetails
 } from '../../models/presentation-session.js';
 
-describe('PresentationSession Model', () => {
-  describe('createPresentationSession', () => {
-    it('should create a new pending session', () => {
-      const session = createPresentationSession('test-session-1');
+import type { SessionRecord } from '@itw-conformance-tool/database';
 
-      expect(session.sessionId).toBe('test-session-1');
+describe('PresentationSession model', () => {
+  describe('createPresentationSession', () => {
+    it('returns a pending session with the requested TTL', () => {
+      const createdAt = 1_000_000;
+      const session = createPresentationSession({
+        id: 'sess-1',
+        jwt: 'jwt-value',
+        flowType: 'cross-device',
+        ttlMs: 60_000,
+        createdAtMs: createdAt
+      });
+
+      expect(session.id).toBe('sess-1');
       expect(session.state).toBe('pending');
-      expect(session.flowType).toBe('presentation');
-      expect(session.values).toEqual([]);
-      expect(session.createdAt).toBeDefined();
-      expect(session.expiresAt).toBeDefined();
+      expect(session.flowType).toBe('cross-device');
+      expect(session.jwt).toBe('jwt-value');
+      expect(session.redirectUri).toBeNull();
+      expect(session.values).toBeNull();
+      expect(session.createdAt).toBe(createdAt);
+      expect(session.expiresAt).toBe(createdAt + 60_000);
     });
 
-    it('should respect custom TTL', () => {
-      const beforeCreate = Date.now();
-      const session = createPresentationSession('test-session-2', 60);
-      const afterCreate = Date.now();
+    it('uses Date.now() when createdAtMs is omitted', () => {
+      const before = Date.now();
+      const session = createPresentationSession({
+        id: 'sess-2',
+        jwt: 'jwt',
+        flowType: 'same-device',
+        ttlMs: 10_000
+      });
+      const after = Date.now();
 
-      const expectedMinExpiry = beforeCreate + 60 * 1000;
-      const expectedMaxExpiry = afterCreate + 60 * 1000;
-
-      expect(session.expiresAt.getTime()).toBeGreaterThanOrEqual(expectedMinExpiry);
-      expect(session.expiresAt.getTime()).toBeLessThanOrEqual(expectedMaxExpiry);
+      expect(session.createdAt).toBeGreaterThanOrEqual(before);
+      expect(session.createdAt).toBeLessThanOrEqual(after);
+      expect(session.expiresAt - session.createdAt).toBe(10_000);
     });
   });
 
   describe('isTerminalState', () => {
-    it('should identify terminal states', () => {
-      expect(isTerminalState('verified')).toBe(true);
-      expect(isTerminalState('rejected')).toBe(true);
-      expect(isTerminalState('expired')).toBe(true);
-      expect(isTerminalState('denied')).toBe(true);
+    it.each(['verified', 'rejected', 'denied', 'expired'] as const)('treats %s as terminal', (state) => {
+      expect(isTerminalState(state)).toBe(true);
     });
 
-    it('should identify non-terminal states', () => {
-      expect(isTerminalState('pending')).toBe(false);
+    it.each(['pending', 'checking'] as const)('does not treat %s as terminal', (state) => {
+      expect(isTerminalState(state)).toBe(false);
     });
   });
 
-  describe('isExpiredNow', () => {
-    it('should detect expired sessions', () => {
-      const pastDate = new Date(Date.now() - 1000);
-      expect(isExpiredNow(pastDate)).toBe(true);
+  describe('mapToDbState', () => {
+    it('maps pending and checking to db.pending', () => {
+      expect(mapToDbState('pending')).toBe('pending');
+      expect(mapToDbState('checking')).toBe('pending');
     });
 
-    it('should detect non-expired sessions', () => {
-      const futureDate = new Date(Date.now() + 10000);
-      expect(isExpiredNow(futureDate)).toBe(false);
+    it('maps verified to db.completed', () => {
+      expect(mapToDbState('verified')).toBe('completed');
+    });
+
+    it.each(['rejected', 'denied', 'expired'] as const)('maps %s to db.failed', (state) => {
+      expect(mapToDbState(state)).toBe('failed');
     });
   });
 
-  describe('serializeDetails and parseDetails', () => {
-    it('should serialize and deserialize details', () => {
-      const original: PresentationSessionDetails = {
-        redirectUri: 'http://example.com/callback',
-        values: [{ name: 'John', age: '30' }]
+  describe('serializeDetails / parseDetails', () => {
+    it('round-trips persisted details', () => {
+      const original = {
+        rpState: 'checking' as const,
+        flowType: 'cross-device' as const,
+        redirectUri: 'https://wallet.example/cb',
+        values: [{ given_name: 'Mario', family_name: null }],
+        expiresAt: 1_700_000_000_000
       };
 
-      const serialized = serializeDetails(original);
-      const parsed = parseDetails(serialized);
+      const round = parseDetails(serializeDetails(original));
 
-      expect(parsed).toEqual(original);
+      expect(round).toEqual(original);
     });
 
-    it('should handle parse errors gracefully', () => {
-      const result = parseDetails('invalid json');
-      expect(result).toEqual({ redirectUri: '', values: [] });
+    it('returns undefined when response is null', () => {
+      expect(parseDetails(null)).toBeUndefined();
     });
   });
 
   describe('recordToPresentationSession', () => {
-    it('should convert database record to domain model', () => {
-      const now = new Date();
-      const record = {
-        id: 'session-123',
-        state: 'verified',
-        details: JSON.stringify({ redirectUri: 'http://example.com', values: [] }),
-        created_at: now.toISOString(),
-        expires_at: new Date(now.getTime() + 300000).toISOString(),
-        verified_at: now.toISOString()
+    it('builds a session from a SessionRecord with persisted details', () => {
+      const record: SessionRecord = {
+        id: 'sess-3',
+        state: 'pending',
+        requestObject: 'jwt-value',
+        response: serializeDetails({
+          rpState: 'checking',
+          flowType: 'same-device',
+          redirectUri: 'https://wallet.example/cb',
+          values: null,
+          expiresAt: 1_700_000_000_000
+        }),
+        createdAt: 1_699_999_000_000
       };
 
       const session = recordToPresentationSession(record);
 
-      expect(session.sessionId).toBe('session-123');
-      expect(session.state).toBe('verified');
-      expect(session.redirectUri).toBe('http://example.com');
-      expect(session.verifiedAt).toBeDefined();
+      expect(session).toEqual({
+        id: 'sess-3',
+        state: 'checking',
+        flowType: 'same-device',
+        jwt: 'jwt-value',
+        redirectUri: 'https://wallet.example/cb',
+        values: null,
+        expiresAt: 1_700_000_000_000,
+        createdAt: 1_699_999_000_000
+      });
+    });
+
+    it('throws when persisted details are missing', () => {
+      const record: SessionRecord = {
+        id: 'sess-4',
+        state: 'pending',
+        requestObject: 'jwt-value',
+        response: null,
+        createdAt: 0
+      };
+
+      expect(() => recordToPresentationSession(record)).toThrow(/persisted details/);
+    });
+
+    it('throws when JWT is missing', () => {
+      const record: SessionRecord = {
+        id: 'sess-5',
+        state: 'pending',
+        requestObject: null,
+        response: serializeDetails({
+          rpState: 'pending',
+          flowType: 'cross-device',
+          redirectUri: null,
+          values: null,
+          expiresAt: 0
+        }),
+        createdAt: 0
+      };
+
+      expect(() => recordToPresentationSession(record)).toThrow(/JWT/);
+    });
+  });
+
+  describe('isExpiredNow', () => {
+    it('returns true for non-terminal sessions past expiry', () => {
+      expect(isExpiredNow({ state: 'pending', expiresAt: 100 }, 200)).toBe(true);
+      expect(isExpiredNow({ state: 'checking', expiresAt: 100 }, 200)).toBe(true);
+    });
+
+    it('returns false for non-terminal sessions not yet expired', () => {
+      expect(isExpiredNow({ state: 'pending', expiresAt: 200 }, 100)).toBe(false);
+    });
+
+    it('never considers terminal sessions expired', () => {
+      expect(isExpiredNow({ state: 'verified', expiresAt: 0 }, 999)).toBe(false);
+      expect(isExpiredNow({ state: 'rejected', expiresAt: 0 }, 999)).toBe(false);
+      expect(isExpiredNow({ state: 'denied', expiresAt: 0 }, 999)).toBe(false);
+      expect(isExpiredNow({ state: 'expired', expiresAt: 0 }, 999)).toBe(false);
     });
   });
 });

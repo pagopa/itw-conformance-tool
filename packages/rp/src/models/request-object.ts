@@ -1,22 +1,17 @@
-import { z } from 'zod';
-
-export const requestObjectSchema = z.object({
-  iss: z.string().url(),
-  aud: z.string(),
-  client_id: z.string(),
-  nonce: z.string(),
-  state: z.string(),
-  iat: z.number().int(),
-  exp: z.number().int(),
-  presentation_definition: z.record(z.unknown()).optional()
-});
-
-export type RequestObject = z.infer<typeof requestObjectSchema>;
-
-export function validateRequestObject(obj: unknown): RequestObject {
-  return requestObjectSchema.parse(obj);
+/**
+ * An OpenID Connect / OpenID4VP request object: the signed JWT and the
+ * decoded header + payload claims.
+ */
+export interface RequestObject {
+  jwt: string;
+  header: Record<string, unknown>;
+  claims: Record<string, unknown>;
 }
 
-export function isRequestObjectExpired(requestObject: RequestObject): boolean {
-  return Math.floor(Date.now() / 1000) > requestObject.exp;
+export function createRequestObject(
+  jwt: string,
+  claims: Record<string, unknown> = {},
+  header: Record<string, unknown> = {}
+): RequestObject {
+  return { jwt, header, claims };
 }

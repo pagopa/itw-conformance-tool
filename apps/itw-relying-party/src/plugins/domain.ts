@@ -5,12 +5,12 @@ import fp from 'fastify-plugin';
 
 import { SqliteNonceRepository, SqliteSessionRepository } from '../infrastructure/index.js';
 
-import type { NonceRepository, SessionRepository } from '@itw-conformance-tool/rp';
+import type { INonceRepository, ISessionRepository } from '@itw-conformance-tool/database';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    sessionRepository: SessionRepository;
-    nonceRepository: NonceRepository;
+    sessionRepository: ISessionRepository;
+    nonceRepository: INonceRepository;
   }
 }
 

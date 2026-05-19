@@ -1,45 +1,40 @@
 import { describe, it, expect } from 'vitest';
 
-import { isAuthResponseError, isAuthResponseSuccess, type AuthResponse } from '../../models/auth-response.js';
+import { createSuccessAuthResponse, createErrorAuthResponse } from '../../models/auth-response.js';
 
-describe('AuthResponse Model', () => {
-  describe('isAuthResponseError', () => {
-    it('should identify error responses', () => {
-      const errorResponse: AuthResponse = {
-        error: 'invalid_request',
-        error_description: 'Request is invalid',
-        state: 's-123'
-      };
+describe('AuthResponse', () => {
+  describe('createSuccessAuthResponse', () => {
+    it('should create a success response with code', () => {
+      const response = createSuccessAuthResponse('auth-code-123');
 
-      expect(isAuthResponseError(errorResponse)).toBe(true);
+      expect(response.code).toBe('auth-code-123');
+      expect(response.error).toBeUndefined();
+      expect(response.state).toBeUndefined();
     });
 
-    it('should reject success responses', () => {
-      const successResponse: AuthResponse = {
-        redirect_uri: 'http://example.com/callback'
-      };
+    it('should create a success response with code and state', () => {
+      const response = createSuccessAuthResponse('auth-code-123', 'state-xyz');
 
-      expect(isAuthResponseError(successResponse)).toBe(false);
+      expect(response.code).toBe('auth-code-123');
+      expect(response.state).toBe('state-xyz');
+      expect(response.error).toBeUndefined();
     });
   });
 
-  describe('isAuthResponseSuccess', () => {
-    it('should identify success responses', () => {
-      const successResponse: AuthResponse = {
-        redirect_uri: 'http://example.com/callback'
-      };
+  describe('createErrorAuthResponse', () => {
+    it('should create an error response', () => {
+      const response = createErrorAuthResponse('invalid_request', 'Missing client_id');
 
-      expect(isAuthResponseSuccess(successResponse)).toBe(true);
+      expect(response.error).toBe('invalid_request');
+      expect(response.errorDescription).toBe('Missing client_id');
+      expect(response.code).toBeUndefined();
     });
 
-    it('should reject error responses', () => {
-      const errorResponse: AuthResponse = {
-        error: 'access_denied',
-        error_description: 'User denied',
-        state: 's-123'
-      };
+    it('should create an error response with state', () => {
+      const response = createErrorAuthResponse('access_denied', 'User denied access', 'state-abc');
 
-      expect(isAuthResponseSuccess(errorResponse)).toBe(false);
+      expect(response.error).toBe('access_denied');
+      expect(response.state).toBe('state-abc');
     });
   });
 });
