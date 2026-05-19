@@ -37,3 +37,5 @@ export {
   type TransitionalState
 } from './services/session-service.js';
 export { InvalidRequestObjectJwtError, RequestObjectService } from './services/request-object-service.js';
+
+export { type NonceRepository, type RequestObjectServiceConfig, type SessionRepository } from './repositories.js';
