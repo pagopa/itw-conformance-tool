@@ -33,8 +33,10 @@ export function loadConfigs(
         configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
       } else {
         configFileExists = false;
+        configs = getDefaultConfigs(rootPath);
         emitLog(
-          `Config file at ${flags.config.path} could not be parsed: ${parsedINI.error}. Starting with default values.\n` +
+          `Config file at ${flags.config.path} could not be parsed: ${parsedINI.error}. Starting with default values.
+` +
             `Content:\n${JSON.stringify(configs, null, 2)}`,
           'warn'
         );
@@ -58,8 +60,10 @@ export function loadConfigs(
       configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
     } else {
       configFileExists = false;
+      configs = getDefaultConfigs(rootPath);
       emitLog(
-        `Config file at ${defaultConfigPath} could not be parsed: ${parsedINI.error}. Starting with default values.\n` +
+        `Config file at ${defaultConfigPath} could not be parsed: ${parsedINI.error}. Starting with default values.
+` +
           `Content:\n${JSON.stringify(configs, null, 2)}`,
         'warn'
       );
