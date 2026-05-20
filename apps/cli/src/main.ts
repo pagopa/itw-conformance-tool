@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -209,9 +211,9 @@ function isCommand(value: string): value is Command {
 function resolveWorkspaceRoot(from: string): string {
   const workspaceRoot = resolve(from);
   const hasNx = existsSync(resolve(workspaceRoot, 'nx.json'));
-  const hasPackage = existsSync(resolve(workspaceRoot, 'package.json'));
+  const hasPackageJson = existsSync(resolve(workspaceRoot, 'package.json'));
 
-  if (!hasNx || !hasPackage) {
+  if (!hasNx || !hasPackageJson) {
     throw new Error('This command must be run from the itw-conformance-tool workspace root');
   }
 
