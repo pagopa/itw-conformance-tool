@@ -46,7 +46,7 @@ const domainPlugin = fp(
   },
   {
     name: 'domain',
-    dependencies: ['configPlugin']
+    dependencies: ['config']
   }
 );
 
