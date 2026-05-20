@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 import { type Level } from '@itw-conformance-tool/logger';
@@ -33,29 +33,29 @@ export function init(
   const defaultConfigPath =
     flags.config.value && existsFileSync(flags.config.path)
       ? expandPath(flags.config.path, rootPath)
-      : resolve(rootPath, 'config.ini');
+      : join(rootPath, 'config.ini');
 
-  let dataDirPath = resolve(rootPath, '.itw-conformance-tool');
-  let issuerDirPath = resolve(dataDirPath, 'issuer');
-  let rpDirPath = resolve(dataDirPath, 'rp');
+  let dataDirPath = join(rootPath, '.itw-conformance-tool');
+  let issuerDirPath = join(dataDirPath, 'issuer');
+  let rpDirPath = join(dataDirPath, 'rp');
   const configFilePath = defaultConfigPath;
 
-  let signingKeysPath = resolve(issuerDirPath, 'signing-keys.jwks.json');
-  let iacaCertPath = resolve(issuerDirPath, 'iaca-cert.pem');
-  let iacaKeyPath = resolve(issuerDirPath, 'iaca-key.pem');
-  let authRequestKeyPath = resolve(rpDirPath, 'auth-request-key.jwk.json');
-  let authResponseKeyPath = resolve(rpDirPath, 'auth-response-key.jwk.json');
+  let signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
+  let iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
+  let iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
+  let authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
+  let authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
 
   if (configFileExists && !flags.force) {
     dataDirPath = expandPath(configs.global.data_dir, rootPath);
-    issuerDirPath = resolve(dataDirPath, 'issuer');
-    rpDirPath = resolve(dataDirPath, 'rp');
+    issuerDirPath = join(dataDirPath, 'issuer');
+    rpDirPath = join(dataDirPath, 'rp');
 
-    signingKeysPath = resolve(issuerDirPath, 'signing-keys.jwks.json');
-    iacaCertPath = resolve(issuerDirPath, 'iaca-cert.pem');
-    iacaKeyPath = resolve(issuerDirPath, 'iaca-key.pem');
-    authRequestKeyPath = resolve(rpDirPath, 'auth-request-key.jwk.json');
-    authResponseKeyPath = resolve(rpDirPath, 'auth-response-key.jwk.json');
+    signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
+    iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
+    iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
+    authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
+    authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
   }
 
   const dirsPaths = [

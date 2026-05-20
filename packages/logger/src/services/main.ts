@@ -1,6 +1,6 @@
 import pino, { type Logger, type LoggerOptions } from 'pino';
 
-import type { CreateLoggerOptions } from 'src/types/types.js';
+import type { CreateLoggerOptions } from '../types/types.js';
 
 /** Predefined logger options that set the log level
  * based on the environment and configure the timestamp format.

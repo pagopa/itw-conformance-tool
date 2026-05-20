@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { type Logger, type Level } from '@itw-conformance-tool/logger';
 
@@ -47,7 +47,7 @@ export function printHelp(): void {
  */
 export function printVersion(rootPath: string): void {
   let version = 'unknown';
-  const packageJsonPath = resolve(rootPath, 'apps/cli/package.json');
+  const packageJsonPath = join(rootPath, 'apps/cli/package.json');
   if (existsSync(packageJsonPath)) {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
     version = packageJson.version || 'unknown';

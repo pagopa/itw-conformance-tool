@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 
@@ -39,7 +39,7 @@ export function loadConfigs(
     return { configs, configFileExists };
   }
 
-  const defaultConfigPath = resolve(rootPath, 'config.ini');
+  const defaultConfigPath = join(rootPath, 'config.ini');
   configFileExists = existsFileSync(defaultConfigPath);
   if (configFileExists) {
     const parsedINI = parseINI(defaultConfigPath);

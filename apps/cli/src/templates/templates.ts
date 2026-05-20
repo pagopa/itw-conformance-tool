@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { join } from 'node:path';
 
 import type { ConfigType } from '@itw-conformance-tool/config';
 
@@ -27,7 +27,7 @@ port = 8080
 export function getDefaultConfigs(rootPath: string): ConfigType {
   return {
     global: {
-      data_dir: resolve(rootPath, '.itw-conformance-tool'),
+      data_dir: join(rootPath, '.itw-conformance-tool'),
       log_level: 'info'
     },
     'itw-credential-issuer': {

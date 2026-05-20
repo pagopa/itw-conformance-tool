@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 /** Utility function to find the root directory of an
  * Nx workspace by searching for the presence of 'nx.json' file.
@@ -10,9 +10,9 @@ import { resolve } from 'node:path';
 export function findRoot(startDir = process.cwd()): string {
   let dir = startDir;
   while (true) {
-    if (existsSync(resolve(dir, 'nx.json'))) return dir;
+    if (existsSync(join(dir, 'nx.json'))) return dir;
 
-    const parent = resolve(dir, '..');
+    const parent = join(dir, '..');
     if (parent === dir) break;
 
     dir = parent;
@@ -31,9 +31,9 @@ export function findRoot(startDir = process.cwd()): string {
  */
 export function searchNx(rootPath: string): string {
   const candidatePaths = [
-    resolve(rootPath, 'node_modules/nx/dist/bin/nx.js'),
-    resolve(rootPath, 'apps/cli/node_modules/nx/dist/bin/nx.js'),
-    resolve(rootPath, 'apps/cli/node_modules/nx/bin/nx.js')
+    join(rootPath, 'node_modules/nx/dist/bin/nx.js'),
+    join(rootPath, 'apps/cli/node_modules/nx/dist/bin/nx.js'),
+    join(rootPath, 'apps/cli/node_modules/nx/bin/nx.js')
   ];
 
   const nxCliPath = candidatePaths.find((candidatePath) => existsSync(candidatePath));
@@ -61,7 +61,11 @@ export function expandPath(path: string, rootPath: string): string {
     path = path.replace('~', rootPath);
   }
 
-  return resolve(path);
+  if (!isAbsolute(path)) {
+    return join(rootPath, path);
+  }
+
+  return join(path);
 }
 
 /** Creates the file paths for the required keys and certificates
@@ -73,11 +77,11 @@ export function expandPath(path: string, rootPath: string): string {
  */
 export function createFileDirPaths(filePath: string): string[] {
   return [
-    resolve(filePath, 'issuer', 'signing-keys.jwks.json'),
-    resolve(filePath, 'issuer', 'iaca-cert.pem'),
-    resolve(filePath, 'issuer', 'iaca-key.pem'),
-    resolve(filePath, 'rp', 'auth-request-key.jwk.json'),
-    resolve(filePath, 'rp', 'auth-response-key.jwk.json')
+    join(filePath, 'issuer', 'signing-keys.jwks.json'),
+    join(filePath, 'issuer', 'iaca-cert.pem'),
+    join(filePath, 'issuer', 'iaca-key.pem'),
+    join(filePath, 'rp', 'auth-request-key.jwk.json'),
+    join(filePath, 'rp', 'auth-response-key.jwk.json')
   ];
 }
 

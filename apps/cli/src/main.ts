@@ -57,9 +57,9 @@ async function main(): Promise<void> {
     throw new Error(`Nx CLI process exited with code ${exitCode}`);
   } catch (error) {
     if (error instanceof Error) {
-      emitLog(`${error.name}: ${error.message} | ${error.stack}`);
+      emitLog(`${error.name}: ${error.message} | ${error.stack}`, 'error');
     } else {
-      emitLog(`Unknown error: ${String(error)}`);
+      emitLog(`Unknown error: ${String(error)}`, 'error');
     }
 
     process.exit(1);
