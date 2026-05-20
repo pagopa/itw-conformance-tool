@@ -69,10 +69,9 @@ export function expandPath(path: string, rootPath: string): string {
 }
 
 /** Creates the file paths for the required keys and certificates
- * based on the provided root path.
+ * based on the provided file path.
  *
- * @param fileRootPath - The root path for the files.
- * @param rootPath - The root path to replace the tilde with.
+ * @param filePath - The base path for the files.
  * @returns An array of file paths for the required keys and certificates.
  */
 export function createFileDirPaths(filePath: string): string[] {

@@ -28,8 +28,17 @@ export function loadConfigs(
     if (configFileExists) {
       const parsedINI = parseINI(flags.config.path);
       configs = parsedINI.data;
-      emitLog(`Config file found at: ${flags.config.path}\n` + `Content:\n${JSON.stringify(configs, null, 2)}`);
-      configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
+      if (parsedINI.ok) {
+        emitLog(`Config file found at: ${flags.config.path}\n` + `Content:\n${JSON.stringify(configs, null, 2)}`);
+        configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
+      } else {
+        configFileExists = false;
+        emitLog(
+          `Config file at ${flags.config.path} could not be parsed: ${parsedINI.error}. Starting with default values.\n` +
+            `Content:\n${JSON.stringify(configs, null, 2)}`,
+          'warn'
+        );
+      }
     } else {
       emitLog(
         `Config file not found at specified path: ${flags.config.path}. Starting with default values.\n` +
@@ -44,8 +53,17 @@ export function loadConfigs(
   if (configFileExists) {
     const parsedINI = parseINI(defaultConfigPath);
     configs = parsedINI.data;
-    emitLog(`Config file found at: ${defaultConfigPath}` + '\n' + `Content:\n${JSON.stringify(configs, null, 2)}`);
-    configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
+    if (parsedINI.ok) {
+      emitLog(`Config file found at: ${defaultConfigPath}` + '\n' + `Content:\n${JSON.stringify(configs, null, 2)}`);
+      configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
+    } else {
+      configFileExists = false;
+      emitLog(
+        `Config file at ${defaultConfigPath} could not be parsed: ${parsedINI.error}. Starting with default values.\n` +
+          `Content:\n${JSON.stringify(configs, null, 2)}`,
+        'warn'
+      );
+    }
   } else {
     emitLog(
       `Config file not found at default path: ${defaultConfigPath}.\nStarting with default values.\n` +

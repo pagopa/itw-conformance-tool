@@ -24,7 +24,7 @@ async function main(): Promise<void> {
 
     // Handle 'init' command separately to set up configuration and necessary files
     if (command === 'init') {
-      init(rootPath, flags, configs, configFileExists, emitLog);
+      init(rootPath, flags, configs, emitLog);
       emitLog('Start services with: itw-conformance-tool start --all', 'info');
       process.exit(0);
     }

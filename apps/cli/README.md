@@ -136,7 +136,7 @@ Quoted paths are also supported for config arguments.
 
 ## Passing Arguments Through the Root Script
 
-The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `-- --args="..."` form.
+The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `--args="..."` form.
 
 Examples:
 

@@ -17,7 +17,6 @@ import type { CLIFlags } from '../types/types.js';
  *
  * @param flags - The command-line flags.
  * @param configs - The current configuration object.
- * @param configFileExists - A boolean indicating whether the configuration file already exists.
  * @param emitter - A function used to emit structured log messages.
  * @returns It performs file system operations and exits the process upon completion.
  */
@@ -25,38 +24,27 @@ export function init(
   rootPath: string,
   flags: CLIFlags,
   configs: ConfigType,
-  configFileExists: boolean,
   emitter: (event: string, type?: Level) => void
 ): void {
   emitter('CLI init started.');
   const reportMessages = [`- Force overwrite: ${flags.force ? 'yes' : 'no'}`];
-  const defaultConfigPath =
+
+  const configFilePath =
     flags.config.value && existsFileSync(flags.config.path)
       ? expandPath(flags.config.path, rootPath)
       : join(rootPath, 'config.ini');
 
-  let dataDirPath = join(rootPath, '.itw-conformance-tool');
-  let issuerDirPath = join(dataDirPath, 'issuer');
-  let rpDirPath = join(dataDirPath, 'rp');
-  const configFilePath = defaultConfigPath;
+  const dataDirPath = flags.force
+    ? join(rootPath, '.itw-conformance-tool')
+    : expandPath(configs.global.data_dir, rootPath);
+  const issuerDirPath = join(dataDirPath, 'issuer');
+  const rpDirPath = join(dataDirPath, 'rp');
 
-  let signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
-  let iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
-  let iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
-  let authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
-  let authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
-
-  if (configFileExists && !flags.force) {
-    dataDirPath = expandPath(configs.global.data_dir, rootPath);
-    issuerDirPath = join(dataDirPath, 'issuer');
-    rpDirPath = join(dataDirPath, 'rp');
-
-    signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
-    iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
-    iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
-    authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
-    authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
-  }
+  const signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
+  const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
+  const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
+  const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
+  const authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
 
   const dirsPaths = [
     { path: dataDirPath, name: 'Data directory' },
@@ -69,12 +57,12 @@ export function init(
   }
 
   // Create config file if it doesn't exist or if --force is used, then read the config values
-  if (!configFileExists || flags.force) {
-    const configExisted = existsFileSync(configFilePath);
+  const configTargetExists = existsFileSync(configFilePath);
+  if (!configTargetExists || flags.force) {
     writeFileSync(configFilePath, configINITemplate, { encoding: 'utf8', flag: 'w' });
     configs = parseINI(configFilePath).data;
     reportMessages.push(
-      `- Config file ${configExisted ? 'overwritten' : 'created'} at: ${configFilePath}\n` +
+      `- Config file ${configTargetExists ? 'overwritten' : 'created'} at: ${configFilePath}\n` +
         '  Content:\n' +
         JSON.stringify(configs, null, 2)
     );
