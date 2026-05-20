@@ -80,11 +80,23 @@ async function verifyAndExtractKbJwtClaims(
     throw new Error('KB-JWT missing required "sd_hash" claim');
   }
 
-  if (expectedAudience && claims.aud) {
-    if (typeof claims.aud === 'string' && claims.aud !== expectedAudience) {
-      throw new Error(`KB-JWT audience mismatch: expected "${expectedAudience}", got "${claims.aud}"`);
-    } else if (Array.isArray(claims.aud) && !claims.aud.includes(expectedAudience)) {
-      throw new Error(`KB-JWT audience does not include "${expectedAudience}"`);
+  if (expectedAudience) {
+    if (typeof claims.aud === 'string') {
+      if (claims.aud.length === 0) {
+        throw new Error('KB-JWT missing required "aud" claim');
+      }
+      if (claims.aud !== expectedAudience) {
+        throw new Error(`KB-JWT audience mismatch: expected "${expectedAudience}", got "${claims.aud}"`);
+      }
+    } else if (Array.isArray(claims.aud)) {
+      if (claims.aud.length === 0 || claims.aud.some((aud) => typeof aud !== 'string')) {
+        throw new Error('KB-JWT missing required "aud" claim');
+      }
+      if (!claims.aud.includes(expectedAudience)) {
+        throw new Error(`KB-JWT audience does not include "${expectedAudience}"`);
+      }
+    } else {
+      throw new Error('KB-JWT missing required "aud" claim');
     }
   }
 
