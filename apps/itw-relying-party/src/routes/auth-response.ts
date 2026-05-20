@@ -39,7 +39,7 @@ function decodeDisclosureValues(vpToken: Record<string, string>): PresentationVa
     const parsedClaims: Record<string, string | null> = {};
     for (const disclosure of disclosures) {
       try {
-        const decoded = JSON.parse(Buffer.from(disclosure, 'base64').toString('utf8')) as unknown;
+        const decoded = JSON.parse(Buffer.from(disclosure, 'base64url').toString('utf8')) as unknown;
         if (Array.isArray(decoded) && decoded.length >= 3 && typeof decoded[1] === 'string') {
           parsedClaims[decoded[1]] = decoded[2] === null || decoded[2] === undefined ? null : String(decoded[2]);
         }
