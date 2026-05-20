@@ -49,54 +49,57 @@ function loadPrivateKey(dataDir: string, keyName: string): string {
   return key;
 }
 
-const configPlugin = fp(async (app) => {
-  const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
+const configPlugin = fp(
+  async (app) => {
+    const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
 
-  // Load base RP config
-  const loadResult = await loadRpConfig({ configFilePath });
-  const rpConfigFromLib = loadResult.config;
-  const dataDir = rpConfigFromLib.dataDir;
+    // Load base RP config
+    const loadResult = await loadRpConfig({ configFilePath });
+    const rpConfigFromLib = loadResult.config;
+    const dataDir = rpConfigFromLib.dataDir;
 
-  // Load auth keys from data_dir (FR-27)
-  let authRequestPrivateKey = '';
-  let authResponsePrivateKey = '';
+    // Load auth keys from data_dir (FR-27)
+    let authRequestPrivateKey = '';
+    let authResponsePrivateKey = '';
 
-  try {
-    authRequestPrivateKey = loadPrivateKey(dataDir, 'authRequestPrivateKey');
-    authResponsePrivateKey = loadPrivateKey(dataDir, 'authResponsePrivateKey');
-  } catch (err) {
-    app.log.error({ err }, 'Failed to load auth keys');
-    throw err;
-  }
+    try {
+      authRequestPrivateKey = loadPrivateKey(dataDir, 'authRequestPrivateKey');
+      authResponsePrivateKey = loadPrivateKey(dataDir, 'authResponsePrivateKey');
+    } catch (err) {
+      app.log.error({ err }, 'Failed to load auth keys');
+      throw err;
+    }
 
-  const runtimeConfig: RpConfig = {
-    host: rpConfigFromLib.host,
-    port: rpConfigFromLib.port,
-    baseUrl: rpConfigFromLib.baseUrl,
-    dataDir: rpConfigFromLib.dataDir,
-    configFilePath,
-    authRequestPrivateKey,
-    authResponsePrivateKey
-  };
+    const runtimeConfig: RpConfig = {
+      host: rpConfigFromLib.host,
+      port: rpConfigFromLib.port,
+      baseUrl: rpConfigFromLib.baseUrl,
+      dataDir: rpConfigFromLib.dataDir,
+      configFilePath,
+      authRequestPrivateKey,
+      authResponsePrivateKey
+    };
 
-  const databaseClient = new DatabaseClient({ dataDir: runtimeConfig.dataDir });
-  const sessionRepository = new SqliteSessionRepository(databaseClient.db);
-  const nonceRepository = new SqliteNonceRepository(databaseClient.db);
+    const databaseClient = new DatabaseClient({ dataDir: runtimeConfig.dataDir });
+    const sessionRepository = new SqliteSessionRepository(databaseClient.db);
+    const nonceRepository = new SqliteNonceRepository(databaseClient.db);
 
-  const rp = {
-    authRequestPrivateKeyPem: runtimeConfig.authRequestPrivateKey,
-    authResponsePrivateKeyPem: runtimeConfig.authResponsePrivateKey,
-    basePath: runtimeConfig.baseUrl,
-    clientId: runtimeConfig.baseUrl,
-    nonceRepository,
-    sessionService: new SessionService(sessionRepository)
-  };
+    const rp = {
+      authRequestPrivateKeyPem: runtimeConfig.authRequestPrivateKey,
+      authResponsePrivateKeyPem: runtimeConfig.authResponsePrivateKey,
+      basePath: runtimeConfig.baseUrl,
+      clientId: runtimeConfig.baseUrl,
+      nonceRepository,
+      sessionService: new SessionService(sessionRepository)
+    };
 
-  app.decorate('config', runtimeConfig);
-  app.decorate('rp', rp);
-  app.addHook('onClose', async () => {
-    databaseClient.close();
-  });
-});
+    app.decorate('config', runtimeConfig);
+    app.decorate('rp', rp);
+    app.addHook('onClose', async () => {
+      databaseClient.close();
+    });
+  },
+  { name: 'config' }
+);
 
 export default configPlugin;
