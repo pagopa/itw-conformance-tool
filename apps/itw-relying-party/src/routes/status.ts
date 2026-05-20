@@ -35,7 +35,7 @@ const statusRoute: FastifyPluginAsync = async (app) => {
           return { redirect_uri: 'error.html?response_code=unexpected' };
         }
         return {
-          redirect_uri: `${redirectUri}?response_code=success`,
+          redirect_uri: redirectUri,
           values
         };
       }

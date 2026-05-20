@@ -67,9 +67,10 @@ import {
 ### Setup with Fastify
 
 ```typescript
-import { loadRpConfig, SessionService } from '@itw-conformance-tool/rp';
+import { deriveBaseUrl, loadRpConfig, SessionService } from '@itw-conformance-tool/rp';
 
-const { config, baseUrl } = await loadRpConfig();
+const { config, configFileFound } = loadRpConfig({ configFilePath: './config.ini' });
+const baseUrl = deriveBaseUrl({ host: config.host, port: config.port });
 
 // Implement your repository
 class MySessionRepository implements SessionRepository {
@@ -81,7 +82,7 @@ const sessionService = new SessionService(new MySessionRepository());
 app.decorate('rp', {
   sessionService,
   clientId: config.host,
-  baseUrl: baseUrl
+  baseUrl
 });
 ```
 
@@ -89,16 +90,18 @@ app.decorate('rp', {
 
 ```typescript
 // Create a new session
-const sessionId = await sessionService.create({
-  sessionId: 'random-uuid',
-  ttlSeconds: 300
+const session = await sessionService.create({
+  id: 'random-uuid',
+  jwt: requestObjectJwt,
+  flowType: 'same-device',
+  ttlMs: 300_000 // optional, defaults to 5 minutes
 });
 
 // Retrieve session
-const session = await sessionService.get(sessionId);
+const session = await sessionService.get(id);
 
 // Update session to verified
-await sessionService.update(sessionId, 'verified', {
+await sessionService.update(id, 'verified', {
   redirectUri: 'http://...',
   values: [
     /* presented claims */
@@ -112,7 +115,12 @@ await sessionService.update(sessionId, 'verified', {
 const requestObjectService = new RequestObjectService();
 
 try {
-  const requestObject = requestObjectService.decodeAndValidate(jwtString);
+  // Decode the JWT header and payload (no signature verification)
+  const requestObject = requestObjectService.parse(jwtString);
+
+  // Validate the parsed request object structure
+  const isValid = requestObjectService.validate(requestObject);
+
   console.log(requestObject.nonce); // Use nonce for verification
 } catch (error) {
   // Handle InvalidRequestObjectJwtError
@@ -124,14 +132,14 @@ try {
 Load configuration from environment variables or ini file:
 
 ```typescript
-const result = await loadRpConfig({
+const { config, configFileFound } = loadRpConfig({
   configFilePath: './config.ini',
-  env: process.env
+  env: process.env // optional, defaults to process.env
 });
 
 // Supported environment variables take precedence:
 // - ITW_CT_RP_PORT (default: 8080)
-// - ITW_CT_DATA_DIR (default: "./data")
+// - ITW_CT_DATA_DIR (default: "~/.itw-conformance-tool")
 ```
 
 ## Wiring Contracts (Dependency Injection)
