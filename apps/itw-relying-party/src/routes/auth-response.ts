@@ -60,7 +60,13 @@ async function verifyAndExtractKbJwtClaims(
   sdJwt: string,
   expectedAudience?: string
 ): Promise<{ nonce: string; sd_hash: string }> {
-  const header = JSON.parse(Buffer.from(kbJwt.split('.')[0], 'base64').toString('utf8')) as { jwk?: JWK };
+  const kbJwtSegments = kbJwt.split('.');
+  if (kbJwtSegments.length !== 3) {
+    throw new Error('KB-JWT must be a compact JWT with exactly 3 segments');
+  }
+
+  const [headerSegment] = kbJwtSegments;
+  const header = JSON.parse(Buffer.from(headerSegment, 'base64url').toString('utf8')) as { jwk?: JWK };
 
   if (!header.jwk) {
     throw new Error('KB-JWT header missing required "jwk" claim');
