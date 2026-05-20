@@ -2,19 +2,16 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
-  cacheDir: '../../node_modules/.vite/packages/database',
+  cacheDir: '../../node_modules/.vite/packages/rp',
   test: {
-    name: 'database',
+    name: '@itw-conformance-tool/rp',
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['src/**/*.{test,spec}.ts', 'src/__tests__/**/*.ts'],
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}'],
     reporters: ['default'],
     // node:sqlite requires --experimental-sqlite on Node.js 22
     pool: 'forks',
-    forks: {
-      execArgv: ['--experimental-sqlite']
-    },
     coverage: {
       reportsDirectory: './test-output/vitest/coverage',
       provider: 'v8' as const,
@@ -24,6 +21,9 @@ export default defineConfig(() => ({
         branches: 80,
         statements: 80
       }
+    },
+    forks: {
+      execArgv: ['--experimental-sqlite']
     }
   }
 }));

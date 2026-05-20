@@ -12,9 +12,10 @@
   "dependencies": {
     "@fastify/autoload": "catalog:fastify",
     "@fastify/cors": "catalog:fastify",
-    "@fastify/env": "catalog:fastify",
+    "@fastify/formbody": "^8.0.2",
     "@fastify/helmet": "catalog:fastify",
     "@fastify/sensible": "catalog:fastify",
+    "@fastify/static": "^9.1.1",
     "@fastify/swagger": "catalog:fastify",
     "@fastify/swagger-ui": "catalog:fastify",
     "@pagopa/io-wallet-oauth2": "catalog:pagopa",
@@ -22,10 +23,17 @@
     "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
     "@pagopa/io-wallet-oid4vp": "catalog:pagopa",
     "@pagopa/io-wallet-utils": "catalog:pagopa",
+    "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
+    "@itw-conformance-tool/rp": "workspace:",
     "close-with-grace": "^2.5.0",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
+    "jose": "^5.10.0",
+    "jsonwebtoken": "^9.0.2",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10"
   }
 }

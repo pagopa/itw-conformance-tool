@@ -17,7 +17,7 @@ async function main(): Promise<void> {
 
   try {
     const rootPath = findRoot();
-    const { command, flags } = parseCLIArgs(process.argv.slice(2), rootPath, emitLog);
+    const { command, flags } = parseCLIArgs(process.argv.slice(2), rootPath);
 
     // Handle configs
     const { configs, configFileExists } = loadConfigs(flags, rootPath, emitLog);

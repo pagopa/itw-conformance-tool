@@ -2,7 +2,6 @@ import { printHelp, printVersion } from '../utils/prompt.js';
 import { expandPath } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
-import type { Level } from '@itw-conformance-tool/logger';
 
 /** Tokenizes the command-line arguments, handling the case where Nx
  * forwards --args as a single array of strings.
@@ -66,11 +65,7 @@ function extractConfig(args: string[], i: number): { value: string; skip: number
  * @param argv - The array of command-line arguments.
  * @returns An object containing the parsed command and flags.
  */
-export function parseCLIArgs(
-  argv: string[],
-  rootPath: string,
-  emitLog: (event: string, type?: Level | undefined) => void
-): { command?: string; flags: CLIFlags } {
+export function parseCLIArgs(argv: string[], rootPath: string): { command?: string; flags: CLIFlags } {
   if (argv.length === 0) {
     printHelp();
     throw new Error('No command provided. Please specify a command (init or start) followed by any relevant flags.');

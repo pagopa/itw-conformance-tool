@@ -39,9 +39,10 @@ async function startServer() {
   // Start server
   try {
     await app.listen({
-      host: app.config.HOST,
-      port: app.config.PORT,
-      listenTextResolver: (address) => `IT Wallet Relying Party listening on ${address}`
+      host: app.config.host,
+      port: app.config.port,
+      listenTextResolver: (address) =>
+        `IT Wallet Relying Party listening on ${address} (base URL: ${app.config.baseUrl})`
     });
   } catch (err) {
     app.log.error(err);

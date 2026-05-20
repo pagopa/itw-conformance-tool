@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DCQL Query Personalizzata - IT Wallet</title>
+
+    <!-- Google Fonts - Titillium Web (IO App) + Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Design System -->
+    <link rel="stylesheet" href="styles/design-system.css">
+    <link rel="stylesheet" href="styles/animations.css">
+
+    <style>
+      body {
+        min-height: 100vh;
+        padding: var(--space-8) var(--space-4);
+      }
+
+      /* Header */
+      .page-header {
+        max-width: 900px;
+        margin: 0 auto var(--space-8);
+        text-align: center;
+        animation: fadeInDown 0.6s ease-out;
+      }
+
+      .page-title {
+        font-size: var(--text-3xl);
+        font-weight: var(--font-bold);
+        color: var(--gray-900);
+        margin-bottom: var(--space-2);
+      }
+
+      .page-subtitle {
+        font-size: var(--text-base);
+        color: var(--gray-600);
+        line-height: var(--leading-relaxed);
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        animation: fadeInUp 0.6s ease-out;
+      }
+
+      /* Query Editor Card */
+      .query-editor-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-md);
+        padding: var(--space-8);
+        margin-bottom: var(--space-6);
+      }
+
+      .editor-label {
+        font-size: var(--text-lg);
+        font-weight: var(--font-semibold);
+        color: var(--gray-900);
+        margin-bottom: var(--space-4);
+        display: block;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 200px;
+        padding: var(--space-4);
+        font-size: var(--text-sm);
+        font-family: 'Courier New', Consolas, monospace;
+        border: 2px solid var(--gray-300);
+        border-radius: var(--radius-md);
+        resize: vertical;
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: var(--primary-blue);
+        box-shadow: 0 0 0 3px var(--primary-light);
+      }
+
+      /* Output Section */
+      pre {
+        width: 100%;
+        max-height: 300px;
+        overflow-y: auto;
+        background: var(--gray-50);
+        padding: var(--space-4);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--gray-200);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        margin-top: var(--space-4);
+        display: none;
+        font-size: var(--text-sm);
+        font-family: 'Courier New', Consolas, monospace;
+        color: var(--gray-700);
+      }
+
+      pre.show {
+        display: block;
+      }
+
+      /* Examples Section */
+      .examples-section {
+        background: var(--gray-50);
+        border-left: 4px solid var(--primary-blue);
+        border-radius: var(--radius-md);
+        padding: var(--space-4);
+        margin-top: var(--space-4);
+      }
+
+      .examples-title {
+        font-size: var(--text-base);
+        font-weight: var(--font-semibold);
+        color: var(--gray-900);
+        margin-bottom: var(--space-3);
+      }
+
+      .example-code {
+        background: white;
+        padding: var(--space-3);
+        border-radius: var(--radius-sm);
+        font-family: 'Courier New', Consolas, monospace;
+        font-size: var(--text-xs);
+        color: var(--gray-700);
+        word-break: break-all;
+      }
+
+      .toggle-example {
+        margin-top: var(--space-3);
+        color: var(--primary-blue);
+        cursor: pointer;
+        font-weight: var(--font-medium);
+        font-size: var(--text-sm);
+        text-decoration: underline;
+        transition: color var(--transition-fast);
+      }
+
+      .toggle-example:hover {
+        color: var(--primary-dark);
+      }
+
+      #secondExample {
+        display: none;
+        margin-top: var(--space-3);
+      }
+
+      #secondExample.show {
+        display: block;
+      }
+
+      /* Flow Cards - Reuse from index.html */
+      .card-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+        margin-top: var(--space-8);
+      }
+
+      @media (min-width: 768px) {
+        .card-container {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .flow-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-md);
+        padding: var(--space-6);
+        text-align: center;
+        transition: all var(--transition-base);
+        border: 2px solid transparent;
+      }
+
+      .flow-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary-blue);
+      }
+
+      .flow-card h3 {
+        font-size: var(--text-xl);
+        font-weight: var(--font-bold);
+        margin-bottom: var(--space-2);
+      }
+
+      .flow-card p {
+        font-size: var(--text-sm);
+        color: var(--gray-600);
+        margin-bottom: var(--space-4);
+      }
+
+      /* QR Section */
+      #qrSection {
+        display: none;
+        margin-top: var(--space-8);
+        animation: scaleIn 0.4s ease-out;
+      }
+
+      #walletButtonContainer {
+        display: none;
+        margin-top: var(--space-8);
+        text-align: center;
+      }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script>
+      let pollingInterval;
+
+      function copyUrl() {
+        const urlText = document.getElementById('qrUrlText').textContent;
+        navigator.clipboard.writeText(urlText).then(() => {
+          const button = document.querySelector('.copy-url-button');
+          const originalText = button.innerHTML;
+          button.innerHTML = `
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Copiato!
+          `;
+          button.style.background = 'var(--accent-teal)';
+          button.style.color = 'white';
+          button.style.borderColor = 'var(--accent-teal)';
+
+          setTimeout(() => {
+            button.innerHTML = originalText;
+            button.style.background = '';
+            button.style.color = '';
+            button.style.borderColor = '';
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+        });
+      }
+
+      function isUriSchemeValid() {
+        const val = document.getElementById("walletAuthBaseUri").value.trim();
+        if (val === "") return true;
+        try { new URL(val); return true; } catch { return false; }
+      }
+
+      function updateUriError() {
+        const valid = isUriSchemeValid();
+        document.getElementById("walletAuthBaseUriError").style.display = valid ? "none" : "block";
+        return valid;
+      }
+
+      function updateButtonState() {
+        const input = document.getElementById("jsonInput").value;
+        const output = document.getElementById("jsonOutput");
+        const sameBtn = document.getElementById("createSameDevice");
+        const crossBtn = document.getElementById("createCrossDevice");
+        const uriValid = isUriSchemeValid();
+
+        try {
+          const parsed = JSON.parse(input);
+
+          if (
+            !parsed.credentials ||
+            !Array.isArray(parsed.credentials) ||
+            parsed.credentials.length === 0
+          ) {
+            throw new Error("Formato JSON non valido: manca 'credentials'");
+          }
+
+          output.textContent = "✅ Query valida:\n" + JSON.stringify(parsed, null, 2);
+          output.classList.add("show");
+          output.style.color = "var(--gray-700)";
+
+          sameBtn.disabled = !uriValid;
+          crossBtn.disabled = !uriValid;
+        } catch (e) {
+          output.textContent = "❌ Errore: " + e.message;
+          output.classList.toggle("show", input.trim() !== "");
+          output.style.color = "var(--accent-coral)";
+          sameBtn.disabled = true;
+          crossBtn.disabled = true;
+        }
+      }
+
+      async function handleRequest(flowType) {
+        const sameBtn = document.getElementById("createSameDevice");
+        const crossBtn = document.getElementById("createCrossDevice");
+        if (flowType === "same-device") {
+          crossBtn.disabled = true;
+        } else {
+          sameBtn.disabled = true;
+        }
+
+        document.getElementById("qrSection").style.display = "none";
+        document.getElementById("walletButtonContainer").style.display = "none";
+
+        let input = document.getElementById("jsonInput").value;
+        let output = document.getElementById("jsonOutput");
+        let parsed;
+
+        try {
+          parsed = JSON.parse(input);
+        } catch (error) {
+          output.textContent = "❌ Errore: JSON non valido";
+          return;
+        }
+
+        const walletAuthBaseUriInput = document
+          .getElementById("walletAuthBaseUri")
+          .value.trim();
+
+        if (!updateUriError()) {
+          return;
+        }
+
+        const requestBody = {
+          dcqlQuery: parsed,
+          flow_type: flowType,
+        };
+        if (walletAuthBaseUriInput) {
+          requestBody.wallet_auth_base_uri = walletAuthBaseUriInput;
+        }
+
+        try {
+          const response = await fetch("/request-object", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          });
+
+          if (!response.ok) {
+            output.textContent = "❌ Errore: DCQL query non valida";
+            return;
+          }
+
+          output.textContent = JSON.stringify(parsed, null, 2);
+
+          const { url } = await response.json();
+          if (typeof url !== "string") throw new Error("URL non valido");
+
+          if (flowType === "cross-device") {
+            document.getElementById("qrCodeBox").innerHTML = "";
+            new QRCode(document.getElementById("qrCodeBox"), {
+              text: url,
+              width: 256,
+              height: 256,
+              correctLevel: QRCode.CorrectLevel.L,
+              version: 20,
+            });
+            document.getElementById("qrUrlText").textContent = url;
+            const qrSection = document.getElementById("qrSection");
+            qrSection.style.display = "block";
+
+            qrSection.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+
+          if (flowType === "same-device") {
+            document.getElementById("openWallet").onclick = () => {
+              window.open(url, "_blank");
+            };
+            document.getElementById("walletButtonContainer").style.display =
+              "block";
+          }
+
+          const state = new URL(url).searchParams.get("state");
+          console.log(state);
+          startPolling(state);
+        } catch (err) {
+          output.textContent = "Errore durante la richiesta: " + err.message;
+        }
+      }
+
+      function startPolling(state) {
+        pollingInterval = setInterval(async () => {
+          try {
+            let response = await fetch(`/status/${state}`);
+            let data = await response.json();
+            if (data.redirect_uri) {
+              const [path] = data.redirect_uri.split("?");
+              if (path && path !== "undefined") {
+                clearInterval(pollingInterval);
+                sessionStorage.setItem("values", JSON.stringify(data.values));
+                window.location.href = path;
+              }
+            }
+          } catch (error) {
+            console.error("Errore nel polling:", error);
+          }
+        }, 3000);
+      }
+
+      let debounceTimer;
+      document.addEventListener("DOMContentLoaded", () => {
+        const textarea = document.getElementById("jsonInput");
+        textarea.addEventListener("input", () => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(updateButtonState, 400);
+        });
+
+        let uriDebounce;
+        document.getElementById("walletAuthBaseUri").addEventListener("input", () => {
+          clearTimeout(uriDebounce);
+          uriDebounce = setTimeout(() => {
+            updateUriError();
+            updateButtonState();
+          }, 400);
+        });
+
+        document
+          .getElementById("toggleSecondExample")
+          .addEventListener("click", () => {
+            const second = document.getElementById("secondExample");
+            const isVisible = second.classList.toggle("show");
+            const toggle = document.getElementById("toggleSecondExample");
+            toggle.textContent = isVisible
+              ? "📚 Nascondi esempio avanzato"
+              : "📚 Mostra esempio avanzato (credenziali obbligatorie/facoltative)";
+          });
+      });
+    </script>
+  </head>
+  <body>
+    <!-- Page Header -->
+    <header class="page-header">
+      <h1 class="page-title">Query DCQL Personalizzata</h1>
+      <p class="page-subtitle">Inserisci una query DCQL personalizzata per richiedere credenziali specifiche</p>
+    </header>
+
+    <main>
+      <!-- Query Editor Card -->
+      <div class="query-editor-card">
+        <label for="jsonInput" class="editor-label">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline; vertical-align: middle;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+          </svg>
+          Inserisci Query JSON
+        </label>
+        <textarea
+          id="jsonInput"
+          placeholder='{ "credentials": [ ... ] }'
+          aria-label="Query DCQL in formato JSON"
+        ></textarea>
+
+        <!-- Validation Output -->
+        <pre id="jsonOutput" aria-live="polite"></pre>
+
+        <!-- Examples Section -->
+        <div class="examples-section">
+          <div class="examples-title">💡 Esempio Base:</div>
+          <div class="example-code">
+            { "credentials": [ { "id": "PID", "format": "dc+sd-jwt", "meta": { "vct_values": [ "urn:eudi:pid:1" ] }, "claims": [ { "path": [ "given_name" ] }, { "path": [ "family_name" ] } ] } ] }
+          </div>
+
+          <div class="toggle-example" id="toggleSecondExample">
+            📚 Mostra esempio avanzato (credenziali obbligatorie/facoltative)
+          </div>
+
+          <div id="secondExample">
+            <div class="example-code">
+              { "credentials": [ { "id": "e156382b-5a8b-46a5-af9f-403329f55fa6", "format": "dc+sd-jwt", "meta": { "vct_values": ["urn:eudi:pid:1"] }, "claims": [ { "path": ["given_name"] }, { "path": ["family_name"] } ] }, { "id": "779ef07a-cc96-419a-9487-14950fd24b08", "format": "dc+sd-jwt", "meta": { "vct_values": ["https://pre.ta.wallet.ipzs.it/vct/v1.0.0/mdl"] }, "claims": [ { "path": ["birth_date"] } ] } ], "credential_sets": [ { "purpose": "Authentication services", "required": true, "options": [["e156382b-5a8b-46a5-af9f-403329f55fa6"]] }, { "options": [["779ef07a-cc96-419a-9487-14950fd24b08"]], "purpose": "Extra services", "required": false } ] }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wallet Auth Base URI -->
+      <div style="background: white; border-radius: var(--radius-xl); box-shadow: var(--shadow-md); padding: var(--space-6) var(--space-8); margin-bottom: var(--space-6);">
+        <label for="walletAuthBaseUri" class="editor-label" style="margin-bottom: var(--space-2);">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline; vertical-align: middle;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+          </svg>
+          Wallet Auth Base URL
+        </label>
+        <input
+          type="text"
+          id="walletAuthBaseUri"
+          placeholder="https://continua.io.pagopa.it/itw/auth"
+          style="width: 100%; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); font-family: 'Courier New', Consolas, monospace; color: var(--gray-800); background: white; border: 2px solid var(--gray-300); border-radius: var(--radius-md); box-sizing: border-box; transition: border-color var(--transition-fast), box-shadow var(--transition-fast);"
+          autocomplete="off"
+          spellcheck="false"
+          onfocus="this.style.borderColor='var(--primary-blue)'; this.style.boxShadow='0 0 0 3px var(--primary-light)';"
+          onblur="this.style.borderColor='var(--gray-300)'; this.style.boxShadow='none';"
+        />
+        <p id="walletAuthBaseUriError" style="display: none; margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--accent-coral); font-weight: var(--font-medium);">
+          URL non valido
+        </p>
+        <p style="margin: var(--space-3) 0 0; font-size: var(--text-sm); color: var(--gray-600); line-height: var(--leading-relaxed);">
+          URL completo del wallet su cui costruire il deeplink (es. <code>https://continua.io.pagopa.it/itw/auth</code>, <code>haip://authorize</code>, <code>eudi-openid4vp://authorize</code>). I parametri di query esistenti verranno preservati. Lascia vuoto per usare il default del server.
+        </p>
+      </div>
+
+      <!-- Flow Selection Cards -->
+      <div class="card-container">
+        <div class="flow-card">
+          <h3>📷 Cross-Device</h3>
+          <p>Genera un QR code per continuare su un altro dispositivo</p>
+          <button
+            class="button primary"
+            id="createCrossDevice"
+            onclick="handleRequest('cross-device')"
+            disabled
+            aria-label="Crea richiesta cross-device"
+          >
+            Genera QR Code
+          </button>
+        </div>
+        <div class="flow-card">
+          <h3>📱 Same-Device</h3>
+          <p>Apri il wallet installato su questo dispositivo</p>
+          <button
+            class="button secondary"
+            id="createSameDevice"
+            onclick="handleRequest('same-device')"
+            disabled
+            aria-label="Crea richiesta same-device"
+          >
+            Apri Wallet
+          </button>
+        </div>
+      </div>
+
+      <!-- Wallet Button -->
+      <div id="walletButtonContainer">
+        <button class="button primary" id="openWallet">Apri con il tuo wallet</button>
+      </div>
+
+    </main>
+
+    <!-- QR Section -->
+    <div id="qrSection" class="qr-display-container">
+      <div class="qr-card">
+        <div class="qr-header">
+          <h3>Scansiona con il tuo Wallet</h3>
+          <p class="qr-instructions">
+            Apri l'app IO Wallet e utilizza la funzione "Inquadra QR Code"
+          </p>
+        </div>
+        <div class="qr-code-wrapper">
+          <div id="qrCodeBox" class="qr-code-display"></div>
+          <div class="qr-decorations">
+            <div class="corner-decoration top-left"></div>
+            <div class="corner-decoration top-right"></div>
+            <div class="corner-decoration bottom-left"></div>
+            <div class="corner-decoration bottom-right"></div>
+          </div>
+        </div>
+        <div class="qr-url-section">
+          <button class="copy-url-button button secondary" onclick="copyUrl()" aria-label="Copia URL QR code">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+            Copia URL
+          </button>
+          <details class="url-details">
+            <summary>Mostra URL completo</summary>
+            <code id="qrUrlText"></code>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="link-hint" style="max-width: 900px; margin: var(--space-4) auto 0;">
+      <p>
+        <a href="index.html">← Torna alla home</a>
+      </p>
+    </div>
+
+  </body>
+</html>
