@@ -5,9 +5,27 @@ Local CLI for the `itw-conformance-tool` monorepo. It supports two flows:
 - `init`, to generate the local configuration and key material
 - `start`, to launch the issuer and relying party services through Nx
 
+## Installation (global binary)
+
+To make `itw-conformance-tool` and `itwct` available as global commands in the terminal:
+
+```sh
+# From the project root
+pnpm i
+pnpm nx build itw-conformance-cli   # compiles the CLI and generates dist/main.js
+cd apps/cli
+pnpm link --global                  # registers the bin entries in the global PATH
+```
+
+To uninstall:
+
+```sh
+pnpm unlink --global itw-conformance-cli
+```
+
 ## Entry Points
 
-You can run the CLI either through the exported binary or through the root workspace scripts.
+You can run the CLI either through the exported binary (after `pnpm link --global`) or through the root workspace scripts without installing globally.
 
 Direct CLI usage:
 
@@ -18,18 +36,18 @@ Direct CLI usage:
 
 From the workspace root through Nx-backed scripts:
 
-- `pnpm conformance -- --args="init"`
-- `pnpm conformance -- --args="start --all"`
-- `pnpm conformance -- --args="start --issuer"`
-- `pnpm conformance -- --args="start --rp"`
-- `pnpm conformance -- --args="init --config ./config.ini --force"`
+- `pnpm itw-conformance-tool --args="init"`
+- `pnpm itw-conformance-tool --args="start --all"`
+- `pnpm itw-conformance-tool --args="start --issuer"`
+- `pnpm itw-conformance-tool --args="start --rp"`
+- `pnpm itw-conformance-tool --args="init --config ./config.ini --force"`
 
 Root shortcuts:
 
-- `pnpm conformance:init`
-- `pnpm conformance:start`
-- `pnpm conformance:start:issuer`
-- `pnpm conformance:start:rp`
+- `pnpm itw-conformance-tool:init`
+- `pnpm itw-conformance-tool:start`
+- `pnpm itw-conformance-tool:start:issuer`
+- `pnpm itw-conformance-tool:start:rp`
 
 ## Supported Commands
 
@@ -105,13 +123,6 @@ The CLI resolves configuration in this order:
 3. If `--config` is not provided, it looks for `<project-root>/config.ini`.
 4. If no config file exists, it falls back to built-in defaults.
 
-Current built-in defaults:
-
-- `global.data_dir = <project-root>/.itw-conformance-tool`
-- `global.log_level = info`
-- issuer port `3000`
-- relying party port `8080`
-
 ## Path Resolution
 
 This CLI treats `~` as the project root, not as the operating system home directory.
@@ -125,12 +136,12 @@ Quoted paths are also supported for config arguments.
 
 ## Passing Arguments Through the Root Script
 
-The root `pnpm conformance` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `-- --args="..."` form.
+The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `-- --args="..."` form.
 
 Examples:
 
-- `pnpm conformance -- --args="init --config ./ci/config.ini"`
-- `pnpm conformance -- --args="start --config ./ci/config.ini --all"`
-- `pnpm conformance -- --args="start --config ./ci/config.ini --issuer"`
+- `pnpm itw-conformance-tool -- --args="init --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool -- --args="start --config ./ci/config.ini --all"`
+- `pnpm itw-conformance-tool -- --args="start --config ./ci/config.ini --issuer"`
 
 This format is required because Nx forwards the CLI payload through its own `--args` option.
