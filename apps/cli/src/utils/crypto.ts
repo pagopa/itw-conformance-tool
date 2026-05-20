@@ -26,7 +26,6 @@ interface JwkSet {
   keys: JwkRecord[];
 }
 
-
 interface IacaChain {
   certificate: string;
   privateKey: string;
@@ -60,7 +59,7 @@ function generateRsaKeyPair(): { privateKeyPem: string; privateJwk: JwkRecord } 
 }
 
 /** Generates a JWK Set containing a single RSA signing key.
- * 
+ *
  * @param descriptor - Key identifier and intended use.
  * @returns A JSON string representing the JWK Set.
  */
@@ -82,7 +81,7 @@ function generateSigningJwks(descriptor: KeyDescriptor): string {
 }
 
 /** Generates an EC P-256 private key in JWK format.
- * 
+ *
  * @param descriptor - Key metadata including kid, alg, use, and key_ops.
  * @returns A JSON string representing the private JWK.
  */
@@ -133,7 +132,7 @@ function generateKeyPair(): forge.pki.rsa.KeyPair {
 }
 
 /** Creates and signs an X.509 certificate.
- * 
+ *
  * @param params - Certificate parameters including subject, issuer, keys, serial number, and CA flag.
  * @returns The signed forge certificate object.
  */
