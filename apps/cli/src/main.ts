@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-
 import { createLogger } from '@itw-conformance-tool/logger';
 
 import { buildEnv } from './services/buildEnv.js';
@@ -9,7 +7,7 @@ import { loadConfigs } from './services/loadConfigs.js';
 import { parseCLIArgs } from './services/parseCLIArgs.js';
 import { runCommands } from './services/runCommands.js';
 import { createEmitter } from './utils/prompt.js';
-import { findRoot, createFileDirPaths } from './utils/search.js';
+import { findRoot, createFileDirPaths, existsFileSync } from './utils/search.js';
 
 async function main(): Promise<void> {
   const starterLogger = createLogger({ level: 'trace' });
@@ -31,13 +29,14 @@ async function main(): Promise<void> {
 
     if (command === 'start') {
       if (!configFileExists) {
+        const missingConfigPath = flags.config?.path ?? 'config.ini';
         emitLog(
-          'config.ini not found. Starting with default values.\nRun `itw-conformance-tool init` to create the configuration file.',
+          `${missingConfigPath} not found. Starting with default values.\nRun \`itw-conformance-tool init\` to create the configuration file.`,
           'warn'
         );
       }
 
-      const missingFiles = createFileDirPaths(configs.global.data_dir).filter((f) => !existsSync(f));
+      const missingFiles = createFileDirPaths(configs.global.data_dir).filter((f) => !existsFileSync(f));
       if (missingFiles.length > 0) {
         throw new Error(
           `Missing required files: \n${missingFiles.join('\n')}\nPlease run \`itw-conformance-tool init\` to create the necessary keys and certificates.`

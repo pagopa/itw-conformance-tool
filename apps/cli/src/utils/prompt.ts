@@ -30,10 +30,10 @@ export function printHelp(): void {
   process.stdout.write('  -h, --help                         Show help\n\n');
   process.stdout.write('Options:\n');
   process.stdout.write('  -c, --config <path>                Config path (for init output and runtime overrides)\n');
-  process.stdout.write('  --all                              Start issuer and relying party (default for start)\n');
+  process.stdout.write('  -a, --all                          Start issuer and relying party (default for start)\n');
   process.stdout.write('  --issuer                           Start only itw-credential-issuer\n');
   process.stdout.write('  --rp                               Start only itw-relying-party\n');
-  process.stdout.write('  --force                            Force overwrite for init-generated files\n');
+  process.stdout.write('  -f, --force                        Force overwrite for init-generated files\n');
   process.stdout.write('Examples:\n');
   process.stdout.write(`  itw-conformance-tool init  --force\n`);
   process.stdout.write(`  itw-conformance-tool start --all\n`);
