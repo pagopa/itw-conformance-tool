@@ -15,7 +15,14 @@ const parRoute: FastifyPluginAsync = async (app) => {
       tags: ['Authorization']
     },
     handler: async (request, reply) => {
-      const bodyString = typeof request.body === 'string' ? request.body : '';
+      const bodyString =
+        typeof request.body === 'string'
+          ? request.body
+          : new URLSearchParams(
+              Object.entries((request.body ?? {}) as Record<string, string | number | boolean | null | undefined>)
+                .filter(([, value]) => value !== undefined && value !== null)
+                .map(([key, value]) => [key, String(value)] as [string, string])
+            ).toString();
       const { baseURL, headers, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
       try {
@@ -38,6 +45,13 @@ const parRoute: FastifyPluginAsync = async (app) => {
         });
       } catch (error) {
         if (error instanceof PostPushedAuthorizationError) {
+          return reply.code(400).send({
+            error: 'invalid_request',
+            error_description: error.message
+          });
+        }
+
+        if (error instanceof Error && error.name === 'Oauth2JwtParseError') {
           return reply.code(400).send({
             error: 'invalid_request',
             error_description: error.message

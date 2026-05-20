@@ -39,23 +39,34 @@ export class PARService {
   async parseAndStore(options: ParseAndStoreOptions): Promise<string> {
     const parRequestFormUrl = Object.fromEntries(new URLSearchParams(options.parRequest.bodyString));
 
-    const clientId = parRequestFormUrl.client_id;
-    const signedRequestJwt = parRequestFormUrl.request;
+    const clientId = typeof parRequestFormUrl.client_id === 'string' ? parRequestFormUrl.client_id.trim() : '';
+    const signedRequestJwt = typeof parRequestFormUrl.request === 'string' ? parRequestFormUrl.request.trim() : '';
+
+    parRequestFormUrl.client_id = clientId;
+    parRequestFormUrl.request = signedRequestJwt;
 
     if (!clientId || !signedRequestJwt) {
       throw new PostPushedAuthorizationError('client_id and request are required');
     }
 
-    const { authorizationRequest, authorizationRequestJwt } = await parsePushedAuthorizationRequest({
-      authorizationRequest: parRequestFormUrl,
-      callbacks: options.callbacks,
-      config: options.config,
-      request: {
-        headers: options.parRequest.headers,
-        method: options.parRequest.method,
-        url: options.parRequest.url
-      }
-    });
+    let authorizationRequest: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['authorizationRequest'];
+    let authorizationRequestJwt: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['authorizationRequestJwt'];
+
+    try {
+      ({ authorizationRequest, authorizationRequestJwt } = await parsePushedAuthorizationRequest({
+        authorizationRequest: parRequestFormUrl,
+        callbacks: options.callbacks,
+        config: options.config,
+        request: {
+          headers: options.parRequest.headers,
+          method: options.parRequest.method,
+          url: options.parRequest.url
+        }
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to parse pushed authorization request';
+      throw new PostPushedAuthorizationError(message);
+    }
 
     if (!authorizationRequestJwt) {
       throw new PostPushedAuthorizationError('signed authorization request is required');

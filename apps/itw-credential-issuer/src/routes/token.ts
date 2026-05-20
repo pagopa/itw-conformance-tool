@@ -19,7 +19,14 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
       tags: ['Authorization']
     },
     handler: async (request, reply) => {
-      const bodyString = typeof request.body === 'string' ? request.body : '';
+      const bodyString =
+        typeof request.body === 'string'
+          ? request.body
+          : new URLSearchParams(
+              Object.entries((request.body ?? {}) as Record<string, string | number | boolean | null | undefined>)
+                .filter(([, value]) => value !== undefined && value !== null)
+                .map(([key, value]) => [key, String(value)] as [string, string])
+            ).toString();
       const { baseURL, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
       try {

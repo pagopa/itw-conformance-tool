@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastif
 import configPlugin from './plugins/config.js';
 import dbPlugin from './plugins/db.js';
 import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
+import formbodyPlugin from './plugins/external/formbody.js';
 import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
 import rateLimitPlugin, { autoConfig as rateLimitConfig } from './plugins/external/rate-limit.js';
 import sensiblePlugin from './plugins/external/sensible.js';
@@ -19,6 +20,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
 
   await app.register(corsPlugin, corsConfig);
   await app.register(helmetPlugin, helmetConfig);
+  await app.register(formbodyPlugin);
   await app.register(rateLimitPlugin, rateLimitConfig);
   await app.register(sensiblePlugin);
   await app.register(swaggerPlugin);

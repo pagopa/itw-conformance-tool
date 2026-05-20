@@ -14,6 +14,7 @@
     "@fastify/autoload": "catalog:fastify",
     "@fastify/cors": "catalog:fastify",
     "@fastify/env": "catalog:fastify",
+    "@fastify/formbody": "^8.0.2",
     "@fastify/helmet": "catalog:fastify",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/sensible": "catalog:fastify",

@@ -22,7 +22,14 @@ const presentationResponseRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const query = request.query as { request_uri: string };
-      const bodyString = typeof request.body === 'string' ? request.body : '';
+      const bodyString =
+        typeof request.body === 'string'
+          ? request.body
+          : new URLSearchParams(
+              Object.entries((request.body ?? {}) as Record<string, string | number | boolean | null | undefined>)
+                .filter(([, value]) => value !== undefined && value !== null)
+                .map(([key, value]) => [key, String(value)] as [string, string])
+            ).toString();
       const { baseURL, oauthCallbacks } = makeOauthCallbacks(app, request);
 
       try {
