@@ -47,8 +47,8 @@ Thumbs.db
 .nx/workspace-data
 .claude/worktrees
 .claude/settings.local.json
+.data
+.itw-conformance-tool
 
 vitest.config.*.timestamp*
 config.ini
-
-.data

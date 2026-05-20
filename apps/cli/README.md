@@ -1,60 +1,136 @@
 # ITW Conformance CLI
 
-CLI locale per il monorepo `itw-conformance-tool`, allineata ai flow `init` e `start`.
+Local CLI for the `itw-conformance-tool` monorepo. It supports two flows:
 
-## Comandi
+- `init`, to generate the local configuration and key material
+- `start`, to launch the issuer and relying party services through Nx
+
+## Entry Points
+
+You can run the CLI either through the exported binary or through the root workspace scripts.
+
+Direct CLI usage:
 
 - `itw-conformance-tool init`
 - `itw-conformance-tool start`
-- `itw-conformance-tool help`
+- `itwct init`
+- `itwct start`
 
-Durante lo sviluppo da root workspace:
+From the workspace root through Nx-backed scripts:
 
-- `pnpm conformance --args="init"`
-- `pnpm conformance --args="start --all"`
-- `pnpm conformance --args="start --issuer"`
-- `pnpm conformance --args="start --rp"`
+- `pnpm conformance -- --args="init"`
+- `pnpm conformance -- --args="start --all"`
+- `pnpm conformance -- --args="start --issuer"`
+- `pnpm conformance -- --args="start --rp"`
+- `pnpm conformance -- --args="init --config ./config.ini --force"`
 
-Shortcut root:
+Root shortcuts:
 
 - `pnpm conformance:init`
 - `pnpm conformance:start`
 - `pnpm conformance:start:issuer`
 - `pnpm conformance:start:rp`
 
-## Opzioni
+## Supported Commands
 
-- `-c, --config <path>` path config (output `init` o file richiesto da `start`)
-- `--all` avvia entrambi i servizi (default di `start`)
-- `--issuer` avvia solo issuer
-- `--rp` avvia solo relying party
-- `--force` forza overwrite file generati da `init`
-- `--unsafe-tls` disabilita verifica TLS
-- `--tls-ca-file <path>` esporta `ITW_CT_TLS_CA_FILE`
-- `--log-level <debug|info|warn|error>` livello log CLI
-- `--skip-nx-cache` passa `--skip-nx-cache` ai comandi Nx delegati
-- `--dry-run` mostra azione calcolata senza eseguire
-- `-h, --help` mostra help
+- `init`
+- `start`
+- `help`
+- `version`
 
-## Cosa fa oggi
+## Supported Options
 
-- `init` crea:
-  - `~/.itw-conformance-tool/issuer`
-  - `~/.itw-conformance-tool/rp`
-  - `config.example.ini` (template) in cwd, o nel path passato con `--config`
-- `start` delega a Nx:
-  - `--all` → `nx run-many -t serve -p itw-credential-issuer,itw-relying-party`
-  - `--issuer` → `nx run itw-credential-issuer:serve`
-  - `--rp` → `nx run itw-relying-party:serve`
-  - fallisce con errore esplicito se manca `config.ini`
+- `-c, --config <path>`: path to the configuration file used by `start`, or the output path used by `init`
+- `--all`: start both services. This is the default for `start`
+- `--issuer`: start only the issuer service
+- `--rp`: start only the relying party service
+- `-f, --force`: overwrite generated files during `init`
+- `-h, --help`: print the CLI help
+- `-v, --version`: print the CLI version
 
-## Eventi log principali
+The parser also supports inline config assignment:
 
-- `cli.runtime_config_resolved`
-- `cli.init_summary`
-- `cli.nx_command`
-- `cli.dry_run_summary`
-- `cli.nx_output`
-- `cli.flow_completed`
-- `cli.flow_failed`
-- `cli.unhandled_error`
+- `--config=/absolute/path/config.ini`
+- `-c=./config.ini`
+
+## Current Behavior
+
+### `init`
+
+`init` prepares the local runtime material used by the conformance services.
+
+When executed, it:
+
+- determines the target config file path
+- creates the data directory
+- creates the `issuer` and `rp` subdirectories
+- generates issuer signing keys
+- generates relying party authentication keys
+- generates the IACA certificate and private key
+- creates or overwrites the config file when needed
+
+Generated structure:
+
+- `<data_dir>/issuer/signing-keys.jwks.json`
+- `<data_dir>/issuer/iaca-cert.pem`
+- `<data_dir>/issuer/iaca-key.pem`
+- `<data_dir>/rp/auth-request-key.jwk.json`
+- `<data_dir>/rp/auth-response-key.jwk.json`
+
+Default locations:
+
+- config file: `<project-root>/config.ini`
+- data directory: `<project-root>/.itw-conformance-tool`
+
+If a config file already exists and `--force` is not used, `init` reuses the configured `global.data_dir` and does not overwrite existing generated files unless required.
+
+### `start`
+
+`start` resolves runtime configuration, validates that the required key material exists, and then delegates service startup to Nx.
+
+Service selection:
+
+- default or `--all`: `nx run-many -t serve -p itw-credential-issuer,itw-relying-party`
+- `--issuer`: `nx run itw-credential-issuer:serve`
+- `--rp`: `nx run itw-relying-party:serve`
+
+Before launching Nx, the CLI checks that the required files exist in the resolved data directory. If any required file is missing, the CLI throws and exits before starting the services.
+
+## Configuration Resolution
+
+The CLI resolves configuration in this order:
+
+1. If `--config` is provided and the file exists, it loads that file.
+2. If `--config` is provided but the file does not exist, it falls back to the default runtime configuration.
+3. If `--config` is not provided, it looks for `<project-root>/config.ini`.
+4. If no config file exists, it falls back to built-in defaults.
+
+Current built-in defaults:
+
+- `global.data_dir = <project-root>/.itw-conformance-tool`
+- `global.log_level = info`
+- issuer port `3000`
+- relying party port `8080`
+
+## Path Resolution
+
+This CLI treats `~` as the project root, not as the operating system home directory.
+
+Examples, assuming the workspace root is `/workspace/itw-conformance-tool`:
+
+- `~/.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
+- `~/custom-config.ini` resolves to `/workspace/itw-conformance-tool/custom-config.ini`
+
+Quoted paths are also supported for config arguments.
+
+## Passing Arguments Through the Root Script
+
+The root `pnpm conformance` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `-- --args="..."` form.
+
+Examples:
+
+- `pnpm conformance -- --args="init --config ./ci/config.ini"`
+- `pnpm conformance -- --args="start --config ./ci/config.ini --all"`
+- `pnpm conformance -- --args="start --config ./ci/config.ini --issuer"`
+
+This format is required because Nx forwards the CLI payload through its own `--args` option.

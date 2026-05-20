@@ -13,6 +13,13 @@
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
-    "pino": "catalog:node"
+    "node-forge": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node-forge": "1.3.14"
+  },
+  "bin": {
+    "itw-conformance-tool": "./dist/main.js",
+    "itwct": "./dist/main.js"
   }
 }
