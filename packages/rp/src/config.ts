@@ -70,7 +70,7 @@ export function parseIni(iniRaw: string): IniConfig {
 
     const key = line.slice(0, separatorIndex).trim().toLowerCase();
     const value = line.slice(separatorIndex + 1).trim();
-    if (key.length === 0) {
+    if (key.length === 0 || key === '__proto__' || key === 'constructor' || key === 'prototype') {
       continue;
     }
 
