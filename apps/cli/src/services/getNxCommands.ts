@@ -17,9 +17,5 @@ export function getNxCommands(flags: CLIFlags): string[] {
     return ['run', 'itw-credential-issuer:serve'];
   }
 
-  if (flags.rp) {
-    return ['run', 'itw-relying-party:serve'];
-  }
-
-  return ['run-many', '-t', 'serve', '-p', 'itw-credential-issuer,itw-relying-party'];
+  return ['run', 'itw-relying-party:serve'];
 }

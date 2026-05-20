@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 
 /** Utility function to find the root directory of an
  * Nx workspace by searching for the presence of 'nx.json' file.
@@ -12,7 +12,7 @@ export function findRoot(startDir = process.cwd()): string {
   while (true) {
     if (existsSync(join(dir, 'nx.json'))) return dir;
 
-    const parent = join(dir, '..');
+    const parent = resolve(dir, '..');
     if (parent === dir) break;
 
     dir = parent;

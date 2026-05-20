@@ -140,8 +140,8 @@ The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for
 
 Examples:
 
-- `pnpm itw-conformance-tool -- --args="init --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool -- --args="start --config ./ci/config.ini --all"`
-- `pnpm itw-conformance-tool -- --args="start --config ./ci/config.ini --issuer"`
+- `pnpm itw-conformance-tool --args="init --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
+- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
 
 This format is required because Nx forwards the CLI payload through its own `--args` option.
