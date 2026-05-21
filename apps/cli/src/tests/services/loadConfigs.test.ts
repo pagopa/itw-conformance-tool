@@ -11,7 +11,7 @@ vi.mock('../../utils/search.js');
 vi.mock('../../templates/templates.js', () => ({
   getDefaultConfigs: vi.fn((rootPath: string) => ({
     global: { data_dir: `${rootPath}/.itw-conformance-tool`, log_level: 'info' },
-    'itw-credential-issuer': { port: 3000, credential_types: 'pid,mdl,badge,eaa' },
+    'itw-credential-issuer': { auth_flow: 'direct', port: 3000, credential_types: 'pid,mdl,badge,eaa' },
     rp: { port: 8080 }
   }))
 }));
@@ -24,7 +24,7 @@ const rootPath = '/root';
 
 const parsedConfigs = {
   global: { data_dir: '/custom/.itw-conformance-tool', log_level: 'warn' as const },
-  'itw-credential-issuer': { port: 4000, credential_types: 'pid' },
+  'itw-credential-issuer': { auth_flow: 'direct', port: 4000, credential_types: 'pid' },
   rp: { port: 9090 }
 };
 

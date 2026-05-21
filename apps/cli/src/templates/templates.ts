@@ -3,6 +3,9 @@ import { join } from 'node:path';
 import type { ConfigType } from '@itw-conformance-tool/config';
 
 export const configINITemplate = `[global]
+; Authentication flow: direct | l2plus | l3
+; Default: direct
+auth_flow = direct
 ; Local directory for keys, certificates, and generated data
 ; Default: ~/.itw-conformance-tool
 data_dir = ~/.itw-conformance-tool
@@ -31,6 +34,7 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
       log_level: 'info'
     },
     'itw-credential-issuer': {
+      auth_flow: 'direct',
       port: 3000,
       credential_types: 'pid,mdl,badge,eaa'
     },
