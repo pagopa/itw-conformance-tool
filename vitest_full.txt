@@ -1,0 +1,218 @@
+
+ RUN  v4.1.5 /Users/francescoascenzi/Documents/dev/pagopa/itw-conformance-tool/apps/cli
+
+ ✓ |itw-conformance-cli| src/tests/init.test.ts (0 test) 0ms
+ ✓ |itw-conformance-cli| src/tests/services/buildEnv.test.ts (4 tests) 3ms
+ ❯ |itw-conformance-cli| src/tests/services/getNxCommands.test.ts (5 tests | 2 failed) 7ms
+     ✓ returns run-many for all services when --all is set 1ms
+     ✓ returns run-many when both issuer and rp flags are set 0ms
+     ✓ returns run-many when no service flag is provided (default) 0ms
+     × returns issuer command when only --issuer is set 4ms
+     × returns rp command when only --rp is set 1ms
+ ✓ |itw-conformance-cli| src/tests/utils/search.test.ts (16 tests) 5ms
+ ❯ |itw-conformance-cli| src/tests/services/loadConfigs.test.ts (6 tests | 6 failed) 5ms
+       × returns parsed configs when the file exists and parseINI succeeds 3ms
+       × returns default configs and logs warn when file exists but parseINI fails 0ms
+       × returns default configs and logs when the file does not exist 0ms
+       × returns parsed configs when default config.ini exists and parseINI succeeds 0ms
+       × returns default configs and logs warn when default config.ini exists but parseINI fails 0ms
+       × returns default configs and logs when default config.ini does not exist 0ms
+ ✓ |itw-conformance-cli| src/tests/utils/prompt.test.ts (4 tests) 4ms
+ ❯ |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts (25 tests | 25 failed) 7ms
+       × throws when no arguments are provided 3ms
+       × calls printHelp and exits for "help" 0ms
+       × calls printHelp and exits for "--help" 0ms
+       × calls printHelp and exits for "-h" 0ms
+       × calls printVersion and exits for "version" 0ms
+       × calls printVersion and exits for "--version" 0ms
+       × calls printVersion and exits for "-v" 0ms
+       × throws for an unrecognized command 0ms
+       × returns command "init" with default flags 0ms
+       × sets force flag with --force 0ms
+       × sets force flag with -f 0ms
+       × sets config flag with --config <path> 0ms
+       × sets config flag with --config=<path> 0ms
+       × sets config flag with -c <path> 0ms
+       × sets config flag with -c=<path> 0ms
+       × returns command "start" with default flags 0ms
+       × sets all flag with --all 0ms
+       × sets all flag with -a 0ms
+       × sets issuer flag with --issuer 0ms
+       × sets rp flag with --rp 0ms
+       × sets both issuer and rp flags together 0ms
+       × tokenizes a single "start --all" string 0ms
+       × tokenizes a single "start --issuer" string 0ms
+       × tokenizes a single string containing --config with a value 0ms
+       × tokenizes a single string with --config in quotes 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 33 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/getNxCommands.test.ts > getNxCommands > returns issuer command when only --issuer is set
+AssertionError: expected [ 'run-many', '-t', 'serve', …(2) ] to deeply equal [ Array(2) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "run",[39m
+[32m-   "itw-credential-issuer:serve",[39m
+[31m+   "run-many",[39m
+[31m+   "-t",[39m
+[31m+   "serve",[39m
+[31m+   "-p",[39m
+[31m+   "itw-credential-issuer,itw-relying-party",[39m
+[2m  ][22m
+
+ ❯ src/tests/services/getNxCommands.test.ts:40:20
+     38|     mockedFlags.issuer = true;
+     39|     const result = getNxCommands(mockedFlags);
+     40|     expect(result).toEqual(['run', 'itw-credential-issuer:serve']);
+       |                    ^
+     41|   });
+     42|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/getNxCommands.test.ts > getNxCommands > returns rp command when only --rp is set
+AssertionError: expected [ 'run-many', '-t', 'serve', …(2) ] to deeply equal [ 'run', 'itw-relying-party:serve' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "run",[39m
+[32m-   "itw-relying-party:serve",[39m
+[31m+   "run-many",[39m
+[31m+   "-t",[39m
+[31m+   "serve",[39m
+[31m+   "-p",[39m
+[31m+   "itw-credential-issuer,itw-relying-party",[39m
+[2m  ][22m
+
+ ❯ src/tests/services/getNxCommands.test.ts:46:20
+     44|     mockedFlags.rp = true;
+     45|     const result = getNxCommands(mockedFlags);
+     46|     expect(result).toEqual(['run', 'itw-relying-party:serve']);
+       |                    ^
+     47|   });
+     48| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/loadConfigs.test.ts > loadConfigs > with explicit config flag (flags.config.value = true) > returns parsed configs when the file exists and parseINI succeeds
+TypeError: vi.mocked(...).mockReturnValue is not a function
+ ❯ src/tests/services/loadConfigs.test.ts:41:33
+     39|   describe('with explicit config flag (flags.config.value = true)', ()…
+     40|     it('returns parsed configs when the file exists and parseINI succe…
+     41|       vi.mocked(existsFileSync).mockReturnValue(true);
+       |                                 ^
+     42|       vi.mocked(parseINI).mockReturnValue({ ok: true, data: parsedConf…
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/loadConfigs.test.ts > loadConfigs > with explicit config flag (flags.config.value = true) > returns default configs and logs warn when file exists but parseINI fails
+TypeError: vi.mocked(...).mockReturnValue is not a function
+ ❯ src/tests/services/loadConfigs.test.ts:53:33
+     51|
+     52|     it('returns default configs and logs warn when file exists but par…
+     53|       vi.mocked(existsFileSync).mockReturnValue(true);
+       |                                 ^
+     54|       vi.mocked(parseINI).mockReturnValue({ ok: false, error: 'Invalid…
+     55|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/loadConfigs.test.ts > loadConfigs > with explicit config flag (flags.config.value = true) > returns default configs and logs when the file does not exist
+TypeError: vi.mocked(...).mockReturnValue is not a function
+ ❯ src/tests/services/loadConfigs.test.ts:65:33
+     63|
+     64|     it('returns default configs and logs when the file does not exist'…
+     65|       vi.mocked(existsFileSync).mockReturnValue(false);
+       |                                 ^
+     66|
+     67|       const flags = { issuer: false, rp: false, all: false, force: fal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/loadConfigs.test.ts > loadConfigs > without explicit config flag (flags.config.value = false) > returns parsed configs when default config.ini exists and parseINI succeeds
+TypeError: vi.mocked(...).mockReturnValue is not a function
+ ❯ src/tests/services/loadConfigs.test.ts:78:33
+     76|   describe('without explicit config flag (flags.config.value = false)'…
+     77|     it('returns parsed configs when default config.ini exists and pars…
+     78|       vi.mocked(existsFileSync).mockReturnValue(true);
+       |                                 ^
+     79|       vi.mocked(parseINI).mockReturnValue({ ok: true, data: parsedConf…
+     80|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/loadConfigs.test.ts > loadConfigs > without explicit config flag (flags.config.value = false) > returns default configs and logs warn when default config.ini exists but parseINI fails
+TypeError: vi.mocked(...).mockReturnValue is not a function
+ ❯ src/tests/services/loadConfigs.test.ts:90:33
+     88|
+     89|     it('returns default configs and logs warn when default config.ini …
+     90|       vi.mocked(existsFileSync).mockReturnValue(true);
+       |                                 ^
+     91|       vi.mocked(parseINI).mockReturnValue({ ok: false, error: 'Bad for…
+     92|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/loadConfigs.test.ts > loadConfigs > without explicit config flag (flags.config.value = false) > returns default configs and logs when default config.ini does not exist
+TypeError: vi.mocked(...).mockReturnValue is not a function
+ ❯ src/tests/services/loadConfigs.test.ts:102:33
+    100|
+    101|     it('returns default configs and logs when default config.ini does …
+    102|       vi.mocked(existsFileSync).mockReturnValue(false);
+       |                                 ^
+    103|
+    104|       const flags = { issuer: false, rp: false, all: false, force: fal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/33]⎯
+
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > no arguments > throws when no arguments are provided
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > help command > calls printHelp and exits for "help"
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > help command > calls printHelp and exits for "--help"
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > help command > calls printHelp and exits for "-h"
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > version command > calls printVersion and exits for "version"
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > version command > calls printVersion and exits for "--version"
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > version command > calls printVersion and exits for "-v"
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > invalid command > throws for an unrecognized command
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > returns command "init" with default flags
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > sets force flag with --force
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > sets force flag with -f
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > sets config flag with --config <path>
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > sets config flag with --config=<path>
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > sets config flag with -c <path>
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > init command > sets config flag with -c=<path>
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > start command > returns command "start" with default flags
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > start command > sets all flag with --all
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > start command > sets all flag with -a
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > start command > sets issuer flag with --issuer
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > start command > sets rp flag with --rp
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > start command > sets both issuer and rp flags together
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > tokenization of single-argument input > tokenizes a single "start --all" string
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > tokenization of single-argument input > tokenizes a single "start --issuer" string
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > tokenization of single-argument input > tokenizes a single string containing --config with a value
+ FAIL  |itw-conformance-cli| src/tests/services/parseCLIArgs.test.ts > parseCLIArgs > tokenization of single-argument input > tokenizes a single string with --config in quotes
+TypeError: vi.mocked(...).mockImplementation is not a function
+ ❯ src/tests/services/parseCLIArgs.test.ts:24:27
+     22|   beforeEach(() => {
+     23|     vi.clearAllMocks();
+     24|     vi.mocked(expandPath).mockImplementation((path: string) => `/root/…
+       |                           ^
+     25|     vi.spyOn(process, 'exit').mockImplementation((code) => {
+     26|       throw new ProcessExitSignal((code as number) ?? 0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/33]⎯
+
+
+ Test Files  3 failed | 4 passed (7)
+      Tests  33 failed | 27 passed (60)
+   Start at  09:32:06
+   Duration  310ms (transform 341ms, setup 0ms, import 458ms, tests 32ms, environment 0ms)
+
+undefined
+/Users/francescoascenzi/Documents/dev/pagopa/itw-conformance-tool/apps/cli:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run --no-color
