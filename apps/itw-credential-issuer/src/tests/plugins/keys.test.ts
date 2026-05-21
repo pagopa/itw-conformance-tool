@@ -55,7 +55,7 @@ describe('keys plugin', () => {
     const app = Fastify();
     await app.register(configPlugin);
 
-    await expect(app.register(keysPlugin)).rejects.toThrow('Required key material file is missing or not readable');
+    await expect(app.register(keysPlugin)).rejects.toThrow('Required key material files are missing or not readable');
   });
 
   it('resolves key files from ITW_CT_DATA_DIR/itw-credential-issuer when KEYS_DIR is not set', async () => {
