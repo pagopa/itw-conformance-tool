@@ -62,10 +62,11 @@ function parseJwks(content: string, filePath: string): SigningJwks {
 
 export default fp(
   async function keysPlugin(app) {
+    // TODO: consider to delete the unusual config.KEYS_DIR and just rely on the presence of the required files in the data dir (or a subdir)
     const candidateDirs =
       app.config.KEYS_DIR !== undefined
         ? [app.config.KEYS_DIR]
-        : [path.join(app.config.DATA_DIR, 'itw-credential-issuer'), app.config.DATA_DIR];
+        : [path.join(path.dirname(app.config.DATA_DIR), 'issuer'), app.config.DATA_DIR];
 
     let keysDir: string | undefined;
     for (const candidateDir of candidateDirs) {
@@ -76,8 +77,10 @@ export default fp(
     }
 
     if (keysDir === undefined) {
-      const searched = candidateDirs.map((candidateDir) => path.join(candidateDir, '<required-file>')).join(', ');
-      throw new Error(`Required key material file is missing or not readable. Searched: ${searched}`);
+      const searched = candidateDirs
+        .flatMap((candidateDir) => REQUIRED_FILES.map((fileName) => path.resolve(candidateDir, fileName)))
+        .join(', ');
+      throw new Error(`Required key material files are missing or not readable. Searched: ${searched}`);
     }
 
     const filePaths = REQUIRED_FILES.map((fileName) => path.join(keysDir, fileName));

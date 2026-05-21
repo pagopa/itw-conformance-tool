@@ -15,6 +15,18 @@ interface RpConfig {
   authResponsePrivateKey: string;
 }
 
+type AuthFile = {
+  kty: string;
+  x: string;
+  y: string;
+  crv: string;
+  d: string;
+  kid: string;
+  alg: string;
+  use: string;
+  key_ops: string[];
+};
+
 declare module 'fastify' {
   interface FastifyInstance {
     config: RpConfig;
@@ -40,25 +52,7 @@ function resolveKeyPath(dataDir: string, keyName: string): string | undefined {
   return candidates.find((candidatePath) => existsSync(candidatePath));
 }
 
-function normalizeKey(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    throw new Error('Key file is empty');
-  }
-
-  if (trimmed.includes('-----BEGIN') && trimmed.includes('-----END')) {
-    return `${trimmed}\n`;
-  }
-
-  const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim();
-  if (decoded.includes('-----BEGIN') && decoded.includes('-----END')) {
-    return `${decoded}\n`;
-  }
-
-  return `${trimmed}\n`;
-}
-
-function loadPrivateKey(dataDir: string, keyName: string): string {
+async function loadPrivateKey(dataDir: string, keyName: string): Promise<string> {
   const keyPath = resolveKeyPath(dataDir, keyName);
 
   if (keyPath === undefined) {
@@ -68,7 +62,8 @@ function loadPrivateKey(dataDir: string, keyName: string): string {
     );
   }
 
-  return normalizeKey(readFileSync(keyPath, { encoding: 'utf8' }));
+  const rawKey: AuthFile = await JSON.parse(readFileSync(keyPath, { encoding: 'utf8' }));
+  return rawKey.d;
 }
 
 const configPlugin = fp(
@@ -85,8 +80,8 @@ const configPlugin = fp(
     let authResponsePrivateKey = '';
 
     try {
-      authRequestPrivateKey = loadPrivateKey(dataDir, 'authRequestPrivateKey');
-      authResponsePrivateKey = loadPrivateKey(dataDir, 'authResponsePrivateKey');
+      authRequestPrivateKey = await loadPrivateKey(dataDir, 'auth-request-key.jwk.json');
+      authResponsePrivateKey = await loadPrivateKey(dataDir, 'auth-response-key.jwk.json');
     } catch (err) {
       app.log.error({ err }, 'Failed to load auth keys');
       throw err;
