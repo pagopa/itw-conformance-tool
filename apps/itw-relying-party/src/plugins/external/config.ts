@@ -29,24 +29,46 @@ declare module 'fastify' {
   }
 }
 
-function loadPrivateKey(dataDir: string, keyName: string): string {
-  const keyPath = resolve(dataDir, keyName);
+function resolveKeyPath(dataDir: string, keyName: string): string | undefined {
+  const candidates = [
+    resolve(dataDir, 'rp', `${keyName}.pem`),
+    resolve(dataDir, 'rp', keyName),
+    resolve(dataDir, `${keyName}.pem`),
+    resolve(dataDir, keyName)
+  ];
 
-  if (!existsSync(keyPath)) {
+  return candidates.find((candidatePath) => existsSync(candidatePath));
+}
+
+function normalizeKey(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Key file is empty');
+  }
+
+  if (trimmed.includes('-----BEGIN') && trimmed.includes('-----END')) {
+    return `${trimmed}\n`;
+  }
+
+  const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim();
+  if (decoded.includes('-----BEGIN') && decoded.includes('-----END')) {
+    return `${decoded}\n`;
+  }
+
+  return `${trimmed}\n`;
+}
+
+function loadPrivateKey(dataDir: string, keyName: string): string {
+  const keyPath = resolveKeyPath(dataDir, keyName);
+
+  if (keyPath === undefined) {
     throw new Error(
-      `Missing required auth key: ${keyName} not found in ${dataDir}. ` +
+      `Missing required auth key: ${keyName} not found under ${dataDir} or ${resolve(dataDir, 'rp')}. ` +
         `Please ensure the key file exists before starting the server.`
     );
   }
 
-  const key = readFileSync(keyPath, { encoding: 'utf8' });
-  if (key.trim().length === 0) {
-    throw new Error(
-      `Invalid auth key: ${keyName} in ${dataDir} is empty. ` + `Please ensure the key file contains valid content.`
-    );
-  }
-
-  return key;
+  return normalizeKey(readFileSync(keyPath, { encoding: 'utf8' }));
 }
 
 const configPlugin = fp(
@@ -54,7 +76,7 @@ const configPlugin = fp(
     const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
 
     // Load base RP config
-    const loadResult = await loadRpConfig({ configFilePath });
+    const loadResult = loadRpConfig({ configFilePath });
     const rpConfigFromLib = loadResult.config;
     const dataDir = rpConfigFromLib.dataDir;
 

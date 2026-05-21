@@ -32,6 +32,15 @@ async function ensureReadable(filePath: string): Promise<void> {
   }
 }
 
+async function areAllRequiredFilesReadable(dirPath: string): Promise<boolean> {
+  try {
+    await Promise.all(REQUIRED_FILES.map((fileName) => ensureReadable(path.join(dirPath, fileName))));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function parseJwks(content: string, filePath: string): SigningJwks {
   let parsed: unknown;
   try {
@@ -53,7 +62,24 @@ function parseJwks(content: string, filePath: string): SigningJwks {
 
 export default fp(
   async function keysPlugin(app) {
-    const keysDir = app.config.KEYS_DIR ?? app.config.DATA_DIR;
+    const candidateDirs =
+      app.config.KEYS_DIR !== undefined
+        ? [app.config.KEYS_DIR]
+        : [path.join(app.config.DATA_DIR, 'itw-credential-issuer'), app.config.DATA_DIR];
+
+    let keysDir: string | undefined;
+    for (const candidateDir of candidateDirs) {
+      if (await areAllRequiredFilesReadable(candidateDir)) {
+        keysDir = candidateDir;
+        break;
+      }
+    }
+
+    if (keysDir === undefined) {
+      const searched = candidateDirs.map((candidateDir) => path.join(candidateDir, '<required-file>')).join(', ');
+      throw new Error(`Required key material file is missing or not readable. Searched: ${searched}`);
+    }
+
     const filePaths = REQUIRED_FILES.map((fileName) => path.join(keysDir, fileName));
 
     await Promise.all(filePaths.map((filePath) => ensureReadable(filePath)));

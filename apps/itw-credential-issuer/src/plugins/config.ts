@@ -38,12 +38,25 @@ function resolvePortOverride(variableName: string): string | undefined {
   return value;
 }
 
+function resolvePathOverride(variableName: string): string | undefined {
+  const value = process.env[variableName];
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+
+  return value.trim();
+}
+
 export default fp(
   async function configPlugin(app) {
     const data: NodeJS.ProcessEnv = { ...process.env };
     const orchestratedPort = resolvePortOverride('ITW_CT_ISSUER_PORT');
     if (orchestratedPort !== undefined) {
       data.PORT = orchestratedPort;
+    }
+    const orchestratedDataDir = resolvePathOverride('ITW_CT_DATA_DIR');
+    if (orchestratedDataDir !== undefined) {
+      data.DATA_DIR = path.join(orchestratedDataDir, 'itw-credential-issuer');
     }
 
     await app.register(FastifyEnv, {

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import configPlugin from '../../plugins/config.js';
 import keysPlugin from '../../plugins/keys.js';
 
-const ENV_KEYS = ['KEYS_DIR', 'PORT', 'HOST', 'DATA_DIR', 'DB_CLEANUP_INTERVAL_MS'] as const;
+const ENV_KEYS = ['KEYS_DIR', 'PORT', 'HOST', 'DATA_DIR', 'DB_CLEANUP_INTERVAL_MS', 'ITW_CT_DATA_DIR'] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
@@ -55,7 +55,28 @@ describe('keys plugin', () => {
     const app = Fastify();
     await app.register(configPlugin);
 
-    await expect(app.register(keysPlugin)).rejects.toThrow('Required key material file is missing or not readable:');
+    await expect(app.register(keysPlugin)).rejects.toThrow('Required key material file is missing or not readable');
+  });
+
+  it('resolves key files from ITW_CT_DATA_DIR/itw-credential-issuer when KEYS_DIR is not set', async () => {
+    const rootDataDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-data-dir-'));
+    const serviceDataDir = path.join(rootDataDir, 'itw-credential-issuer');
+    mkdirSync(serviceDataDir, { recursive: true });
+
+    writeFileSync(path.join(serviceDataDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'test-kid' }] }));
+    writePemFiles(serviceDataDir);
+    process.env.ITW_CT_DATA_DIR = rootDataDir;
+
+    const app = Fastify();
+    await app.register(configPlugin);
+    await app.register(keysPlugin);
+    await app.ready();
+
+    expect(app.issuerKeys.signingKeysJwks.keys).toHaveLength(1);
+    expect(app.issuerKeys.iacaCertPem).toContain('BEGIN CERTIFICATE');
+    expect(app.issuerKeys.iacaKeyPem).toContain('BEGIN PRIVATE KEY');
+
+    await app.close();
   });
 
   it('fails with a clear error when signing-keys.jwks.json is not valid JSON', async () => {
