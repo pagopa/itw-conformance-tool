@@ -11,6 +11,7 @@ const mockConfigs: ConfigType = {
     log_level: 'info'
   },
   'itw-credential-issuer': {
+    auth_flow: 'direct',
     port: 3000,
     credential_types: 'pid,mdl,badge,eaa'
   },
@@ -35,6 +36,7 @@ describe('buildEnv', () => {
     expect(env.ITW_CT_ISSUER_PORT).toBe('3000');
     expect(env.ITW_CT_ISSUER_CREDENTIAL_TYPES).toBe('pid,mdl,badge,eaa');
     expect(env.ITW_CT_RP_PORT).toBe('8080');
+    expect(env.ITW_CT_ISSUER_AUTH_FLOW).toBe('direct');
   });
 
   it('merges with existing process.env variables', () => {
@@ -59,7 +61,7 @@ describe('buildEnv', () => {
   it('converts numeric port values to strings', () => {
     const configs: ConfigType = {
       ...mockConfigs,
-      'itw-credential-issuer': { port: 4000, credential_types: 'pid' },
+      'itw-credential-issuer': { auth_flow: 'direct', port: 4000, credential_types: 'pid' },
       rp: { port: 9090 }
     };
 
