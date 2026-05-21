@@ -49,7 +49,27 @@ pnpm lint
 pnpm test
 ```
 
-Start the local apps:
+Start the full conformance stack via CLI (recommended):
+
+```bash
+# First run: initialize data directory, keys, and config template
+pnpm itw-conformance-tool:init
+
+# Start both services
+pnpm itw-conformance-tool:start
+```
+
+Or install the CLI globally and run it directly:
+
+```bash
+pnpm nx build itw-conformance-cli
+cd apps/cli && pnpm link --global
+
+itw-conformance-tool init
+itw-conformance-tool start --all
+```
+
+Alternatively, start the individual services directly:
 
 ```bash
 # Credential Issuer
@@ -59,29 +79,31 @@ pnpm issuer
 pnpm rp
 ```
 
+> See [apps/cli/README.md](apps/cli/README.md) for full CLI usage.
+
 ## Commands
 
 All commands are run from the workspace root. Root-level scripts delegate to **Nx** where applicable and operate on projects that expose the requested target.
 
 ### Root-level `pnpm` scripts
 
-| Command                         | Description                                                           |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `pnpm build`                    | Build all projects with a `build` target                              |
-| `pnpm start`                    | Serve all runnable apps with a `serve` target                         |
-| `pnpm conformance`              | Run the local conformance CLI (`init`/`start`)                        |
-| `pnpm conformance:init`         | Initialize local data directory and config template                   |
-| `pnpm conformance:start`        | Start both services via CLI (`start --all`)                           |
-| `pnpm conformance:start:issuer` | Start only the issuer service via CLI                                 |
-| `pnpm conformance:start:rp`     | Start only the relying-party service via CLI                          |
-| `pnpm issuer`                   | Serve `itw-credential-issuer`                                         |
-| `pnpm rp`                       | Serve `itw-relying-party`                                             |
-| `pnpm test`                     | Run Vitest for projects with a `test` target                          |
-| `pnpm typecheck`                | Type-check projects with a `typecheck` target                         |
-| `pnpm lint`                     | Lint projects with a `lint` target                                    |
-| `pnpm format`                   | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier |
-| `pnpm clean`                    | Run project clean targets, then remove root `node_modules` and `.nx`  |
-| `pnpm pre-commit`               | Run lint and type-check on affected projects                          |
+| Command                                  | Description                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| `pnpm build`                             | Build all projects with a `build` target                              |
+| `pnpm start`                             | Serve all runnable apps with a `serve` target                         |
+| `pnpm itw-conformance-tool`              | Run the local conformance CLI (`init`/`start`)                        |
+| `pnpm itw-conformance-tool:init`         | Initialize local data directory and config template                   |
+| `pnpm itw-conformance-tool:start`        | Start both services via CLI (`start --all`)                           |
+| `pnpm itw-conformance-tool:start:issuer` | Start only the issuer service via CLI                                 |
+| `pnpm itw-conformance-tool:start:rp`     | Start only the relying-party service via CLI                          |
+| `pnpm issuer`                            | Serve `itw-credential-issuer`                                         |
+| `pnpm rp`                                | Serve `itw-relying-party`                                             |
+| `pnpm test`                              | Run Vitest for projects with a `test` target                          |
+| `pnpm typecheck`                         | Type-check projects with a `typecheck` target                         |
+| `pnpm lint`                              | Lint projects with a `lint` target                                    |
+| `pnpm format`                            | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier |
+| `pnpm clean`                             | Run project clean targets, then remove root `node_modules` and `.nx`  |
+| `pnpm pre-commit`                        | Run lint and type-check on affected projects                          |
 
 ### Targeting a single project with Nx
 
@@ -107,11 +129,16 @@ All CLI details are documented in [apps/cli/README.md](apps/cli/README.md).
 
 Current workspace projects include:
 
-| Project                        | Path                         | Common targets                                |
-| ------------------------------ | ---------------------------- | --------------------------------------------- |
-| `itw-credential-issuer`        | `apps/itw-credential-issuer` | `build`, `serve`, `test`, `typecheck`, `lint` |
-| `itw-relying-party`            | `apps/itw-relying-party`     | `build`, `serve`, `test`, `typecheck`, `lint` |
-| `@itw-conformance-tool/logger` | `packages/logger`            | `build`, `typecheck`, `lint`                  |
+| Project                          | Path                         | Common targets                                |
+| -------------------------------- | ---------------------------- | --------------------------------------------- |
+| `itw-credential-issuer`          | `apps/itw-credential-issuer` | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `itw-relying-party`              | `apps/itw-relying-party`     | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `itw-conformance-cli`            | `apps/cli`                   | `build`, `run`, `test`, `typecheck`, `lint`   |
+| `@itw-conformance-tool/config`   | `packages/config`            | `build`, `test`, `typecheck`, `lint`          |
+| `@itw-conformance-tool/database` | `packages/database`          | `build`, `test`, `typecheck`, `lint`          |
+| `@itw-conformance-tool/issuer`   | `packages/issuer`            | `build`, `typecheck`, `lint`                  |
+| `@itw-conformance-tool/rp`       | `packages/rp`                | `build`, `test`, `typecheck`, `lint`          |
+| `@itw-conformance-tool/logger`   | `packages/logger`            | `build`, `typecheck`, `lint`                  |
 
 ### Nx cache
 
