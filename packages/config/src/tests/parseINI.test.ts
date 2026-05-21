@@ -15,7 +15,7 @@ data_dir=~/.itw-conformance-tool
 log_level=warn
 
 [itw-credential-issuer]
-auth_flow=direct
+auth_flow=l2plus
 port=4000
 credential_types=pid,mdl,badge,eaa
 
@@ -77,7 +77,7 @@ describe('parseINI', () => {
         log_level: 'warn'
       },
       'itw-credential-issuer': {
-        auth_flow: 'direct',
+        auth_flow: 'l2plus',
         port: 4000,
         credential_types: 'pid,mdl,badge,eaa'
       },

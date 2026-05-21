@@ -1,4 +1,4 @@
-import { parseINI } from '@itw-conformance-tool/config';
+import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { loadConfigs } from '../../services/loadConfigs.js';
@@ -22,8 +22,8 @@ vi.mock('@itw-conformance-tool/config', () => ({
 
 const rootPath = '/root';
 
-const parsedConfigs = {
-  global: { data_dir: '/custom/.itw-conformance-tool', log_level: 'warn' as const },
+const parsedConfigs: ConfigType = {
+  global: { data_dir: '/custom/.itw-conformance-tool', log_level: 'warn' },
   'itw-credential-issuer': { auth_flow: 'direct', port: 4000, credential_types: 'pid' },
   rp: { port: 9090 }
 };
