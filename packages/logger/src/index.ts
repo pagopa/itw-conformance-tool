@@ -1,17 +1,7 @@
-import pino, { type Logger, type LoggerOptions } from 'pino';
+// Main export file for the logger package
+export { createLogger, logger, loggerOptions } from './services/main.js';
 
-export const loggerOptions: LoggerOptions = {
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  timestamp: pino.stdTimeFunctions.isoTimeNano,
-  transport:
-    process.env.NODE_ENV === 'production'
-      ? undefined
-      : {
-          target: 'pino-pretty',
-          options: {
-            colorize: true
-          }
-        }
-};
+// Types
+export type { Logger, LoggerOptions, Level } from 'pino';
 
-export const logger: Logger = pino(loggerOptions);
+export type { CreateLoggerOptions } from './types/types.js';
