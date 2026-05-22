@@ -55,7 +55,10 @@ export class PresentationResponseService {
     });
 
     return {
-      redirectUri: `${options.baseURL}/code/jwt?request_uri=${options.requestUri}`
+      redirectUri: new URL(
+        `/code/jwt?request_uri=${encodeURIComponent(options.requestUri)}`,
+        options.baseURL
+      ).toString()
     };
   }
 }

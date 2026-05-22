@@ -104,11 +104,14 @@ export class AuthorizationService {
       requestObject: JSON.stringify(updatedParRequest)
     });
 
-    const location = `${parRequest.redirect_uri}?code=${code}&state=${parRequest.state}&iss=${options.baseURL}`;
+    const location = new URL(parRequest.redirect_uri);
+    location.searchParams.set('code', code);
+    location.searchParams.set('state', parRequest.state);
+    location.searchParams.set('iss', options.baseURL);
 
     return {
       kind: 'redirect',
-      location
+      location: location.toString()
     };
   }
 
@@ -145,7 +148,10 @@ export class AuthorizationService {
       nonce: authorizationSessionNonce,
       response_mode: 'direct_post.jwt',
       response_type: 'vp_token',
-      response_uri: `${options.baseURL}/presentation-response?request_uri=${options.requestUri}`,
+      response_uri: new URL(
+        `/presentation-response?request_uri=${encodeURIComponent(options.requestUri)}`,
+        options.baseURL
+      ).toString(),
       state: parRequest.state
     };
 

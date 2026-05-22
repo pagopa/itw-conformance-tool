@@ -101,7 +101,8 @@ export function makeTokenParRepository(app) {
           `SELECT request_uri, request_object
            FROM par_entries
            WHERE json_extract(request_object, '$.code') = ?
-             AND json_extract(request_object, '$.code_expires_at') >= unixepoch('now')`
+             AND json_extract(request_object, '$.code_expires_at') >= unixepoch('now')
+             AND expires_at >= unixepoch('now') * 1000`
         )
         .get(code);
 

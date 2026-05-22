@@ -45,13 +45,13 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
       } catch (error) {
         if (error instanceof AuthorizationRequestError) {
           if (error.redirectUri) {
-            const params = new URLSearchParams({
-              error: 'invalid_request',
-              error_description: error.message,
-              ...(error.state ? { state: error.state } : {})
-            });
-            const location = `${error.redirectUri}?${params.toString()}`;
-            return reply.code(302).header('Location', location).send();
+            const location = new URL(error.redirectUri);
+            location.searchParams.set('error', 'invalid_request');
+            location.searchParams.set('error_description', error.message);
+            if (error.state) {
+              location.searchParams.set('state', error.state);
+            }
+            return reply.code(302).header('Location', location.toString()).send();
           }
 
           return reply.code(error.statusCode).send({
