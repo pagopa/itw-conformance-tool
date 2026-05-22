@@ -1,3 +1,4 @@
+import { createPrivateKey, type JsonWebKey } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -14,18 +15,6 @@ interface RpConfig {
   authRequestPrivateKey: string;
   authResponsePrivateKey: string;
 }
-
-type AuthFile = {
-  kty: string;
-  x: string;
-  y: string;
-  crv: string;
-  d: string;
-  kid: string;
-  alg: string;
-  use: string;
-  key_ops: string[];
-};
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -52,7 +41,36 @@ function resolveKeyPath(dataDir: string, keyName: string): string | undefined {
   return candidates.find((candidatePath) => existsSync(candidatePath));
 }
 
-async function loadPrivateKey(dataDir: string, keyName: string): Promise<string> {
+function toPemPrivateKey(raw: string, keyPath: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`Invalid auth key file: ${keyPath} is empty.`);
+  }
+
+  if (trimmed.includes('-----BEGIN') && trimmed.includes('PRIVATE KEY')) {
+    return `${trimmed}\n`;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new Error(`Invalid auth key format in ${keyPath}: expected PEM or JWK JSON.`);
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Invalid auth key format in ${keyPath}: expected PEM or JWK JSON object.`);
+  }
+
+  try {
+    const privateKey = createPrivateKey({ key: parsed as JsonWebKey, format: 'jwk' });
+    return privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+  } catch {
+    throw new Error(`Invalid JWK private key in ${keyPath}: cannot convert to PEM.`);
+  }
+}
+
+function loadPrivateKey(dataDir: string, keyName: string): string {
   const keyPath = resolveKeyPath(dataDir, keyName);
 
   if (keyPath === undefined) {
@@ -62,8 +80,7 @@ async function loadPrivateKey(dataDir: string, keyName: string): Promise<string>
     );
   }
 
-  const rawKey: AuthFile = await JSON.parse(readFileSync(keyPath, { encoding: 'utf8' }));
-  return rawKey.d;
+  return toPemPrivateKey(readFileSync(keyPath, { encoding: 'utf8' }), keyPath);
 }
 
 const configPlugin = fp(
@@ -80,8 +97,8 @@ const configPlugin = fp(
     let authResponsePrivateKey = '';
 
     try {
-      authRequestPrivateKey = await loadPrivateKey(dataDir, 'auth-request-key.jwk.json');
-      authResponsePrivateKey = await loadPrivateKey(dataDir, 'auth-response-key.jwk.json');
+      authRequestPrivateKey = loadPrivateKey(dataDir, 'auth-request-key.jwk.json');
+      authResponsePrivateKey = loadPrivateKey(dataDir, 'auth-response-key.jwk.json');
     } catch (err) {
       app.log.error({ err }, 'Failed to load auth keys');
       throw err;
