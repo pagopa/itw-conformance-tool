@@ -19,10 +19,19 @@ declare module 'fastify' {
 const schema = z.object({
   HOST: z.string().default('localhost'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  DATA_DIR: z.string().default(path.join(process.cwd(), '.data', 'itw-credential-issuer')),
+  DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool', 'issuer')),
   DB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   KEYS_DIR: z.string().optional()
 });
+
+function resolveIssuerDataDir(globalDataDir: string): string {
+  const trimmed = globalDataDir.trim();
+  if (trimmed.length === 0) {
+    return trimmed;
+  }
+
+  return path.basename(trimmed) === 'issuer' ? trimmed : path.join(trimmed, 'issuer');
+}
 
 function resolvePortOverride(variableName: string): string | undefined {
   const value = process.env[variableName];
@@ -44,6 +53,10 @@ export default fp(
     const orchestratedPort = resolvePortOverride('ITW_CT_ISSUER_PORT');
     if (orchestratedPort !== undefined) {
       data.PORT = orchestratedPort;
+    }
+
+    if (data.ITW_CT_DATA_DIR && !data.DATA_DIR) {
+      data.DATA_DIR = resolveIssuerDataDir(data.ITW_CT_DATA_DIR);
     }
 
     await app.register(FastifyEnv, {
