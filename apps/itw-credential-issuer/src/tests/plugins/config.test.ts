@@ -3,7 +3,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import configPlugin from '../../plugins/config.js';
 
-const ENV_KEYS = ['HOST', 'PORT', 'DATA_DIR', 'DB_CLEANUP_INTERVAL_MS', 'KEYS_DIR', 'ITW_CT_ISSUER_PORT'] as const;
+const ENV_KEYS = [
+  'HOST',
+  'PORT',
+  'DATA_DIR',
+  'DB_CLEANUP_INTERVAL_MS',
+  'KEYS_DIR',
+  'ITW_CT_DATA_DIR',
+  'ITW_CT_ISSUER_PORT'
+] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
@@ -54,6 +62,18 @@ describe('config plugin', () => {
     await app.ready();
 
     expect(app.config.PORT).toBe(5010);
+
+    await app.close();
+  });
+
+  it('uses ITW_CT_DATA_DIR as base directory for DATA_DIR', async () => {
+    process.env.ITW_CT_DATA_DIR = '/tmp/itw-conformance-tool';
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool/itw-credential-issuer');
 
     await app.close();
   });
