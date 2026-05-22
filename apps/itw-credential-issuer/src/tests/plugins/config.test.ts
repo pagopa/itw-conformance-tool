@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -90,5 +92,29 @@ describe('config plugin', () => {
     const app = Fastify();
 
     await expect(app.register(configPlugin)).rejects.toThrow();
+  });
+
+  it('maps ITW_CT_DATA_DIR to issuer subdirectory when DATA_DIR is not provided', async () => {
+    process.env.ITW_CT_DATA_DIR = '/tmp/itw-conformance-tool';
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool/issuer');
+
+    await app.close();
+  });
+
+  it('ignores whitespace-only ITW_CT_DATA_DIR and keeps default DATA_DIR', async () => {
+    process.env.ITW_CT_DATA_DIR = '   ';
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.DATA_DIR).toBe(path.join(process.cwd(), '.itw-conformance-tool', 'issuer'));
+
+    await app.close();
   });
 });

@@ -44,3 +44,5 @@ export * from './services/par-service.js';
 export * from './services/token-service.js';
 export * from './services/federation-service.js';
 export * from './services/credential-service.js';
+export * from './services/authorization-service.js';
+export * from './services/presentation-response-service.js';
