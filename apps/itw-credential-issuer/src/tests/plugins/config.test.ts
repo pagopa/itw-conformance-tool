@@ -3,7 +3,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import configPlugin from '../../plugins/config.js';
 
-const ENV_KEYS = ['HOST', 'PORT', 'DATA_DIR', 'DB_CLEANUP_INTERVAL_MS', 'KEYS_DIR', 'ITW_CT_ISSUER_PORT', 'ITW_CT_DATA_DIR'] as const;
+const ENV_KEYS = [
+  'HOST',
+  'PORT',
+  'DATA_DIR',
+  'DB_CLEANUP_INTERVAL_MS',
+  'KEYS_DIR',
+  'ITW_CT_ISSUER_PORT',
+  'ITW_CT_DATA_DIR'
+] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
