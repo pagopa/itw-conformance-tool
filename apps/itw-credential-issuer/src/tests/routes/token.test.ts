@@ -1,3 +1,4 @@
+import { InvalidGrantError } from '@itw-conformance-tool/issuer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocked = vi.hoisted(() => ({
@@ -38,10 +39,34 @@ describe('POST /token', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers.pragma).toBe('no-cache');
     expect(response.json()).toEqual({
       access_token: 'token',
       expires_in: 300,
       token_type: 'Bearer'
+    });
+
+    await app.close();
+  });
+
+  it('returns invalid_grant with no-cache headers', async () => {
+    mocked.createAccessToken.mockRejectedValue(new InvalidGrantError('code expired'));
+
+    const app = await buildRouteApp(tokenRoute);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: 'code=abc&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      headers: { 'content-type': 'text/plain' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers.pragma).toBe('no-cache');
+    expect(response.json()).toEqual({
+      error: 'invalid_grant',
+      error_description: 'code expired'
     });
 
     await app.close();

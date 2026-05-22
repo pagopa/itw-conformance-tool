@@ -24,10 +24,10 @@ const schema = z.object({
   KEYS_DIR: z.string().optional()
 });
 
-function resolveIssuerDataDir(globalDataDir: string): string {
+function resolveIssuerDataDir(globalDataDir: string): string | undefined {
   const trimmed = globalDataDir.trim();
   if (trimmed.length === 0) {
-    return trimmed;
+    return undefined;
   }
 
   return path.basename(trimmed) === 'issuer' ? trimmed : path.join(trimmed, 'issuer');
@@ -56,7 +56,10 @@ export default fp(
     }
 
     if (data.ITW_CT_DATA_DIR && !data.DATA_DIR) {
-      data.DATA_DIR = resolveIssuerDataDir(data.ITW_CT_DATA_DIR);
+      const issuerDataDir = resolveIssuerDataDir(data.ITW_CT_DATA_DIR);
+      if (issuerDataDir !== undefined) {
+        data.DATA_DIR = issuerDataDir;
+      }
     }
 
     await app.register(FastifyEnv, {

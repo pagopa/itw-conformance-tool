@@ -7,10 +7,16 @@ import {
 
 import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '../plugins/issuer-runtime.js';
 
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 
 const tokenRoute: FastifyPluginAsync = async (app) => {
   const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store',
+    Pragma: 'no-cache'
+  };
+  const withNoCache = (reply: FastifyReply) => reply.headers(noCacheHeaders);
+
   app.route({
     url: '/token',
     method: 'POST',
@@ -46,22 +52,21 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
 
         return reply
           .code(200)
-          .headers({
-            'Cache-Control': 'no-store',
-            'Content-Type': 'application/json'
-          })
+          .headers({ ...noCacheHeaders, 'Content-Type': 'application/json' })
           .send(response);
       } catch (error) {
         if (error instanceof CreateAccessTokenError) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: error.message });
+          return withNoCache(reply).code(400).send({ error: 'invalid_request', error_description: error.message });
         }
 
         if (error instanceof InvalidGrantError) {
-          return reply.code(400).send({ error: 'invalid_grant', error_description: error.message });
+          return withNoCache(reply).code(400).send({ error: 'invalid_grant', error_description: error.message });
         }
 
         if (error instanceof UnsupportedGrantTypeError) {
-          return reply.code(400).send({ error: 'unsupported_grant_type', error_description: error.message });
+          return withNoCache(reply)
+            .code(400)
+            .send({ error: 'unsupported_grant_type', error_description: error.message });
         }
 
         request.log.error({ err: error }, 'Token request failed');
