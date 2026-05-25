@@ -61,21 +61,21 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
 
       const state = randomUUID();
       const nonce = randomBytes(32).toString('hex');
-      await app.rp.nonceRepository.insert(nonce, Date.now() + TTL_MS);
+      await app.nonceRepository.insert(nonce, Date.now() + TTL_MS);
 
       const payload = {
-        client_id: app.rp.clientId,
+        client_id: app.config.baseUrl,
         dcql_query: parsed.data.dcqlQuery,
-        iss: app.rp.clientId,
+        iss: app.config.baseUrl,
         nonce,
         request_uri_method: 'get',
         response_mode: 'direct_post.jwt',
         response_type: 'vp_token',
-        response_uri: `${app.rp.basePath}/auth/response`,
+        response_uri: `${app.config.baseUrl}/auth/response`,
         state
       };
 
-      const requestObject = jwt.sign(payload, app.rp.authRequestPrivateKeyPem, {
+      const requestObject = jwt.sign(payload, app.rpKeys.authRequestPrivateKeyPem, {
         algorithm: 'ES256',
         expiresIn: '1h',
         header: {
@@ -84,16 +84,16 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
         }
       });
 
-      await app.rp.sessionService.create({
+      await app.sessionService.create({
         flowType: parsed.data.flowType,
         id: state,
         jwt: requestObject,
         ttlMs: TTL_MS
       });
 
-      const requestUri = `${app.rp.basePath}/auth/request/${state}`;
+      const requestUri = `${app.config.baseUrl}/auth/request/${state}`;
       const params = new URLSearchParams({
-        client_id: app.rp.clientId,
+        client_id: app.config.baseUrl,
         request_uri: requestUri,
         state
       });

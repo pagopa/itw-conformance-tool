@@ -147,7 +147,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
         if (parsedBody.data.state === undefined) {
           return reply.code(400).send({ message: 'The request is missing required parameters' });
         }
-        await app.rp.sessionService.update(parsedBody.data.state, 'rejected');
+        await app.sessionService.update(parsedBody.data.state, 'rejected');
         return reply.code(200).send({});
       }
 
@@ -155,7 +155,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
       try {
         const { state: parsedState, vp_token: vpToken } = await decryptAuthorizationResponse(
           parsedBody.data.response,
-          app.rp.authResponsePrivateKeyPem
+          app.rpKeys.authResponsePrivateKeyPem
         );
         state = parsedState;
 
@@ -166,7 +166,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
           const kbJwt = parts[parts.length - 1];
 
           try {
-            const { nonce } = await verifyAndExtractKbJwtClaims(kbJwt, sdJwt, app.rp.clientId);
+            const { nonce } = await verifyAndExtractKbJwtClaims(kbJwt, sdJwt, app.config.baseUrl);
             verifiedNonces.push(nonce);
           } catch (error) {
             throw new Error(
@@ -185,16 +185,16 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
         }
 
         // Consume the verified nonce
-        const consumed = await app.rp.nonceRepository.consume(firstNonce);
+        const consumed = await app.nonceRepository.consume(firstNonce);
         if (!consumed) {
           throw new Error('The nonce does not match with the one provided in the request object');
         }
 
         const values = decodeDisclosureValues(vpToken);
         const responseCode = randomBytes(32).toString('hex');
-        const redirectUri = `${app.rp.basePath}/success.html?response_code=${responseCode}`;
+        const redirectUri = `${app.config.baseUrl}/success.html?response_code=${responseCode}`;
 
-        await app.rp.sessionService.update(state, 'verified', {
+        await app.sessionService.update(state, 'verified', {
           redirectUri,
           values
         });
@@ -202,7 +202,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
         return reply.code(200).send({ redirect_uri: redirectUri });
       } catch (error) {
         if (state !== undefined) {
-          await app.rp.sessionService.update(state, 'denied');
+          await app.sessionService.update(state, 'denied');
         }
         throw error;
       }
