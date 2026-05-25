@@ -94,14 +94,14 @@ describe('config plugin', () => {
     await expect(app.register(configPlugin)).rejects.toThrow();
   });
 
-  it('maps ITW_CT_DATA_DIR to issuer subdirectory when DATA_DIR is not provided', async () => {
+  it('maps ITW_CT_DATA_DIR to itw-credential-issuer subdirectory when DATA_DIR is not provided', async () => {
     process.env.ITW_CT_DATA_DIR = '/tmp/itw-conformance-tool';
     const app = Fastify();
 
     await app.register(configPlugin);
     await app.ready();
 
-    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool/issuer');
+    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool/itw-credential-issuer');
 
     await app.close();
   });
