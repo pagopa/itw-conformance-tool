@@ -5,7 +5,7 @@ import {
   UnsupportedGrantTypeError
 } from '@itw-conformance-tool/issuer';
 
-import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '../plugins/issuer-runtime.js';
+import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '#/plugins/index.js';
 
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 

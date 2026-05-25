@@ -1,6 +1,6 @@
 import { CreateCredentialError, CredentialService, InvalidProofError } from '@itw-conformance-tool/issuer';
 
-import { makeJwksRepository, makeOauthCallbacks } from '../plugins/issuer-runtime.js';
+import { makeJwksRepository, makeOauthCallbacks } from '#/plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';

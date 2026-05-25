@@ -1,6 +1,6 @@
 import { CodeJwtService, InvalidRequestUriError } from '@itw-conformance-tool/issuer';
 
-import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from '../plugins/issuer-runtime.js';
+import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from '#/plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
