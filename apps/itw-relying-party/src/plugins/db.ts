@@ -24,8 +24,8 @@ export default fp(
     app.decorate('nonceRepository', nonceRepository);
     app.decorate('sessionService', new SessionService(sessionRepository));
 
-    app.addHook('onClose', async () => {
-      await dbClient.close();
+    app.addHook('onClose', () => {
+      dbClient.close();
     });
   },
   { name: 'db', dependencies: ['config'] }
