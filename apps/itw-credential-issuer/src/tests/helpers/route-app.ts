@@ -25,7 +25,7 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
   });
 
   app.decorate('issuerKeys', {
-    signingKeysJwks: JSON.stringify({ keys: [signingKey] }),
+    signingKeysJwks: { keys: [signingKey] },
     iacaCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n',
     iacaKeyPem: '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n'
   });

@@ -7,6 +7,7 @@ import fp from 'fastify-plugin';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import bootstrap from '../app.js';
+import { generateIaca, generateJwks } from '../crypto/auto-keygen.js';
 
 const ENV_KEYS = ['DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS'] as const;
 
@@ -16,16 +17,14 @@ function cleanupEnv(): void {
   }
 }
 
-function setupKeyMaterial(): string {
+async function setupKeyMaterial(): Promise<string> {
   const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-app-keys-'));
   const issuerDir = path.join(rootDir, 'issuer');
   mkdirSync(issuerDir);
-  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'issuer-kid' }] }));
-  writeFileSync(
-    path.join(issuerDir, 'iaca-cert.pem'),
-    '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
-  );
-  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n');
+  const [jwksJson, iaca] = await Promise.all([generateJwks(), generateIaca()]);
+  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), jwksJson);
+  writeFileSync(path.join(issuerDir, 'iaca-cert.pem'), iaca.certPem);
+  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), iaca.keyPem);
 
   return rootDir;
 }
@@ -36,7 +35,7 @@ describe('issuer app bootstrap', () => {
   });
 
   it('registers plugins and serves health route', async () => {
-    process.env.DATA_DIR = setupKeyMaterial();
+    process.env.DATA_DIR = await setupKeyMaterial();
     process.env.DB_CLEANUP_INTERVAL_MS = '999999';
 
     const app = Fastify();
@@ -49,13 +48,13 @@ describe('issuer app bootstrap', () => {
     expect(response.json()).toEqual({ status: 'ok' });
     expect(app.config.PORT).toBe(3000);
     expect(app.dbClient).toBeDefined();
-    expect(JSON.parse(app.issuerKeys.signingKeysJwks).keys).toHaveLength(1);
+    expect(app.issuerKeys.signingKeysJwks.keys).toHaveLength(2);
 
     await app.close();
   });
 
   it('returns 404 for missing routes', async () => {
-    process.env.DATA_DIR = setupKeyMaterial();
+    process.env.DATA_DIR = await setupKeyMaterial();
 
     const app = Fastify();
     await app.register(fp(bootstrap));

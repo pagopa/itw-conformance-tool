@@ -1,12 +1,21 @@
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import fp from 'fastify-plugin';
 
+import { validateIACAKeyPair, validateJWKS } from '#/utils/validate.js';
+
 import { generateIaca, generateJwks } from '../crypto/auto-keygen.js';
 
 export type IssuerKeys = {
-  signingKeysJwks: string;
+  signingKeysJwks: {
+    keys: Array<{
+      kty: string;
+      kid: string;
+      alg?: string;
+      d?: string;
+    }>;
+  };
   iacaCertPem: string;
   iacaKeyPem: string;
 };
@@ -25,22 +34,6 @@ async function readOptional(filePath: string): Promise<string | null> {
     return await readFile(filePath, 'utf8');
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw err;
-  }
-}
-
-/**
- * Writes content to a file exclusively (creates only — does not overwrite).
- * If the file was already created concurrently, reads and returns the existing content.
- */
-async function writeExclusive(filePath: string, content: string): Promise<string> {
-  try {
-    await writeFile(filePath, content, { encoding: 'utf8', flag: 'wx' });
-    return content;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-      return readFile(filePath, 'utf8');
-    }
     throw err;
   }
 }
@@ -66,14 +59,27 @@ async function ensureKeyMaterialExists(dir: string): Promise<{
   ]);
 
   if (certPem === null || keyPem === null) {
+    // If either file is missing, regenerate both — cert and key are a matched cryptographic pair.
+    // Write to temp files first, then rename atomically to avoid a partial pair on crash.
     const generatedIaca = await generateIaca();
-    [certPem, keyPem] = await Promise.all([
-      writeExclusive(certPath, generatedIaca.certPem),
-      writeExclusive(keyPath, generatedIaca.keyPem)
+    const certTmp = `${certPath}.tmp`;
+    const keyTmp = `${keyPath}.tmp`;
+    await Promise.all([
+      writeFile(certTmp, generatedIaca.certPem, 'utf8'),
+      writeFile(keyTmp, generatedIaca.keyPem, 'utf8')
     ]);
+    await Promise.all([rename(certTmp, certPath), rename(keyTmp, keyPath)]);
+    certPem = generatedIaca.certPem;
+    keyPem = generatedIaca.keyPem;
   }
 
-  jwks ??= await writeExclusive(jwksPath, await generateJwks());
+  if (jwks === null) {
+    const generated = await generateJwks();
+    const jwksTmp = `${jwksPath}.tmp`;
+    await writeFile(jwksTmp, generated, 'utf8');
+    await rename(jwksTmp, jwksPath);
+    jwks = generated;
+  }
 
   return { jwks, certPem, keyPem };
 }
@@ -82,21 +88,15 @@ export default fp(
   async function keysPlugin(app) {
     const keysDir = path.join(app.config.DATA_DIR, 'issuer');
 
-    try {
-      const dirStat = await stat(keysDir);
-      if (!dirStat.isDirectory()) {
-        throw new Error(`Issuer path is not a directory: ${keysDir}`);
-      }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new Error(`Issuer directory does not exist: ${keysDir}`);
-      }
-      throw err;
-    }
-
     const { jwks, certPem, keyPem } = await ensureKeyMaterialExists(keysDir);
+
+    const parsedJwks = await JSON.parse(jwks);
+    await validateJWKS(parsedJwks);
+
+    validateIACAKeyPair(certPem, keyPem);
+
     app.decorate('issuerKeys', {
-      signingKeysJwks: jwks,
+      signingKeysJwks: parsedJwks,
       iacaCertPem: certPem,
       iacaKeyPem: keyPem
     });

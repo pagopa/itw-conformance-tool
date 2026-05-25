@@ -8,15 +8,16 @@ import {
 } from '@peculiar/x509';
 import { exportJWK, generateKeyPair } from 'jose';
 
-/** Generates a JWK Set containing a single signing key
- * for the issuer, returning it as a JSON string
+/** Generates a JWK Set containing two issuer keys:
+ * - a signing key (ES256, use=sig) for JWT credential signing
+ * - an encryption key (ECDH-ES, use=enc) for receiving JWE-encrypted requests
  *
- * @returns A JSON string representing the JWK Set with the signing key
+ * @returns A JSON string representing the JWK Set with both keys
  */
 export async function generateJwks(): Promise<string> {
   const [signPair, encPair] = await Promise.all([
     generateKeyPair('ES256', { extractable: true }),
-    generateKeyPair('ES256', { extractable: true })
+    generateKeyPair('ECDH-ES', { extractable: true })
   ]);
 
   const [signPrivJwk, encPrivJwk] = await Promise.all([exportJWK(signPair.privateKey), exportJWK(encPair.privateKey)]);
@@ -24,7 +25,7 @@ export async function generateJwks(): Promise<string> {
   const jwks = {
     keys: [
       { ...signPrivJwk, kid: randomUUID(), use: 'sig', alg: 'ES256', key_ops: ['sign'] },
-      { ...encPrivJwk, kid: randomUUID(), use: 'enc', alg: 'ES256', key_ops: ['encrypt'] }
+      { ...encPrivJwk, kid: randomUUID(), use: 'enc', alg: 'ECDH-ES', key_ops: ['deriveKey'] }
     ]
   };
 

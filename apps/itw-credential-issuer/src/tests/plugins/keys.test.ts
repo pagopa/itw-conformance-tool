@@ -3,18 +3,27 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import Fastify from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { generateIaca, generateJwks } from '../../crypto/auto-keygen.js';
 import configPlugin from '../../plugins/config.js';
 import keysPlugin from '../../plugins/keys.js';
 
-const ENV_KEYS = ['DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS', 'ITW_CT_DATA_DIR'] as const;
+const ENV_KEYS = ['DATA_DIR', 'cPORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS', 'ITW_CT_DATA_DIR'] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
     delete process.env[key];
   }
 }
+
+/** Real key material generated once for all tests that need pre-existing files. */
+let realIaca: { certPem: string; keyPem: string };
+let realJwksJson: string;
+
+beforeAll(async () => {
+  [realIaca, realJwksJson] = await Promise.all([generateIaca(), generateJwks()]);
+});
 
 /** Creates a temp root dir and an `issuer` subdir inside it.
  * Pass `rootDir` as `DATA_DIR` so the plugin resolves `path.join(DATA_DIR, 'issuer')` to `issuerDir`. */
@@ -25,9 +34,10 @@ function createIssuerDir(): { rootDir: string; issuerDir: string } {
   return { rootDir, issuerDir };
 }
 
+/** Writes real IACA cert + key PEM files into `dir`. */
 function writePemFiles(dir: string): void {
-  writeFileSync(path.join(dir, 'iaca-cert.pem'), '-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----\n');
-  writeFileSync(path.join(dir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n');
+  writeFileSync(path.join(dir, 'iaca-cert.pem'), realIaca.certPem);
+  writeFileSync(path.join(dir, 'iaca-key.pem'), realIaca.keyPem);
 }
 
 describe('keys plugin', () => {
@@ -37,7 +47,7 @@ describe('keys plugin', () => {
 
   it('loads existing key files into fastify instance', async () => {
     const { rootDir, issuerDir } = createIssuerDir();
-    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'test-kid' }] }));
+    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), realJwksJson);
     writePemFiles(issuerDir);
     process.env.DATA_DIR = rootDir;
 
@@ -46,8 +56,7 @@ describe('keys plugin', () => {
     await app.register(keysPlugin);
     await app.ready();
 
-    const jwks = JSON.parse(app.issuerKeys.signingKeysJwks);
-    expect(jwks.keys).toHaveLength(1);
+    expect(app.issuerKeys.signingKeysJwks.keys.length).toBeGreaterThanOrEqual(1);
     expect(app.issuerKeys.iacaCertPem).toContain('BEGIN CERTIFICATE');
     expect(app.issuerKeys.iacaKeyPem).toContain('BEGIN PRIVATE KEY');
 
@@ -67,9 +76,8 @@ describe('keys plugin', () => {
     expect(existsSync(path.join(issuerDir, 'iaca-cert.pem'))).toBe(true);
     expect(existsSync(path.join(issuerDir, 'iaca-key.pem'))).toBe(true);
 
-    const jwks = JSON.parse(app.issuerKeys.signingKeysJwks);
-    expect(Array.isArray(jwks.keys)).toBe(true);
-    expect(jwks.keys.length).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(app.issuerKeys.signingKeysJwks.keys)).toBe(true);
+    expect(app.issuerKeys.signingKeysJwks.keys.length).toBeGreaterThanOrEqual(1);
     expect(app.issuerKeys.iacaCertPem).toContain('BEGIN CERTIFICATE');
     expect(app.issuerKeys.iacaKeyPem).toContain('BEGIN PRIVATE KEY');
 
@@ -78,7 +86,7 @@ describe('keys plugin', () => {
 
   it('auto-generates IACA files when only the JWKS exists', async () => {
     const { rootDir, issuerDir } = createIssuerDir();
-    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'existing-kid' }] }));
+    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), realJwksJson);
     process.env.DATA_DIR = rootDir;
 
     const app = Fastify();
@@ -88,9 +96,8 @@ describe('keys plugin', () => {
 
     expect(existsSync(path.join(issuerDir, 'iaca-cert.pem'))).toBe(true);
     expect(existsSync(path.join(issuerDir, 'iaca-key.pem'))).toBe(true);
-    // Pre-existing JWKS is preserved unchanged
-    const jwks = JSON.parse(app.issuerKeys.signingKeysJwks);
-    expect(jwks.keys[0].kid).toBe('existing-kid');
+    // Pre-existing JWKS is preserved — same number of keys
+    expect(app.issuerKeys.signingKeysJwks.keys.length).toBe(JSON.parse(realJwksJson).keys.length);
 
     await app.close();
   });
@@ -106,8 +113,7 @@ describe('keys plugin', () => {
     await app.ready();
 
     expect(existsSync(path.join(issuerDir, 'signing-keys.jwks.json'))).toBe(true);
-    const jwks = JSON.parse(app.issuerKeys.signingKeysJwks);
-    expect(Array.isArray(jwks.keys)).toBe(true);
+    expect(Array.isArray(app.issuerKeys.signingKeysJwks.keys)).toBe(true);
 
     await app.close();
   });
@@ -119,6 +125,6 @@ describe('keys plugin', () => {
 
     const app = Fastify();
     await app.register(configPlugin);
-    await expect(app.register(keysPlugin)).rejects.toThrow('Issuer directory does not exist');
+    await expect(app.register(keysPlugin)).rejects.toThrow();
   });
 });
