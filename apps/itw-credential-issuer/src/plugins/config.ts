@@ -61,10 +61,6 @@ export default fp(
       data.DATA_DIR = path.join(orchestratedDataDir);
     }
 
-    if (data.ITW_CT_DATA_DIR && !data.DATA_DIR) {
-      data.DATA_DIR = data.ITW_CT_DATA_DIR;
-    }
-
     if (data.ITW_CT_ISSUER_AUTH_FLOW && !data.AUTH_FLOW) {
       data.AUTH_FLOW = data.ITW_CT_ISSUER_AUTH_FLOW;
     }
