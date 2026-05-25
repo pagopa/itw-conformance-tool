@@ -11,7 +11,14 @@
         "bundle": false,
         "main": "apps/itw-credential-issuer/src/main.ts",
         "tsConfig": "apps/itw-credential-issuer/tsconfig.app.json",
-        "assets": ["apps/itw-credential-issuer/src/assets"],
+        "assets": [
+          "apps/itw-credential-issuer/src/assets",
+          {
+            "input": "apps/itw-credential-issuer/src/plugins",
+            "glob": "issuer-runtime.js",
+            "output": "plugins"
+          }
+        ],
         "esbuildOptions": {
           "sourcemap": true,
           "outExtension": {
