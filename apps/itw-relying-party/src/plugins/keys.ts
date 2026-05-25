@@ -1,5 +1,4 @@
-import { constants } from 'node:fs';
-import { access, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import fp from 'fastify-plugin';
@@ -19,9 +18,10 @@ const KEY_FILES = ['authRequestPrivateKey', 'authResponsePrivateKey'] as const;
 
 async function loadKeyFile(dataDir: string, keyName: string): Promise<string> {
   const keyPath = resolve(dataDir, keyName);
+  let content: string;
 
   try {
-    await access(keyPath, constants.R_OK);
+    content = await readFile(keyPath, 'utf8');
   } catch {
     throw new Error(
       `Missing required auth key: ${keyName} not found in ${dataDir}. ` +
@@ -29,7 +29,6 @@ async function loadKeyFile(dataDir: string, keyName: string): Promise<string> {
     );
   }
 
-  const content = await readFile(keyPath, 'utf8');
   if (content.trim().length === 0) {
     throw new Error(
       `Invalid auth key: ${keyName} in ${dataDir} is empty. ` + `Please ensure the key file contains valid content.`
