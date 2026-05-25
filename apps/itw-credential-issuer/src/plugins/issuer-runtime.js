@@ -16,7 +16,7 @@ function toHeaders(request) {
 }
 
 function getBaseURL(app) {
-  return `http://${app.config.HOST}:${app.config.PORT}`;
+  return `${app.config.BASE_URL_SCHEME}://${app.config.HOST}:${app.config.PORT}`;
 }
 
 function getRuntimeConfig(request) {
