@@ -20,11 +20,12 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     HOST: 'localhost',
     PORT: 3000,
     DATA_DIR: '/tmp',
-    DB_CLEANUP_INTERVAL_MS: 60_000
+    DB_CLEANUP_INTERVAL_MS: 60_000,
+    AUTH_FLOW: 'l2plus'
   });
 
   app.decorate('issuerKeys', {
-    signingKeysJwks: { keys: [signingKey] },
+    signingKeysJwks: JSON.stringify({ keys: [signingKey] }),
     iacaCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n',
     iacaKeyPem: '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n'
   });

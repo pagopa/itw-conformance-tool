@@ -52,7 +52,7 @@ function keyPairFromKey(key) {
 }
 
 export function makeJwksRepository(app) {
-  const keys = app.issuerKeys.signingKeysJwks.keys;
+  const keys = JSON.parse(app.issuerKeys.signingKeysJwks).keys;
   if (!Array.isArray(keys) || keys.length === 0) {
     throw new Error('Issuer JWKS does not contain keys');
   }
