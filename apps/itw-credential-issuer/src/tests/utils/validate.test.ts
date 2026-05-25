@@ -2,7 +2,8 @@ import { exportJWK, generateKeyPair, type JWK } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 
-import { validateJWKS } from '../../utils/validate.js';
+import { generateIaca } from '../../crypto/auto-keygen.js';
+import { validateIACAKeyPair, validateJWKS } from '../../utils/validate.js';
 
 /** Minimal valid sig key — generated once for all tests. */
 let sigKey: JWK;
@@ -96,5 +97,33 @@ describe('validateJWKS', () => {
       const { alg: _alg, ...noAlg } = encKey;
       await expect(validateJWKS({ keys: [{ ...noAlg, kid: 'enc-no-alg' }] })).rejects.toThrow();
     });
+  });
+});
+
+describe('validateIACAKeyPair', () => {
+  let certPem: string;
+  let keyPem: string;
+
+  beforeAll(async () => {
+    ({ certPem, keyPem } = await generateIaca());
+  });
+
+  it('resolves for a valid matching cert and key', async () => {
+    await expect(validateIACAKeyPair(certPem, keyPem)).resolves.toBeUndefined();
+  });
+
+  it('rejects when the certificate PEM is malformed', async () => {
+    await expect(validateIACAKeyPair('not-a-pem', keyPem)).rejects.toThrow();
+  });
+
+  it('rejects when the private key PEM is malformed', async () => {
+    await expect(validateIACAKeyPair(certPem, 'not-a-pem')).rejects.toThrow();
+  });
+
+  it('rejects when cert and key are from different pairs', async () => {
+    const { keyPem: otherKeyPem } = await generateIaca();
+    await expect(validateIACAKeyPair(certPem, otherKeyPem)).rejects.toThrow(
+      'IACA certificate and private key do not correspond'
+    );
   });
 });

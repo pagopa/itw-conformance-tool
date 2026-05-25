@@ -93,7 +93,7 @@ export default fp(
     const parsedJwks = await JSON.parse(jwks);
     await validateJWKS(parsedJwks);
 
-    validateIACAKeyPair(certPem, keyPem);
+    await validateIACAKeyPair(certPem, keyPem);
 
     app.decorate('issuerKeys', {
       signingKeysJwks: parsedJwks,

@@ -41,6 +41,9 @@ export async function validateJWKS(jwks: unknown): Promise<void> {
       throw new Error(`Duplicate kid found in JWKS: ${key.kid}`);
     }
     seenKids.add(key.kid);
+    if (key.use === 'enc' && key.alg === undefined) {
+      throw new Error(`Key with kid '${key.kid}' has use=enc but no alg specified`);
+    }
     await importJWK(key as JWK, key.alg);
   }
 }
