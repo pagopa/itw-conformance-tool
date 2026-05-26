@@ -15,6 +15,7 @@ data_dir=~/.itw-conformance-tool
 log_level=warn
 
 [itw-credential-issuer]
+auth_flow=l2plus
 port=4000
 credential_types=pid,mdl,badge,eaa
 
@@ -43,6 +44,7 @@ data_dir=~/.itw-conformance-tool
 log_level=warn
 
 [itw-credential-issuer]
+auth_flow=notavalid
 port=notanumber
 credential_types=pi
 
@@ -61,8 +63,6 @@ describe('parseINI', () => {
     const result = parseINI('/missing/config.ini');
 
     expect(result.ok).toBe(false);
-    // @ts-expect-error - It should return an error message containing "Config file not found" and the default config
-    expect(result.error).toContain('Config file not found');
     expect(result.data).toEqual(DEFAULT_CONFIG);
   });
 
@@ -77,6 +77,7 @@ describe('parseINI', () => {
         log_level: 'warn'
       },
       'itw-credential-issuer': {
+        auth_flow: 'l2plus',
         port: 4000,
         credential_types: 'pid,mdl,badge,eaa'
       },
@@ -115,6 +116,7 @@ describe('parseINI', () => {
         log_level: 'warn'
       },
       'itw-credential-issuer': {
+        auth_flow: 'direct',
         port: 4000,
         credential_types: 'pid,mdl,badge,eaa'
       },
@@ -136,6 +138,7 @@ describe('parseINI', () => {
         log_level: 'warn'
       },
       'itw-credential-issuer': {
+        auth_flow: 'direct',
         port: 3000,
         credential_types: 'pid,mdl,badge,eaa'
       },

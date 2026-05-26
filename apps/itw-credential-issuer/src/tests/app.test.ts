@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,8 +7,9 @@ import fp from 'fastify-plugin';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import bootstrap from '../app.js';
+import { generateIaca, generateJwks } from '../crypto/auto-keygen.js';
 
-const ENV_KEYS = ['KEYS_DIR', 'DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS'] as const;
+const ENV_KEYS = ['DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS'] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
@@ -16,13 +17,16 @@ function cleanupEnv(): void {
   }
 }
 
-function setupKeyMaterial(): string {
-  const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-app-keys-'));
-  writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'issuer-kid' }] }));
-  writeFileSync(path.join(keysDir, 'iaca-cert.pem'), '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n');
-  writeFileSync(path.join(keysDir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n');
+async function setupKeyMaterial(): Promise<string> {
+  const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-app-keys-'));
+  const issuerDir = path.join(rootDir, 'issuer');
+  mkdirSync(issuerDir);
+  const [jwksJson, iaca] = await Promise.all([generateJwks(), generateIaca()]);
+  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), jwksJson);
+  writeFileSync(path.join(issuerDir, 'iaca-cert.pem'), iaca.certPem);
+  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), iaca.keyPem);
 
-  return keysDir;
+  return rootDir;
 }
 
 describe('issuer app bootstrap', () => {
@@ -31,8 +35,7 @@ describe('issuer app bootstrap', () => {
   });
 
   it('registers plugins and serves health route', async () => {
-    process.env.KEYS_DIR = setupKeyMaterial();
-    process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), 'issuer-app-db-'));
+    process.env.DATA_DIR = await setupKeyMaterial();
     process.env.DB_CLEANUP_INTERVAL_MS = '999999';
 
     const app = Fastify();
@@ -45,14 +48,13 @@ describe('issuer app bootstrap', () => {
     expect(response.json()).toEqual({ status: 'ok' });
     expect(app.config.PORT).toBe(3000);
     expect(app.dbClient).toBeDefined();
-    expect(app.issuerKeys.signingKeysJwks.keys).toHaveLength(1);
+    expect(app.issuerKeys.signingKeysJwks.keys).toHaveLength(2);
 
     await app.close();
   });
 
   it('returns 404 for missing routes', async () => {
-    process.env.KEYS_DIR = setupKeyMaterial();
-    process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), 'issuer-app-db-missing-route-'));
+    process.env.DATA_DIR = await setupKeyMaterial();
 
     const app = Fastify();
     await app.register(fp(bootstrap));
