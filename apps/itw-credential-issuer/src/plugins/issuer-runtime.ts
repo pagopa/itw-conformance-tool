@@ -40,30 +40,38 @@ function getRuntimeConfig(request: FastifyRequest): RuntimeConfig {
 }
 
 interface JwkKey {
+  kty?: string;
   d?: string;
   kid?: string;
   alg?: string;
+  use?: string;
   [key: string]: unknown;
 }
 
 interface KeyPair {
-  private: JwkKey & { d: string; kid: string; kty: 'EC'; alg: string };
+  private: JwkKey & { d: string; kid: string; kty: string; alg: string };
   public: unknown;
 }
 
 function keyPairFromKey(key: JwkKey): KeyPair {
   if (!key?.d) {
-    throw new Error('Expected a private EC key with d parameter in issuer JWKS');
+    throw new Error('Expected a private key with d parameter in issuer JWKS');
   }
   if (!key?.kid) {
     throw new Error('Expected kid for issuer JWKS key');
   }
+  if (!key?.kty) {
+    throw new Error('Expected kty for issuer JWKS key');
+  }
+  if (key.kty !== 'EC') {
+    throw new Error(`Expected EC key for issuer JWKS key '${key.kid}', got '${key.kty}'`);
+  }
 
   const privateKey = {
     ...key,
+    kty: key.kty,
     d: key.d,
     kid: key.kid,
-    kty: 'EC' as const,
     alg: key.alg ?? 'ES256'
   };
 
@@ -73,14 +81,46 @@ function keyPairFromKey(key: JwkKey): KeyPair {
   };
 }
 
+function isEcPrivateKey(key: JwkKey): key is JwkKey & { kty: 'EC'; d: string; kid: string } {
+  return key.kty === 'EC' && typeof key.d === 'string' && typeof key.kid === 'string';
+}
+
+function pickSigningKey(keys: JwkKey[]): JwkKey {
+  const preferred = keys.find(
+    (key) => isEcPrivateKey(key) && key.use === 'sig' && (key.alg === undefined || key.alg.startsWith('ES'))
+  );
+  if (preferred) {
+    return preferred;
+  }
+
+  const fallback = keys.find((key) => isEcPrivateKey(key) && (key.alg === undefined || key.alg.startsWith('ES')));
+  if (fallback) {
+    return fallback;
+  }
+
+  throw new Error('Issuer JWKS does not contain an EC signing key compatible with ES algorithms');
+}
+
+function pickEncryptionKey(keys: JwkKey[], signKey: JwkKey): JwkKey {
+  const preferred = keys.find((key) => isEcPrivateKey(key) && key.use === 'enc');
+  if (preferred) {
+    return preferred;
+  }
+  return signKey;
+}
+
 export function makeJwksRepository(app: FastifyInstance): JwksRepository {
   const keys = app.issuerKeys.signingKeysJwks.keys;
   if (!Array.isArray(keys) || keys.length === 0) {
     throw new Error('Issuer JWKS does not contain keys');
   }
 
-  const signKey = keyPairFromKey(keys[0] as JwkKey);
-  const encryptKey = keyPairFromKey((keys[1] ?? keys[0]) as JwkKey);
+  const jwkKeys = keys as JwkKey[];
+  const signJwk = pickSigningKey(jwkKeys);
+  const encryptJwk = pickEncryptionKey(jwkKeys, signJwk);
+
+  const signKey = keyPairFromKey(signJwk);
+  const encryptKey = keyPairFromKey(encryptJwk);
 
   return {
     getEncrypt: () => encryptKey as unknown as ReturnType<JwksRepository['getEncrypt']>,

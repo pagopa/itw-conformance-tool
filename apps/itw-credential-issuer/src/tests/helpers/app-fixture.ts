@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,7 +7,7 @@ import fp from 'fastify-plugin';
 
 import bootstrap from '../../app.js';
 
-const ENV_KEYS = ['KEYS_DIR', 'DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS'] as const;
+const ENV_KEYS = ['DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS'] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
@@ -16,9 +16,11 @@ function cleanupEnv(): void {
 }
 
 function setupKeyMaterial(): string {
-  const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-routes-keys-'));
+  const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-routes-'));
+  const issuerDir = path.join(rootDir, 'issuer');
+  mkdirSync(issuerDir);
   writeFileSync(
-    path.join(keysDir, 'signing-keys.jwks.json'),
+    path.join(issuerDir, 'signing-keys.jwks.json'),
     JSON.stringify({
       keys: [
         {
@@ -33,17 +35,19 @@ function setupKeyMaterial(): string {
       ]
     })
   );
-  writeFileSync(path.join(keysDir, 'iaca-cert.pem'), '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n');
-  writeFileSync(path.join(keysDir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n');
+  writeFileSync(
+    path.join(issuerDir, 'iaca-cert.pem'),
+    '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
+  );
+  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n');
 
-  return keysDir;
+  return rootDir;
 }
 
 export async function createIssuerApp() {
   cleanupEnv();
 
-  process.env.KEYS_DIR = setupKeyMaterial();
-  process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), 'issuer-routes-db-'));
+  process.env.DATA_DIR = setupKeyMaterial();
   process.env.DB_CLEANUP_INTERVAL_MS = '999999';
 
   const app = Fastify();

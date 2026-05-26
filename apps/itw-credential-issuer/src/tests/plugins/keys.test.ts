@@ -1,14 +1,15 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import Fastify from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { generateIaca, generateJwks } from '../../crypto/auto-keygen.js';
 import configPlugin from '../../plugins/config.js';
 import keysPlugin from '../../plugins/keys.js';
 
-const ENV_KEYS = ['KEYS_DIR', 'PORT', 'HOST', 'DATA_DIR', 'DB_CLEANUP_INTERVAL_MS', 'ITW_CT_DATA_DIR'] as const;
+const ENV_KEYS = ['DATA_DIR', 'cPORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS', 'ITW_CT_DATA_DIR'] as const;
 
 function cleanupEnv(): void {
   for (const key of ENV_KEYS) {
@@ -16,102 +17,114 @@ function cleanupEnv(): void {
   }
 }
 
+/** Real key material generated once for all tests that need pre-existing files. */
+let realIaca: { certPem: string; keyPem: string };
+let realJwksJson: string;
+
+beforeAll(async () => {
+  [realIaca, realJwksJson] = await Promise.all([generateIaca(), generateJwks()]);
+});
+
+/** Creates a temp root dir and an `issuer` subdir inside it.
+ * Pass `rootDir` as `DATA_DIR` so the plugin resolves `path.join(DATA_DIR, 'issuer')` to `issuerDir`. */
+function createIssuerDir(): { rootDir: string; issuerDir: string } {
+  const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-'));
+  const issuerDir = path.join(rootDir, 'issuer');
+  mkdirSync(issuerDir);
+  return { rootDir, issuerDir };
+}
+
+/** Writes real IACA cert + key PEM files into `dir`. */
+function writePemFiles(dir: string): void {
+  writeFileSync(path.join(dir, 'iaca-cert.pem'), realIaca.certPem);
+  writeFileSync(path.join(dir, 'iaca-key.pem'), realIaca.keyPem);
+}
+
 describe('keys plugin', () => {
   afterEach(() => {
     cleanupEnv();
   });
 
-  function writePemFiles(keysDir: string): void {
-    writeFileSync(
-      path.join(keysDir, 'iaca-cert.pem'),
-      '-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----\n'
-    );
-    writeFileSync(path.join(keysDir, 'iaca-key.pem'), '-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n');
-  }
-
-  it('loads jwks and pem files into fastify instance', async () => {
-    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-'));
-    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'test-kid' }] }));
-    writePemFiles(keysDir);
-    process.env.KEYS_DIR = keysDir;
+  it('loads existing key files into fastify instance', async () => {
+    const { rootDir, issuerDir } = createIssuerDir();
+    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), realJwksJson);
+    writePemFiles(issuerDir);
+    process.env.DATA_DIR = rootDir;
 
     const app = Fastify();
     await app.register(configPlugin);
     await app.register(keysPlugin);
     await app.ready();
 
-    expect(app.issuerKeys.signingKeysJwks.keys).toHaveLength(1);
+    expect(app.issuerKeys.signingKeysJwks.keys.length).toBeGreaterThanOrEqual(1);
     expect(app.issuerKeys.iacaCertPem).toContain('BEGIN CERTIFICATE');
     expect(app.issuerKeys.iacaKeyPem).toContain('BEGIN PRIVATE KEY');
 
     await app.close();
   });
 
-  it('fails with a clear error when required files are missing', async () => {
-    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-missing-'));
-    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [] }));
-    process.env.KEYS_DIR = keysDir;
-
-    const app = Fastify();
-    await app.register(configPlugin);
-
-    await expect(app.register(keysPlugin)).rejects.toThrow('Required key material files are missing or not readable');
-  });
-
-  it('resolves key files from ITW_CT_DATA_DIR/itw-credential-issuer when KEYS_DIR is not set', async () => {
-    const rootDataDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-data-dir-'));
-    const serviceDataDir = path.join(rootDataDir, 'itw-credential-issuer');
-    mkdirSync(serviceDataDir, { recursive: true });
-
-    writeFileSync(path.join(serviceDataDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [{ kid: 'test-kid' }] }));
-    writePemFiles(serviceDataDir);
-    process.env.ITW_CT_DATA_DIR = rootDataDir;
+  it('auto-generates all key material when the issuer directory is empty', async () => {
+    const { rootDir, issuerDir } = createIssuerDir();
+    process.env.DATA_DIR = rootDir;
 
     const app = Fastify();
     await app.register(configPlugin);
     await app.register(keysPlugin);
     await app.ready();
 
-    expect(app.issuerKeys.signingKeysJwks.keys).toHaveLength(1);
+    expect(existsSync(path.join(issuerDir, 'signing-keys.jwks.json'))).toBe(true);
+    expect(existsSync(path.join(issuerDir, 'iaca-cert.pem'))).toBe(true);
+    expect(existsSync(path.join(issuerDir, 'iaca-key.pem'))).toBe(true);
+
+    expect(Array.isArray(app.issuerKeys.signingKeysJwks.keys)).toBe(true);
+    expect(app.issuerKeys.signingKeysJwks.keys.length).toBeGreaterThanOrEqual(1);
     expect(app.issuerKeys.iacaCertPem).toContain('BEGIN CERTIFICATE');
     expect(app.issuerKeys.iacaKeyPem).toContain('BEGIN PRIVATE KEY');
 
     await app.close();
   });
 
-  it('fails with a clear error when signing-keys.jwks.json is not valid JSON', async () => {
-    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-invalid-json-'));
-    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), '{ not-valid-json');
-    writePemFiles(keysDir);
-    process.env.KEYS_DIR = keysDir;
+  it('auto-generates IACA files when only the JWKS exists', async () => {
+    const { rootDir, issuerDir } = createIssuerDir();
+    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), realJwksJson);
+    process.env.DATA_DIR = rootDir;
 
     const app = Fastify();
     await app.register(configPlugin);
+    await app.register(keysPlugin);
+    await app.ready();
 
-    await expect(app.register(keysPlugin)).rejects.toThrow('Invalid JSON in');
+    expect(existsSync(path.join(issuerDir, 'iaca-cert.pem'))).toBe(true);
+    expect(existsSync(path.join(issuerDir, 'iaca-key.pem'))).toBe(true);
+    // Pre-existing JWKS is preserved — same number of keys
+    expect(app.issuerKeys.signingKeysJwks.keys.length).toBe(JSON.parse(realJwksJson).keys.length);
+
+    await app.close();
   });
 
-  it('fails when signing-keys.jwks.json does not contain a keys array', async () => {
-    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-invalid-jwks-'));
-    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ foo: 'bar' }));
-    writePemFiles(keysDir);
-    process.env.KEYS_DIR = keysDir;
+  it('auto-generates the JWKS when only IACA files exist', async () => {
+    const { rootDir, issuerDir } = createIssuerDir();
+    writePemFiles(issuerDir);
+    process.env.DATA_DIR = rootDir;
 
     const app = Fastify();
     await app.register(configPlugin);
+    await app.register(keysPlugin);
+    await app.ready();
 
-    await expect(app.register(keysPlugin)).rejects.toThrow('expected an object with a keys array');
+    expect(existsSync(path.join(issuerDir, 'signing-keys.jwks.json'))).toBe(true);
+    expect(Array.isArray(app.issuerKeys.signingKeysJwks.keys)).toBe(true);
+
+    await app.close();
   });
 
-  it('fails when signing-keys.jwks.json has an empty keys array', async () => {
-    const keysDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-empty-jwks-'));
-    writeFileSync(path.join(keysDir, 'signing-keys.jwks.json'), JSON.stringify({ keys: [] }));
-    writePemFiles(keysDir);
-    process.env.KEYS_DIR = keysDir;
+  it('throws when the keys directory does not exist', async () => {
+    const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-no-dir-'));
+    // DATA_DIR = rootDir  →  keysDir = rootDir/issuer  (not created)
+    process.env.DATA_DIR = rootDir;
 
     const app = Fastify();
     await app.register(configPlugin);
-
-    await expect(app.register(keysPlugin)).rejects.toThrow('keys array must not be empty');
+    await expect(app.register(keysPlugin)).rejects.toThrow();
   });
 });

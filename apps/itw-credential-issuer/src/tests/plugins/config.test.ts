@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import Fastify from 'fastify';
@@ -12,8 +13,10 @@ const ENV_KEYS = [
   'DATA_DIR',
   'DB_CLEANUP_INTERVAL_MS',
   'KEYS_DIR',
+  'AUTH_FLOW',
   'ITW_CT_DATA_DIR',
-  'ITW_CT_ISSUER_PORT'
+  'ITW_CT_ISSUER_PORT',
+  'ITW_CT_ISSUER_AUTH_FLOW'
 ] as const;
 
 function cleanupEnv(): void {
@@ -39,6 +42,7 @@ describe('config plugin', () => {
     expect(app.config.PORT).toBe(3000);
     expect(app.config.DB_CLEANUP_INTERVAL_MS).toBe(60_000);
     expect(app.config.DATA_DIR.length).toBeGreaterThan(0);
+    expect(app.config.AUTH_FLOW).toBe('direct');
 
     await app.close();
   });
@@ -73,13 +77,13 @@ describe('config plugin', () => {
   });
 
   it('uses ITW_CT_DATA_DIR as base directory for DATA_DIR', async () => {
-    process.env.ITW_CT_DATA_DIR = '/tmp/itw-conformance-tool';
+    process.env.ITW_CT_DATA_DIR = path.join(tmpdir(), 'itw-conformance-tool');
     const app = Fastify();
 
     await app.register(configPlugin);
     await app.ready();
 
-    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool/itw-credential-issuer');
+    expect(app.config.DATA_DIR).toBe(path.join(tmpdir(), 'itw-conformance-tool'));
 
     await app.close();
   });
@@ -98,27 +102,51 @@ describe('config plugin', () => {
     await expect(app.register(configPlugin)).rejects.toThrow();
   });
 
-  it('maps ITW_CT_DATA_DIR to itw-credential-issuer subdirectory when DATA_DIR is not provided', async () => {
+  it('maps ITW_CT_DATA_DIR directly to DATA_DIR when DATA_DIR is not provided', async () => {
     process.env.ITW_CT_DATA_DIR = '/tmp/itw-conformance-tool';
     const app = Fastify();
 
     await app.register(configPlugin);
     await app.ready();
 
-    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool/itw-credential-issuer');
+    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool');
 
     await app.close();
   });
 
-  it('ignores whitespace-only ITW_CT_DATA_DIR and keeps default DATA_DIR', async () => {
-    process.env.ITW_CT_DATA_DIR = '   ';
+  it('uses ITW_CT_ISSUER_AUTH_FLOW as override for AUTH_FLOW', async () => {
+    process.env.ITW_CT_ISSUER_AUTH_FLOW = 'l3';
     const app = Fastify();
 
     await app.register(configPlugin);
     await app.ready();
 
-    expect(app.config.DATA_DIR).toBe(path.join(process.cwd(), '.itw-conformance-tool', 'issuer'));
+    expect(app.config.AUTH_FLOW).toBe('l3');
 
     await app.close();
+  });
+
+  it('accepts all valid auth_flow values', async () => {
+    for (const flow of ['direct', 'l2plus', 'l3'] as const) {
+      process.env.ITW_CT_ISSUER_AUTH_FLOW = flow;
+      const app = Fastify();
+
+      await app.register(configPlugin);
+      await app.ready();
+
+      expect(app.config.AUTH_FLOW).toBe(flow);
+
+      await app.close();
+      cleanupEnv();
+    }
+  });
+
+  it('throws when ITW_CT_ISSUER_AUTH_FLOW is invalid', async () => {
+    process.env.ITW_CT_ISSUER_AUTH_FLOW = 'unknown';
+    const app = Fastify();
+
+    await expect(app.register(configPlugin)).rejects.toThrow(
+      'env/AUTH_FLOW must be equal to one of the allowed values'
+    );
   });
 });

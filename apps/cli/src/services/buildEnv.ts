@@ -13,7 +13,8 @@ export function buildEnv(configs: ConfigType, emitLog: (event: string, type?: Lo
     ITW_CT_LOG_LEVEL: configs.global.log_level,
     ITW_CT_ISSUER_PORT: String(configs['itw-credential-issuer'].port),
     ITW_CT_ISSUER_CREDENTIAL_TYPES: String(configs['itw-credential-issuer'].credential_types),
-    ITW_CT_RP_PORT: String(configs.rp.port)
+    ITW_CT_RP_PORT: String(configs.rp.port),
+    ITW_CT_ISSUER_AUTH_FLOW: String(configs['itw-credential-issuer'].auth_flow)
   };
 
   emitLog(`\nEnvironment variables for Nx CLI:\n${JSON.stringify(keysToAdd, null, 2)}\n`);
