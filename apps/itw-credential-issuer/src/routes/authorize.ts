@@ -1,6 +1,6 @@
 import { AuthorizationRequestError, AuthorizationService } from '@itw-conformance-tool/issuer';
 
-import { makeJwksRepository, makeOauthCallbacks } from '../plugins/issuer-runtime.js';
+import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -28,6 +28,7 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
       try {
         const service = new AuthorizationService(app.parRepository, makeJwksRepository(app));
         const result = await service.authorize({
+          authFlow: app.config.AUTH_FLOW,
           baseURL,
           callbacks: {
             encryptJwe: oauthCallbacks.encryptJwe

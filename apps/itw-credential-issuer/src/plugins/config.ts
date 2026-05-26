@@ -7,6 +7,7 @@ import { z } from 'zod';
 declare module 'fastify' {
   interface FastifyInstance {
     config: {
+      BASE_URL_SCHEME: 'http' | 'https';
       HOST: string;
       PORT: number;
       DATA_DIR: string;
@@ -19,6 +20,7 @@ declare module 'fastify' {
 const AUTH_FLOW_VALUES = ['direct', 'l2plus', 'l3'] as const;
 
 const schema = z.object({
+  BASE_URL_SCHEME: z.enum(['http', 'https']).default('http'),
   HOST: z.string().default('localhost'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool')),

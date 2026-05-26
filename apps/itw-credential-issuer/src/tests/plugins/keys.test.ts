@@ -118,6 +118,43 @@ describe('keys plugin', () => {
     await app.close();
   });
 
+  it('regenerates JWKS when existing file contains only RSA / incompatible keys', async () => {
+    const { rootDir, issuerDir } = createIssuerDir();
+    // Write an RSA-only JWKS (no EC sig key, no ECDH-ES enc key)
+    const incompatibleJwks = JSON.stringify({
+      keys: [
+        {
+          kty: 'RSA',
+          kid: 'rsa-key',
+          use: 'sig',
+          alg: 'RS256',
+          n: 'sHfHFq1234',
+          e: 'AQAB'
+        }
+      ]
+    });
+    writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), incompatibleJwks);
+    writePemFiles(issuerDir);
+    process.env.DATA_DIR = rootDir;
+
+    const app = Fastify();
+    await app.register(configPlugin);
+    await app.register(keysPlugin);
+    await app.ready();
+
+    // Plugin must have replaced the file with compatible EC keys
+    const regenerated = app.issuerKeys.signingKeysJwks;
+    type AnyJwk = (typeof regenerated.keys)[number] & { use?: string };
+    const ecSigKey = (regenerated.keys as AnyJwk[]).find(
+      (k) => k.kty === 'EC' && (k.use === 'sig' || k.use === undefined)
+    );
+    const ecEncKey = (regenerated.keys as AnyJwk[]).find((k) => k.kty === 'EC' && k.use === 'enc');
+    expect(ecSigKey).toBeDefined();
+    expect(ecEncKey).toBeDefined();
+
+    await app.close();
+  });
+
   it('throws when the keys directory does not exist', async () => {
     const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-keys-plugin-no-dir-'));
     // DATA_DIR = rootDir  →  keysDir = rootDir/issuer  (not created)

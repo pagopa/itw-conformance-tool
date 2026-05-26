@@ -1,3 +1,5 @@
+import { createPrivateKey, createPublicKey } from 'node:crypto';
+
 import { X509Certificate } from '@peculiar/x509';
 import { importJWK, type JWK } from 'jose';
 import { z } from 'zod';
@@ -48,34 +50,63 @@ export async function validateJWKS(jwks: unknown): Promise<void> {
   }
 }
 
-/** Decodes a PEM string to an ArrayBuffer by stripping headers and base64-decoding the body. */
-function decodePem(pem: string): ArrayBuffer {
-  const b64 = pem.replace(/-----[^-]+-----|\s/g, '');
-  const buf = Buffer.from(b64, 'base64');
-  // slice ensures we get a standalone ArrayBuffer, not a view into a shared buffer
-  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+/**
+ * Parses a PEM private key into a Node.js KeyObject.
+ * Supports both "BEGIN PRIVATE KEY" (PKCS#8) and "BEGIN EC PRIVATE KEY" (SEC1).
+ */
+function parseIacaPrivateKey(keyPem: string): ReturnType<typeof createPrivateKey> {
+  try {
+    return createPrivateKey(keyPem);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid IACA private key format. Expected a valid PEM private key (PKCS#8 or SEC1). ${message}`);
+  }
 }
 
-/** Validates that an IACA X.509 certificate and its
- * PKCS#8 private key form a valid cryptographic pair
- *
- * @param certPem - PEM-encoded X.509 IACA certificate
- * @param keyPem - PEM-encoded PKCS#8 IACA private key (EC P-256)
- */
+type ExportedPublicJwk = {
+  kty?: string;
+  crv?: string;
+  x?: string;
+  y?: string;
+  n?: string;
+  e?: string;
+};
+
+/** Returns a stable identifier for public JWK coordinates/modulus for key-pair matching. */
+function publicJwkIdentity(jwk: ExportedPublicJwk): string {
+  switch (jwk.kty) {
+    case 'EC': {
+      if (!jwk.crv || !jwk.x || !jwk.y) {
+        throw new Error('Invalid EC JWK: missing crv/x/y');
+      }
+      return `EC:${jwk.crv}:${jwk.x}:${jwk.y}`;
+    }
+    case 'RSA': {
+      if (!jwk.n || !jwk.e) {
+        throw new Error('Invalid RSA JWK: missing n/e');
+      }
+      return `RSA:${jwk.n}:${jwk.e}`;
+    }
+    case 'OKP': {
+      if (!jwk.crv || !jwk.x) {
+        throw new Error('Invalid OKP JWK: missing crv/x');
+      }
+      return `OKP:${jwk.crv}:${jwk.x}`;
+    }
+    default:
+      throw new Error(`Unsupported IACA key type: ${String(jwk.kty)}`);
+  }
+}
+
+/** Validates that an IACA X.509 certificate and private key form a valid cryptographic pair. */
 export async function validateIACAKeyPair(certPem: string, keyPem: string): Promise<void> {
   const cert = new X509Certificate(certPem);
 
-  const ecAlg = { name: 'ECDSA', namedCurve: 'P-256' } as const;
-  const [privateKey, publicKey] = await Promise.all([
-    crypto.subtle.importKey('pkcs8', decodePem(keyPem), ecAlg, false, ['sign']),
-    crypto.subtle.importKey('spki', cert.publicKey.rawData, ecAlg, false, ['verify'])
-  ]);
+  const privateKey = parseIacaPrivateKey(keyPem);
+  const publicFromPrivate = createPublicKey(privateKey).export({ format: 'jwk' }) as ExportedPublicJwk;
+  const publicFromCert = createPublicKey(cert.toString()).export({ format: 'jwk' }) as ExportedPublicJwk;
 
-  const challenge = crypto.getRandomValues(new Uint8Array(16));
-  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privateKey, challenge);
-  const valid = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, publicKey, sig, challenge);
-
-  if (!valid) {
+  if (publicJwkIdentity(publicFromPrivate) !== publicJwkIdentity(publicFromCert)) {
     throw new Error('IACA certificate and private key do not correspond');
   }
 }

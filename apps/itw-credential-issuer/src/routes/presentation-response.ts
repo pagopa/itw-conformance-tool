@@ -1,6 +1,6 @@
 import { PresentationResponseError, PresentationResponseService } from '@itw-conformance-tool/issuer';
 
-import { makeJwksRepository, makeOauthCallbacks } from '../plugins/issuer-runtime.js';
+import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import configPlugin from '../../plugins/config.js';
 
 const ENV_KEYS = [
+  'BASE_URL_SCHEME',
   'HOST',
   'PORT',
   'DATA_DIR',
@@ -36,6 +37,7 @@ describe('config plugin', () => {
     await app.register(configPlugin);
     await app.ready();
 
+    expect(app.config.BASE_URL_SCHEME).toBe('http');
     expect(app.config.HOST).toBe('localhost');
     expect(app.config.PORT).toBe(3000);
     expect(app.config.DB_CLEANUP_INTERVAL_MS).toBe(60_000);
@@ -46,6 +48,7 @@ describe('config plugin', () => {
   });
 
   it('parses numeric values from environment variables', async () => {
+    process.env.BASE_URL_SCHEME = 'http';
     process.env.PORT = '4123';
     process.env.DB_CLEANUP_INTERVAL_MS = '1000';
     const app = Fastify();
@@ -53,6 +56,7 @@ describe('config plugin', () => {
     await app.register(configPlugin);
     await app.ready();
 
+    expect(app.config.BASE_URL_SCHEME).toBe('http');
     expect(app.config.PORT).toBe(4123);
     expect(app.config.DB_CLEANUP_INTERVAL_MS).toBe(1000);
 

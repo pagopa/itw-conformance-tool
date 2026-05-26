@@ -1,6 +1,6 @@
-import type { ParRequest } from '../z-par.js';
+import type { MockIdentity, MockLoa, MrtdAuthSession, ParRequest, PidAuthFlow } from '../z-par.js';
 
-export type { ParRequest };
+export type { MockIdentity, MockLoa, MrtdAuthSession, ParRequest, PidAuthFlow };
 
 export interface ParEntryRecord {
   readonly requestUri: string;

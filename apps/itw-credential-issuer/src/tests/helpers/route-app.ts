@@ -17,6 +17,7 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
   const app = Fastify();
 
   app.decorate('config', {
+    BASE_URL_SCHEME: 'http',
     HOST: 'localhost',
     PORT: 3000,
     DATA_DIR: '/tmp',

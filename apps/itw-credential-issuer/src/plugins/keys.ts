@@ -28,6 +28,50 @@ declare module 'fastify' {
 
 const REQUIRED_FILES = ['signing-keys.jwks.json', 'iaca-cert.pem', 'iaca-key.pem'] as const;
 
+type StoredJwk = {
+  kty?: string;
+  use?: string;
+  alg?: string;
+  d?: string;
+  crv?: string;
+  x?: string;
+  y?: string;
+};
+
+function isEcPrivateJwk(jwk: StoredJwk): boolean {
+  return (
+    jwk.kty === 'EC' &&
+    typeof jwk.d === 'string' &&
+    typeof jwk.crv === 'string' &&
+    typeof jwk.x === 'string' &&
+    typeof jwk.y === 'string'
+  );
+}
+
+function hasCompatibleEcSigningKey(keys: StoredJwk[]): boolean {
+  return keys.some(
+    (jwk) =>
+      isEcPrivateJwk(jwk) &&
+      (jwk.use === undefined || jwk.use === 'sig') &&
+      (jwk.alg === undefined || jwk.alg.startsWith('ES'))
+  );
+}
+
+function hasCompatibleEcEncryptionKey(keys: StoredJwk[]): boolean {
+  return keys.some(
+    (jwk) => isEcPrivateJwk(jwk) && jwk.use === 'enc' && (jwk.alg === undefined || jwk.alg === 'ECDH-ES')
+  );
+}
+
+function hasCompatibleIssuerJwks(jwks: unknown): boolean {
+  const keys = (jwks as { keys?: StoredJwk[] }).keys;
+  if (!Array.isArray(keys)) {
+    return false;
+  }
+
+  return hasCompatibleEcSigningKey(keys) && hasCompatibleEcEncryptionKey(keys);
+}
+
 /** Reads a file, returning null if it does not exist. */
 async function readOptional(filePath: string): Promise<string | null> {
   try {
@@ -87,11 +131,24 @@ async function ensureKeyMaterialExists(dir: string): Promise<{
 export default fp(
   async function keysPlugin(app) {
     const keysDir = path.join(app.config.DATA_DIR, 'issuer');
+    const jwksPath = path.join(keysDir, 'signing-keys.jwks.json');
 
     const { jwks, certPem, keyPem } = await ensureKeyMaterialExists(keysDir);
 
-    const parsedJwks = await JSON.parse(jwks);
+    let parsedJwks = JSON.parse(jwks);
     await validateJWKS(parsedJwks);
+
+    if (!hasCompatibleIssuerJwks(parsedJwks)) {
+      app.log.warn('Issuer JWKS is incompatible with ES256/ECDH-ES runtime requirements; regenerating key material');
+
+      const regeneratedJwks = await generateJwks();
+      const jwksTmp = `${jwksPath}.tmp`;
+      await writeFile(jwksTmp, regeneratedJwks, 'utf8');
+      await rename(jwksTmp, jwksPath);
+
+      parsedJwks = JSON.parse(regeneratedJwks);
+      await validateJWKS(parsedJwks);
+    }
 
     await validateIACAKeyPair(certPem, keyPem);
 
