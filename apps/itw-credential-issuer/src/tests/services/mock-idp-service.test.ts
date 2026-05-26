@@ -63,7 +63,9 @@ function createParRepository(entry: PAREntry | undefined) {
 describe('MockIdpService', () => {
   it('returns standard authorization code redirect for l3 flow', async () => {
     const parRequest = {
-      authorization_details: [{ credential_configuration_id: 'dc_sd_jwt_PersonIdentificationData', type: 'openid_credential' }],
+      authorization_details: [
+        { credential_configuration_id: 'dc_sd_jwt_PersonIdentificationData', type: 'openid_credential' }
+      ],
       client_id: 'wallet-client',
       id: '1',
       pid_auth_flow: 'l3',
@@ -103,7 +105,9 @@ describe('MockIdpService', () => {
 
   it('returns challenge_info redirect and initializes mrtd session for l2plus flow', async () => {
     const parRequest = {
-      authorization_details: [{ credential_configuration_id: 'dc_sd_jwt_PersonIdentificationData', type: 'openid_credential' }],
+      authorization_details: [
+        { credential_configuration_id: 'dc_sd_jwt_PersonIdentificationData', type: 'openid_credential' }
+      ],
       client_id: 'wallet-client',
       id: '1',
       pid_auth_flow: 'l2plus',
