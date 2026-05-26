@@ -28,6 +28,7 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
       try {
         const service = new AuthorizationService(app.parRepository, makeJwksRepository(app));
         const result = await service.authorize({
+          authFlow: app.config.AUTH_FLOW,
           baseURL,
           callbacks: {
             encryptJwe: oauthCallbacks.encryptJwe

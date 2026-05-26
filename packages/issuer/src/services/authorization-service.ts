@@ -7,7 +7,7 @@ import { getSignJwtCallback } from '../crypto.js';
 import { getFederationMetadata } from '../openid-federation/index.js';
 
 import type { JwksRepository } from '../signer.js';
-import type { ParRequest } from '../z-par.js';
+import type { ParRequest, PidAuthFlow } from '../z-par.js';
 import type { IPARRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext, TrustChain } from '@pagopa/io-wallet-oauth2';
 
@@ -29,8 +29,6 @@ export class AuthorizationRequestError extends Error {
 export type AuthorizationResult =
   | { readonly kind: 'redirect'; readonly location: string }
   | { readonly kind: 'jwt'; readonly payload: string };
-
-type PidAuthFlow = 'direct' | 'l2plus' | 'l3';
 
 export type AuthorizeOptions = {
   readonly authFlow?: PidAuthFlow;
@@ -100,6 +98,9 @@ export class AuthorizationService {
     if (authFlow === 'l2plus' || authFlow === 'l3') {
       const updatedParRequest = {
         ...parRequest,
+        code: undefined,
+        code_expires_at: undefined,
+        code_consumed_at: undefined,
         pid_auth_flow: authFlow
       };
 

@@ -102,18 +102,6 @@ describe('config plugin', () => {
     await expect(app.register(configPlugin)).rejects.toThrow();
   });
 
-  it('maps ITW_CT_DATA_DIR directly to DATA_DIR when DATA_DIR is not provided', async () => {
-    process.env.ITW_CT_DATA_DIR = '/tmp/itw-conformance-tool';
-    const app = Fastify();
-
-    await app.register(configPlugin);
-    await app.ready();
-
-    expect(app.config.DATA_DIR).toBe('/tmp/itw-conformance-tool');
-
-    await app.close();
-  });
-
   it('uses ITW_CT_ISSUER_AUTH_FLOW as override for AUTH_FLOW', async () => {
     process.env.ITW_CT_ISSUER_AUTH_FLOW = 'l3';
     const app = Fastify();

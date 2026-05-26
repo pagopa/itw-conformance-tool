@@ -14,6 +14,13 @@ export default defineConfig(() => ({
     coverage: {
       reportsDirectory: './test-output/vitest/coverage',
       provider: 'v8' as const
+    },
+    server: {
+      deps: {
+        // Force @fastify/autoload to run inside Vitest's module system so that
+        // its dynamic imports go through Vite's resolver and .js → .ts mapping works.
+        inline: ['@fastify/autoload']
+      }
     }
   }
 }));

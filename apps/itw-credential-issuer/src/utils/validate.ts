@@ -51,14 +51,12 @@ export async function validateJWKS(jwks: unknown): Promise<void> {
 }
 
 /**
- * Normalizes a PEM private key to PKCS#8 DER so it can be imported by WebCrypto.
+ * Parses a PEM private key into a Node.js KeyObject.
  * Supports both "BEGIN PRIVATE KEY" (PKCS#8) and "BEGIN EC PRIVATE KEY" (SEC1).
  */
-function toPkcs8Der(keyPem: string): Buffer {
+function parseIacaPrivateKey(keyPem: string): ReturnType<typeof createPrivateKey> {
   try {
-    const keyObject = createPrivateKey(keyPem);
-    const der = keyObject.export({ format: 'der', type: 'pkcs8' });
-    return Buffer.isBuffer(der) ? der : Buffer.from(der as ArrayBuffer);
+    return createPrivateKey(keyPem);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid IACA private key format. Expected a valid PEM private key (PKCS#8 or SEC1). ${message}`);
@@ -104,7 +102,7 @@ function publicJwkIdentity(jwk: ExportedPublicJwk): string {
 export async function validateIACAKeyPair(certPem: string, keyPem: string): Promise<void> {
   const cert = new X509Certificate(certPem);
 
-  const privateKey = createPrivateKey({ key: toPkcs8Der(keyPem), format: 'der', type: 'pkcs8' });
+  const privateKey = parseIacaPrivateKey(keyPem);
   const publicFromPrivate = createPublicKey(privateKey).export({ format: 'jwk' }) as ExportedPublicJwk;
   const publicFromCert = createPublicKey(cert.toString()).export({ format: 'jwk' }) as ExportedPublicJwk;
 

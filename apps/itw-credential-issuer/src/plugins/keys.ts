@@ -135,7 +135,7 @@ export default fp(
 
     const { jwks, certPem, keyPem } = await ensureKeyMaterialExists(keysDir);
 
-    let parsedJwks = await JSON.parse(jwks);
+    let parsedJwks = JSON.parse(jwks);
     await validateJWKS(parsedJwks);
 
     if (!hasCompatibleIssuerJwks(parsedJwks)) {
