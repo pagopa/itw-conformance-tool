@@ -121,7 +121,7 @@ export class MockIdpService {
       state: parRequest.state,
       status: 'pending_mrtd_init'
     };
-    const challengeInfo = await this.#createMrtdChallengeInfo(payload, expiresAt, now);
+    const challengeInfo = await this.#createMrtdChallengeInfo(payload, expiresAt, now, options.baseURL);
 
     const mrtdAuthSession: MrtdAuthSession = {
       auth_flow: 'l2plus',
@@ -157,7 +157,12 @@ export class MockIdpService {
     };
   }
 
-  async #createMrtdChallengeInfo(payload: MrtdChallengePayload, exp: number, iat: number): Promise<string> {
+  async #createMrtdChallengeInfo(
+    payload: MrtdChallengePayload,
+    exp: number,
+    iat: number,
+    issuer: string
+  ): Promise<string> {
     const { private: privateSig, public: publicSig } = this.#jwksRepository.getSign();
     const signAlgorithm = 'ES256';
     const key = await importJWK(privateSig, signAlgorithm);
@@ -168,7 +173,7 @@ export class MockIdpService {
         kid: publicSig.kid,
         typ: 'mrtd-ias+jwt'
       })
-      .setIssuer('mock-idp')
+      .setIssuer(issuer)
       .setIssuedAt(iat)
       .setExpirationTime(exp)
       .sign(key);

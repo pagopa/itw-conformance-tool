@@ -150,6 +150,7 @@ describe('MockIdpService', () => {
     const verified = await jwtVerify(String(mrtdAuthSession.challenge), publicKey);
 
     const payload = verified.payload as Record<string, unknown>;
+    expect(payload.iss).toBe(BASE_URL);
     expect(payload.status).toBe('pending_mrtd_init');
     expect(payload.state).toBe('state-456');
     expect(payload.htu).toBe(new URL('/edoc-proof/init', BASE_URL).toString());

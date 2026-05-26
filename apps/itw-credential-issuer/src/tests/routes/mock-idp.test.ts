@@ -54,4 +54,13 @@ describe('GET /idp/authorize', () => {
 
     await app.close();
   });
+
+  it('returns 400 when request_uri query param is missing', async () => {
+    const app = await buildRouteApp(mockIdpRoute);
+    const response = await app.inject({ method: 'GET', url: '/idp/authorize' });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
 });
