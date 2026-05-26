@@ -11,6 +11,9 @@ data_dir = ~/.itw-conformance-tool
 log_level = info
 
 [itw-credential-issuer]
+; Authentication flow: direct | l2plus | l3
+; Default: direct
+auth_flow = direct
 ; HTTP port for the issuer service
 ; Default: 3000
 port = 3000
@@ -31,6 +34,7 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
       log_level: 'info'
     },
     'itw-credential-issuer': {
+      auth_flow: 'direct',
       port: 3000,
       credential_types: 'pid,mdl,badge,eaa'
     },

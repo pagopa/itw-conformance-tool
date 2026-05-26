@@ -12,6 +12,7 @@ export const ConfigSchema = z.object({
     }),
   'itw-credential-issuer': z
     .object({
+      auth_flow: z.enum(['direct', 'l2plus', 'l3']).catch('direct'),
       port: z.coerce.number().int().min(1).max(65535).catch(3000),
       credential_types: z
         .string()
@@ -26,6 +27,7 @@ export const ConfigSchema = z.object({
         .catch('pid,mdl,badge,eaa')
     })
     .default({
+      auth_flow: 'direct',
       port: 3000,
       credential_types: 'pid,mdl,badge,eaa'
     }),

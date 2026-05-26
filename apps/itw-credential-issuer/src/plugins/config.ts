@@ -11,27 +11,20 @@ declare module 'fastify' {
       PORT: number;
       DATA_DIR: string;
       DB_CLEANUP_INTERVAL_MS: number;
-      KEYS_DIR?: string;
+      AUTH_FLOW: 'direct' | 'l2plus' | 'l3';
     };
   }
 }
 
+const AUTH_FLOW_VALUES = ['direct', 'l2plus', 'l3'] as const;
+
 const schema = z.object({
   HOST: z.string().default('localhost'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool', 'issuer')),
+  DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool')),
   DB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
-  KEYS_DIR: z.string().optional()
+  AUTH_FLOW: z.enum(AUTH_FLOW_VALUES).default('direct')
 });
-
-function resolveIssuerDataDir(globalDataDir: string): string | undefined {
-  const trimmed = globalDataDir.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  return path.basename(trimmed) === 'issuer' ? trimmed : path.join(trimmed, 'issuer');
-}
 
 function resolvePortOverride(variableName: string): string | undefined {
   const value = process.env[variableName];
@@ -65,14 +58,11 @@ export default fp(
     }
     const orchestratedDataDir = resolvePathOverride('ITW_CT_DATA_DIR');
     if (orchestratedDataDir !== undefined) {
-      data.DATA_DIR = path.join(orchestratedDataDir, 'itw-credential-issuer');
+      data.DATA_DIR = path.join(orchestratedDataDir);
     }
 
-    if (data.ITW_CT_DATA_DIR && !data.DATA_DIR) {
-      const issuerDataDir = resolveIssuerDataDir(data.ITW_CT_DATA_DIR);
-      if (issuerDataDir !== undefined) {
-        data.DATA_DIR = issuerDataDir;
-      }
+    if (data.ITW_CT_ISSUER_AUTH_FLOW && !data.AUTH_FLOW) {
+      data.AUTH_FLOW = data.ITW_CT_ISSUER_AUTH_FLOW;
     }
 
     await app.register(FastifyEnv, {
