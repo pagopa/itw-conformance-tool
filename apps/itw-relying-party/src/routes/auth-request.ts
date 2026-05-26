@@ -22,7 +22,7 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const { state } = request.params;
-      const session = await app.rp.sessionService.get(state);
+      const session = await app.sessionService.get(state);
       if (session === undefined) {
         return reply.code(404).send({ message: 'Session not found' });
       }
@@ -31,7 +31,7 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ message: 'Session not found' });
       }
 
-      await app.rp.sessionService.update(state, 'checking');
+      await app.sessionService.update(state, 'checking');
 
       return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(session.jwt);
     }
