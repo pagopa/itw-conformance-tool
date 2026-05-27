@@ -1,6 +1,6 @@
 import { PARService, PostPushedAuthorizationError } from '@itw-conformance-tool/issuer';
 
-import { makeOauthCallbacks } from '../plugins/issuer-runtime.js';
+import { makeOauthCallbacks } from '../plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';

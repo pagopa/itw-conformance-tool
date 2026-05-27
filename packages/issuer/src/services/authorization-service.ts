@@ -7,7 +7,7 @@ import { getSignJwtCallback } from '../crypto.js';
 import { getFederationMetadata } from '../openid-federation/index.js';
 
 import type { JwksRepository } from '../signer.js';
-import type { ParRequest } from '../z-par.js';
+import type { ParRequest, PidAuthFlow } from '../z-par.js';
 import type { IPARRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext, TrustChain } from '@pagopa/io-wallet-oauth2';
 
@@ -31,6 +31,7 @@ export type AuthorizationResult =
   | { readonly kind: 'jwt'; readonly payload: string };
 
 export type AuthorizeOptions = {
+  readonly authFlow?: PidAuthFlow;
   readonly baseURL: string;
   readonly callbacks: Pick<CallbackContext, 'encryptJwe'>;
   readonly clientId: string;
@@ -92,12 +93,37 @@ export class AuthorizationService {
   }
 
   async #authorizePid(parRequest: ParRequest, options: AuthorizeOptions): Promise<AuthorizationResult> {
+    const authFlow = normalizePidAuthFlow(options.authFlow);
+
+    if (authFlow === 'l2plus' || authFlow === 'l3') {
+      const updatedParRequest = {
+        ...parRequest,
+        code: undefined,
+        code_expires_at: undefined,
+        code_consumed_at: undefined,
+        pid_auth_flow: authFlow
+      };
+
+      await this.#parRepository.update(options.requestUri, {
+        requestObject: JSON.stringify(updatedParRequest)
+      });
+
+      const location = new URL('/idp/authorize', options.baseURL);
+      location.searchParams.set('request_uri', options.requestUri);
+
+      return {
+        kind: 'redirect',
+        location: location.toString()
+      };
+    }
+
     const code = randomUUID();
     const codeExpiresAt = Math.floor(Date.now() / 1000) + 60;
     const updatedParRequest = {
       ...parRequest,
       code,
-      code_expires_at: codeExpiresAt
+      code_expires_at: codeExpiresAt,
+      pid_auth_flow: authFlow
     };
 
     await this.#parRepository.update(options.requestUri, {
@@ -220,6 +246,14 @@ export class AuthorizationService {
       payload: authorizationRequest.jar.authorizationRequestJwt
     };
   }
+}
+
+function normalizePidAuthFlow(authFlow: PidAuthFlow | undefined): PidAuthFlow {
+  if (authFlow === 'l2plus' || authFlow === 'l3') {
+    return authFlow;
+  }
+
+  return 'direct';
 }
 
 function getDcqlQuery(config: IoWalletSdkConfig) {

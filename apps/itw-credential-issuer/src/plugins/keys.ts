@@ -1,15 +1,21 @@
-import { constants } from 'node:fs';
-import { access, readFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import fp from 'fastify-plugin';
 
-type SigningJwks = {
-  keys: unknown[];
-};
+import { validateIACAKeyPair, validateJWKS } from '#/utils/validate.js';
 
-type IssuerKeys = {
-  signingKeysJwks: SigningJwks;
+import { generateIaca, generateJwks } from '../crypto/auto-keygen.js';
+
+export type IssuerKeys = {
+  signingKeysJwks: {
+    keys: Array<{
+      kty: string;
+      kid: string;
+      alg?: string;
+      d?: string;
+    }>;
+  };
   iacaCertPem: string;
   iacaKeyPem: string;
 };
@@ -22,79 +28,132 @@ declare module 'fastify' {
 
 const REQUIRED_FILES = ['signing-keys.jwks.json', 'iaca-cert.pem', 'iaca-key.pem'] as const;
 
-async function ensureReadable(filePath: string): Promise<void> {
-  try {
-    await access(filePath, constants.R_OK);
-  } catch (error) {
-    const errno = (error as NodeJS.ErrnoException).code;
-    const suffix = errno ? ` (${errno})` : '';
-    throw new Error(`Required key material file is missing or not readable: ${filePath}${suffix}`);
-  }
+type StoredJwk = {
+  kty?: string;
+  use?: string;
+  alg?: string;
+  d?: string;
+  crv?: string;
+  x?: string;
+  y?: string;
+};
+
+function isEcPrivateJwk(jwk: StoredJwk): boolean {
+  return (
+    jwk.kty === 'EC' &&
+    typeof jwk.d === 'string' &&
+    typeof jwk.crv === 'string' &&
+    typeof jwk.x === 'string' &&
+    typeof jwk.y === 'string'
+  );
 }
 
-async function areAllRequiredFilesReadable(dirPath: string): Promise<boolean> {
-  try {
-    await Promise.all(REQUIRED_FILES.map((fileName) => ensureReadable(path.join(dirPath, fileName))));
-    return true;
-  } catch {
+function hasCompatibleEcSigningKey(keys: StoredJwk[]): boolean {
+  return keys.some(
+    (jwk) =>
+      isEcPrivateJwk(jwk) &&
+      (jwk.use === undefined || jwk.use === 'sig') &&
+      (jwk.alg === undefined || jwk.alg.startsWith('ES'))
+  );
+}
+
+function hasCompatibleEcEncryptionKey(keys: StoredJwk[]): boolean {
+  return keys.some(
+    (jwk) => isEcPrivateJwk(jwk) && jwk.use === 'enc' && (jwk.alg === undefined || jwk.alg === 'ECDH-ES')
+  );
+}
+
+function hasCompatibleIssuerJwks(jwks: unknown): boolean {
+  const keys = (jwks as { keys?: StoredJwk[] }).keys;
+  if (!Array.isArray(keys)) {
     return false;
   }
+
+  return hasCompatibleEcSigningKey(keys) && hasCompatibleEcEncryptionKey(keys);
 }
 
-function parseJwks(content: string, filePath: string): SigningJwks {
-  let parsed: unknown;
+/** Reads a file, returning null if it does not exist. */
+async function readOptional(filePath: string): Promise<string | null> {
   try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error(`Invalid JSON in ${filePath}`);
+    return await readFile(filePath, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+/** Ensures that the required key material files exist
+ * in the specified directory, generating them if necessary,
+ * and reads their contents
+ *
+ * @param dir - The directory where the key material files should be located
+ * @returns An object containing the contents of the JWKS and PEM files
+ */
+async function ensureKeyMaterialExists(dir: string): Promise<{
+  jwks: string;
+  certPem: string;
+  keyPem: string;
+}> {
+  const [jwksPath, certPath, keyPath] = REQUIRED_FILES.map((f) => path.join(dir, f));
+
+  let [jwks, certPem, keyPem] = await Promise.all([
+    readOptional(jwksPath),
+    readOptional(certPath),
+    readOptional(keyPath)
+  ]);
+
+  if (certPem === null || keyPem === null) {
+    // If either file is missing, regenerate both — cert and key are a matched cryptographic pair.
+    // Write to temp files first, then rename atomically to avoid a partial pair on crash.
+    const generatedIaca = await generateIaca();
+    const certTmp = `${certPath}.tmp`;
+    const keyTmp = `${keyPath}.tmp`;
+    await Promise.all([
+      writeFile(certTmp, generatedIaca.certPem, 'utf8'),
+      writeFile(keyTmp, generatedIaca.keyPem, 'utf8')
+    ]);
+    await Promise.all([rename(certTmp, certPath), rename(keyTmp, keyPath)]);
+    certPem = generatedIaca.certPem;
+    keyPem = generatedIaca.keyPem;
   }
 
-  if (typeof parsed !== 'object' || parsed === null || !('keys' in parsed) || !Array.isArray(parsed.keys)) {
-    throw new Error(`Invalid JWKS in ${filePath}: expected an object with a keys array`);
+  if (jwks === null) {
+    const generated = await generateJwks();
+    const jwksTmp = `${jwksPath}.tmp`;
+    await writeFile(jwksTmp, generated, 'utf8');
+    await rename(jwksTmp, jwksPath);
+    jwks = generated;
   }
 
-  if (parsed.keys.length === 0) {
-    throw new Error(`Invalid JWKS in ${filePath}: keys array must not be empty`);
-  }
-
-  return parsed as SigningJwks;
+  return { jwks, certPem, keyPem };
 }
 
 export default fp(
   async function keysPlugin(app) {
-    // TODO: consider to delete the unusual config.KEYS_DIR and just rely on the presence of the required files in the data dir (or a subdir)
-    const candidateDirs =
-      app.config.KEYS_DIR !== undefined
-        ? [app.config.KEYS_DIR]
-        : [path.join(path.dirname(app.config.DATA_DIR), 'issuer'), app.config.DATA_DIR];
+    const keysDir = path.join(app.config.DATA_DIR, 'issuer');
+    const jwksPath = path.join(keysDir, 'signing-keys.jwks.json');
 
-    let keysDir: string | undefined;
-    for (const candidateDir of candidateDirs) {
-      if (await areAllRequiredFilesReadable(candidateDir)) {
-        keysDir = candidateDir;
-        break;
-      }
+    const { jwks, certPem, keyPem } = await ensureKeyMaterialExists(keysDir);
+
+    let parsedJwks = JSON.parse(jwks);
+    await validateJWKS(parsedJwks);
+
+    if (!hasCompatibleIssuerJwks(parsedJwks)) {
+      app.log.warn('Issuer JWKS is incompatible with ES256/ECDH-ES runtime requirements; regenerating key material');
+
+      const regeneratedJwks = await generateJwks();
+      const jwksTmp = `${jwksPath}.tmp`;
+      await writeFile(jwksTmp, regeneratedJwks, 'utf8');
+      await rename(jwksTmp, jwksPath);
+
+      parsedJwks = JSON.parse(regeneratedJwks);
+      await validateJWKS(parsedJwks);
     }
 
-    if (keysDir === undefined) {
-      const searched = candidateDirs
-        .flatMap((candidateDir) => REQUIRED_FILES.map((fileName) => path.resolve(candidateDir, fileName)))
-        .join(', ');
-      throw new Error(`Required key material files are missing or not readable. Searched: ${searched}`);
-    }
-
-    const filePaths = REQUIRED_FILES.map((fileName) => path.join(keysDir, fileName));
-
-    await Promise.all(filePaths.map((filePath) => ensureReadable(filePath)));
-
-    const [jwksContent, certPem, keyPem] = await Promise.all([
-      readFile(filePaths[0], 'utf8'),
-      readFile(filePaths[1], 'utf8'),
-      readFile(filePaths[2], 'utf8')
-    ]);
+    await validateIACAKeyPair(certPem, keyPem);
 
     app.decorate('issuerKeys', {
-      signingKeysJwks: parseJwks(jwksContent, filePaths[0]),
+      signingKeysJwks: parsedJwks,
       iacaCertPem: certPem,
       iacaKeyPem: keyPem
     });
