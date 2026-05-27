@@ -46,6 +46,24 @@ export class SqlitePARRepository implements IPARRepository {
     return rowToEntry(row);
   }
 
+  async getByMrtdAuthSession(sessionId: string): Promise<PAREntry | undefined> {
+    const row = this.db
+      .prepare("SELECT * FROM par_entries WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?")
+      .get(sessionId) as PARRow | undefined;
+
+    if (!row) {
+      return undefined;
+    }
+
+    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
+    if (row.expires_at < nowMs) {
+      this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(row.request_uri);
+      return undefined;
+    }
+
+    return rowToEntry(row);
+  }
+
   async insert(entry: PAREntry): Promise<void> {
     this.db
       .prepare(
