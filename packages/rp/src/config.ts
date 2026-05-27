@@ -153,7 +153,10 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
 
   const baseUrlOverride = env.ITW_CT_RP_BASE_URL?.trim();
   const baseUrlCandidate = baseUrlOverride && baseUrlOverride.length > 0 ? baseUrlOverride : deriveBaseUrl({ host, port });
-  const baseUrl = baseUrlCandidate.replace(/\/+$/u, '');
+  let baseUrl = baseUrlCandidate;
+  while (baseUrl.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
   const config = rpConfigSchema.parse({
     host,
     port,
