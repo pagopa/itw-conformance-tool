@@ -24,13 +24,17 @@ async function generateEcKeyMaterial(kid: string): Promise<EcKeyMaterial> {
 
 function buildJwksRepository(keys: EcKeyMaterial): JwksRepository {
   return {
-    getSign: () => ({ private: keys.privateJwk, public: keys.publicJwk }) as unknown as ReturnType<JwksRepository['getSign']>,
-    getEncrypt: () => ({ private: keys.privateJwk, public: keys.publicJwk }) as unknown as ReturnType<JwksRepository['getEncrypt']>,
+    getSign: () =>
+      ({ private: keys.privateJwk, public: keys.publicJwk }) as unknown as ReturnType<JwksRepository['getSign']>,
+    getEncrypt: () =>
+      ({ private: keys.privateJwk, public: keys.publicJwk }) as unknown as ReturnType<JwksRepository['getEncrypt']>,
     iacaX509: () => 'CERT'
   };
 }
 
-async function buildClientAttestationJwts(audience: string): Promise<{ attestationJwt: string; attestationPopJwt: string }> {
+async function buildClientAttestationJwts(
+  audience: string
+): Promise<{ attestationJwt: string; attestationPopJwt: string }> {
   const { privateKey, publicKey } = await generateKeyPair('ES256');
   const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
 
@@ -112,7 +116,9 @@ describe('EdocProofService.processInit', () => {
       const session = makeValidSession();
       const parRequest = makeParRequest(session);
       const repo = makeMockRepo({
-        getByMrtdAuthSession: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:ietf:params:oauth:request_uri:test' })
+        getByMrtdAuthSession: vi
+          .fn()
+          .mockResolvedValue({ parRequest, requestUri: 'urn:ietf:params:oauth:request_uri:test' })
       });
 
       const service = new EdocProofService(repo, buildJwksRepository(issuerKeys));
@@ -205,7 +211,10 @@ describe('EdocProofService.processInit', () => {
       });
 
       expect(update).toHaveBeenCalledOnce();
-      const [calledUri, updatedPar] = update.mock.calls[0] as [string, ParRequest & { mrtd_auth_session: MrtdAuthSession }];
+      const [calledUri, updatedPar] = update.mock.calls[0] as [
+        string,
+        ParRequest & { mrtd_auth_session: MrtdAuthSession }
+      ];
       expect(calledUri).toBe('urn:test');
       expect(updatedPar.mrtd_auth_session.status).toBe('pending_mrtd_verify');
       expect(updatedPar.mrtd_auth_session.mrtd_pop_jwt_nonce_consumed_at).toBeGreaterThan(0);
@@ -366,7 +375,10 @@ describe('EdocProofService.processInit', () => {
 
     it('throws EdocProofInitError (400) when the PAR entry has no mrtd_auth_session field', async () => {
       const { attestationJwt, attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
-      const parRequest = { ...makeParRequest(makeValidSession()), mrtd_auth_session: undefined } as unknown as ParRequest;
+      const parRequest = {
+        ...makeParRequest(makeValidSession()),
+        mrtd_auth_session: undefined
+      } as unknown as ParRequest;
       const repo = makeMockRepo({
         getByMrtdAuthSession: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' })
       });

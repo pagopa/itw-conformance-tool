@@ -55,10 +55,7 @@ const EdocInit: FastifyPluginAsync = async (app) => {
           mrtdPopJwtNonce: mrtd_pop_jwt_nonce
         });
 
-        return reply
-          .code(202)
-          .header('Content-Type', 'application/jwt; charset=utf-8')
-          .send(responseJwt);
+        return reply.code(202).header('Content-Type', 'application/jwt; charset=utf-8').send(responseJwt);
       } catch (error) {
         if (error instanceof EdocProofInitError) {
           return reply.code(error.statusCode).send({
