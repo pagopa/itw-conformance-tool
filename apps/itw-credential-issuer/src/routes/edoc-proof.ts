@@ -44,9 +44,13 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
       try {
         // 1. Extract and validate Wallet Public Key from Attestation
         const decodedAttestation = decodeJwt(headers['oauth-client-attestation']);
-        const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as Record<string, unknown> | undefined;
+        const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as
+          | Record<string, unknown>
+          | undefined;
         if (!walletJwk) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Missing wallet JWK in attestation' });
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Missing wallet JWK in attestation' });
         }
         const walletPublicKey = await importJWK(walletJwk, 'ES256');
 
@@ -64,7 +68,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         if (!session) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session invalid' });
         }
-        
+
         if (session.status !== 'pending_mrtd_verify') {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid session state' });
         }
@@ -78,7 +82,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         if (body.mrtd_pop_nonce !== session.mrtd_pop_nonce) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid mrtd_pop_nonce' });
         }
-        
+
         if (session.mrtd_pop_nonce_consumed_at) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Nonce already consumed' });
         }
@@ -92,7 +96,9 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         try {
           verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey);
         } catch {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid mrtd_validation_jwt signature' });
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Invalid mrtd_validation_jwt signature' });
         }
 
         const header = verifiedJwt.protectedHeader;
@@ -102,7 +108,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
 
         const payload = verifiedJwt.payload as Record<string, unknown>;
         const { baseURL } = makeOauthCallbacks(app, request);
-        
+
         if (!payload.iss || !payload.aud || !payload.iat || !payload.exp) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Missing base payload claims' });
         }
@@ -120,12 +126,28 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         const mrtd = payload.mrtd as Record<string, unknown> | undefined;
-        if (!mrtd || typeof mrtd.dg1 !== 'string' || !mrtd.dg1 || typeof mrtd.dg11 !== 'string' || !mrtd.dg11 || typeof mrtd.sod_mrtd !== 'string' || !mrtd.sod_mrtd) {
+        if (
+          !mrtd ||
+          typeof mrtd.dg1 !== 'string' ||
+          !mrtd.dg1 ||
+          typeof mrtd.dg11 !== 'string' ||
+          !mrtd.dg11 ||
+          typeof mrtd.sod_mrtd !== 'string' ||
+          !mrtd.sod_mrtd
+        ) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid mrtd object' });
         }
 
         const ias = payload.ias as Record<string, unknown> | undefined;
-        if (!ias || typeof ias.ias_pk !== 'string' || !ias.ias_pk || typeof ias.sod_ias !== 'string' || !ias.sod_ias || typeof ias.challenge_signed !== 'string' || !ias.challenge_signed) {
+        if (
+          !ias ||
+          typeof ias.ias_pk !== 'string' ||
+          !ias.ias_pk ||
+          typeof ias.sod_ias !== 'string' ||
+          !ias.sod_ias ||
+          typeof ias.challenge_signed !== 'string' ||
+          !ias.challenge_signed
+        ) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid ias object' });
         }
 
@@ -133,7 +155,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         session.status = 'verified';
         const newNonce = randomBytes(16).toString('hex');
         session.mrtd_val_pop_nonce = newNonce;
-        
+
         await app.parRepository.update(parEntry.requestUri, { requestObject: JSON.stringify(parRequest) });
 
         return reply.code(202).send({
@@ -142,7 +164,6 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           redirect_uri: `${baseURL}/idp/callback?mrtd_auth_session=${session.mrtd_auth_session}`,
           mrtd_val_pop_nonce: newNonce
         });
-
       } catch (error) {
         request.log.error({ err: error }, 'EDoc Proof verify failed');
         return reply.code(500).send({ error: 'internal_server_error' });

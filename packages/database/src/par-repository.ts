@@ -48,7 +48,9 @@ export class SqlitePARRepository implements IPARRepository {
 
   async getByMrtdAuthSession(sessionId: string): Promise<PAREntry | undefined> {
     const row = this.db
-      .prepare("SELECT * FROM par_entries WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?")
+      .prepare(
+        "SELECT * FROM par_entries WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?"
+      )
       .get(sessionId) as PARRow | undefined;
 
     if (!row) {
