@@ -65,8 +65,9 @@
       "inputs": ["{projectRoot}/src/assets"],
       "outputs": ["{projectRoot}/dist/assets"],
       "options": {
-        "command": "cp -r apps/itw-relying-party/src/assets apps/itw-relying-party/dist/"
+        "command": "node -e \"require('node:fs').cpSync('apps/itw-relying-party/src/assets','apps/itw-relying-party/dist/assets',{recursive:true});\""
       }
+    },
     },
     "serve": {
       "continuous": true,
