@@ -11,6 +11,7 @@
  */
 
 import { mkdtempSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,7 +28,6 @@ import statusRoute from '../../routes/status.js';
 import {
   TEST_AUTH_REQUEST_PEM,
   TEST_AUTH_RESPONSE_PEM,
-  TEST_BASE_PATH,
   TEST_CLIENT_ID,
   createAuthResponseJwe
 } from '../helpers/rp-route-app.js';
@@ -44,18 +44,25 @@ async function buildFullRpApp() {
   const sessionService = new SessionService(sessionRepo);
 
   const app = Fastify({ logger: false });
-  app.decorate('rp', {
-    authRequestPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
-    authResponsePrivateKeyPem: TEST_AUTH_RESPONSE_PEM,
-    basePath: TEST_BASE_PATH,
-    clientId: TEST_CLIENT_ID,
-    nonceRepository: nonceRepo,
-    sessionService
+
+  app.decorate('config', {
+    host: '0.0.0.0',
+    port: 8080,
+    baseUrl: TEST_CLIENT_ID,
+    dataDir,
+    configFilePath: join(dataDir, 'config.ini')
   });
+
+  app.decorate('rpKeys', {
+    authRequestPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
+    authResponsePrivateKeyPem: TEST_AUTH_RESPONSE_PEM
+  });
+
+  app.decorate('nonceRepository', nonceRepo);
+  app.decorate('sessionService', sessionService);
 
   app.addHook('onClose', async () => {
     await dbClient.close();
-    const { rm } = await import('node:fs/promises');
     await rm(dataDir, { recursive: true, force: true });
   });
 

@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -114,19 +115,19 @@ export function createMemoryNonceRepository(): INonceRepository {
 }
 
 // ---------------------------------------------------------------------------
-// buildRpRouteApp — minimal Fastify app with mocked `app.rp` for route tests
+// buildRpRouteApp — minimal Fastify app matching production decorator structure
 // ---------------------------------------------------------------------------
 
 export interface RpRouteAppOptions {
   authRequestPrivateKeyPem?: string;
   authResponsePrivateKeyPem?: string;
-  basePath?: string;
-  clientId?: string;
+  baseUrl?: string;
 }
 
 /**
  * Builds a lightweight Fastify instance suitable for route-level tests.
- * Uses a real SQLite database in a temp directory and generated EC key material.
+ * Decorates with the same names used by production plugins:
+ *   app.config, app.rpKeys, app.nonceRepository, app.sessionService
  */
 export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRouteAppOptions = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'rp-route-test-'));
@@ -137,18 +138,24 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
 
   const app = Fastify({ logger: false });
 
-  app.decorate('rp', {
-    authRequestPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,
-    authResponsePrivateKeyPem: options.authResponsePrivateKeyPem ?? TEST_AUTH_RESPONSE_PEM,
-    basePath: options.basePath ?? TEST_BASE_PATH,
-    clientId: options.clientId ?? TEST_CLIENT_ID,
-    nonceRepository: nonceRepo,
-    sessionService
+  app.decorate('config', {
+    host: '0.0.0.0',
+    port: 8080,
+    baseUrl: options.baseUrl ?? TEST_CLIENT_ID,
+    dataDir,
+    configFilePath: join(dataDir, 'config.ini')
   });
+
+  app.decorate('rpKeys', {
+    authRequestPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,
+    authResponsePrivateKeyPem: options.authResponsePrivateKeyPem ?? TEST_AUTH_RESPONSE_PEM
+  });
+
+  app.decorate('nonceRepository', nonceRepo);
+  app.decorate('sessionService', sessionService);
 
   app.addHook('onClose', async () => {
     await dbClient.close();
-    const { rm } = await import('node:fs/promises');
     await rm(dataDir, { recursive: true, force: true });
   });
 
