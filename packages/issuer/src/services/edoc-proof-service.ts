@@ -1,13 +1,19 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
-import { SignJWT, type JWK, decodeJwt, importJWK, jwtVerify } from 'jose';
+import { EmbeddedJWK, SignJWT, type JWK, importJWK, jwtVerify } from 'jose';
 
 import type { JwksRepository } from '../signer.js';
 import type { MrtdAuthSession, ParRequest } from '../z-par.js';
 
 export interface IEdocParRepository {
   getByMrtdAuthSession(mrtdAuthSessionId: string): Promise<{ parRequest: ParRequest; requestUri: string } | undefined>;
-  update(requestUri: string, parRequest: ParRequest): Promise<void>;
+  /**
+   * Atomically transitions the MRTD session to `pending_mrtd_verify` by updating the PAR entry
+   * only when the session is still in `pending_mrtd_init` state and the nonce has not yet been
+   * consumed. Returns `true` if the update was applied; `false` if a concurrent request already
+   * claimed the session (caller should treat this as a replay and respond with 403).
+   */
+  atomicClaimSession(requestUri: string, mrtdAuthSessionId: string, updatedParRequest: ParRequest): Promise<boolean>;
 }
 
 export interface EdocProofInitOptions {
@@ -39,7 +45,11 @@ export class EdocProofService {
   }
 
   async processInit(options: EdocProofInitOptions): Promise<string> {
-    await validateClientAttestation(options.clientAttestationJwt, options.clientAttestationPopJwt, options.baseURL);
+    const walletPublicKey = await validateClientAttestation(
+      options.clientAttestationJwt,
+      options.clientAttestationPopJwt,
+      options.baseURL
+    );
 
     const result = await this.#edocParRepository.getByMrtdAuthSession(options.mrtdAuthSessionId);
     if (!result) {
@@ -85,11 +95,19 @@ export class EdocProofService {
       challenge,
       mrtd_pop_jwt_nonce_consumed_at: Date.now(),
       mrtd_pop_nonce: mrtdPopNonce,
-      status: 'pending_mrtd_verify'
+      status: 'pending_mrtd_verify',
+      wallet_public_key: walletPublicKey as MrtdAuthSession['wallet_public_key']
     };
 
     const updatedParRequest = { ...parRequest, mrtd_auth_session: updatedSession };
-    await this.#edocParRepository.update(requestUri, updatedParRequest as ParRequest);
+    const claimed = await this.#edocParRepository.atomicClaimSession(
+      requestUri,
+      options.mrtdAuthSessionId,
+      updatedParRequest as ParRequest
+    );
+    if (!claimed) {
+      throw new EdocProofInitError('mrtd_pop_jwt_nonce has already been used', 403);
+    }
 
     const { private: signKey, public: signPublic } = this.#jwksRepository.getSign();
     const alg = ((signKey as Record<string, unknown>)['alg'] as string | undefined) ?? 'ES256';
@@ -125,17 +143,24 @@ function deriveNewNonce(previousNonce: string): string {
 
 /**
  * Validates OAuth-Client-Attestation and OAuth-Client-Attestation-PoP headers.
- * Extracts cnf.jwk from the attestation JWT and verifies the PoP signature against it.
+ *
+ * The attestation JWT MUST carry its signing public key in the protected header's
+ * `jwk` parameter (RFC 7517 §4.6 / JWS embedded key). The signature is verified
+ * against that key so that self-signed forgeries cannot be used to inject an
+ * arbitrary cnf.jwk. Private-key material in cnf.jwk is also rejected.
+ *
+ * Returns the verified wallet public JWK from `cnf.jwk` for storage in the session.
  */
 async function validateClientAttestation(
   attestationJwt: string,
   attestationPopJwt: string,
   audience: string
-): Promise<void> {
+): Promise<JWK> {
   let attestationPayload: Record<string, unknown>;
 
   try {
-    attestationPayload = decodeJwt(attestationJwt) as Record<string, unknown>;
+    const { payload } = await jwtVerify(attestationJwt, EmbeddedJWK, { clockTolerance: 300 });
+    attestationPayload = payload as Record<string, unknown>;
   } catch {
     throw new EdocProofInitError('OAuth-Client-Attestation is not a valid JWT', 401);
   }
@@ -145,6 +170,11 @@ async function validateClientAttestation(
 
   if (!walletPublicKey || typeof walletPublicKey !== 'object') {
     throw new EdocProofInitError('OAuth-Client-Attestation is missing cnf.jwk claim', 401);
+  }
+
+  // Reject private-key material: the 'd' parameter is present on EC and RSA private keys.
+  if ('d' in walletPublicKey) {
+    throw new EdocProofInitError('OAuth-Client-Attestation cnf.jwk must not contain private key material', 401);
   }
 
   let walletKey: Awaited<ReturnType<typeof importJWK>>;
@@ -163,4 +193,6 @@ async function validateClientAttestation(
   } catch {
     throw new EdocProofInitError('OAuth-Client-Attestation-PoP verification failed', 401);
   }
+
+  return walletPublicKey;
 }

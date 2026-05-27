@@ -61,7 +61,7 @@ async function buildWalletAttestationJwts(audience: string) {
   const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-e2e-key' };
 
   const attestationJwt = await new SignJWT({ cnf: { jwk: walletPublicJwk } })
-    .setProtectedHeader({ alg: 'ES256' })
+    .setProtectedHeader({ alg: 'ES256', jwk: walletPublicJwk })
     .setIssuer('https://wallet-provider.example.it')
     .setIssuedAt()
     .setExpirationTime('1h')

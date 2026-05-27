@@ -38,9 +38,10 @@ async function buildClientAttestationJwts(
   const { privateKey, publicKey } = await generateKeyPair('ES256');
   const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
 
-  // The attestation is decoded without signature verification — only cnf.jwk is extracted.
+  // The attestation JWT embeds its signing key in the 'jwk' protected header parameter so
+  // the verifier can check the signature without a pre-registered trust anchor.
   const attestationJwt = await new SignJWT({ cnf: { jwk: walletPublicJwk } })
-    .setProtectedHeader({ alg: 'ES256' })
+    .setProtectedHeader({ alg: 'ES256', jwk: walletPublicJwk })
     .setIssuer('https://wallet-provider.example.it')
     .setIssuedAt()
     .setExpirationTime('1h')
@@ -60,7 +61,7 @@ async function buildClientAttestationJwts(
 function makeMockRepo(overrides: Partial<IEdocParRepository> = {}): IEdocParRepository {
   return {
     getByMrtdAuthSession: vi.fn().mockResolvedValue(undefined),
-    update: vi.fn().mockResolvedValue(undefined),
+    atomicClaimSession: vi.fn().mockResolvedValue(true),
     ...overrides
   };
 }
@@ -195,10 +196,10 @@ describe('EdocProofService.processInit', () => {
       const { attestationJwt, attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
       const session = makeValidSession();
       const parRequest = makeParRequest(session);
-      const update = vi.fn().mockResolvedValue(undefined);
+      const atomicClaimSession = vi.fn().mockResolvedValue(true);
       const repo = makeMockRepo({
         getByMrtdAuthSession: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' }),
-        update
+        atomicClaimSession
       });
 
       const service = new EdocProofService(repo, buildJwksRepository(issuerKeys));
@@ -210,16 +211,24 @@ describe('EdocProofService.processInit', () => {
         mrtdPopJwtNonce: NONCE
       });
 
-      expect(update).toHaveBeenCalledOnce();
-      const [calledUri, updatedPar] = update.mock.calls[0] as [
+      expect(atomicClaimSession).toHaveBeenCalledOnce();
+      const [calledUri, calledSessionId, updatedPar] = atomicClaimSession.mock.calls[0] as [
+        string,
         string,
         ParRequest & { mrtd_auth_session: MrtdAuthSession }
       ];
       expect(calledUri).toBe('urn:test');
+      expect(calledSessionId).toBe(SESSION_ID);
       expect(updatedPar.mrtd_auth_session.status).toBe('pending_mrtd_verify');
       expect(updatedPar.mrtd_auth_session.mrtd_pop_jwt_nonce_consumed_at).toBeGreaterThan(0);
       expect(typeof updatedPar.mrtd_auth_session.challenge).toBe('string');
       expect(typeof updatedPar.mrtd_auth_session.mrtd_pop_nonce).toBe('string');
+      // wallet_public_key must be persisted so subsequent steps (/edoc-proof/verify, /idp/callback)
+      // can verify wallet-bound proofs without requiring attestation headers again.
+      expect(updatedPar.mrtd_auth_session.wallet_public_key).toBeDefined();
+      expect(typeof updatedPar.mrtd_auth_session.wallet_public_key).toBe('object');
+      expect((updatedPar.mrtd_auth_session.wallet_public_key as Record<string, unknown>)['kty']).toBe('EC');
+      expect((updatedPar.mrtd_auth_session.wallet_public_key as Record<string, unknown>)['d']).toBeUndefined();
     });
 
     it('produces different challenges on each call (randomness check)', async () => {
@@ -276,10 +285,12 @@ describe('EdocProofService.processInit', () => {
     });
 
     it('throws EdocProofInitError (401) when the attestation JWT is missing cnf.jwk', async () => {
-      const { privateKey } = await generateKeyPair('ES256');
+      const { privateKey, publicKey } = await generateKeyPair('ES256');
+      const pubJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
       const attestationJwt = await new SignJWT({ no_cnf: true })
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'ES256', jwk: pubJwk })
         .setIssuedAt()
+        .setExpirationTime('1h')
         .sign(privateKey);
       const { attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
 
@@ -302,8 +313,9 @@ describe('EdocProofService.processInit', () => {
       const walletPublicJwk = { ...(await exportJWK(walletPublic)), alg: 'ES256', kid: 'wallet-key' };
 
       const attestationJwt = await new SignJWT({ cnf: { jwk: walletPublicJwk } })
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'ES256', jwk: walletPublicJwk })
         .setIssuedAt()
+        .setExpirationTime('1h')
         .sign(walletPrivate);
 
       const attestationPopJwt = await new SignJWT({ iss: 'wallet-client-id' })
@@ -331,8 +343,9 @@ describe('EdocProofService.processInit', () => {
       const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
 
       const attestationJwt = await new SignJWT({ cnf: { jwk: walletPublicJwk } })
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'ES256', jwk: walletPublicJwk })
         .setIssuedAt()
+        .setExpirationTime('1h')
         .sign(privateKey);
 
       // PoP targets the wrong audience
@@ -354,6 +367,32 @@ describe('EdocProofService.processInit', () => {
           mrtdPopJwtNonce: NONCE
         })
       ).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    it('throws EdocProofInitError (401) when cnf.jwk contains private key material', async () => {
+      const { privateKey, publicKey } = await generateKeyPair('ES256');
+      const pubJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
+      // Deliberately embed the private key in cnf.jwk
+      const privJwk = { ...(await exportJWK(privateKey)), alg: 'ES256', kid: 'wallet-key' };
+
+      const attestationJwt = await new SignJWT({ cnf: { jwk: privJwk } })
+        .setProtectedHeader({ alg: 'ES256', jwk: pubJwk })
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(privateKey);
+
+      const { attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
+      const service = new EdocProofService(makeMockRepo(), buildJwksRepository(issuerKeys));
+
+      await expect(
+        service.processInit({
+          baseURL: BASE_URL,
+          clientAttestationJwt: attestationJwt,
+          clientAttestationPopJwt: attestationPopJwt,
+          mrtdAuthSessionId: SESSION_ID,
+          mrtdPopJwtNonce: NONCE
+        })
+      ).rejects.toMatchObject({ statusCode: 401, message: expect.stringContaining('private key') });
     });
   });
 
@@ -503,6 +542,28 @@ describe('EdocProofService.processInit', () => {
       const parRequest = makeParRequest(makeValidSession({ mrtd_pop_jwt_nonce_consumed_at: Date.now() - 5000 }));
       const repo = makeMockRepo({
         getByMrtdAuthSession: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' })
+      });
+
+      const service = new EdocProofService(repo, buildJwksRepository(issuerKeys));
+
+      await expect(
+        service.processInit({
+          baseURL: BASE_URL,
+          clientAttestationJwt: attestationJwt,
+          clientAttestationPopJwt: attestationPopJwt,
+          mrtdAuthSessionId: SESSION_ID,
+          mrtdPopJwtNonce: NONCE
+        })
+      ).rejects.toMatchObject({ statusCode: 403, message: expect.stringContaining('already been used') });
+    });
+
+    it('throws EdocProofInitError (403) when atomicClaimSession loses a concurrent race', async () => {
+      const { attestationJwt, attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
+      const parRequest = makeParRequest(makeValidSession());
+      const repo = makeMockRepo({
+        getByMrtdAuthSession: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' }),
+        // Simulate another request having already claimed the session
+        atomicClaimSession: vi.fn().mockResolvedValue(false)
       });
 
       const service = new EdocProofService(repo, buildJwksRepository(issuerKeys));
