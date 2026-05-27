@@ -4,6 +4,11 @@ import { MockIdpRequestError, MockIdpService } from '../services/mock-idp-servic
 import type { FastifyPluginAsync } from 'fastify';
 
 const mockIdpAuthorizeRoute: FastifyPluginAsync = async (app) => {
+  // This endpoint auto-authenticates a hardcoded user; avoid exposing it when mock IdP flows are disabled.
+  if (app.config.AUTH_FLOW === 'direct') {
+    return;
+  }
+
   const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
 
   app.route({

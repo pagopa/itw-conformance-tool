@@ -164,7 +164,7 @@ export class MockIdpService {
     issuer: string
   ): Promise<string> {
     const { private: privateSig, public: publicSig } = this.#jwksRepository.getSign();
-    const signAlgorithm = 'ES256';
+    const signAlgorithm = 'alg' in privateSig && typeof privateSig.alg === 'string' ? privateSig.alg : 'ES256';
     const key = await importJWK(privateSig, signAlgorithm);
 
     return await new SignJWT(payload)
