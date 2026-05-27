@@ -54,7 +54,9 @@ async function buildFullRpApp() {
   });
 
   app.addHook('onClose', async () => {
-    dbClient.close();
+    await dbClient.close();
+    const { rm } = await import('node:fs/promises');
+    await rm(dataDir, { recursive: true, force: true });
   });
 
   await app.register(healthRoute);
