@@ -42,7 +42,9 @@ async function createApp(authFlow: 'direct' | 'l2plus' | 'l3') {
 
 function makePidParRequestObject() {
   return JSON.stringify({
-    authorization_details: [{ credential_configuration_id: 'dc_sd_jwt_PersonIdentificationData', type: 'openid_credential' }],
+    authorization_details: [
+      { credential_configuration_id: 'dc_sd_jwt_PersonIdentificationData', type: 'openid_credential' }
+    ],
     client_id: CLIENT_ID,
     code_challenge: 'dGVzdC1jaGFsbGVuZ2U',
     code_challenge_method: 'S256',
@@ -159,8 +161,14 @@ describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
   });
 
   it('returns 403 access_denied when /edoc-proof/init is called twice (replay protection)', async () => {
-    await app.inject({ method: 'GET', url: `/authorize?client_id=${CLIENT_ID}&request_uri=${encodeURIComponent(REQUEST_URI)}` });
-    const idpResponse = await app.inject({ method: 'GET', url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}` });
+    await app.inject({
+      method: 'GET',
+      url: `/authorize?client_id=${CLIENT_ID}&request_uri=${encodeURIComponent(REQUEST_URI)}`
+    });
+    const idpResponse = await app.inject({
+      method: 'GET',
+      url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}`
+    });
     const walletLocation = new URL(idpResponse.headers.location as string);
     const challengeInfoJwt = walletLocation.searchParams.get('challenge_info');
     const challengePayload = decodeJwt(challengeInfoJwt!) as Record<string, unknown>;
@@ -185,7 +193,11 @@ describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
     const second = await app.inject({
       method: 'POST',
       url: '/edoc-proof/init',
-      headers: { 'content-type': 'application/json', 'oauth-client-attestation': att2, 'oauth-client-attestation-pop': pop2 },
+      headers: {
+        'content-type': 'application/json',
+        'oauth-client-attestation': att2,
+        'oauth-client-attestation-pop': pop2
+      },
       payload: body
     });
     expect(second.statusCode).toBe(403);
@@ -193,8 +205,14 @@ describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
   });
 
   it('returns 401 invalid_client when wallet attestation PoP signature is invalid', async () => {
-    await app.inject({ method: 'GET', url: `/authorize?client_id=${CLIENT_ID}&request_uri=${encodeURIComponent(REQUEST_URI)}` });
-    const idpResponse = await app.inject({ method: 'GET', url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}` });
+    await app.inject({
+      method: 'GET',
+      url: `/authorize?client_id=${CLIENT_ID}&request_uri=${encodeURIComponent(REQUEST_URI)}`
+    });
+    const idpResponse = await app.inject({
+      method: 'GET',
+      url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}`
+    });
     const walletLocation = new URL(idpResponse.headers.location as string);
     const challengePayload = decodeJwt(walletLocation.searchParams.get('challenge_info')!) as Record<string, unknown>;
 
