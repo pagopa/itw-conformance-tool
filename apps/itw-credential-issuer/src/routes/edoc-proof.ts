@@ -117,7 +117,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid audience' });
         }
 
-        if (payload.exp < now) {
+        if ((payload.exp as number) < now) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'JWT expired' });
         }
 
