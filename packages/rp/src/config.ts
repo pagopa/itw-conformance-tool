@@ -151,13 +151,17 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
 
   const host = DEFAULT_HOST;
 
+  const baseUrlOverride = env.ITW_CT_RP_BASE_URL?.trim();
+  const baseUrl = baseUrlOverride && baseUrlOverride.length > 0 ? baseUrlOverride : deriveBaseUrl({ host, port });
+
   const config = rpConfigSchema.parse({
     host,
     port,
-    baseUrl: deriveBaseUrl({ host, port }),
+    baseUrl,
     dataDir,
     configFilePath: input.configFilePath
   });
 
   return { config, configFileFound: found };
 }
+
