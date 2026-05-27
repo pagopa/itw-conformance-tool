@@ -78,7 +78,11 @@ export class MockIdpService {
       throw new MockIdpRequestError('request_uri not found', 400);
     }
 
-    return JSON.parse(entry.requestObject) as ParRequest;
+    try {
+      return JSON.parse(entry.requestObject) as ParRequest;
+    } catch {
+      throw new MockIdpRequestError('Invalid PAR request object', 400);
+    }
   }
 
   async #authorizeL3(parRequest: ParRequest, options: MockIdpAuthorizeOptions): Promise<MockIdpAuthorizeResult> {

@@ -167,4 +167,45 @@ describe('MockIdpService', () => {
       MockIdpRequestError
     );
   });
+
+  it('throws error when PAR request is missing redirect_uri or state', async () => {
+    const parRequest = {
+      client_id: 'wallet-client',
+      id: '1',
+      pid_auth_flow: 'l3'
+      // Missing redirect_uri and state
+    };
+    const { repository } = createParRepository({
+      clientId: parRequest.client_id,
+      expiresAt: Date.now() + 60_000,
+      requestObject: JSON.stringify(parRequest),
+      requestUri: REQUEST_URI
+    });
+    const service = new MockIdpService(repository, createJwksRepository());
+
+    await expect(service.authorize({ baseURL: BASE_URL, requestUri: REQUEST_URI })).rejects.toThrowError(
+      new MockIdpRequestError('PAR request is missing redirect_uri/state', 400)
+    );
+  });
+
+  it('throws error when PAR request flow is not configured for mock IdP', async () => {
+    const parRequest = {
+      client_id: 'wallet-client',
+      id: '1',
+      pid_auth_flow: 'unsupported_flow',
+      redirect_uri: 'https://wallet.example/cb',
+      state: 'state-123'
+    };
+    const { repository } = createParRepository({
+      clientId: parRequest.client_id,
+      expiresAt: Date.now() + 60_000,
+      requestObject: JSON.stringify(parRequest),
+      requestUri: REQUEST_URI
+    });
+    const service = new MockIdpService(repository, createJwksRepository());
+
+    await expect(service.authorize({ baseURL: BASE_URL, requestUri: REQUEST_URI })).rejects.toThrowError(
+      new MockIdpRequestError('PAR request is not configured for mock IdP flow', 400)
+    );
+  });
 });
