@@ -164,4 +164,3 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
 
   return { config, configFileFound: found };
 }
-

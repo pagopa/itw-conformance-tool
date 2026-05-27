@@ -113,10 +113,7 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
 
     // Extract nonce from the request JWT payload
     const [, payloadB64] = step2.body.split('.');
-    const requestObjectPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as Record<
-      string,
-      unknown
-    >;
+    const requestObjectPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as Record<string, unknown>;
     const nonce = requestObjectPayload.nonce as string;
     expect(typeof nonce).toBe('string');
 

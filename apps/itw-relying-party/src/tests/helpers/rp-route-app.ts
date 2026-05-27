@@ -64,10 +64,7 @@ export async function createAuthResponseJwe({
 
   // Holder key pair (signs the KB-JWT)
   const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  const holderPrivJose = await importPKCS8(
-    holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(),
-    'ES256'
-  );
+  const holderPrivJose = await importPKCS8(holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
   const holderPubJwk = holderPubNode.export({ format: 'jwk' }) as unknown as JWK;
 
   // SD-JWT with no disclosures: issuerJwt~kbJwt
@@ -83,9 +80,7 @@ export async function createAuthResponseJwe({
 
   // Encrypt { state, vp_token } as ECDH-ES JWE
   const payload = new TextEncoder().encode(JSON.stringify({ state, vp_token: { pid: sdJwt } }));
-  return new CompactEncrypt(payload)
-    .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' })
-    .encrypt(rpPubKey);
+  return new CompactEncrypt(payload).setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' }).encrypt(rpPubKey);
 }
 
 // ---------------------------------------------------------------------------
