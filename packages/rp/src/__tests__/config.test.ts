@@ -178,12 +178,14 @@ describe('loadRpConfig', () => {
     expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
   });
 
-  it('ITW_CT_RP_BASE_URL with trailing slash is preserved as-is', () => {
+  it('ITW_CT_RP_BASE_URL trailing slash is stripped by Zod URL normalization', () => {
+    // Zod's z.string().url() uses WHATWG URL semantics which strips the trailing
+    // slash from the root path (http://host:port/ → http://host:port).
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
       env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000/' }
     });
 
-    expect(result.config.baseUrl).toBe('http://rp.example.com:9000/');
+    expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
   });
 });
