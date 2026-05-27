@@ -260,7 +260,7 @@ describe('EdocProofService.processInit', () => {
   });
 
   describe('OAuth-Client-Attestation validation', () => {
-    it('throws EdocProofInitError (400) when the attestation JWT is not a valid JWT', async () => {
+    it('throws EdocProofInitError (401) when the attestation JWT is not a valid JWT', async () => {
       const { attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
       const service = new EdocProofService(makeMockRepo(), buildJwksRepository(issuerKeys));
 
@@ -272,10 +272,10 @@ describe('EdocProofService.processInit', () => {
           mrtdAuthSessionId: SESSION_ID,
           mrtdPopJwtNonce: NONCE
         })
-      ).rejects.toMatchObject({ statusCode: 400 });
+      ).rejects.toMatchObject({ statusCode: 401 });
     });
 
-    it('throws EdocProofInitError (400) when the attestation JWT is missing cnf.jwk', async () => {
+    it('throws EdocProofInitError (401) when the attestation JWT is missing cnf.jwk', async () => {
       const { privateKey } = await generateKeyPair('ES256');
       const attestationJwt = await new SignJWT({ no_cnf: true })
         .setProtectedHeader({ alg: 'ES256' })
@@ -293,10 +293,10 @@ describe('EdocProofService.processInit', () => {
           mrtdAuthSessionId: SESSION_ID,
           mrtdPopJwtNonce: NONCE
         })
-      ).rejects.toMatchObject({ statusCode: 400 });
+      ).rejects.toMatchObject({ statusCode: 401 });
     });
 
-    it('throws EdocProofInitError (400) when the PoP is signed with a different key than cnf.jwk', async () => {
+    it('throws EdocProofInitError (401) when the PoP is signed with a different key than cnf.jwk', async () => {
       const { privateKey: walletPrivate, publicKey: walletPublic } = await generateKeyPair('ES256');
       const { privateKey: wrongPrivate } = await generateKeyPair('ES256');
       const walletPublicJwk = { ...(await exportJWK(walletPublic)), alg: 'ES256', kid: 'wallet-key' };
@@ -323,10 +323,10 @@ describe('EdocProofService.processInit', () => {
           mrtdAuthSessionId: SESSION_ID,
           mrtdPopJwtNonce: NONCE
         })
-      ).rejects.toMatchObject({ statusCode: 400 });
+      ).rejects.toMatchObject({ statusCode: 401 });
     });
 
-    it('throws EdocProofInitError (400) when the PoP audience does not match baseURL', async () => {
+    it('throws EdocProofInitError (401) when the PoP audience does not match baseURL', async () => {
       const { privateKey, publicKey } = await generateKeyPair('ES256');
       const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
 
@@ -353,7 +353,7 @@ describe('EdocProofService.processInit', () => {
           mrtdAuthSessionId: SESSION_ID,
           mrtdPopJwtNonce: NONCE
         })
-      ).rejects.toMatchObject({ statusCode: 400 });
+      ).rejects.toMatchObject({ statusCode: 401 });
     });
   });
 

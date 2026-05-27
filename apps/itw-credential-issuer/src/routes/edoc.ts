@@ -58,14 +58,20 @@ const EdocInit: FastifyPluginAsync = async (app) => {
         return reply.code(202).header('Content-Type', 'application/jwt; charset=utf-8').send(responseJwt);
       } catch (error) {
         if (error instanceof EdocProofInitError) {
+          const errorCode =
+            error.statusCode === 401
+              ? 'invalid_client'
+              : error.statusCode === 403
+                ? 'access_denied'
+                : 'invalid_request';
           return reply.code(error.statusCode).send({
-            error: error.statusCode === 403 ? 'access_denied' : 'invalid_request',
+            error: errorCode,
             error_description: error.message
           });
         }
 
         request.log.error({ err: error }, 'Edoc proof init failed');
-        return reply.code(500).send({ error: 'internal_server_error' });
+        return reply.code(503).send({ error: 'temporarily_unavailable' });
       }
     }
   });

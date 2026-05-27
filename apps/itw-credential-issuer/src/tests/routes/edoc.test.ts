@@ -180,7 +180,29 @@ describe('POST /edoc-proof/init', () => {
       await app.close();
     });
 
-    it('returns 500 for unexpected errors', async () => {
+    it('returns 401 with invalid_client when EdocProofInitError statusCode is 401', async () => {
+      mocked.processInit.mockRejectedValue(
+        new EdocProofInitError('OAuth-Client-Attestation-PoP verification failed', 401)
+      );
+
+      const app = await buildRouteApp(edocRoute);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/edoc-proof/init',
+        payload: JSON.stringify(VALID_BODY),
+        headers: VALID_HEADERS
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toMatchObject({
+        error: 'invalid_client',
+        error_description: 'OAuth-Client-Attestation-PoP verification failed'
+      });
+
+      await app.close();
+    });
+
+    it('returns 503 with temporarily_unavailable for unexpected errors', async () => {
       mocked.processInit.mockRejectedValue(new Error('database crashed'));
 
       const app = await buildRouteApp(edocRoute);
@@ -191,8 +213,8 @@ describe('POST /edoc-proof/init', () => {
         headers: VALID_HEADERS
       });
 
-      expect(response.statusCode).toBe(500);
-      expect(response.json()).toEqual({ error: 'internal_server_error' });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({ error: 'temporarily_unavailable' });
 
       await app.close();
     });

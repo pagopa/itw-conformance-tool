@@ -5,17 +5,6 @@ import { SignJWT, type JWK, decodeJwt, importJWK, jwtVerify } from 'jose';
 import type { JwksRepository } from '../signer.js';
 import type { MrtdAuthSession, ParRequest } from '../z-par.js';
 
-export class EdocProofInitError extends Error {
-  readonly statusCode: 400 | 403;
-
-  constructor(message: string, statusCode: 400 | 403 = 400) {
-    super(message);
-    this.name = 'EdocProofInitError';
-    this.statusCode = statusCode;
-    Object.setPrototypeOf(this, EdocProofInitError.prototype);
-  }
-}
-
 export interface IEdocParRepository {
   getByMrtdAuthSession(mrtdAuthSessionId: string): Promise<{ parRequest: ParRequest; requestUri: string } | undefined>;
   update(requestUri: string, parRequest: ParRequest): Promise<void>;
@@ -27,6 +16,17 @@ export interface EdocProofInitOptions {
   readonly clientAttestationPopJwt: string;
   readonly mrtdAuthSessionId: string;
   readonly mrtdPopJwtNonce: string;
+}
+
+export class EdocProofInitError extends Error {
+  readonly statusCode: 400 | 401 | 403;
+
+  constructor(message: string, statusCode: 400 | 401 | 403 = 400) {
+    super(message);
+    this.name = 'EdocProofInitError';
+    this.statusCode = statusCode;
+    Object.setPrototypeOf(this, EdocProofInitError.prototype);
+  }
 }
 
 export class EdocProofService {
@@ -137,21 +137,21 @@ async function validateClientAttestation(
   try {
     attestationPayload = decodeJwt(attestationJwt) as Record<string, unknown>;
   } catch {
-    throw new EdocProofInitError('OAuth-Client-Attestation is not a valid JWT');
+    throw new EdocProofInitError('OAuth-Client-Attestation is not a valid JWT', 401);
   }
 
   const cnf = attestationPayload['cnf'] as { jwk?: JWK } | undefined;
   const walletPublicKey = cnf?.jwk;
 
   if (!walletPublicKey || typeof walletPublicKey !== 'object') {
-    throw new EdocProofInitError('OAuth-Client-Attestation is missing cnf.jwk claim');
+    throw new EdocProofInitError('OAuth-Client-Attestation is missing cnf.jwk claim', 401);
   }
 
   let walletKey: Awaited<ReturnType<typeof importJWK>>;
   try {
     walletKey = await importJWK(walletPublicKey, (walletPublicKey.alg as string) ?? 'ES256');
   } catch {
-    throw new EdocProofInitError('OAuth-Client-Attestation cnf.jwk is not a valid public key');
+    throw new EdocProofInitError('OAuth-Client-Attestation cnf.jwk is not a valid public key', 401);
   }
 
   try {
@@ -161,6 +161,6 @@ async function validateClientAttestation(
       typ: 'oauth-client-attestation-pop+jwt'
     });
   } catch {
-    throw new EdocProofInitError('OAuth-Client-Attestation-PoP verification failed');
+    throw new EdocProofInitError('OAuth-Client-Attestation-PoP verification failed', 401);
   }
 }
