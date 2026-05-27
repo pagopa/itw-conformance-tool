@@ -7,9 +7,15 @@ import { makeOauthCallbacks } from '../plugins/index.js';
 import type { FastifyPluginAsync } from 'fastify';
 
 const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
+  const rateLimit = app.rateLimit({
+    max: 10,
+    timeWindow: '1 minute'
+  });
+
   app.route({
     url: '/edoc-proof/verify',
     method: 'POST',
+    onRequest: [rateLimit],
     schema: {
       tags: ['EDoc Proof'],
       headers: {
@@ -43,19 +49,42 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
 
       try {
         // 1. Extract and validate Wallet Public Key from Attestation
-        const decodedAttestation = decodeJwt(headers['oauth-client-attestation']);
+        let decodedAttestation;
+        try {
+          // FIX: Intercetta i token malformati prima che l'app vada in crash
+          decodedAttestation = decodeJwt(headers['oauth-client-attestation']);
+        } catch {
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Malformed oauth-client-attestation' });
+        }
+
         const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as
           | Record<string, unknown>
           | undefined;
+
         if (!walletJwk) {
           return reply
             .code(400)
             .send({ error: 'invalid_request', error_description: 'Missing wallet JWK in attestation' });
         }
-        const walletPublicKey = await importJWK(walletJwk, 'ES256');
+
+        let walletPublicKey;
+        try {
+          walletPublicKey = await importJWK(walletJwk, 'ES256');
+        } catch {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid wallet JWK format' });
+        }
 
         // Verify PoP signature with the derived key
-        await jwtVerify(headers['oauth-client-attestation-pop'], walletPublicKey);
+        try {
+          await jwtVerify(headers['oauth-client-attestation-pop'], walletPublicKey);
+        } catch (err) {
+          // FIX: Restituisce 400 (Invalid Request) invece di 500 se la firma fallisce
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Invalid oauth-client-attestation-pop signature' });
+        }
 
         // 2. Verify Session exists, is not expired and in correct state
         const parEntry = await app.parRepository.getByMrtdAuthSession(body.mrtd_auth_session);
@@ -95,10 +124,12 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         let verifiedJwt;
         try {
           verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey);
-        } catch {
+        } catch (err) {
+          // FIX: Messaggio di errore dinamico per il JWT (copre scadenza, malformazione o firma errata)
+          const errorMessage = err instanceof Error ? err.message : 'Unknown signature error';
           return reply
             .code(400)
-            .send({ error: 'invalid_request', error_description: 'Invalid mrtd_validation_jwt signature' });
+            .send({ error: 'invalid_request', error_description: `Invalid mrtd_validation_jwt: ${errorMessage}` });
         }
 
         const header = verifiedJwt.protectedHeader;
