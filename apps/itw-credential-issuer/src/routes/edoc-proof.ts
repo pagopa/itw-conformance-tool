@@ -6,12 +6,12 @@ import { makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
-const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({
-    max: 10,
-    timeWindow: '1 minute'
-  });
+const isBase64 = (str: unknown): boolean => {
+  return typeof str === 'string' && str.length > 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(str);
+};
 
+const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
+  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/edoc-proof/verify',
     method: 'POST',
@@ -48,10 +48,8 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
       };
 
       try {
-        // 1. Extract and validate Wallet Public Key from Attestation
         let decodedAttestation;
         try {
-          // FIX: Intercetta i token malformati prima che l'app vada in crash
           decodedAttestation = decodeJwt(headers['oauth-client-attestation']);
         } catch {
           return reply
@@ -76,23 +74,26 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid wallet JWK format' });
         }
 
-        // Verify PoP signature with the derived key
         try {
           await jwtVerify(headers['oauth-client-attestation-pop'], walletPublicKey);
-        } catch (err) {
-          // FIX: Restituisce 400 (Invalid Request) invece di 500 se la firma fallisce
+        } catch {
           return reply
             .code(400)
             .send({ error: 'invalid_request', error_description: 'Invalid oauth-client-attestation-pop signature' });
         }
 
-        // 2. Verify Session exists, is not expired and in correct state
         const parEntry = await app.parRepository.getByMrtdAuthSession(body.mrtd_auth_session);
         if (!parEntry) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session not found or expired' });
         }
 
-        const parRequest = JSON.parse(parEntry.requestObject);
+        let parRequest;
+        try {
+          parRequest = JSON.parse(parEntry.requestObject);
+        } catch {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Corrupted session data' });
+        }
+
         const session = parRequest.mrtd_auth_session;
         if (!session) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session invalid' });
@@ -107,7 +108,6 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session expired' });
         }
 
-        // 3. Nonce Chaining and Anti-Replay
         if (body.mrtd_pop_nonce !== session.mrtd_pop_nonce) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid mrtd_pop_nonce' });
         }
@@ -116,16 +116,13 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Nonce already consumed' });
         }
 
-        // Consume nonce
         session.mrtd_pop_nonce_consumed_at = now;
         await app.parRepository.update(parEntry.requestUri, { requestObject: JSON.stringify(parRequest) });
 
-        // 4. Validate mrtd_validation_jwt schema
         let verifiedJwt;
         try {
           verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey);
         } catch (err) {
-          // FIX: Messaggio di errore dinamico per il JWT (copre scadenza, malformazione o firma errata)
           const errorMessage = err instanceof Error ? err.message : 'Unknown signature error';
           return reply
             .code(400)
@@ -144,7 +141,11 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Missing base payload claims' });
         }
 
-        if (payload.aud !== baseURL) {
+        const isValidAudience =
+          (typeof payload.aud === 'string' && payload.aud === baseURL) ||
+          (Array.isArray(payload.aud) && payload.aud.includes(baseURL));
+
+        if (!isValidAudience) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid audience' });
         }
 
@@ -157,32 +158,19 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         const mrtd = payload.mrtd as Record<string, unknown> | undefined;
-        if (
-          !mrtd ||
-          typeof mrtd.dg1 !== 'string' ||
-          !mrtd.dg1 ||
-          typeof mrtd.dg11 !== 'string' ||
-          !mrtd.dg11 ||
-          typeof mrtd.sod_mrtd !== 'string' ||
-          !mrtd.sod_mrtd
-        ) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid mrtd object' });
+        if (!mrtd || !isBase64(mrtd.dg1) || !isBase64(mrtd.dg11) || !isBase64(mrtd.sod_mrtd)) {
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Invalid mrtd object or missing Base64 strings' });
         }
 
         const ias = payload.ias as Record<string, unknown> | undefined;
-        if (
-          !ias ||
-          typeof ias.ias_pk !== 'string' ||
-          !ias.ias_pk ||
-          typeof ias.sod_ias !== 'string' ||
-          !ias.sod_ias ||
-          typeof ias.challenge_signed !== 'string' ||
-          !ias.challenge_signed
-        ) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid ias object' });
+        if (!ias || !isBase64(ias.ias_pk) || !isBase64(ias.sod_ias) || !isBase64(ias.challenge_signed)) {
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Invalid ias object or missing Base64 strings' });
         }
 
-        // 5. Transizione di Stato e Risposta
         session.status = 'verified';
         const newNonce = randomBytes(16).toString('hex');
         session.mrtd_val_pop_nonce = newNonce;

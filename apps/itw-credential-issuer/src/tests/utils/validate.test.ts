@@ -5,9 +5,7 @@ import { ZodError } from 'zod';
 import { generateIaca } from '../../crypto/auto-keygen.js';
 import { validateIACAKeyPair, validateJWKS } from '../../utils/validate.js';
 
-/** Minimal valid sig key — generated once for all tests. */
 let sigKey: JWK;
-/** Minimal valid enc key (ECDH-ES) — generated once for all tests. */
 let encKey: JWK;
 
 beforeAll(async () => {
@@ -36,7 +34,11 @@ describe('validateJWKS', () => {
     });
 
     it('accepts a key without optional use/alg/key_ops fields', async () => {
-      const { use: _use, alg: _alg, key_ops: _ops, ...bare } = sigKey;
+      const bare = { ...sigKey };
+      delete bare.use;
+      delete bare.alg;
+      delete bare.key_ops;
+
       await expect(validateJWKS({ keys: [{ ...bare, kid: 'bare-key' }] })).resolves.toBeUndefined();
     });
   });
@@ -59,7 +61,9 @@ describe('validateJWKS', () => {
     });
 
     it('rejects a key missing kty', async () => {
-      const { kty: _kty, ...noKty } = sigKey;
+      const noKty = { ...sigKey };
+      delete noKty.kty;
+
       await expect(validateJWKS({ keys: [noKty] })).rejects.toThrow(ZodError);
     });
 
@@ -74,7 +78,7 @@ describe('validateJWKS', () => {
 
   describe('semantic errors', () => {
     it('rejects a JWKS with duplicate kid values', async () => {
-      const dup = { ...encKey, kid: sigKey.kid }; // same kid as sigKey
+      const dup = { ...encKey, kid: sigKey.kid };
       await expect(validateJWKS({ keys: [sigKey, dup] })).rejects.toThrow(/duplicate kid/i);
     });
   });
@@ -93,8 +97,9 @@ describe('validateJWKS', () => {
     });
 
     it('rejects an enc key when the alg hint is missing and the key cannot be inferred', async () => {
-      // ECDH-ES key without alg — jose cannot determine the algorithm without a hint
-      const { alg: _alg, ...noAlg } = encKey;
+      const noAlg = { ...encKey };
+      delete noAlg.alg;
+
       await expect(validateJWKS({ keys: [{ ...noAlg, kid: 'enc-no-alg' }] })).rejects.toThrow();
     });
   });
