@@ -150,4 +150,40 @@ describe('loadRpConfig', () => {
       })
     ).toThrow(/Invalid ITW_CT_RP_PORT/);
   });
+
+  it('env override ITW_CT_RP_BASE_URL wins over the derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000' }
+    });
+
+    expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
+  });
+
+  it('empty ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: '' }
+    });
+
+    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+  });
+
+  it('whitespace-only ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: '   ' }
+    });
+
+    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+  });
+
+  it('ITW_CT_RP_BASE_URL with trailing slash is preserved as-is', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000/' }
+    });
+
+    expect(result.config.baseUrl).toBe('http://rp.example.com:9000/');
+  });
 });
