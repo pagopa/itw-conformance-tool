@@ -1,4 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 
 /** Utility function to find the root directory of an
@@ -46,11 +47,11 @@ export function searchNx(rootPath: string): string {
 }
 
 /** Expands a file path that may contain a tilde (~) or be enclosed in quotes,
- * replacing the tilde with the provided root path.
+ * replacing the tilde with the user's home directory.
  *
  * @param path - The path that may contain a tilde.
- * @param rootPath - The root path to replace the tilde with.
- * @returns The expanded path with ~ replaced by the root path.
+ * @param rootPath - The root path used to resolve relative paths (not tilde).
+ * @returns The expanded path with ~ replaced by the home directory.
  */
 export function expandPath(path: string, rootPath: string): string {
   if ((path.startsWith('"') && path.endsWith('"')) || (path.startsWith("'") && path.endsWith("'"))) {
@@ -58,7 +59,7 @@ export function expandPath(path: string, rootPath: string): string {
   }
 
   if (path.startsWith('~')) {
-    path = path.replace('~', rootPath);
+    path = path.replace('~', homedir());
   }
 
   if (!isAbsolute(path)) {

@@ -11,7 +11,13 @@
         "bundle": false,
         "main": "apps/itw-relying-party/src/main.ts",
         "tsConfig": "apps/itw-relying-party/tsconfig.app.json",
-        "assets": ["apps/itw-relying-party/src/assets"],
+        "assets": [
+          {
+            "input": "apps/itw-relying-party/src/assets",
+            "glob": "**/*",
+            "output": "assets"
+          }
+        ],
         "esbuildOptions": {
           "sourcemap": true,
           "outExtension": {
@@ -54,11 +60,19 @@
       "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
       "executor": "nx:noop"
     },
+    "copy-assets": {
+      "executor": "nx:run-commands",
+      "inputs": ["{projectRoot}/src/assets"],
+      "outputs": ["{projectRoot}/dist/assets"],
+      "options": {
+        "command": "cp -r apps/itw-relying-party/src/assets apps/itw-relying-party/dist/"
+      }
+    },
     "serve": {
       "continuous": true,
       "executor": "@nx/js:node",
       "defaultConfiguration": "development",
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "copy-assets"],
       "options": {
         "buildTarget": "itw-relying-party:build",
         "runBuildTargetDependencies": false,
