@@ -15,7 +15,8 @@ export const createPidCredential = async (
   jwksRepository: JwksRepository,
   holderPublicKey: JwkPublicKey,
   config: IoWalletSdkConfig,
-  fakeUser: FakeUser
+  fakeUser: FakeUser,
+  authFlow?: string
 ): Promise<string> => {
   const jwks = jwksRepository.getSign();
 
@@ -37,36 +38,38 @@ export const createPidCredential = async (
   const expiration = new Date(now.getTime() + 24 * 60 * 60 * 1000 * 355);
   const iat = Math.floor(now.getTime() / 1000);
 
+  const isMockFlow = authFlow === 'l2plus' || authFlow === 'l3';
+
   const baseClaims = {
-    family_name: fakeUser.familyName,
-    given_name: fakeUser.givenName,
+    family_name: isMockFlow ? 'Rossi' : fakeUser.familyName,
+    given_name: isMockFlow ? 'Mario' : fakeUser.givenName,
     iat,
     issuing_authority: 'PagoPA S.p.A.',
     issuing_country: 'IT',
     nationalities: ['IT'],
-    personal_administrative_number: fakeUser.fiscalCode
+    personal_administrative_number: isMockFlow ? 'RSSMRA90T12H501U' : fakeUser.fiscalCode
   };
 
   const claims = config.isVersion(ItWalletSpecsVersion.V1_3)
     ? {
         ...baseClaims,
-        birthdate: fakeUser.birthDate,
+        birthdate: isMockFlow ? '1990-12-12' : fakeUser.birthDate,
         date_of_expiry: expiration.toISOString().slice(0, 10),
         place_of_birth: {
           country: 'IT',
-          locality: 'Roma',
-          region: 'Lazio'
+          locality: isMockFlow ? 'Roma' : fakeUser.birthPlace,
+          region: isMockFlow ? 'Lazio' : undefined
         },
         sub: fakeUser.id,
         verification: {
-          assurance_level: 'high',
-          trust_framework: 'it_cie'
+          assurance_level: authFlow === 'l2plus' ? 'substantial' : 'high',
+          trust_framework: authFlow === 'l2plus' ? 'it_l2+document_proof' : 'it_cie'
         }
       }
     : {
         ...baseClaims,
-        birth_date: fakeUser.birthDate,
-        birth_place: fakeUser.birthPlace,
+        birth_date: isMockFlow ? '1990-12-12' : fakeUser.birthDate,
+        birth_place: isMockFlow ? 'Roma' : fakeUser.birthPlace,
         expiry_date: expiration.toISOString().slice(0, 10)
       };
 
