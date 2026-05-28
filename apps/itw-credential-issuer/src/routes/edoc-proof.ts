@@ -7,11 +7,21 @@ import { makeOauthCallbacks } from '../plugins/index.js';
 import type { FastifyPluginAsync } from 'fastify';
 
 const isBase64 = (str: unknown): boolean => {
-  return typeof str === 'string' && str.length > 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(str);
+  if (typeof str !== 'string' || str.length === 0 || str.length % 4 !== 0) {
+    return false;
+  }
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(str)) {
+    return false;
+  }
+  try {
+    return Buffer.from(str, 'base64').toString('base64') === str;
+  } catch {
+    return false;
+  }
 };
 
 const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
+  const rateLimit = app.rateLimit({ max: 100, timeWindow: '1 minute' });
   app.route({
     url: '/edoc-proof/verify',
     method: 'POST',
@@ -116,9 +126,6 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Nonce already consumed' });
         }
 
-        session.mrtd_pop_nonce_consumed_at = now;
-        await app.parRepository.update(parEntry.requestUri, { requestObject: JSON.stringify(parRequest) });
-
         let verifiedJwt;
         try {
           verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey);
@@ -172,6 +179,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         session.status = 'verified';
+        session.mrtd_pop_nonce_consumed_at = now;
         const newNonce = randomBytes(16).toString('hex');
         session.mrtd_val_pop_nonce = newNonce;
 

@@ -67,6 +67,54 @@ describe('POST /edoc-proof/verify', () => {
     expect(body.error_description).toBe('Session not found or expired');
   });
 
+  it('returns 400 if nonce is already consumed (Anti-Replay)', async () => {
+    app = (await buildRouteApp(edocProofVerifyRoute)) as TestApp;
+
+    const { privateKey, publicKey } = await generateKeyPair('ES256');
+    const jwk = await exportJWK(publicKey);
+
+    const attestation = await new SignJWT({ cnf: { jwk } })
+      .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation+jwt' })
+      .sign(privateKey);
+
+    const pop = await new SignJWT({})
+      .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation-pop+jwt' })
+      .sign(privateKey);
+
+    app.parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
+      requestUri: 'urn:test:uri',
+      clientId: 'client-1',
+      expiresAt: Date.now() + 60000,
+      requestObject: JSON.stringify({
+        mrtd_auth_session: {
+          mrtd_auth_session: 'valid_session',
+          status: 'pending_mrtd_verify',
+          mrtd_pop_nonce: 'correct_nonce',
+          mrtd_pop_nonce_consumed_at: 1234567890,
+          expires_at: Math.floor(Date.now() / 1000) + 3600
+        }
+      })
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/edoc-proof/verify',
+      headers: {
+        'oauth-client-attestation': attestation,
+        'oauth-client-attestation-pop': pop
+      },
+      payload: {
+        mrtd_auth_session: 'valid_session',
+        mrtd_pop_nonce: 'correct_nonce',
+        mrtd_validation_jwt: 'some_jwt'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body);
+    expect(body.error_description).toBe('Nonce already consumed');
+  });
+
   it('successfully processes a valid verification request (Happy Path)', async () => {
     app = (await buildRouteApp(edocProofVerifyRoute)) as TestApp;
 
