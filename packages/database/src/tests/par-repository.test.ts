@@ -1,79 +1,158 @@
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { DatabaseClient } from '../client.js';
 import { SqlitePARRepository } from '../par-repository.js';
 
-import type { PAREntry } from '../interfaces.js';
-
-function makeTmpDir(): string {
-  return join(tmpdir(), `itw-par-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-}
-
-function makeEntry(overrides: Partial<PAREntry> = {}): PAREntry {
-  return {
-    requestUri: 'urn:test:1',
-    clientId: 'client-1',
-    requestObject: JSON.stringify({ foo: 'bar' }),
-    expiresAt: Date.now() + 60_000,
-    ...overrides
-  };
-}
-
 describe('SqlitePARRepository', () => {
-  let client: DatabaseClient;
-  let repo: SqlitePARRepository;
+  let db: DatabaseSync;
+  let repository: SqlitePARRepository;
 
   beforeEach(() => {
-    client = new DatabaseClient({ dataDir: makeTmpDir(), cleanupIntervalMs: 999_999 });
-    repo = new SqlitePARRepository(client.db);
+    db = new DatabaseSync(':memory:');
+    db.exec(`
+      CREATE TABLE par_entries (
+        request_uri TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        request_object TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+    `);
+    repository = new SqlitePARRepository(db);
   });
 
   afterEach(() => {
-    client.close();
+    db.close();
   });
 
-  it('insert and get by requestUri', async () => {
-    const entry = makeEntry();
-    await repo.insert(entry);
-    const result = await repo.get(entry.requestUri);
-    expect(result?.requestUri).toBe(entry.requestUri);
-    expect(result?.clientId).toBe(entry.clientId);
+  describe('Core CRUD Operations', () => {
+    it('inserts and retrieves a PAR entry', async () => {
+      const entry = {
+        requestUri: 'urn:uuid:crud-1',
+        clientId: 'client-1',
+        requestObject: '{}',
+        expiresAt: Date.now() + 10000
+      };
+
+      await repository.insert(entry);
+      const retrieved = await repository.get(entry.requestUri);
+
+      expect(retrieved).toBeDefined();
+      expect(retrieved?.requestUri).toBe(entry.requestUri);
+      expect(retrieved?.clientId).toBe(entry.clientId);
+    });
+
+    it('returns undefined and lazy-deletes if the entry is expired on get()', async () => {
+      const entry = {
+        requestUri: 'urn:uuid:crud-2',
+        clientId: 'client-2',
+        requestObject: '{}',
+        expiresAt: Date.now() - 10000 // Expired 10 seconds ago
+      };
+
+      await repository.insert(entry);
+      const retrieved = await repository.get(entry.requestUri);
+      expect(retrieved).toBeUndefined();
+
+      // Verify it was actually deleted from the DB
+      const row = db.prepare('SELECT * FROM par_entries WHERE request_uri = ?').get(entry.requestUri);
+      expect(row).toBeUndefined();
+    });
+
+    it('deletes an entry', async () => {
+      const entry = {
+        requestUri: 'urn:uuid:crud-3',
+        clientId: 'client-3',
+        requestObject: '{}',
+        expiresAt: Date.now() + 10000
+      };
+
+      await repository.insert(entry);
+      await repository.delete(entry.requestUri);
+      const retrieved = await repository.get(entry.requestUri);
+
+      expect(retrieved).toBeUndefined();
+    });
+
+    it('updates a PAR entry', async () => {
+      const entry = {
+        requestUri: 'urn:uuid:crud-4',
+        clientId: 'client-4',
+        requestObject: '{"test": true}',
+        expiresAt: Date.now() + 10000
+      };
+
+      await repository.insert(entry);
+      await repository.update(entry.requestUri, { clientId: 'client-updated' });
+
+      const retrieved = await repository.get(entry.requestUri);
+      expect(retrieved?.clientId).toBe('client-updated');
+      expect(retrieved?.requestObject).toBe('{"test": true}'); // Unchanged fields remain
+    });
+
+    it('does nothing on update if no data is provided', async () => {
+      const entry = {
+        requestUri: 'urn:uuid:crud-5',
+        clientId: 'client-5',
+        requestObject: '{}',
+        expiresAt: Date.now() + 10000
+      };
+
+      await repository.insert(entry);
+      await repository.update(entry.requestUri, {}); // Empty update
+
+      const retrieved = await repository.get(entry.requestUri);
+      expect(retrieved?.clientId).toBe('client-5');
+    });
   });
 
-  it('get returns undefined for unknown requestUri', async () => {
-    const result = await repo.get('urn:unknown');
-    expect(result).toBeUndefined();
-  });
+  describe('getByMrtdAuthSession', () => {
+    it('retrieves a PAR entry by the nested mrtd_auth_session value', async () => {
+      const requestUri = 'urn:uuid:123';
+      const sessionId = 'session-123';
+      const requestObject = JSON.stringify({
+        mrtd_auth_session: { mrtd_auth_session: sessionId }
+      });
+      const expiresAt = Date.now() + 10000;
 
-  it('get returns undefined for expired entry (lazy expiry)', async () => {
-    const entry = makeEntry({ expiresAt: Date.now() - 2000 });
-    await repo.insert(entry);
-    const result = await repo.get(entry.requestUri);
-    expect(result).toBeUndefined();
-  });
+      await repository.insert({
+        requestUri,
+        clientId: 'client-1',
+        requestObject,
+        expiresAt
+      });
 
-  it('delete removes the entry', async () => {
-    const entry = makeEntry();
-    await repo.insert(entry);
-    await repo.delete(entry.requestUri);
-    const result = await repo.get(entry.requestUri);
-    expect(result).toBeUndefined();
-  });
+      const entry = await repository.getByMrtdAuthSession(sessionId);
+      expect(entry).toBeDefined();
+      expect(entry?.requestUri).toBe(requestUri);
+      expect(entry?.requestObject).toBe(requestObject);
+    });
 
-  it('update changes requestObject', async () => {
-    const entry = makeEntry();
-    await repo.insert(entry);
-    await repo.update(entry.requestUri, { requestObject: JSON.stringify({ updated: true }) });
-    const result = await repo.get(entry.requestUri);
-    expect(result?.requestObject).toBe(JSON.stringify({ updated: true }));
-  });
+    it('deletes the row and returns undefined if the entry is expired', async () => {
+      const requestUri = 'urn:uuid:123';
+      const sessionId = 'session-123';
+      const requestObject = JSON.stringify({
+        mrtd_auth_session: { mrtd_auth_session: sessionId }
+      });
+      const expiresAt = Date.now() - 10000; // Expired 10 seconds ago
 
-  it('update with empty data is a no-op', async () => {
-    const entry = makeEntry();
-    await repo.insert(entry);
-    await expect(repo.update(entry.requestUri, {})).resolves.not.toThrow();
+      await repository.insert({
+        requestUri,
+        clientId: 'client-1',
+        requestObject,
+        expiresAt
+      });
+
+      const entry = await repository.getByMrtdAuthSession(sessionId);
+      expect(entry).toBeUndefined();
+
+      const row = db.prepare('SELECT * FROM par_entries WHERE request_uri = ?').get(requestUri);
+      expect(row).toBeUndefined();
+    });
+
+    it('returns undefined if no matching session is found', async () => {
+      const entry = await repository.getByMrtdAuthSession('non-existent-session');
+      expect(entry).toBeUndefined();
+    });
   });
 });

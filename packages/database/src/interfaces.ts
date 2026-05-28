@@ -36,6 +36,7 @@ export interface PAREntry {
 export interface IPARRepository {
   delete(requestUri: string): Promise<void>;
   get(requestUri: string): Promise<PAREntry | undefined>;
+  getByMrtdAuthSession(sessionId: string): Promise<PAREntry | undefined>;
   insert(entry: PAREntry): Promise<void>;
   /** Partially updates an existing PAR entry. */
   update(requestUri: string, data: Partial<Omit<PAREntry, 'requestUri'>>): Promise<void>;
