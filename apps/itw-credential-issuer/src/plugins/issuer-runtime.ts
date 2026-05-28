@@ -7,7 +7,13 @@ import {
   toPublicJwk
 } from '@itw-conformance-tool/issuer';
 
-import type { ICodeJwtParRepository, ITokenParRepository, JwksRepository } from '@itw-conformance-tool/issuer';
+import type {
+  ICodeJwtParRepository,
+  IEdocParRepository,
+  ITokenParRepository,
+  JwksRepository,
+  ParRequest
+} from '@itw-conformance-tool/issuer';
 import type { CallbackContext } from '@pagopa/io-wallet-oauth2';
 import type { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -221,6 +227,44 @@ export function makeCodeJwtParRepository(app: FastifyInstance): ICodeJwtParRepos
       await app.parRepository.update(requestUri, {
         requestObject: JSON.stringify(updated)
       });
+    }
+  };
+}
+
+export function makeEdocParRepository(app: FastifyInstance): IEdocParRepository {
+  return {
+    getByMrtdAuthSession: async (mrtdAuthSessionId: string) => {
+      const row = app.dbClient.db
+        .prepare(
+          `SELECT request_uri, request_object
+           FROM par_entries
+           WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?
+             AND expires_at >= unixepoch('now') * 1000`
+        )
+        .get(mrtdAuthSessionId);
+
+      if (!row) {
+        return undefined;
+      }
+
+      return {
+        parRequest: JSON.parse(row.request_object as string) as ParRequest,
+        requestUri: row.request_uri as string
+      };
+    },
+    atomicClaimSession: async (requestUri: string, mrtdAuthSessionId: string, updatedParRequest: ParRequest) => {
+      const result = app.dbClient.db
+        .prepare(
+          `UPDATE par_entries
+           SET request_object = ?
+           WHERE request_uri = ?
+             AND json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?
+             AND json_extract(request_object, '$.mrtd_auth_session.status') = 'pending_mrtd_init'
+             AND json_extract(request_object, '$.mrtd_auth_session.mrtd_pop_jwt_nonce_consumed_at') IS NULL`
+        )
+        .run(JSON.stringify(updatedParRequest), requestUri, mrtdAuthSessionId);
+
+      return (result as { changes: number }).changes > 0;
     }
   };
 }

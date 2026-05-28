@@ -33,7 +33,8 @@ const zMrtdAuthSession = z.object({
   mrtd_pop_nonce_consumed_at: z.number().optional(),
   mrtd_val_pop_nonce: z.string().optional(),
   mrtd_val_pop_nonce_consumed_at: z.number().optional(),
-  status: zMrtdAuthSessionState
+  status: zMrtdAuthSessionState,
+  wallet_public_key: z.record(z.string(), z.unknown()).optional()
 });
 
 const WithCustomClaims = z.object({

@@ -114,7 +114,7 @@ export class MockIdpService {
 
   async #authorizeL2Plus(parRequest: ParRequest, options: MockIdpAuthorizeOptions): Promise<MockIdpAuthorizeResult> {
     const now = Math.floor(Date.now() / 1000);
-    const expiresAt = now + 300;
+    const expiresAt = (now + 300) * 1000;
     const mrtdAuthSessionId = randomUUID();
     const mrtdPopJwtNonce = randomBytes(16).toString('hex');
 
@@ -125,7 +125,7 @@ export class MockIdpService {
       state: parRequest.state,
       status: 'pending_mrtd_init'
     };
-    const challengeInfo = await this.#createMrtdChallengeInfo(payload, expiresAt, now, options.baseURL);
+    const challengeInfo = await this.#createMrtdChallengeInfo(payload, now + 300, now, options.baseURL);
 
     const mrtdAuthSession: MrtdAuthSession = {
       auth_flow: 'l2plus',
