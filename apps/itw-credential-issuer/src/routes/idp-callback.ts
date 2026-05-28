@@ -94,10 +94,8 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
             .send({ error: 'invalid_request', error_description: 'Invalid mrtd_val_pop_nonce JWT' });
         }
 
-        if (!jwtPayload['iat'] || !jwtPayload['exp']) {
-          return reply
-            .code(400)
-            .send({ error: 'invalid_request', error_description: 'mrtd_val_pop_nonce JWT must include iat and exp' });
+        if (typeof jwtPayload['iat'] !== 'number' || typeof jwtPayload['exp'] !== 'number') {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid mrtd_val_pop_nonce JWT' });
         }
 
         if (jwtPayload['nonce'] !== session.mrtd_val_pop_nonce) {
