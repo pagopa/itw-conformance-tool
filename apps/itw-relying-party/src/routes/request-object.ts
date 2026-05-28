@@ -78,6 +78,7 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
       const privateKey = await importPKCS8(app.rpKeys.authRequestPrivateKeyPem, 'ES256');
       const requestObject = await new SignJWT(payload)
         .setProtectedHeader({ alg: 'ES256', typ: 'oauth-authz-req+jwt' })
+        .setIssuedAt()
         .setExpirationTime('1h')
         .sign(privateKey);
 
