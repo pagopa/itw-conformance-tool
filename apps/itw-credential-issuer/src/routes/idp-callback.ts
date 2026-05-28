@@ -36,8 +36,12 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session not found or expired' });
         }
 
-        const parRequest = await JSON.parse(parEntry.requestObject);
-
+        let parRequest;
+        try {
+          parRequest = JSON.parse(parEntry.requestObject);
+        } catch {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Corrupted session data' });
+        }
         const session = parRequest.mrtd_auth_session;
         if (!session) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session invalid' });
