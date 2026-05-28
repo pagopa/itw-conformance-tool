@@ -4,7 +4,7 @@ import { decodeJwt, importJWK, jwtVerify } from 'jose';
 
 import { makeOauthCallbacks } from '../plugins/index.js';
 
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 
 const isBase64 = (str: unknown): boolean => {
   if (typeof str !== 'string' || str.length === 0 || str.length % 4 !== 0) {
@@ -13,12 +13,20 @@ const isBase64 = (str: unknown): boolean => {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(str)) {
     return false;
   }
-  try {
-    return Buffer.from(str, 'base64').toString('base64') === str;
-  } catch {
-    return false;
-  }
+  return Buffer.from(str, 'base64').toString('base64') === str;
 };
+
+interface EdocProofVerifyRequest {
+  Body: {
+    mrtd_auth_session: string;
+    mrtd_pop_nonce: string;
+    mrtd_validation_jwt: string;
+  };
+  Headers: {
+    'oauth-client-attestation': string;
+    'oauth-client-attestation-pop': string;
+  };
+}
 
 const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
   const rateLimit = app.rateLimit({ max: 100, timeWindow: '1 minute' });
@@ -46,16 +54,8 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
       }
     },
-    handler: async (request, reply) => {
-      const headers = request.headers as {
-        'oauth-client-attestation': string;
-        'oauth-client-attestation-pop': string;
-      };
-      const body = request.body as {
-        mrtd_auth_session: string;
-        mrtd_pop_nonce: string;
-        mrtd_validation_jwt: string;
-      };
+    handler: async (request: FastifyRequest<EdocProofVerifyRequest>, reply) => {
+      const { headers, body } = request;
 
       try {
         let decodedAttestation;
@@ -130,10 +130,10 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         try {
           verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey);
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Unknown signature error';
+          request.log.error({ err }, 'mrtd_validation_jwt verification failed');
           return reply
             .code(400)
-            .send({ error: 'invalid_request', error_description: `Invalid mrtd_validation_jwt: ${errorMessage}` });
+            .send({ error: 'invalid_request', error_description: 'Invalid mrtd_validation_jwt signature or format' });
         }
 
         const header = verifiedJwt.protectedHeader;
