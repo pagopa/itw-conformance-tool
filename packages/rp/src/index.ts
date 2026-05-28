@@ -5,7 +5,6 @@ export {
   DEFAULT_PORT,
   deriveBaseUrl,
   loadRpConfig,
-  parseIni,
   rpConfigSchema,
   type LoadRpConfigInput,
   type LoadRpConfigResult,
