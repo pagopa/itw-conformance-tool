@@ -4,6 +4,13 @@ import * as x509 from '@peculiar/x509';
 import { X509Certificate } from '@peculiar/x509';
 import { exportJWK, importX509 } from 'jose';
 
+/** Utility functions for working with X.509 certificates, 
+ * including parsing, validation, and key extraction
+ * 
+ * @param input - An object containing the certificate data as an ArrayBuffer
+ * @returns An object with parsed certificate information such as issuer name, 
+ * validity period, serial number, subject name, and thumbprint
+ */
 export const getCertificateData = async (input: { certificate: ArrayBuffer }) => {
   const certificate = new X509Certificate(input.certificate);
   const thumbprint = await certificate.getThumbprint(webcrypto);
@@ -19,6 +26,12 @@ export const getCertificateData = async (input: { certificate: ArrayBuffer }) =>
   };
 };
 
+/** Extracts the public key from the leaf certificate in a certificate chain 
+ * and converts it to JWK format
+ * 
+ * @param input - An object containing the algorithm and the certificate chain
+ * @returns A JWK representation of the public key
+ */
 export const getCertificateChainPublicKey = async (input: { alg: string; certificateChain: readonly unknown[] }) => {
   const [leafCertificate] = input.certificateChain;
   if (leafCertificate === undefined) {
@@ -35,6 +48,15 @@ export const getCertificateChainPublicKey = async (input: { alg: string; certifi
   return await exportJWK(key);
 };
 
+/** Validates a certificate chain against a set of trusted root certificates, 
+ * ensuring the chain is properly ordered, and each certificate is valid and 
+ * signed by its issuer
+ * 
+ * @param input - An object containing the current date, trusted certificates, 
+ * and the certificate chain to validate
+ * @returns A promise that resolves if the certificate chain is valid, or 
+ * rejects with an error if invalid
+ */
 export const validateCertificateChain = async (input: {
   now?: Date;
   trustedCertificates: [ArrayBuffer, ...ArrayBuffer[]];
@@ -79,5 +101,6 @@ export const validateCertificateChain = async (input: {
   }
 };
 
+// Utility function to convert a base64 DER-encoded certificate to PEM format
 export const convertBase64DerToPem = (certificate: string): string =>
   `-----BEGIN CERTIFICATE-----\n${certificate}\n-----END CERTIFICATE-----`;
