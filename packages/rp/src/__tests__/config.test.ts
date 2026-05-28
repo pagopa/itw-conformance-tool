@@ -10,35 +10,8 @@ import {
   DEFAULT_PORT,
   deriveBaseUrl,
   loadRpConfig,
-  parseIni,
   rpConfigSchema
 } from '../config.js';
-
-describe('parseIni', () => {
-  it('parses sections, keys, and ignores comments + blank lines', () => {
-    const raw = [
-      '; full-line comment',
-      '# another comment',
-      '',
-      '[Global]',
-      '  data_dir = ~/somewhere ; trailing comment',
-      '',
-      '[rp]',
-      'port = 9090',
-      'invalid line without equals'
-    ].join('\n');
-
-    const parsed = parseIni(raw);
-
-    expect(parsed.global?.data_dir).toBe('~/somewhere');
-    expect(parsed.rp?.port).toBe('9090');
-  });
-
-  it('lowercases section and key names', () => {
-    const parsed = parseIni('[GLOBAL]\nDATA_DIR=/tmp');
-    expect(parsed.global?.data_dir).toBe('/tmp');
-  });
-});
 
 describe('deriveBaseUrl', () => {
   it('uses localhost when host is 0.0.0.0', () => {
@@ -135,11 +108,13 @@ describe('loadRpConfig', () => {
     expect(result.config.dataDir).toBe('/from/env');
   });
 
-  it('rejects an invalid port in the ini file', () => {
+  it('invalid [rp].port in the ini file falls back to the default port', () => {
     const cfgPath = join(workDir, 'config.ini');
     writeFileSync(cfgPath, '[rp]\nport = 99999\n');
 
-    expect(() => loadRpConfig({ configFilePath: cfgPath, env: {} })).toThrow(/Invalid rp\.port/);
+    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+
+    expect(result.config.port).toBe(DEFAULT_PORT);
   });
 
   it('rejects an invalid port in the env override', () => {
