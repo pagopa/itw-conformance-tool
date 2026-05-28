@@ -56,7 +56,7 @@ function makePidParRequestObject() {
   });
 }
 
-async function buildWalletAttestationJwts(audience: string) {
+async function buildWalletKeyMaterial(audience: string) {
   const { privateKey, publicKey } = await generateKeyPair('ES256');
   const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-e2e-key' };
 
@@ -74,7 +74,95 @@ async function buildWalletAttestationJwts(audience: string) {
     .setExpirationTime('1h')
     .sign(privateKey);
 
+  return { attestationJwt, attestationPopJwt, privateKey, walletPublicJwk };
+}
+
+async function buildWalletAttestationJwts(audience: string) {
+  const { attestationJwt, attestationPopJwt } = await buildWalletKeyMaterial(audience);
   return { attestationJwt, attestationPopJwt };
+}
+
+/** Runs the full L2+ flow up to and including /edoc-proof/verify. Returns everything
+ * the wallet needs to call /idp/callback. */
+async function runL2PlusUpToVerify(app: Awaited<ReturnType<typeof createApp>>) {
+  // /authorize → /idp/authorize
+  await app.inject({
+    method: 'GET',
+    url: `/authorize?client_id=${CLIENT_ID}&request_uri=${encodeURIComponent(REQUEST_URI)}`
+  });
+  const idpResponse = await app.inject({
+    method: 'GET',
+    url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}`
+  });
+  const walletLocation = new URL(idpResponse.headers.location as string);
+  const challengePayload = decodeJwt(walletLocation.searchParams.get('challenge_info')!) as Record<string, unknown>;
+  const mrtdAuthSession = challengePayload['mrtd_auth_session'] as string;
+  const mrtdPopJwtNonce = challengePayload['mrtd_pop_jwt_nonce'] as string;
+
+  // /edoc-proof/init — keep the same private key for the whole flow
+  const { attestationJwt, attestationPopJwt, privateKey, walletPublicJwk } = await buildWalletKeyMaterial(BASE_URL);
+  const initResponse = await app.inject({
+    method: 'POST',
+    url: '/edoc-proof/init',
+    headers: {
+      'content-type': 'application/json',
+      'oauth-client-attestation': attestationJwt,
+      'oauth-client-attestation-pop': attestationPopJwt
+    },
+    payload: JSON.stringify({ mrtd_auth_session: mrtdAuthSession, mrtd_pop_jwt_nonce: mrtdPopJwtNonce })
+  });
+  const popPayload = decodeJwt(initResponse.body) as Record<string, unknown>;
+  const mrtdPopNonce = popPayload['mrtd_pop_nonce'] as string;
+
+  // Build mrtd_validation_jwt (fake CIE data, valid Base64)
+  // The wallet uses the same key pair throughout the L2+ flow.
+  const fakeB64 = Buffer.from('fake').toString('base64');
+  const att2 = await new SignJWT({ cnf: { jwk: walletPublicJwk } })
+    .setProtectedHeader({ alg: 'ES256', jwk: walletPublicJwk })
+    .setIssuer('https://wallet-provider.example.it')
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(privateKey);
+  const pop2 = await new SignJWT({ iss: CLIENT_ID })
+    .setProtectedHeader({ alg: 'ES256', typ: 'oauth-client-attestation-pop+jwt' })
+    .setAudience(BASE_URL)
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(privateKey);
+  const validationJwt = await new SignJWT({
+    aud: BASE_URL,
+    document_type: 'cie',
+    ias: { challenge_signed: fakeB64, ias_pk: fakeB64, sod_ias: fakeB64 },
+    iss: CLIENT_ID,
+    mrtd: { dg1: fakeB64, dg11: fakeB64, sod_mrtd: fakeB64 }
+  })
+    .setProtectedHeader({ alg: 'ES256', kid: walletPublicJwk.kid, typ: 'mrtd-ias+jwt' })
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(privateKey);
+
+  // /edoc-proof/verify
+  const verifyResponse = await app.inject({
+    method: 'POST',
+    url: '/edoc-proof/verify',
+    headers: {
+      'content-type': 'application/json',
+      'oauth-client-attestation': att2,
+      'oauth-client-attestation-pop': pop2
+    },
+    payload: JSON.stringify({
+      mrtd_auth_session: mrtdAuthSession,
+      mrtd_pop_nonce: mrtdPopNonce,
+      mrtd_validation_jwt: validationJwt
+    })
+  });
+
+  const verifyBody = verifyResponse.json() as Record<string, unknown>;
+  return {
+    mrtdAuthSession,
+    mrtdValPopNonce: verifyBody['mrtd_val_pop_nonce'] as string,
+    privateKey
+  };
 }
 
 describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
@@ -232,5 +320,116 @@ describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
 
     expect(initResponse.statusCode).toBe(401);
     expect(initResponse.json()['error']).toBe('invalid_client');
+  });
+});
+
+describe('E2E: L2+ full path (GET /idp/callback)', () => {
+  let app: Awaited<ReturnType<typeof createApp>>;
+
+  beforeEach(async () => {
+    for (const key of ENV_KEYS) delete process.env[key];
+    app = await createApp('l2plus');
+    await app.parRepository.insert({
+      clientId: CLIENT_ID,
+      expiresAt: Date.now() + 60_000,
+      requestObject: makePidParRequestObject(),
+      requestUri: REQUEST_URI
+    });
+  });
+
+  afterEach(async () => {
+    await app.close();
+    for (const key of ENV_KEYS) delete process.env[key];
+  });
+
+  it('completes the full L2+ flow and issues an authorization code via 302 redirect', async () => {
+    const { mrtdAuthSession, mrtdValPopNonce, privateKey } = await runL2PlusUpToVerify(app);
+
+    // Wallet signs the mrtd_val_pop_nonce JWT with its own key (same as stored in session)
+    const valPopNonceJwt = await new SignJWT({ nonce: mrtdValPopNonce })
+      .setProtectedHeader({ alg: 'ES256', typ: 'mrtd-val-pop+jwt' })
+      .setAudience(BASE_URL)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey);
+
+    const callbackResponse = await app.inject({
+      method: 'GET',
+      url: `/idp/callback?mrtd_auth_session=${mrtdAuthSession}&mrtd_val_pop_nonce=${encodeURIComponent(valPopNonceJwt)}`
+    });
+
+    expect(callbackResponse.statusCode).toBe(302);
+    const location = new URL(callbackResponse.headers['location'] as string);
+    expect(location.origin + location.pathname).toBe(REDIRECT_URI);
+    expect(location.searchParams.get('code')).toBeTruthy();
+    expect(location.searchParams.get('state')).toBe(STATE);
+    expect(location.searchParams.get('iss')).toBe(BASE_URL);
+  });
+
+  it('returns 403 access_denied when /idp/callback is called twice with the same nonce (replay protection)', async () => {
+    const { mrtdAuthSession, mrtdValPopNonce, privateKey } = await runL2PlusUpToVerify(app);
+
+    const valPopNonceJwt = await new SignJWT({ nonce: mrtdValPopNonce })
+      .setProtectedHeader({ alg: 'ES256', typ: 'mrtd-val-pop+jwt' })
+      .setAudience(BASE_URL)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey);
+
+    const url = `/idp/callback?mrtd_auth_session=${mrtdAuthSession}&mrtd_val_pop_nonce=${encodeURIComponent(valPopNonceJwt)}`;
+
+    const first = await app.inject({ method: 'GET', url });
+    expect(first.statusCode).toBe(302);
+
+    const second = await app.inject({ method: 'GET', url });
+    expect(second.statusCode).toBe(403);
+    expect(second.json()['error']).toBe('access_denied');
+  });
+
+  it('returns 400 when the mrtd_val_pop_nonce JWT contains the wrong nonce (FR-61)', async () => {
+    const { mrtdAuthSession, privateKey } = await runL2PlusUpToVerify(app);
+
+    // JWT signed correctly but with the wrong nonce value
+    const valPopNonceJwt = await new SignJWT({ nonce: 'this-is-not-the-right-nonce' })
+      .setProtectedHeader({ alg: 'ES256', typ: 'mrtd-val-pop+jwt' })
+      .setAudience(BASE_URL)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey);
+
+    const callbackResponse = await app.inject({
+      method: 'GET',
+      url: `/idp/callback?mrtd_auth_session=${mrtdAuthSession}&mrtd_val_pop_nonce=${encodeURIComponent(valPopNonceJwt)}`
+    });
+
+    expect(callbackResponse.statusCode).toBe(400);
+    expect(callbackResponse.json()).toMatchObject({
+      error: 'invalid_request',
+      error_description: 'mrtd_val_pop_nonce does not match issued nonce'
+    });
+  });
+
+  it('returns 400 when the mrtd_val_pop_nonce JWT is signed with a different key', async () => {
+    const { mrtdAuthSession, mrtdValPopNonce } = await runL2PlusUpToVerify(app);
+
+    // Sign with a fresh unrelated key pair — session holds the original wallet key
+    const { privateKey: wrongKey } = await generateKeyPair('ES256');
+    const valPopNonceJwt = await new SignJWT({ nonce: mrtdValPopNonce })
+      .setProtectedHeader({ alg: 'ES256', typ: 'mrtd-val-pop+jwt' })
+      .setAudience(BASE_URL)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(wrongKey);
+
+    const callbackResponse = await app.inject({
+      method: 'GET',
+      url: `/idp/callback?mrtd_auth_session=${mrtdAuthSession}&mrtd_val_pop_nonce=${encodeURIComponent(valPopNonceJwt)}`
+    });
+
+    expect(callbackResponse.statusCode).toBe(400);
+    expect(callbackResponse.json()).toMatchObject({
+      error: 'invalid_request',
+      error_description: 'Invalid mrtd_val_pop_nonce JWT'
+    });
   });
 });
