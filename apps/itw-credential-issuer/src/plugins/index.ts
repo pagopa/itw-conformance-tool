@@ -1,5 +1,6 @@
 export {
   makeCodeJwtParRepository,
+  makeEdocParRepository,
   makeJwksRepository,
   makeOauthCallbacks,
   makeTokenParRepository
