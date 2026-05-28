@@ -118,7 +118,12 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
 
         await app.parRepository.update(parEntry.requestUri, { requestObject: JSON.stringify(parRequest) });
 
-        const location = new URL(parRequest.redirect_uri);
+        let location: URL;
+        try {
+          location = new URL(parRequest.redirect_uri);
+        } catch {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid redirect_uri' });
+        }
         location.searchParams.set('code', code);
         location.searchParams.set('state', parRequest.state);
         location.searchParams.set('iss', baseURL);
