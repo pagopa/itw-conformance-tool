@@ -45,7 +45,7 @@ export class EdocProofService {
   }
 
   async processInit(options: EdocProofInitOptions): Promise<string> {
-    const walletPublicKey = await validateClientAttestation(
+    const { walletPublicKey, popClientId } = await validateClientAttestation(
       options.clientAttestationJwt,
       options.clientAttestationPopJwt,
       options.baseURL
@@ -57,6 +57,11 @@ export class EdocProofService {
     }
 
     const { requestUri, parRequest } = result;
+
+    if (popClientId !== parRequest.client_id) {
+      throw new EdocProofInitError('OAuth-Client-Attestation-PoP iss does not match the PAR client_id', 401);
+    }
+
     const session = parRequest.mrtd_auth_session;
 
     if (!session) {
@@ -146,16 +151,22 @@ function deriveNewNonce(previousNonce: string): string {
  *
  * The attestation JWT MUST carry its signing public key in the protected header's
  * `jwk` parameter (RFC 7517 §4.6 / JWS embedded key). The signature is verified
- * against that key so that self-signed forgeries cannot be used to inject an
- * arbitrary cnf.jwk. Private-key material in cnf.jwk is also rejected.
+ * against that key so that self-signed forgeries using the same key pair are
+ * detected, but a caller who controls both the attestation-signing key and the
+ * wallet instance key can still produce a valid token — this is an accepted
+ * limitation for a local conformance tool that has no pre-configured Wallet
+ * Provider trust store.
  *
- * Returns the verified wallet public JWK from `cnf.jwk` for storage in the session.
+ * cnf.jwk is restricted to EC or RSA public keys; all private/symmetric
+ * material is rejected before the key is imported or persisted.
+ *
+ * Returns the verified wallet public JWK and the PoP JWT `iss` (wallet client id).
  */
 async function validateClientAttestation(
   attestationJwt: string,
   attestationPopJwt: string,
   audience: string
-): Promise<JWK> {
+): Promise<{ walletPublicKey: JWK; popClientId: string | undefined }> {
   let attestationPayload: Record<string, unknown>;
 
   try {
@@ -172,9 +183,24 @@ async function validateClientAttestation(
     throw new EdocProofInitError('OAuth-Client-Attestation is missing cnf.jwk claim', 401);
   }
 
-  // Reject private-key material: the 'd' parameter is present on EC and RSA private keys.
-  if ('d' in walletPublicKey) {
-    throw new EdocProofInitError('OAuth-Client-Attestation cnf.jwk must not contain private key material', 401);
+  // Only EC and RSA public keys are acceptable as wallet instance keys.
+  const kty = walletPublicKey.kty as string | undefined;
+  if (kty !== 'EC' && kty !== 'RSA') {
+    throw new EdocProofInitError(
+      'OAuth-Client-Attestation cnf.jwk must be an EC or RSA public key (oct and other symmetric types are not allowed)',
+      401
+    );
+  }
+
+  // Reject any private or symmetric key material across EC, RSA, and oct key types.
+  const PRIVATE_OR_SYMMETRIC_PARAMS = ['d', 'p', 'q', 'dp', 'dq', 'qi', 'k'] as const;
+  for (const param of PRIVATE_OR_SYMMETRIC_PARAMS) {
+    if (param in walletPublicKey) {
+      throw new EdocProofInitError(
+        `OAuth-Client-Attestation cnf.jwk must not contain private or symmetric key material (found '${param}')`,
+        401
+      );
+    }
   }
 
   let walletKey: Awaited<ReturnType<typeof importJWK>>;
@@ -184,15 +210,17 @@ async function validateClientAttestation(
     throw new EdocProofInitError('OAuth-Client-Attestation cnf.jwk is not a valid public key', 401);
   }
 
+  let popClientId: string | undefined;
   try {
-    await jwtVerify(attestationPopJwt, walletKey, {
+    const { payload: popPayload } = await jwtVerify(attestationPopJwt, walletKey, {
       audience,
       clockTolerance: 300,
       typ: 'oauth-client-attestation-pop+jwt'
     });
+    popClientId = popPayload.iss;
   } catch {
     throw new EdocProofInitError('OAuth-Client-Attestation-PoP verification failed', 401);
   }
 
-  return walletPublicKey;
+  return { walletPublicKey, popClientId };
 }

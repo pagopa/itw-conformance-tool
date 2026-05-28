@@ -48,7 +48,8 @@ async function buildClientAttestationJwts(
     .sign(privateKey);
 
   // The PoP must be signed by the wallet key (cnf.jwk private counterpart) and include aud.
-  const attestationPopJwt = await new SignJWT({ iss: 'wallet-client-id' })
+  // iss must equal the client_id stored in the PAR (see makeParRequest → 'test-client-id').
+  const attestationPopJwt = await new SignJWT({ iss: 'test-client-id' })
     .setProtectedHeader({ alg: 'ES256', typ: 'oauth-client-attestation-pop+jwt' })
     .setAudience(audience)
     .setIssuedAt()
@@ -369,7 +370,45 @@ describe('EdocProofService.processInit', () => {
       ).rejects.toMatchObject({ statusCode: 401 });
     });
 
-    it('throws EdocProofInitError (401) when cnf.jwk contains private key material', async () => {
+    it('throws EdocProofInitError (401) when PoP iss does not match parRequest.client_id', async () => {
+      const { privateKey, publicKey } = await generateKeyPair('ES256');
+      const walletPublicJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
+
+      const attestationJwt = await new SignJWT({ cnf: { jwk: walletPublicJwk } })
+        .setProtectedHeader({ alg: 'ES256', jwk: walletPublicJwk })
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(privateKey);
+
+      // PoP iss intentionally mismatches the PAR client_id ('test-client-id')
+      const attestationPopJwt = await new SignJWT({ iss: 'different-client-id' })
+        .setProtectedHeader({ alg: 'ES256', typ: 'oauth-client-attestation-pop+jwt' })
+        .setAudience(BASE_URL)
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(privateKey);
+
+      const session = makeValidSession();
+      const repo = makeMockRepo({
+        getByMrtdAuthSession: vi.fn().mockResolvedValue({
+          requestUri: 'urn:ietf:params:oauth:request_uri:test',
+          parRequest: makeParRequest(session)
+        })
+      });
+      const service = new EdocProofService(repo, buildJwksRepository(issuerKeys));
+
+      await expect(
+        service.processInit({
+          baseURL: BASE_URL,
+          clientAttestationJwt: attestationJwt,
+          clientAttestationPopJwt: attestationPopJwt,
+          mrtdAuthSessionId: SESSION_ID,
+          mrtdPopJwtNonce: NONCE
+        })
+      ).rejects.toMatchObject({ statusCode: 401, message: expect.stringContaining('client_id') });
+    });
+
+    it('throws EdocProofInitError (401) when cnf.jwk contains private key material (EC private key)', async () => {
       const { privateKey, publicKey } = await generateKeyPair('ES256');
       const pubJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
       // Deliberately embed the private key in cnf.jwk
@@ -392,7 +431,33 @@ describe('EdocProofService.processInit', () => {
           mrtdAuthSessionId: SESSION_ID,
           mrtdPopJwtNonce: NONCE
         })
-      ).rejects.toMatchObject({ statusCode: 401, message: expect.stringContaining('private key') });
+      ).rejects.toMatchObject({ statusCode: 401, message: expect.stringContaining('private or symmetric') });
+    });
+
+    it('throws EdocProofInitError (401) when cnf.jwk is an oct (symmetric) key', async () => {
+      const { privateKey, publicKey } = await generateKeyPair('ES256');
+      const pubJwk = { ...(await exportJWK(publicKey)), alg: 'ES256', kid: 'wallet-key' };
+      // Fabricate an oct JWK with a k parameter
+      const octJwk: JWK = { kty: 'oct', k: 'c2VjcmV0LWtleS12YWx1ZQ', alg: 'HS256', kid: 'wallet-key' };
+
+      const attestationJwt = await new SignJWT({ cnf: { jwk: octJwk } })
+        .setProtectedHeader({ alg: 'ES256', jwk: pubJwk })
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(privateKey);
+
+      const { attestationPopJwt } = await buildClientAttestationJwts(BASE_URL);
+      const service = new EdocProofService(makeMockRepo(), buildJwksRepository(issuerKeys));
+
+      await expect(
+        service.processInit({
+          baseURL: BASE_URL,
+          clientAttestationJwt: attestationJwt,
+          clientAttestationPopJwt: attestationPopJwt,
+          mrtdAuthSessionId: SESSION_ID,
+          mrtdPopJwtNonce: NONCE
+        })
+      ).rejects.toMatchObject({ statusCode: 401, message: expect.stringContaining('EC or RSA') });
     });
   });
 
