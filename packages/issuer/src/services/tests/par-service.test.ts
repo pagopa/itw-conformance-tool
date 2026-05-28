@@ -23,6 +23,7 @@ function makeRepo(overrides: Partial<IPARRepository> = {}): IPARRepository {
   return {
     delete: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(undefined),
+    getByMrtdAuthSession: vi.fn().mockResolvedValue(undefined),
     insert: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(undefined),
     ...overrides

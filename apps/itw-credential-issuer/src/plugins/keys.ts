@@ -3,9 +3,8 @@ import path from 'node:path';
 
 import fp from 'fastify-plugin';
 
-import { validateIACAKeyPair, validateJWKS } from '#/utils/validate.js';
-
 import { generateIaca, generateJwks } from '../crypto/auto-keygen.js';
+import { validateIACAKeyPair, validateJWKS } from '../utils/validate.js';
 
 export type IssuerKeys = {
   signingKeysJwks: {

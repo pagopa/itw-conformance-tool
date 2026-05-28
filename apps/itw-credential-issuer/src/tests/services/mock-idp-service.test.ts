@@ -49,6 +49,7 @@ function createParRepository(entry: PAREntry | undefined) {
   const repository: IPARRepository = {
     delete: async () => undefined,
     get,
+    getByMrtdAuthSession: vi.fn(async () => undefined),
     insert: async () => undefined,
     update
   };
