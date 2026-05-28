@@ -83,7 +83,8 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
         try {
           const { payload } = await jwtVerify(mrtd_val_pop_nonce, walletPublicKey, {
             audience: baseURL,
-            clockTolerance: 30
+            clockTolerance: 30,
+            typ: 'mrtd-val-pop+jwt'
           });
           jwtPayload = payload;
         } catch (err) {
@@ -107,7 +108,7 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
 
         const code = randomUUID();
         const codeExpiresAt = Math.floor(Date.now() / 1000) + 60;
-        const now = Math.floor(Date.now() / 1000);
+        const now = Date.now();
 
         session.status = 'completed';
         session.mrtd_val_pop_nonce_consumed_at = now;

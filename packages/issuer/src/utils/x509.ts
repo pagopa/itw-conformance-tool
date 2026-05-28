@@ -4,12 +4,12 @@ import * as x509 from '@peculiar/x509';
 import { X509Certificate } from '@peculiar/x509';
 import { exportJWK, importX509 } from 'jose';
 
-/** Utility functions for working with X.509 certificates,
- * including parsing, validation, and key extraction
+/** Parses an X.509 certificate and returns basic metadata
+ * (issuer/subject, validity, serial number, PEM, and thumbprint)
  *
  * @param input - An object containing the certificate data as an ArrayBuffer
- * @returns An object with parsed certificate information such as issuer name,
- * validity period, serial number, subject name, and thumbprint
+ * @returns An object with parsed certificate information such as issuer/subject names,
+ * validity period, serial number, PEM, and thumbprint
  */
 export const getCertificateData = async (input: { certificate: ArrayBuffer }) => {
   const certificate = new X509Certificate(input.certificate);

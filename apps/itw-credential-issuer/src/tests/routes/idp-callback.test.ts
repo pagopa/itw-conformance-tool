@@ -260,7 +260,7 @@ describe('GET /idp/callback', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       error: 'invalid_request',
-      error_description: 'mrtd_val_pop_nonce JWT must include iat and exp'
+      error_description: 'Invalid mrtd_val_pop_nonce JWT'
     });
   });
 
@@ -285,7 +285,7 @@ describe('GET /idp/callback', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       error: 'invalid_request',
-      error_description: 'mrtd_val_pop_nonce JWT must include iat and exp'
+      error_description: 'Invalid mrtd_val_pop_nonce JWT'
     });
   });
 
