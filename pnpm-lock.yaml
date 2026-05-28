@@ -357,6 +357,9 @@ importers:
 
   packages/rp:
     dependencies:
+      '@itw-conformance-tool/config':
+        specifier: workspace:*
+        version: link:../config
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database

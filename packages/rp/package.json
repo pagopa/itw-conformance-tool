@@ -18,6 +18,7 @@
     "clean": "rimraf dist out-tsc"
   },
   "dependencies": {
+    "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
     "tslib": "^2.3.0",
     "zod": "^4.3.6"
