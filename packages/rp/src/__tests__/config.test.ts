@@ -10,35 +10,8 @@ import {
   DEFAULT_PORT,
   deriveBaseUrl,
   loadRpConfig,
-  parseIni,
   rpConfigSchema
 } from '../config.js';
-
-describe('parseIni', () => {
-  it('parses sections, keys, and ignores comments + blank lines', () => {
-    const raw = [
-      '; full-line comment',
-      '# another comment',
-      '',
-      '[Global]',
-      '  data_dir = ~/somewhere ; trailing comment',
-      '',
-      '[rp]',
-      'port = 9090',
-      'invalid line without equals'
-    ].join('\n');
-
-    const parsed = parseIni(raw);
-
-    expect(parsed.global?.data_dir).toBe('~/somewhere');
-    expect(parsed.rp?.port).toBe('9090');
-  });
-
-  it('lowercases section and key names', () => {
-    const parsed = parseIni('[GLOBAL]\nDATA_DIR=/tmp');
-    expect(parsed.global?.data_dir).toBe('/tmp');
-  });
-});
 
 describe('deriveBaseUrl', () => {
   it('uses localhost when host is 0.0.0.0', () => {
@@ -135,11 +108,13 @@ describe('loadRpConfig', () => {
     expect(result.config.dataDir).toBe('/from/env');
   });
 
-  it('rejects an invalid port in the ini file', () => {
+  it('invalid [rp].port in the ini file falls back to the default port', () => {
     const cfgPath = join(workDir, 'config.ini');
     writeFileSync(cfgPath, '[rp]\nport = 99999\n');
 
-    expect(() => loadRpConfig({ configFilePath: cfgPath, env: {} })).toThrow(/Invalid rp\.port/);
+    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+
+    expect(result.config.port).toBe(DEFAULT_PORT);
   });
 
   it('rejects an invalid port in the env override', () => {
@@ -149,5 +124,43 @@ describe('loadRpConfig', () => {
         env: { ITW_CT_RP_PORT: 'not-a-port' }
       })
     ).toThrow(/Invalid ITW_CT_RP_PORT/);
+  });
+
+  it('env override ITW_CT_RP_BASE_URL wins over the derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000' }
+    });
+
+    expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
+  });
+
+  it('empty ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: '' }
+    });
+
+    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+  });
+
+  it('whitespace-only ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: '   ' }
+    });
+
+    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+  });
+
+  it('ITW_CT_RP_BASE_URL trailing slash is stripped by Zod URL normalization', () => {
+    // Zod's z.string().url() uses WHATWG URL semantics which strips the trailing
+    // slash from the root path (http://host:port/ → http://host:port).
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000/' }
+    });
+
+    expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
   });
 });

@@ -1,4 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -56,9 +58,9 @@ describe('searchNx', () => {
 });
 
 describe('expandPath', () => {
-  it('replaces leading ~ with the root path', () => {
+  it('replaces leading ~ with the home directory', () => {
     const result = expandPath('~/.itw-conformance-tool', '/root');
-    expect(result).toBe('/root/.itw-conformance-tool');
+    expect(result).toBe(join(homedir(), '.itw-conformance-tool'));
   });
 
   it('strips surrounding double quotes before expanding', () => {

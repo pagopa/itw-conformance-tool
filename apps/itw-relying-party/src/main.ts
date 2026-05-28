@@ -17,8 +17,8 @@ async function startServer() {
     },
     ajv: {
       customOptions: {
-        coerceTypes: 'array', // change type of data to match type keyword
-        removeAdditional: 'all' // Remove additional body properties
+        coerceTypes: 'array',
+        removeAdditional: 'all'
       }
     }
   });
@@ -36,7 +36,6 @@ async function startServer() {
 
   await app.ready();
 
-  // Start server
   try {
     await app.listen({
       host: app.config.host,
