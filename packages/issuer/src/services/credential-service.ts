@@ -103,9 +103,9 @@ export class CredentialService {
       throw new CreateCredentialError('Private keys are not allowed in the DPoP Proof JWT!');
     }
 
-    let accessTokenPayload: JwtPayload;
+    let accessTokenPayload: JwtPayload & { auth_flow?: string };
     try {
-      accessTokenPayload = decodeJwt<JwtPayload>(accessToken);
+      accessTokenPayload = decodeJwt<JwtPayload & { auth_flow?: string }>(accessToken);
     } catch {
       throw new CreateCredentialError('Invalid access token payload');
     }
@@ -182,7 +182,8 @@ export class CredentialService {
       options.baseURL,
       options.config,
       fakeUser,
-      holderPublicKey.data
+      holderPublicKey.data,
+      accessTokenPayload
     );
 
     return this.#buildCredentialResponse(options, credential);
@@ -244,10 +245,18 @@ export class CredentialService {
     baseURL: string,
     config: IoWalletSdkConfig,
     fakeUser: FakeUser,
-    holderPublicKey: JwkPublicKey
+    holderPublicKey: JwkPublicKey,
+    accessTokenPayload?: JwtPayload & { auth_flow?: string }
   ): Promise<string> {
     if (credentialIdentifier === 'dc_sd_jwt_PersonIdentificationData') {
-      return createPidCredential(baseURL, this.#jwksRepository, holderPublicKey, config, fakeUser);
+      return createPidCredential(
+        baseURL,
+        this.#jwksRepository,
+        holderPublicKey,
+        config,
+        fakeUser,
+        accessTokenPayload?.auth_flow
+      );
     }
 
     if (credentialIdentifier === 'dc_sd_jwt_EuropeanDisabilityCard') {

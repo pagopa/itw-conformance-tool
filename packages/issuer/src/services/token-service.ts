@@ -95,7 +95,8 @@ export class TokenService {
 
     const accessTokenResponse = await createAccessTokenResponse({
       additionalPayload: {
-        authorization_details: createAuthorizationDetails(parRequest.authorization_details, federationMetadata)
+        authorization_details: createAuthorizationDetails(parRequest.authorization_details, federationMetadata),
+        ...(parRequest.pid_auth_flow && { auth_flow: parRequest.pid_auth_flow })
       },
       audience: options.baseURL,
       authorizationServer: options.baseURL,

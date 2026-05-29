@@ -133,5 +133,39 @@ describe('TokenService', () => {
       ).rejects.toBeInstanceOf(InvalidGrantError);
       expect(lookup.consume).not.toHaveBeenCalled();
     });
+
+    it('passes auth_flow to createAccessTokenResponse when present in PAR request', async () => {
+      createAccessTokenResponseMock.mockClear();
+      const response = { access_token: 'token-123', expires_in: 300, token_type: 'Bearer' };
+      createAccessTokenResponseMock.mockResolvedValue(response);
+
+      const parRequest = {
+        client_id: 'client',
+        redirect_uri: 'https://client.example.com/cb',
+        request_uri: 'urn:test',
+        pid_auth_flow: 'l2plus'
+      };
+      const lookup = makeParLookup({
+        getByCode: vi.fn().mockResolvedValue({ parRequest, requestUri: 'urn:test' })
+      });
+      const svc = new TokenService(lookup, makeJwksRepo());
+
+      await svc.createAccessToken({
+        baseURL: 'https://example.com',
+        callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+        config: { isVersion: vi.fn().mockReturnValue(false) } as never,
+        tokenRequest: {
+          bodyString: 'code=good&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb'
+        }
+      });
+
+      expect(createAccessTokenResponseMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          additionalPayload: expect.objectContaining({
+            auth_flow: 'l2plus'
+          })
+        })
+      );
+    });
   });
 });

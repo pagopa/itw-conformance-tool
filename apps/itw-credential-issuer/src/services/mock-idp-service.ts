@@ -22,7 +22,9 @@ type MrtdChallengePayload = {
   mrtd_auth_session: string;
   mrtd_pop_jwt_nonce: string;
   state: string;
-  status: 'pending_mrtd_init';
+  status: 'require_interaction';
+  type: 'mrtd+ias';
+  htm: 'POST';
 };
 
 export class MockIdpRequestError extends Error {
@@ -123,7 +125,9 @@ export class MockIdpService {
       mrtd_auth_session: mrtdAuthSessionId,
       mrtd_pop_jwt_nonce: mrtdPopJwtNonce,
       state: parRequest.state,
-      status: 'pending_mrtd_init'
+      status: 'require_interaction',
+      type: 'mrtd+ias',
+      htm: 'POST'
     };
     const challengeInfo = await this.#createMrtdChallengeInfo(payload, now + 300, now, options.baseURL);
 
@@ -178,6 +182,7 @@ export class MockIdpService {
         typ: 'mrtd-ias+jwt'
       })
       .setIssuer(issuer)
+      .setAudience(issuer)
       .setIssuedAt(iat)
       .setExpirationTime(exp)
       .sign(key);

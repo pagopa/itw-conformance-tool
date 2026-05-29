@@ -6,15 +6,16 @@ import { buildRouteApp } from '../helpers/route-app.js';
 
 import type { FastifyInstance } from 'fastify';
 
-interface TestApp extends FastifyInstance {
-  parRepository: {
-    getByMrtdAuthSession: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+vi.mock('../../plugins/index.js', async () => {
+  const actual = await vi.importActual<typeof import('../../plugins/index.js')>('../../plugins/index.js');
+  return {
+    ...actual,
+    makeOauthCallbacks: vi.fn().mockReturnValue({ baseURL: 'http://localhost:3000' })
   };
-}
+});
 
 describe('POST /edoc-proof/verify', () => {
-  let app: TestApp | undefined;
+  let app: FastifyInstance | undefined;
 
   afterEach(async () => {
     if (app) {
@@ -23,7 +24,7 @@ describe('POST /edoc-proof/verify', () => {
   });
 
   it('returns 400 if headers are missing', async () => {
-    app = (await buildRouteApp(edocProofVerifyRoute)) as TestApp;
+    app = await buildRouteApp(edocProofVerifyRoute);
 
     const response = await app.inject({
       method: 'POST',
@@ -35,7 +36,7 @@ describe('POST /edoc-proof/verify', () => {
   });
 
   it('returns 400 if session is not found in repository', async () => {
-    app = (await buildRouteApp(edocProofVerifyRoute)) as TestApp;
+    app = await buildRouteApp(edocProofVerifyRoute);
 
     const { privateKey, publicKey } = await generateKeyPair('ES256');
     const jwk = await exportJWK(publicKey);
@@ -47,6 +48,9 @@ describe('POST /edoc-proof/verify', () => {
     const pop = await new SignJWT({})
       .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation-pop+jwt' })
       .sign(privateKey);
+
+    (app as any).parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue(undefined);
+    (app as any).parRepository.update = vi.fn().mockResolvedValue(undefined);
 
     const response = await app.inject({
       method: 'POST',
@@ -68,7 +72,7 @@ describe('POST /edoc-proof/verify', () => {
   });
 
   it('returns 400 if nonce is already consumed (Anti-Replay)', async () => {
-    app = (await buildRouteApp(edocProofVerifyRoute)) as TestApp;
+    app = await buildRouteApp(edocProofVerifyRoute);
 
     const { privateKey, publicKey } = await generateKeyPair('ES256');
     const jwk = await exportJWK(publicKey);
@@ -81,7 +85,7 @@ describe('POST /edoc-proof/verify', () => {
       .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation-pop+jwt' })
       .sign(privateKey);
 
-    app.parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
+    (app as any).parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
       requestUri: 'urn:test:uri',
       clientId: 'client-1',
       expiresAt: Date.now() + 60000,
@@ -95,6 +99,7 @@ describe('POST /edoc-proof/verify', () => {
         }
       })
     });
+    (app as any).parRepository.update = vi.fn().mockResolvedValue(undefined);
 
     const response = await app.inject({
       method: 'POST',
@@ -116,7 +121,7 @@ describe('POST /edoc-proof/verify', () => {
   });
 
   it('successfully processes a valid verification request (Happy Path)', async () => {
-    app = (await buildRouteApp(edocProofVerifyRoute)) as TestApp;
+    app = await buildRouteApp(edocProofVerifyRoute);
 
     const { privateKey, publicKey } = await generateKeyPair('ES256');
     const jwk = await exportJWK(publicKey);
@@ -141,7 +146,7 @@ describe('POST /edoc-proof/verify', () => {
       .setExpirationTime('10m')
       .sign(privateKey);
 
-    app.parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
+    (app as any).parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
       requestUri: 'urn:test:uri',
       clientId: 'client-1',
       expiresAt: Date.now() + 60000,
@@ -154,8 +159,7 @@ describe('POST /edoc-proof/verify', () => {
         }
       })
     });
-
-    app.parRepository.update = vi.fn().mockResolvedValue(undefined);
+    (app as any).parRepository.update = vi.fn().mockResolvedValue(undefined);
 
     const response = await app.inject({
       method: 'POST',

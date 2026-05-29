@@ -212,7 +212,9 @@ describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
 
     // Decode challenge_info JWT (wallet decodes it to extract session details)
     const challengePayload = decodeJwt(challengeInfoJwt!) as Record<string, unknown>;
-    expect(challengePayload['status']).toBe('pending_mrtd_init');
+    expect(challengePayload['status']).toBe('require_interaction');
+    expect(challengePayload['type']).toBe('mrtd+ias');
+    expect(challengePayload['htm']).toBe('POST');
     expect(challengePayload['htu']).toBe(`${BASE_URL}/edoc-proof/init`);
 
     const mrtdAuthSession = challengePayload['mrtd_auth_session'] as string;

@@ -171,18 +171,20 @@ export const getVerifyJwtCallback =
     }
   };
 
-export function toPublicJwk<T extends JWK>(jwk: T): Omit<T, 'd'>;
-export function toPublicJwk<T extends JWK>(jwk: T[]): Omit<T, 'd'>[];
-export function toPublicJwk<T extends JWK>(jwk: T | T[]): Omit<T, 'd'> | Omit<T, 'd'>[] {
+export function toPublicJwk<T extends JWK>(jwk: T): Omit<T, 'd' | 'key_ops'>;
+export function toPublicJwk<T extends JWK>(jwk: T[]): Omit<T, 'd' | 'key_ops'>[];
+export function toPublicJwk<T extends JWK>(jwk: T | T[]): Omit<T, 'd' | 'key_ops'> | Omit<T, 'd' | 'key_ops'>[] {
   if (Array.isArray(jwk)) {
     return jwk.map((key) => {
-      const { d, ...pub } = key;
+      const { d, key_ops, ...pub } = key;
       void d;
+      void key_ops;
       return pub;
     });
   }
-  const { d, ...pub } = jwk;
+  const { d, key_ops, ...pub } = jwk;
   void d;
+  void key_ops;
   return pub;
 }
 

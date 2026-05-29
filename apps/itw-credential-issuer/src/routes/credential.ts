@@ -30,10 +30,10 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
           config: sdkConfig,
           headers,
           method: request.method as HttpMethod,
-          url: request.url
+          url: `${baseURL}${request.url}`
         });
 
-        return reply.code(200).send(result);
+        return reply.code(200).send(result.credentialResponse ?? result);
       } catch (error) {
         if (error instanceof InvalidProofError) {
           return reply.code(400).send({ error: 'invalid_or_missing_proof', error_description: error.message });

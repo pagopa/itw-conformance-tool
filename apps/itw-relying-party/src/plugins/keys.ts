@@ -1,3 +1,4 @@
+import { createPrivateKey } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -14,28 +15,36 @@ declare module 'fastify' {
   }
 }
 
-const KEY_FILES = ['authRequestPrivateKey', 'authResponsePrivateKey'] as const;
+const KEY_FILES = [
+  { key: 'authRequestPrivateKeyPem', file: 'rp/auth-request-key.jwk.json' },
+  { key: 'authResponsePrivateKeyPem', file: 'rp/auth-response-key.jwk.json' }
+] as const;
 
-async function loadKeyFile(dataDir: string, keyName: string): Promise<string> {
-  const keyPath = resolve(dataDir, keyName);
+async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
+  const keyPath = resolve(dataDir, fileName);
   let content: string;
 
   try {
     content = await readFile(keyPath, 'utf8');
   } catch {
     throw new Error(
-      `Missing required auth key: ${keyName} not found in ${dataDir}. ` +
+      `Missing required auth key: ${fileName} not found in ${dataDir}. ` +
         `Please ensure the key file exists before starting the server.`
     );
   }
 
-  if (content.trim().length === 0) {
+  try {
+    const jwk = JSON.parse(content);
+    // Convert JWK to PEM PKCS8
+    const privateKey = createPrivateKey({ key: jwk, format: 'jwk' });
+    const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+    return pem;
+  } catch (err) {
     throw new Error(
-      `Invalid auth key: ${keyName} in ${dataDir} is empty. ` + `Please ensure the key file contains valid content.`
+      `Invalid auth key format in ${fileName}: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Please ensure the key file contains a valid JWK.`
     );
   }
-
-  return content;
 }
 
 export default fp(
@@ -43,7 +52,7 @@ export default fp(
     const { dataDir } = app.config;
 
     const [authRequestPrivateKeyPem, authResponsePrivateKeyPem] = await Promise.all(
-      KEY_FILES.map((keyName) => loadKeyFile(dataDir, keyName))
+      KEY_FILES.map((kf) => loadKeyFile(dataDir, kf.file))
     );
 
     app.decorate('rpKeys', {
