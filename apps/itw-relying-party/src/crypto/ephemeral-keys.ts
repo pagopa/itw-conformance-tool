@@ -14,10 +14,7 @@ export interface EphemeralKeyPair {
  * SHA-256 JWK Thumbprint (RFC 7638) of the public key.
  */
 export async function generateEphemeralKeyPair(): Promise<EphemeralKeyPair> {
-  const { privateKey, publicKey } = await generateKeyPair('ECDH-ES', {
-    crv: 'P-256',
-    extractable: true
-  });
+  const { privateKey, publicKey } = await generateKeyPair('ECDH-ES', { crv: 'P-256' });
 
   const rawPublicJwk = await exportJWK(publicKey);
   const kid = await calculateJwkThumbprint(rawPublicJwk, 'sha256');

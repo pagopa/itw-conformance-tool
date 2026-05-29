@@ -1,6 +1,6 @@
 import { KeyObject } from 'node:crypto';
 
-import { CompactEncrypt, compactDecrypt, importJWK } from 'jose';
+import { calculateJwkThumbprint, CompactEncrypt, compactDecrypt, importJWK } from 'jose';
 import { describe, expect, it } from 'vitest';
 
 import { generateEphemeralKeyPair } from '../../crypto/ephemeral-keys.js';
@@ -42,8 +42,9 @@ describe('generateEphemeralKeyPair', () => {
 
   it('publicJwk has a kid derived from the JWK Thumbprint', async () => {
     const { publicJwk } = await generateEphemeralKeyPair();
-    expect(typeof publicJwk.kid).toBe('string');
-    expect(publicJwk.kid!.length).toBeGreaterThan(0);
+    const { kid, ...rawJwk } = publicJwk;
+    const expectedKid = await calculateJwkThumbprint(rawJwk, 'sha256');
+    expect(kid).toBe(expectedKid);
   });
 
   it('privateKey is a KeyObject (Node.js native key)', async () => {
