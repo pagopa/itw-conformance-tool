@@ -21,14 +21,11 @@
     "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "@itw-conformance-tool/rp": "workspace:",
+    "@pagopa/io-wallet-oid4vp": "1.4.2",
     "close-with-grace": "^2.5.0",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "jose": "^5.10.0",
-    "jsonwebtoken": "^9.0.2",
     "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10"
   }
 }
