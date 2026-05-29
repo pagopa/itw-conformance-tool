@@ -152,7 +152,10 @@ describe('MockIdpService', () => {
 
     const payload = verified.payload as Record<string, unknown>;
     expect(payload.iss).toBe(BASE_URL);
-    expect(payload.status).toBe('pending_mrtd_init');
+    expect(payload.aud).toBe(BASE_URL);
+    expect(payload.status).toBe('require_interaction');
+    expect(payload.type).toBe('mrtd+ias');
+    expect(payload.htm).toBe('POST');
     expect(payload.state).toBe('state-456');
     expect(payload.htu).toBe(new URL('/edoc-proof/init', BASE_URL).toString());
     expect(payload.mrtd_auth_session).toBe(mrtdAuthSession.mrtd_auth_session);

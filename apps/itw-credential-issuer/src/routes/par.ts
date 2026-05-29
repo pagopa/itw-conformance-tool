@@ -35,7 +35,7 @@ const parRoute: FastifyPluginAsync = async (app) => {
             bodyString,
             headers,
             method: request.method as HttpMethod,
-            url: request.url
+            url: `${baseURL}${request.url}`
           }
         });
 
