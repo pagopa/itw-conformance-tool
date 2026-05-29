@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import jwt from 'jsonwebtoken';
+import { SignJWT, importPKCS8 } from 'jose';
 import { z } from 'zod';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -75,14 +75,12 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
         state
       };
 
-      const requestObject = jwt.sign(payload, app.rpKeys.authRequestPrivateKeyPem, {
-        algorithm: 'ES256',
-        expiresIn: '1h',
-        header: {
-          alg: 'ES256',
-          typ: 'oauth-authz-req+jwt'
-        }
-      });
+      const privateKey = await importPKCS8(app.rpKeys.authRequestPrivateKeyPem, 'ES256');
+      const requestObject = await new SignJWT(payload)
+        .setProtectedHeader({ alg: 'ES256', typ: 'oauth-authz-req+jwt' })
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(privateKey);
 
       await app.sessionService.create({
         flowType: parsed.data.flowType,
