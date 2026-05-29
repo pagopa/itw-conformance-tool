@@ -149,7 +149,7 @@ async function createRequestObject(wallet: any, authFlow: 'direct' | 'l2plus' | 
       }
     ],
 
-    auth_flow: authFlow,
+    pid_auth_flow: authFlow,
 
     jti: crypto.randomUUID()
   };
@@ -496,9 +496,8 @@ describe('E2E PID Issuance Flows (MRTD)', () => {
     expect(credentialPayload.family_name).toBe('Rossi');
   });
 
-  it('4. Regressione EAA - should issue EAA successfully without changes', async () => {
-    await setupEnvironment('direct');
-
-    expect(true).toBe(true);
+  it.skip('4. Regressione EAA - should issue EAA successfully without changes', async () => {
+    // TODO: implement an actual EAA issuance regression check in this suite if needed,
+    // or rely on the pre-existing specialized EAA route/test files.
   });
 });

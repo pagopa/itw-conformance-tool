@@ -57,8 +57,8 @@ export const createPidCredential = async (
         date_of_expiry: expiration.toISOString().slice(0, 10),
         place_of_birth: {
           country: 'IT',
-          locality: isMockFlow ? 'Roma' : fakeUser.birthPlace,
-          region: isMockFlow ? 'Lazio' : undefined
+          locality: isMockFlow ? 'Roma' : fakeUser.birthPlace.split(' (')[0],
+          region: 'Lazio'
         },
         sub: fakeUser.id,
         verification: {

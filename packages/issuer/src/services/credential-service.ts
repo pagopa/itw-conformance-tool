@@ -87,7 +87,6 @@ export class CredentialService {
         proofs: { jwt: string }[];
       });
     } catch (error) {
-      console.log('parseCredentialRequest error:', error);
       if (error instanceof CreateCredentialError) {
         throw error;
       }
