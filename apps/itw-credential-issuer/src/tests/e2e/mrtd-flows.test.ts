@@ -58,7 +58,7 @@ async function createApp(authFlow: 'direct' | 'l2plus' | 'l3'): Promise<FastifyI
   process.env.PORT = '3000';
 
   const app = Fastify({
-    logger: true
+    logger: false
   });
 
   await app.register(fp(bootstrap));
@@ -450,7 +450,7 @@ describe('E2E PID Issuance Flows (MRTD)', () => {
     return credResponse;
   }
 
-  it('1. Legacy Direct Flow (PAR -> authorize -> token -> credential)', async () => {
+  it('1. Legacy Direct Flow (PAR -> nonce -> credential with mock access token)', async () => {
     const credResponse = await issueCredential('direct');
 
     expect(credResponse.statusCode).toBe(200);
