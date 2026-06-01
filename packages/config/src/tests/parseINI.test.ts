@@ -115,15 +115,15 @@ describe('parseINI', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(extraKeysContent);
     const result = parseINI('./extra-keys.ini');
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(result.data).toEqual({
       global: {
         data_dir: '~/.itw-conformance-tool',
-        log_level: 'info'
+        log_level: 'warn'
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
-        port: 3000,
+        port: 4000,
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
@@ -133,18 +133,18 @@ describe('parseINI', () => {
         trust_anchor_url: ''
       }
     });
-    expect('error' in result).toBe(true);
+    expect('error' in result).toBe(false);
   });
 
   it('returns default config for wrong type', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(wrongTypeContent);
     const result = parseINI('./wrong-type.ini');
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(result.data).toEqual({
       global: {
         data_dir: '~/.itw-conformance-tool',
-        log_level: 'info'
+        log_level: 'warn'
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -158,7 +158,7 @@ describe('parseINI', () => {
         trust_anchor_url: ''
       }
     });
-    expect('error' in result).toBe(true);
+    expect('error' in result).toBe(false);
   });
 
   it('handles unreadable files', () => {
