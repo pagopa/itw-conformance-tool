@@ -13,6 +13,19 @@ import {
   rpConfigSchema
 } from '../config.js';
 
+const REQUIRED_FIELDS_ENV = {
+  ITW_CT_RP_TRUST_ANCHOR_URL: 'https://trust-anchor.example.com',
+  ITW_CT_RP_SIGNING_KEY_PATH: '/tmp/signing-key.pem',
+  ITW_CT_RP_X5C_CERT_PATH: '/tmp/x5c-cert.pem'
+};
+
+const REQUIRED_FIELDS_INI = `
+[rp]
+trust_anchor_url = https://trust-anchor.example.com
+signing_key_path = /tmp/signing-key.pem
+x5c_cert_path = /tmp/x5c-cert.pem
+`;
+
 describe('deriveBaseUrl', () => {
   it('uses localhost when host is 0.0.0.0', () => {
     expect(deriveBaseUrl({ host: '0.0.0.0', port: 8080 })).toBe('http://localhost:8080');
@@ -30,7 +43,10 @@ describe('rpConfigSchema', () => {
       port: 8080,
       baseUrl: 'http://localhost:8080',
       dataDir: '/tmp/itw',
-      configFilePath: '/tmp/config.ini'
+      configFilePath: '/tmp/config.ini',
+      trustAnchorUrl: 'https://trust-anchor.example.com',
+      signingKeyPath: '/tmp/signing-key.pem',
+      x5cCertPath: '/tmp/x5c-cert.pem'
     });
     expect(parsed.success).toBe(true);
   });
@@ -41,7 +57,37 @@ describe('rpConfigSchema', () => {
       port: 99999,
       baseUrl: 'http://localhost:99999',
       dataDir: '/tmp',
-      configFilePath: '/tmp/c.ini'
+      configFilePath: '/tmp/c.ini',
+      trustAnchorUrl: 'https://trust-anchor.example.com',
+      signingKeyPath: '/tmp/signing-key.pem',
+      x5cCertPath: '/tmp/x5c-cert.pem'
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects an invalid trustAnchorUrl', () => {
+    const parsed = rpConfigSchema.safeParse({
+      host: '0.0.0.0',
+      port: 8080,
+      baseUrl: 'http://localhost:8080',
+      dataDir: '/tmp/itw',
+      configFilePath: '/tmp/config.ini',
+      trustAnchorUrl: 'not-a-url',
+      signingKeyPath: '/tmp/signing-key.pem',
+      x5cCertPath: '/tmp/x5c-cert.pem'
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects missing trustAnchorUrl', () => {
+    const parsed = rpConfigSchema.safeParse({
+      host: '0.0.0.0',
+      port: 8080,
+      baseUrl: 'http://localhost:8080',
+      dataDir: '/tmp/itw',
+      configFilePath: '/tmp/config.ini',
+      signingKeyPath: '/tmp/signing-key.pem',
+      x5cCertPath: '/tmp/x5c-cert.pem'
     });
     expect(parsed.success).toBe(false);
   });
@@ -61,7 +107,7 @@ describe('loadRpConfig', () => {
   it('returns defaults when no config file exists', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
-      env: {}
+      env: { ...REQUIRED_FIELDS_ENV }
     });
 
     expect(result.configFileFound).toBe(false);
@@ -73,9 +119,9 @@ describe('loadRpConfig', () => {
 
   it('reads [rp].port and [global].data_dir from the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(cfgPath, '[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\n');
+    writeFileSync(cfgPath, `[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\n${REQUIRED_FIELDS_INI}`);
 
-    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+    const result = loadRpConfig({ configFilePath: cfgPath, env: { ...REQUIRED_FIELDS_ENV } });
 
     expect(result.configFileFound).toBe(true);
     expect(result.config.port).toBe(9090);
@@ -86,11 +132,11 @@ describe('loadRpConfig', () => {
 
   it('env override ITW_CT_RP_PORT wins over the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(cfgPath, '[rp]\nport = 9090\n');
+    writeFileSync(cfgPath, `[rp]\nport = 9090\n${REQUIRED_FIELDS_INI}`);
 
     const result = loadRpConfig({
       configFilePath: cfgPath,
-      env: { ITW_CT_RP_PORT: '12345' }
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_PORT: '12345' }
     });
 
     expect(result.config.port).toBe(12345);
@@ -98,11 +144,11 @@ describe('loadRpConfig', () => {
 
   it('env override ITW_CT_DATA_DIR wins over the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(cfgPath, '[global]\ndata_dir = /from/ini\n');
+    writeFileSync(cfgPath, `[global]\ndata_dir = /from/ini\n${REQUIRED_FIELDS_INI}`);
 
     const result = loadRpConfig({
       configFilePath: cfgPath,
-      env: { ITW_CT_DATA_DIR: '/from/env' }
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_DATA_DIR: '/from/env' }
     });
 
     expect(result.config.dataDir).toBe('/from/env');
@@ -110,9 +156,9 @@ describe('loadRpConfig', () => {
 
   it('invalid [rp].port in the ini file falls back to the default port', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(cfgPath, '[rp]\nport = 99999\n');
+    writeFileSync(cfgPath, `[rp]\nport = 99999\n${REQUIRED_FIELDS_INI}`);
 
-    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+    const result = loadRpConfig({ configFilePath: cfgPath, env: { ...REQUIRED_FIELDS_ENV } });
 
     expect(result.config.port).toBe(DEFAULT_PORT);
   });
@@ -121,7 +167,7 @@ describe('loadRpConfig', () => {
     expect(() =>
       loadRpConfig({
         configFilePath: join(workDir, 'missing.ini'),
-        env: { ITW_CT_RP_PORT: 'not-a-port' }
+        env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_PORT: 'not-a-port' }
       })
     ).toThrow(/Invalid ITW_CT_RP_PORT/);
   });
@@ -129,7 +175,7 @@ describe('loadRpConfig', () => {
   it('env override ITW_CT_RP_BASE_URL wins over the derived baseUrl', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
-      env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000' }
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000' }
     });
 
     expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
@@ -138,7 +184,7 @@ describe('loadRpConfig', () => {
   it('empty ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
-      env: { ITW_CT_RP_BASE_URL: '' }
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: '' }
     });
 
     expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
@@ -147,7 +193,7 @@ describe('loadRpConfig', () => {
   it('whitespace-only ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
-      env: { ITW_CT_RP_BASE_URL: '   ' }
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: '   ' }
     });
 
     expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
@@ -158,9 +204,59 @@ describe('loadRpConfig', () => {
     // slash from the root path (http://host:port/ → http://host:port).
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
-      env: { ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000/' }
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: 'http://rp.example.com:9000/' }
     });
 
     expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
+  });
+
+  it('reads trustAnchorUrl, signingKeyPath, x5cCertPath from env', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {
+        ITW_CT_RP_TRUST_ANCHOR_URL: 'https://ta.example.org',
+        ITW_CT_RP_SIGNING_KEY_PATH: '/keys/signing.pem',
+        ITW_CT_RP_X5C_CERT_PATH: '/certs/x5c.pem'
+      }
+    });
+
+    expect(result.config.trustAnchorUrl).toBe('https://ta.example.org');
+    expect(result.config.signingKeyPath).toBe('/keys/signing.pem');
+    expect(result.config.x5cCertPath).toBe('/certs/x5c.pem');
+  });
+
+  it('reads trustAnchorUrl, signingKeyPath, x5cCertPath from the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(
+      cfgPath,
+      '[rp]\ntrust_anchor_url = https://ta.from.ini\nsigning_key_path = /ini/signing.pem\nx5c_cert_path = /ini/x5c.pem\n'
+    );
+
+    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+
+    expect(result.config.trustAnchorUrl).toBe('https://ta.from.ini');
+    expect(result.config.signingKeyPath).toBe('/ini/signing.pem');
+    expect(result.config.x5cCertPath).toBe('/ini/x5c.pem');
+  });
+
+  it('env ITW_CT_RP_TRUST_ANCHOR_URL wins over the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, `[rp]\ntrust_anchor_url = https://ta.from.ini\n${REQUIRED_FIELDS_INI}`);
+
+    const result = loadRpConfig({
+      configFilePath: cfgPath,
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_TRUST_ANCHOR_URL: 'https://ta.from.env' }
+    });
+
+    expect(result.config.trustAnchorUrl).toBe('https://ta.from.env');
+  });
+
+  it('throws when trustAnchorUrl, signingKeyPath, and x5cCertPath are all missing', () => {
+    expect(() =>
+      loadRpConfig({
+        configFilePath: join(workDir, 'missing.ini'),
+        env: {}
+      })
+    ).toThrow();
   });
 });

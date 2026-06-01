@@ -14,7 +14,10 @@ export const rpConfigSchema = z.object({
   port: z.number().int().min(1).max(65535),
   baseUrl: z.string().url(),
   dataDir: z.string().min(1),
-  configFilePath: z.string().min(1)
+  configFilePath: z.string().min(1),
+  trustAnchorUrl: z.string().url(),
+  signingKeyPath: z.string().min(1),
+  x5cCertPath: z.string().min(1)
 });
 
 export type RpConfig = z.infer<typeof rpConfigSchema>;
@@ -81,12 +84,27 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     baseUrl = baseUrl.slice(0, -1);
   }
 
+  const trustAnchorUrlOverride = env.ITW_CT_RP_TRUST_ANCHOR_URL?.trim();
+  const trustAnchorUrl =
+    trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0 ? trustAnchorUrlOverride : data.rp.trust_anchor_url;
+
+  const signingKeyPathOverride = env.ITW_CT_RP_SIGNING_KEY_PATH?.trim();
+  const signingKeyPath =
+    signingKeyPathOverride && signingKeyPathOverride.length > 0 ? signingKeyPathOverride : data.rp.signing_key_path;
+
+  const x5cCertPathOverride = env.ITW_CT_RP_X5C_CERT_PATH?.trim();
+  const x5cCertPath =
+    x5cCertPathOverride && x5cCertPathOverride.length > 0 ? x5cCertPathOverride : data.rp.x5c_cert_path;
+
   const config = rpConfigSchema.parse({
     host,
     port,
     baseUrl,
     dataDir,
-    configFilePath: input.configFilePath
+    configFilePath: input.configFilePath,
+    trustAnchorUrl,
+    signingKeyPath,
+    x5cCertPath
   });
 
   return { config, configFileFound };

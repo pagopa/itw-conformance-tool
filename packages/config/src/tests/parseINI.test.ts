@@ -21,6 +21,9 @@ credential_types=pid,mdl,badge,eaa
 
 [rp]
 port=8080
+signing_key_path=/tmp/signing-key.pem
+x5c_cert_path=/tmp/x5c-cert.pem
+trust_anchor_url=https://trust-anchor.example.com
 `;
 
 const emptyConfigContent = ``;
@@ -82,7 +85,10 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        port: 8080,
+        signing_key_path: '/tmp/signing-key.pem',
+        x5c_cert_path: '/tmp/x5c-cert.pem',
+        trust_anchor_url: 'https://trust-anchor.example.com'
       }
     });
   });
@@ -109,33 +115,11 @@ describe('parseINI', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(extraKeysContent);
     const result = parseINI('./extra-keys.ini');
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(result.data).toEqual({
       global: {
         data_dir: '~/.itw-conformance-tool',
-        log_level: 'warn'
-      },
-      'itw-credential-issuer': {
-        auth_flow: 'direct',
-        port: 4000,
-        credential_types: 'pid,mdl,badge,eaa'
-      },
-      rp: {
-        port: 8080
-      }
-    });
-    expect('error' in result).toBe(false);
-  });
-
-  it('returns default config for wrong type', () => {
-    vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(readFileSync).mockReturnValue(wrongTypeContent);
-    const result = parseINI('./wrong-type.ini');
-    expect(result.ok).toBe(true);
-    expect(result.data).toEqual({
-      global: {
-        data_dir: '~/.itw-conformance-tool',
-        log_level: 'warn'
+        log_level: 'info'
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -143,10 +127,38 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        port: 8080,
+        signing_key_path: '',
+        x5c_cert_path: '',
+        trust_anchor_url: ''
       }
     });
-    expect('error' in result).toBe(false);
+    expect('error' in result).toBe(true);
+  });
+
+  it('returns default config for wrong type', () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue(wrongTypeContent);
+    const result = parseINI('./wrong-type.ini');
+    expect(result.ok).toBe(false);
+    expect(result.data).toEqual({
+      global: {
+        data_dir: '~/.itw-conformance-tool',
+        log_level: 'info'
+      },
+      'itw-credential-issuer': {
+        auth_flow: 'direct',
+        port: 3000,
+        credential_types: 'pid,mdl,badge,eaa'
+      },
+      rp: {
+        port: 8080,
+        signing_key_path: '',
+        x5c_cert_path: '',
+        trust_anchor_url: ''
+      }
+    });
+    expect('error' in result).toBe(true);
   });
 
   it('handles unreadable files', () => {
