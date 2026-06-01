@@ -25,6 +25,12 @@ credential_types = pid,mdl,badge,eaa
 ; HTTP port for the itw-relying-party service
 ; Default: 8080
 port = 8080
+; RP OpenID Federation Entity ID (leaf entity)
+; Example: https://rp.example.org
+entity_id =
+; OpenID Federation Trust Anchor Entity Configuration URL
+; Example: https://trust-anchor.example.org/.well-known/openid-federation
+trust_anchor =
 `;
 
 export function getDefaultConfigs(rootPath: string): ConfigType {
@@ -39,7 +45,9 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
       credential_types: 'pid,mdl,badge,eaa'
     },
     rp: {
-      port: 8080
+      port: 8080,
+      entity_id: '',
+      trust_anchor: ''
     }
   };
 }

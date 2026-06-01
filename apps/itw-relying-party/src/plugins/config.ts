@@ -9,6 +9,8 @@ declare module 'fastify' {
       host: string;
       port: number;
       baseUrl: string;
+      entityId: string;
+      trustAnchorUrl?: string;
       dataDir: string;
       configFilePath: string;
     };
@@ -24,6 +26,8 @@ export default fp(
       host: config.host,
       port: config.port,
       baseUrl: config.baseUrl,
+      entityId: config.entityId,
+      trustAnchorUrl: config.trustAnchorUrl,
       dataDir: config.dataDir,
       configFilePath
     });

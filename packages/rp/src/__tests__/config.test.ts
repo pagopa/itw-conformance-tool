@@ -29,6 +29,8 @@ describe('rpConfigSchema', () => {
       host: '0.0.0.0',
       port: 8080,
       baseUrl: 'http://localhost:8080',
+      entityId: 'http://localhost:8080',
+      trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
       dataDir: '/tmp/itw',
       configFilePath: '/tmp/config.ini'
     });
@@ -69,11 +71,15 @@ describe('loadRpConfig', () => {
     expect(result.config.port).toBe(DEFAULT_PORT);
     expect(result.config.dataDir).toBe(DEFAULT_DATA_DIR);
     expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.entityId).toBe(`http://localhost:${DEFAULT_PORT}`);
   });
 
   it('reads [rp].port and [global].data_dir from the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(cfgPath, '[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\n');
+    writeFileSync(
+      cfgPath,
+      '[global]\ndata_dir = /opt/itw-data\n\n[rp]\nentity_id = https://rp.example.org\nport = 9090\ntrust_anchor = https://trust-anchor.example.org/.well-known/openid-federation\n'
+    );
 
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
 
@@ -81,7 +87,33 @@ describe('loadRpConfig', () => {
     expect(result.config.port).toBe(9090);
     expect(result.config.dataDir).toBe('/opt/itw-data');
     expect(result.config.baseUrl).toBe('http://localhost:9090');
+    expect(result.config.entityId).toBe('https://rp.example.org');
+    expect(result.config.trustAnchorUrl).toBe('https://trust-anchor.example.org/.well-known/openid-federation');
     expect(result.config.configFilePath).toBe(cfgPath);
+  });
+
+  it('env override ITW_CT_RP_ENTITY_ID wins over the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, '[rp]\nentity_id = https://rp-from-ini.example.org\n');
+
+    const result = loadRpConfig({
+      configFilePath: cfgPath,
+      env: { ITW_CT_RP_ENTITY_ID: 'https://rp-from-env.example.org' }
+    });
+
+    expect(result.config.entityId).toBe('https://rp-from-env.example.org');
+  });
+
+  it('env override ITW_CT_RP_TRUST_ANCHOR_URL wins over the ini file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, '[rp]\ntrust_anchor = https://ta-from-ini.example.org/.well-known/openid-federation\n');
+
+    const result = loadRpConfig({
+      configFilePath: cfgPath,
+      env: { ITW_CT_RP_TRUST_ANCHOR_URL: 'https://ta-from-env.example.org/.well-known/openid-federation' }
+    });
+
+    expect(result.config.trustAnchorUrl).toBe('https://ta-from-env.example.org/.well-known/openid-federation');
   });
 
   it('env override ITW_CT_RP_PORT wins over the ini file', () => {

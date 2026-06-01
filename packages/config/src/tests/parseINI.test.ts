@@ -20,7 +20,9 @@ port=4000
 credential_types=pid,mdl,badge,eaa
 
 [rp]
+entity_id=https://rp.example.org
 port=8080
+trust_anchor=https://trust-anchor.example.org/.well-known/openid-federation
 `;
 
 const emptyConfigContent = ``;
@@ -37,7 +39,9 @@ port=4000
 credential_types=pid,mdl,badge,eaa
 
 [rp]
+entity_id=https://rp.example.org
 port=8080
+trust_anchor=https://trust-anchor.example.org/.well-known/openid-federation
 `;
 const wrongTypeContent = `[global]
 data_dir=~/.itw-conformance-tool
@@ -82,7 +86,9 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        entity_id: 'https://rp.example.org',
+        port: 8080,
+        trust_anchor: 'https://trust-anchor.example.org/.well-known/openid-federation'
       }
     });
   });
@@ -121,7 +127,9 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        entity_id: 'https://rp.example.org',
+        port: 8080,
+        trust_anchor: 'https://trust-anchor.example.org/.well-known/openid-federation'
       }
     });
     expect('error' in result).toBe(false);
@@ -143,7 +151,9 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        entity_id: '',
+        port: 8080,
+        trust_anchor: ''
       }
     });
     expect('error' in result).toBe(false);

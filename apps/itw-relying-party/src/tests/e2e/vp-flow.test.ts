@@ -49,6 +49,7 @@ async function buildFullRpApp() {
     host: '0.0.0.0',
     port: 8080,
     baseUrl: TEST_CLIENT_ID,
+    entityId: TEST_CLIENT_ID,
     dataDir,
     configFilePath: join(dataDir, 'config.ini')
   });

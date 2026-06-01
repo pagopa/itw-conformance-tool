@@ -33,10 +33,14 @@ export const ConfigSchema = z.object({
     }),
   rp: z
     .object({
-      port: z.coerce.number().int().min(1).max(65535).catch(8080)
+      entity_id: z.string().url().catch(''),
+      port: z.coerce.number().int().min(1).max(65535).catch(8080),
+      trust_anchor: z.string().url().catch('')
     })
     .default({
-      port: 8080
+      entity_id: '',
+      port: 8080,
+      trust_anchor: ''
     })
 });
 

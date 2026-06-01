@@ -13,6 +13,8 @@ export const rpConfigSchema = z.object({
   host: z.string().min(1),
   port: z.number().int().min(1).max(65535),
   baseUrl: z.string().url(),
+  entityId: z.string().url(),
+  trustAnchorUrl: z.string().url().optional(),
   dataDir: z.string().min(1),
   configFilePath: z.string().min(1)
 });
@@ -76,15 +78,41 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
   const baseUrlOverride = env.ITW_CT_RP_BASE_URL?.trim();
   const baseUrlCandidate =
     baseUrlOverride && baseUrlOverride.length > 0 ? baseUrlOverride : deriveBaseUrl({ host, port });
+
+  const entityIdOverride = env.ITW_CT_RP_ENTITY_ID?.trim();
+  const entityIdFromConfig = data.rp.entity_id?.trim();
+  const entityIdCandidate =
+    entityIdOverride && entityIdOverride.length > 0
+      ? entityIdOverride
+      : entityIdFromConfig && entityIdFromConfig.length > 0
+        ? entityIdFromConfig
+        : baseUrlCandidate;
+
+  const trustAnchorUrlOverride = env.ITW_CT_RP_TRUST_ANCHOR_URL?.trim();
+  const trustAnchorFromConfig = data.rp.trust_anchor?.trim();
+  const trustAnchorUrlCandidate =
+    trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0
+      ? trustAnchorUrlOverride
+      : trustAnchorFromConfig && trustAnchorFromConfig.length > 0
+        ? trustAnchorFromConfig
+        : undefined;
+
   let baseUrl = baseUrlCandidate;
   while (baseUrl.endsWith('/')) {
     baseUrl = baseUrl.slice(0, -1);
+  }
+
+  let entityId = entityIdCandidate;
+  while (entityId.endsWith('/')) {
+    entityId = entityId.slice(0, -1);
   }
 
   const config = rpConfigSchema.parse({
     host,
     port,
     baseUrl,
+    entityId,
+    trustAnchorUrl: trustAnchorUrlCandidate,
     dataDir,
     configFilePath: input.configFilePath
   });

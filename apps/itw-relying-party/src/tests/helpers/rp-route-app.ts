@@ -142,6 +142,7 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     host: '0.0.0.0',
     port: 8080,
     baseUrl: options.baseUrl ?? TEST_CLIENT_ID,
+    entityId: options.baseUrl ?? TEST_CLIENT_ID,
     dataDir,
     configFilePath: join(dataDir, 'config.ini')
   });
