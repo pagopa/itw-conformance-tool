@@ -53,7 +53,7 @@ function buildFetchWithTimeout(options: Pick<FetchTrustChainOptions, 'logger' | 
     const method = init?.method ?? 'GET';
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    const signal = init?.signal === undefined ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal]);
+    const signal = init?.signal == null ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal]);
 
     options.logger.info({ method, timeoutMs, url }, 'Fetching trust-chain resource');
 
