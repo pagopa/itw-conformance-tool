@@ -229,7 +229,7 @@ describe('loadRpConfig', () => {
     const cfgPath = join(workDir, 'config.ini');
     writeFileSync(
       cfgPath,
-      '[rp]\ntrust_anchor_url = https://ta.from.ini\nsigning_key_path = /ini/signing.pem\nx5c_cert_path = /ini/x5c.pem\n'
+      '[rp]\nport = 8080\ntrust_anchor_url = https://ta.from.ini\nsigning_key_path = /ini/signing.pem\nx5c_cert_path = /ini/x5c.pem\n'
     );
 
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });

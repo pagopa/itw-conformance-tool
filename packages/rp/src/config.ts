@@ -85,8 +85,9 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
   }
 
   const trustAnchorUrlOverride = env.ITW_CT_RP_TRUST_ANCHOR_URL?.trim();
-  const trustAnchorUrl =
+  const trustAnchorUrlCandidate =
     trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0 ? trustAnchorUrlOverride : data.rp.trust_anchor_url;
+  const trustAnchorUrl = trustAnchorUrlCandidate.trim();
 
   const signingKeyPathOverride = env.ITW_CT_RP_SIGNING_KEY_PATH?.trim();
   const signingKeyPathCandidate =
