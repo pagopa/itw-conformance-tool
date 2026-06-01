@@ -17,9 +17,9 @@ const configDependencyPlugin = fp(
     app.decorate('config', {
       host: '0.0.0.0',
       port: 8080,
-        baseUrl: 'https://rp.example.org',
-        entityId: 'https://rp.example.org',
-        trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
+      baseUrl: 'https://rp.example.org',
+      entityId: 'https://rp.example.org',
+      trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
       dataDir: '/tmp',
       configFilePath: '/tmp/config.ini'
     });
@@ -78,17 +78,20 @@ describe('trust-chain plugin', () => {
     const app = Fastify({ logger: false });
 
     await app.register(
-      fp(async (instance) => {
-        instance.decorate('config', {
-          host: '0.0.0.0',
-          port: 8080,
-          baseUrl: 'http://localhost:8080',
-          entityId: 'http://localhost:8080',
-          trustAnchorUrl: 'http://localhost:3000/.well-known/openid-federation',
-          dataDir: '/tmp',
-          configFilePath: '/tmp/config.ini'
-        });
-      }, { name: 'config' })
+      fp(
+        async (instance) => {
+          instance.decorate('config', {
+            host: '0.0.0.0',
+            port: 8080,
+            baseUrl: 'http://localhost:8080',
+            entityId: 'http://localhost:8080',
+            trustAnchorUrl: 'http://localhost:3000/.well-known/openid-federation',
+            dataDir: '/tmp',
+            configFilePath: '/tmp/config.ini'
+          });
+        },
+        { name: 'config' }
+      )
     );
 
     await app.register(trustChainPlugin);
