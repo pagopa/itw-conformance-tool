@@ -34,9 +34,9 @@ export const ConfigSchema = z.object({
   rp: z
     .object({
       port: z.coerce.number().int().min(1).max(65535).catch(8080),
-      trust_anchor_url: z.string(),
-      signing_key_path: z.string(),
-      x5c_cert_path: z.string()
+      trust_anchor_url: z.string().catch(''),
+      signing_key_path: z.string().catch(''),
+      x5c_cert_path: z.string().catch('')
     })
     .default({
       port: 8080,

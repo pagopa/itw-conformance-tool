@@ -89,12 +89,16 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0 ? trustAnchorUrlOverride : data.rp.trust_anchor_url;
 
   const signingKeyPathOverride = env.ITW_CT_RP_SIGNING_KEY_PATH?.trim();
-  const signingKeyPath =
+  const signingKeyPathCandidate =
     signingKeyPathOverride && signingKeyPathOverride.length > 0 ? signingKeyPathOverride : data.rp.signing_key_path;
+  const signingKeyPathTrimmed = signingKeyPathCandidate.trim();
+  const signingKeyPath = signingKeyPathTrimmed.length > 0 ? expandHome(signingKeyPathTrimmed) : signingKeyPathTrimmed;
 
   const x5cCertPathOverride = env.ITW_CT_RP_X5C_CERT_PATH?.trim();
-  const x5cCertPath =
+  const x5cCertPathCandidate =
     x5cCertPathOverride && x5cCertPathOverride.length > 0 ? x5cCertPathOverride : data.rp.x5c_cert_path;
+  const x5cCertPathTrimmed = x5cCertPathCandidate.trim();
+  const x5cCertPath = x5cCertPathTrimmed.length > 0 ? expandHome(x5cCertPathTrimmed) : x5cCertPathTrimmed;
 
   const config = rpConfigSchema.parse({
     host,

@@ -36,7 +36,7 @@ async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
   }
 
   try {
-    const jwk = await JSON.parse(content);
+    const jwk = JSON.parse(content);
     // Convert JWK to PEM PKCS8
     const privateKey = createPrivateKey({ key: jwk, format: 'jwk' });
     const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
@@ -66,7 +66,7 @@ async function loadSigningKey(signingKeyPath: string): Promise<string> {
     let keyInput: Parameters<typeof createPrivateKey>[0];
     const trimmed = content.trim();
     if (trimmed.startsWith('{')) {
-      const jwk = await JSON.parse(trimmed);
+      const jwk = JSON.parse(trimmed);
       keyInput = { key: jwk, format: 'jwk' };
     } else {
       keyInput = { key: trimmed, format: 'pem' };
