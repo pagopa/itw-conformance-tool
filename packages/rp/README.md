@@ -140,6 +140,9 @@ const { config, configFileFound } = loadRpConfig({
 // Supported environment variables take precedence:
 // - ITW_CT_RP_PORT (default: 8080)
 // - ITW_CT_DATA_DIR (default: "~/.itw-conformance-tool")
+// - ITW_CT_RP_TRUST_ANCHOR_URL (required — Trust Anchor URL for Federation validation)
+// - ITW_CT_RP_SIGNING_KEY_PATH (required — path to PEM or JWK private key for Request Object signing)
+// - ITW_CT_RP_X5C_CERT_PATH (required — path to PEM certificate chain for x5c JWT header)
 ```
 
 ## Wiring Contracts (Dependency Injection)
