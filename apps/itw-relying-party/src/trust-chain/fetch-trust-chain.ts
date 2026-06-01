@@ -96,6 +96,9 @@ function toEntityId(url: string): string {
   if (parsed.pathname !== '/' && parsed.pathname.endsWith('/')) {
     parsed.pathname = parsed.pathname.slice(0, -1);
   }
+  if (parsed.pathname === '/') {
+    return parsed.origin;
+  }
   return parsed.toString();
 }
 

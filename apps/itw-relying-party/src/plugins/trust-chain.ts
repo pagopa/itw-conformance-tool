@@ -9,6 +9,15 @@ declare module 'fastify' {
 }
 
 const DEFAULT_TRUST_CHAIN_FETCH_TIMEOUT_MS = 10_000;
+const INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER = 'insecure-http-local-dev';
+
+function isHttpUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
 
 function resolveFetchTimeoutMs(value: string | undefined): number {
   if (value === undefined || value.trim().length === 0) {
@@ -32,6 +41,18 @@ export default fp(
     }
 
     const timeoutMs = resolveFetchTimeoutMs(process.env.ITW_CT_TRUST_CHAIN_FETCH_TIMEOUT_MS);
+
+    if (isHttpUrl(entityId) || isHttpUrl(trustAnchorUrl)) {
+      app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
+      app.log.warn(
+        {
+          entityId,
+          trustAnchorUrl
+        },
+        'Trust chain bootstrap running in insecure HTTP local-dev mode; strict federation validation is skipped'
+      );
+      return;
+    }
 
     try {
       const trustChain = await fetchTrustChain({

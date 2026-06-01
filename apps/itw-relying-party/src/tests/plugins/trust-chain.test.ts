@@ -17,9 +17,9 @@ const configDependencyPlugin = fp(
     app.decorate('config', {
       host: '0.0.0.0',
       port: 8080,
-      baseUrl: 'http://localhost:8080',
-      entityId: 'http://localhost:8080',
-      trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
+        baseUrl: 'https://rp.example.org',
+        entityId: 'https://rp.example.org',
+        trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
       dataDir: '/tmp',
       configFilePath: '/tmp/config.ini'
     });
@@ -69,6 +69,33 @@ describe('trust-chain plugin', () => {
       'Trust chain bootstrap failed: Trust Anchor URL is not configured'
     );
 
+    await app.close();
+  });
+
+  it('accepts HTTP entity and trust anchor URLs in local-dev mode', async () => {
+    mocked.fetchTrustChain.mockResolvedValue(['leaf.jwt', 'anchor.jwt']);
+
+    const app = Fastify({ logger: false });
+
+    await app.register(
+      fp(async (instance) => {
+        instance.decorate('config', {
+          host: '0.0.0.0',
+          port: 8080,
+          baseUrl: 'http://localhost:8080',
+          entityId: 'http://localhost:8080',
+          trustAnchorUrl: 'http://localhost:3000/.well-known/openid-federation',
+          dataDir: '/tmp',
+          configFilePath: '/tmp/config.ini'
+        });
+      }, { name: 'config' })
+    );
+
+    await app.register(trustChainPlugin);
+    await app.ready();
+
+    expect(mocked.fetchTrustChain).not.toHaveBeenCalled();
+    expect(app.trustChain).toEqual(['insecure-http-local-dev']);
     await app.close();
   });
 });

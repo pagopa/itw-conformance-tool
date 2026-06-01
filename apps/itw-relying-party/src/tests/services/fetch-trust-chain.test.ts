@@ -39,9 +39,9 @@ describe('fetchTrustChain', () => {
     expect(trustChain).toEqual(['leaf.jwt', 'anchor.jwt']);
     expect(mocked.fetchAndValidateTrustChain).toHaveBeenCalledTimes(1);
     expect(mocked.fetchAndValidateTrustChain).toHaveBeenCalledWith(
-      'https://rp.example.org/',
+      'https://rp.example.org',
       expect.objectContaining({
-        trustAnchorUrls: ['https://trust-anchor.example.org/']
+        trustAnchorUrls: ['https://trust-anchor.example.org']
       })
     );
   });
@@ -56,9 +56,9 @@ describe('fetchTrustChain', () => {
     });
 
     expect(mocked.fetchAndValidateTrustChain).toHaveBeenCalledWith(
-      'https://rp.example.org/',
+      'https://rp.example.org',
       expect.objectContaining({
-        trustAnchorUrls: ['https://trust-anchor.example.org/']
+        trustAnchorUrls: ['https://trust-anchor.example.org']
       })
     );
   });
