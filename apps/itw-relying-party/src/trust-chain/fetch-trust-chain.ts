@@ -87,6 +87,9 @@ function buildHashCallback(): HashCallback {
 function toEntityId(url: string): string {
   const parsed = new URL(url);
   const wellKnownSuffix = '/.well-known/openid-federation';
+  if (parsed.pathname !== '/' && parsed.pathname.endsWith('/')) {
+    parsed.pathname = parsed.pathname.slice(0, -1);
+  }
   if (parsed.pathname.endsWith(wellKnownSuffix)) {
     parsed.pathname = parsed.pathname.slice(0, -wellKnownSuffix.length) || '/';
   }
