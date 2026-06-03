@@ -16,7 +16,10 @@ const mockConfigs: ConfigType = {
     credential_types: 'pid,mdl,badge,eaa'
   },
   rp: {
-    port: 8080
+    port: 8080,
+    trust_anchor_url: 'https://trust-anchor.example.com',
+    signing_key_path: '/keys/signing.pem',
+    x5c_cert_path: '/certs/x5c.pem'
   }
 };
 
@@ -37,6 +40,9 @@ describe('buildEnv', () => {
     expect(env.ITW_CT_ISSUER_CREDENTIAL_TYPES).toBe('pid,mdl,badge,eaa');
     expect(env.ITW_CT_RP_PORT).toBe('8080');
     expect(env.ITW_CT_ISSUER_AUTH_FLOW).toBe('l3');
+    expect(env.ITW_CT_RP_TRUST_ANCHOR_URL).toBe('https://trust-anchor.example.com');
+    expect(env.ITW_CT_RP_SIGNING_KEY_PATH).toBe('/keys/signing.pem');
+    expect(env.ITW_CT_RP_X5C_CERT_PATH).toBe('/certs/x5c.pem');
   });
 
   it('merges with existing process.env variables', () => {
@@ -62,7 +68,12 @@ describe('buildEnv', () => {
     const configs: ConfigType = {
       ...mockConfigs,
       'itw-credential-issuer': { auth_flow: 'l3', port: 4000, credential_types: 'pid' },
-      rp: { port: 9090 }
+      rp: {
+        port: 9090,
+        trust_anchor_url: 'https://ta.example.com',
+        signing_key_path: '/k.pem',
+        x5c_cert_path: '/c.pem'
+      }
     };
 
     const env = buildEnv(configs, emitLog);

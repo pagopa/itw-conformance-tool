@@ -143,12 +143,17 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     port: 8080,
     baseUrl: options.baseUrl ?? TEST_CLIENT_ID,
     dataDir,
-    configFilePath: join(dataDir, 'config.ini')
+    configFilePath: join(dataDir, 'config.ini'),
+    trustAnchorUrl: 'https://trust-anchor.example.com',
+    signingKeyPath: join(dataDir, 'signing-key.pem'),
+    x5cCertPath: join(dataDir, 'x5c-cert.pem')
   });
 
   app.decorate('rpKeys', {
     authRequestPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,
-    authResponsePrivateKeyPem: options.authResponsePrivateKeyPem ?? TEST_AUTH_RESPONSE_PEM
+    authResponsePrivateKeyPem: options.authResponsePrivateKeyPem ?? TEST_AUTH_RESPONSE_PEM,
+    signingPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
+    x5cCertPem: ''
   });
 
   app.decorate('nonceRepository', nonceRepo);

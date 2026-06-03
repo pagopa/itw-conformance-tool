@@ -21,6 +21,9 @@ credential_types=pid,mdl,badge,eaa
 
 [rp]
 port=8080
+signing_key_path=/tmp/signing-key.pem
+x5c_cert_path=/tmp/x5c-cert.pem
+trust_anchor_url=https://trust-anchor.example.com
 `;
 
 const emptyConfigContent = ``;
@@ -82,7 +85,10 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        port: 8080,
+        signing_key_path: '/tmp/signing-key.pem',
+        x5c_cert_path: '/tmp/x5c-cert.pem',
+        trust_anchor_url: 'https://trust-anchor.example.com'
       }
     });
   });
@@ -121,7 +127,10 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        port: 8080,
+        signing_key_path: '',
+        x5c_cert_path: '',
+        trust_anchor_url: ''
       }
     });
     expect('error' in result).toBe(false);
@@ -143,7 +152,10 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        port: 8080
+        port: 8080,
+        signing_key_path: '',
+        x5c_cert_path: '',
+        trust_anchor_url: ''
       }
     });
     expect('error' in result).toBe(false);
