@@ -20,7 +20,7 @@ describe('DatabaseClient', () => {
     client.close();
   });
 
-  it('creates all three tables on init', () => {
+  it('creates all required tables on init', () => {
     const tables = client.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`).all() as {
       name: string;
     }[];
@@ -28,6 +28,7 @@ describe('DatabaseClient', () => {
     expect(names).toContain('nonces');
     expect(names).toContain('par_entries');
     expect(names).toContain('presentation_sessions');
+    expect(names).toContain('conformance_sessions');
   });
 
   it('is idempotent — init twice on the same dataDir does not throw', () => {
