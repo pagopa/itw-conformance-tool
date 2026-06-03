@@ -33,11 +33,13 @@ function spawnService(
   const tag = `[${prefix}]`;
 
   createInterface({ input: child.stdout, terminal: false }).on('line', (line) => {
-    emitLog(`${tag} ${line}`, 'info');
+    const message = line.length > 0 ? `${tag} ${line}` : tag;
+    emitLog(message, 'info');
   });
 
   createInterface({ input: child.stderr, terminal: false }).on('line', (line) => {
-    emitLog(`${tag} ${line}`, 'error');
+    const message = line.length > 0 ? `${tag} ${line}` : tag;
+    emitLog(message, 'error');
   });
 
   child.once('error', (err) => {
@@ -80,8 +82,10 @@ export async function runCommands(
     function settle(code: number): void {
       if (settled) return;
       settled = true;
-      for (const child of children) {
-        child.kill();
+      if (code !== 0) {
+        for (const child of children) {
+          child.kill();
+        }
       }
       resolve(code);
     }
