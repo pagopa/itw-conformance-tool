@@ -2,35 +2,14 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+import { DDL } from './schema.js';
+
 export type DatabaseClientOptions = {
   /** Absolute path to the data directory. The database file will be created as `itw.db` inside it. */
   dataDir: string;
   /** Cleanup interval in milliseconds. Defaults to 60 000 (60 seconds). */
   cleanupIntervalMs?: number;
 };
-
-const DDL = `
-  CREATE TABLE IF NOT EXISTS nonces (
-    value      TEXT    PRIMARY KEY,
-    expires_at INTEGER NOT NULL,
-    used       INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE TABLE IF NOT EXISTS par_entries (
-    request_uri    TEXT    PRIMARY KEY,
-    client_id      TEXT    NOT NULL,
-    request_object TEXT    NOT NULL,
-    expires_at     INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS presentation_sessions (
-    id             TEXT    PRIMARY KEY,
-    state          TEXT    NOT NULL CHECK(state IN ('pending', 'completed', 'failed')),
-    request_object TEXT,
-    response       TEXT,
-    created_at     INTEGER NOT NULL
-  );
-`;
 
 export class DatabaseClient {
   readonly db: DatabaseSync;
