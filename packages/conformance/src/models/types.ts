@@ -32,3 +32,10 @@ export interface ConformanceSession {
   status: ConformanceSessionStatus;
   checks: ConformanceCheck[];
 }
+
+export interface IConformanceSessionRepository {
+  create(session: ConformanceSession): Promise<void>;
+  get(sessionId: string): Promise<ConformanceSession | null>;
+  appendCheck(sessionId: string, check: ConformanceCheck): Promise<void>;
+  close(sessionId: string, status: 'PASSED' | 'FAILED' | 'INCOMPLETE'): Promise<void>;
+}

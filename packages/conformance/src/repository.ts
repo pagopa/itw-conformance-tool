@@ -3,7 +3,7 @@ import type {
   ConformanceSession,
   ConformanceSessionStatus,
   IConformanceSessionRepository
-} from '@itw-conformance-tool/database';
+} from './models/types.js';
 import type { DatabaseSync } from 'node:sqlite';
 
 type SessionRow = {
@@ -16,6 +16,7 @@ type SessionRow = {
 
 function rowToSession(row: SessionRow): ConformanceSession {
   return {
+    id: row.session_id,
     sessionId: row.session_id,
     startedAt: row.started_at,
     closedAt: row.closed_at ?? undefined,

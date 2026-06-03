@@ -1,13 +1,6 @@
 export { DatabaseClient } from './client.js';
 export type { DatabaseClientOptions } from './client.js';
 export type {
-  ConformanceCheck,
-  ConformanceCheckResult,
-  ConformancePhase,
-  ConformanceSession,
-  ConformanceSessionStatus,
-  ConformanceStep,
-  IConformanceSessionRepository,
   INonceRepository,
   IPARRepository,
   ISessionRepository,

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SqliteConformanceSessionRepository } from '../repository.js';
 
-import type { ConformanceCheck, ConformanceSession } from '@itw-conformance-tool/database';
+import type { ConformanceCheck, ConformanceSession } from '../models/types.js';
 
 function makeTmpDir(): string {
   return join(tmpdir(), `itw-conformance-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -14,6 +14,7 @@ function makeTmpDir(): string {
 
 function makeSession(overrides: Partial<ConformanceSession> = {}): ConformanceSession {
   return {
+    id: 'aaaaaaaa-0000-1111-2222-333344445555',
     sessionId: 'aaaaaaaa-0000-1111-2222-333344445555',
     startedAt: new Date().toISOString(),
     status: 'OPEN',
