@@ -48,9 +48,9 @@ async function main(): Promise<void> {
     emitLog = createEmitter(logger);
 
     // Start the selected services with Nx CLI
-    const nxArgs = getNxCommands(flags);
+    const services = getNxCommands(flags);
     const env = buildEnv(configs, emitLog);
-    const exitCode = await runCommands(rootPath, nxArgs, env);
+    const exitCode = await runCommands(rootPath, services, env, emitLog);
 
     if (exitCode === 0) process.exit(0);
     throw new Error(`Nx CLI process exited with code ${exitCode}`);

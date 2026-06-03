@@ -1,11 +1,13 @@
 import type { Level } from '@itw-conformance-tool/logger';
 
 // Types
-export type ServiceCommand = 'init' | 'start';
+export type EmitLog = (event: string, level?: Level) => void;
 
 export type LogLevel = Level;
 
 export type Service = 'issuer' | 'rp';
+
+export type ServiceCommand = 'init' | 'start';
 
 // Interfaces
 export interface CLIFlags {
@@ -17,4 +19,9 @@ export interface CLIFlags {
     value: boolean;
     path: string;
   };
+}
+
+export interface ServiceProcess {
+  prefix: string;
+  nxArgs: string[];
 }
