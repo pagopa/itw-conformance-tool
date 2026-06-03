@@ -1,11 +1,8 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-
-import { SignJWT, importPKCS8 } from 'jose';
 import { z } from 'zod';
 
-import type { FastifyPluginAsync } from 'fastify';
+import { createAuthorizationRequestUseCase } from '../use-cases/create-authorization-request.js';
 
-const TTL_MS = 5 * 60 * 1000;
+import type { FastifyPluginAsync } from 'fastify';
 
 const authorizationRequestSchema = z
   .object({
@@ -59,48 +56,19 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ message: 'DCQL is not correct' });
       }
 
-      const state = randomUUID();
-      const nonce = randomBytes(32).toString('hex');
-      await app.nonceRepository.insert(nonce, Date.now() + TTL_MS);
-
-      const payload = {
-        client_id: app.config.baseUrl,
-        dcql_query: parsed.data.dcqlQuery,
-        iss: app.config.baseUrl,
-        nonce,
-        request_uri_method: 'get',
-        response_mode: 'direct_post.jwt',
-        response_type: 'vp_token',
-        response_uri: `${app.config.baseUrl}/auth/response`,
-        state
-      };
-
-      const privateKey = await importPKCS8(app.rpKeys.authRequestPrivateKeyPem, 'ES256');
-      const requestObject = await new SignJWT(payload)
-        .setProtectedHeader({ alg: 'ES256', typ: 'oauth-authz-req+jwt' })
-        .setIssuedAt()
-        .setExpirationTime('1h')
-        .sign(privateKey);
-
-      await app.sessionService.create({
+      const result = await createAuthorizationRequestUseCase({
+        baseUrl: app.config.baseUrl,
+        dcqlQuery: parsed.data.dcqlQuery,
+        ephemeralKeys: app.ephemeralKeys,
         flowType: parsed.data.flowType,
-        id: state,
-        jwt: requestObject,
-        ttlMs: TTL_MS
+        nonceRepository: app.nonceRepository,
+        rpKeys: app.rpKeys,
+        sessionService: app.sessionService,
+        trustChain: app.trustChain,
+        walletAuthBaseUri: parsed.data.walletAuthBaseUri
       });
 
-      const requestUri = `${app.config.baseUrl}/auth/request/${state}`;
-      const params = new URLSearchParams({
-        client_id: app.config.baseUrl,
-        request_uri: requestUri,
-        state
-      });
-      const walletUrl = new URL(parsed.data.walletAuthBaseUri);
-      for (const [key, value] of params.entries()) {
-        walletUrl.searchParams.set(key, value);
-      }
-
-      return reply.code(200).send({ url: walletUrl.toString() });
+      return reply.code(200).send({ url: result.walletUrl });
     }
   });
 };
