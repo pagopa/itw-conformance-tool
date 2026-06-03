@@ -25,6 +25,9 @@
       "path": "./packages/issuer"
     },
     {
+      "path": "./packages/conformance"
+    },
+    {
       "path": "./packages/rp"
     }
   ]
