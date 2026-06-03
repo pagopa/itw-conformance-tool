@@ -25,6 +25,6 @@ export const DDL = `
     started_at  TEXT    NOT NULL,
     closed_at   TEXT,
     status      TEXT    NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'PASSED', 'FAILED', 'INCOMPLETE')),
-    checks      TEXT    NOT NULL DEFAULT '[]'
+    checks      TEXT    NOT NULL DEFAULT '[]' CHECK(json_type(checks) = 'array')
   );
 `;

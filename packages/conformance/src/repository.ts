@@ -56,11 +56,11 @@ export class SqliteConformanceSessionRepository implements IConformanceSessionRe
   }
 
   async appendCheck(sessionId: string, check: ConformanceCheck): Promise<void> {
-    const row = this.db.prepare('SELECT checks FROM conformance_sessions WHERE session_id = ?').get(sessionId) as
-      | { checks: string }
-      | undefined;
+    const row = this.db
+      .prepare('SELECT checks, status FROM conformance_sessions WHERE session_id = ?')
+      .get(sessionId) as { checks: string; status: string } | undefined;
 
-    if (!row) return;
+    if (row?.status !== 'OPEN') return;
 
     const checks = JSON.parse(row.checks) as ConformanceCheck[];
     checks.push(check);
@@ -75,7 +75,7 @@ export class SqliteConformanceSessionRepository implements IConformanceSessionRe
       .prepare(
         `UPDATE conformance_sessions
          SET status = ?, closed_at = ?
-         WHERE session_id = ?`
+         WHERE session_id = ? AND status = 'OPEN'`
       )
       .run(status, new Date().toISOString(), sessionId);
   }
