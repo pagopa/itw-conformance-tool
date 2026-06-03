@@ -240,6 +240,9 @@ importers:
       '@itw-conformance-tool/rp':
         specifier: 'workspace:'
         version: link:../../packages/rp
+      '@pagopa/io-wallet-oauth2':
+        specifier: 1.4.2
+        version: 1.4.2
       '@pagopa/io-wallet-oid-federation':
         specifier: 1.4.2
         version: 1.4.2

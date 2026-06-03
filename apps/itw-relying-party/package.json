@@ -21,6 +21,7 @@
     "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "@itw-conformance-tool/rp": "workspace:",
+    "@pagopa/io-wallet-oauth2": "1.4.2",
     "@pagopa/io-wallet-oid-federation": "1.4.2",
     "@pagopa/io-wallet-oid4vp": "1.4.2",
     "close-with-grace": "^2.5.0",
