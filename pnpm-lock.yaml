@@ -283,9 +283,6 @@ importers:
 
   packages/conformance:
     dependencies:
-      '@itw-conformance-tool/database':
-        specifier: workspace:*
-        version: link:../database
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
