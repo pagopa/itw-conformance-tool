@@ -14,7 +14,6 @@ function makeTmpDir(): string {
 
 function makeSession(overrides: Partial<ConformanceSession> = {}): ConformanceSession {
   return {
-    id: 'aaaaaaaa-0000-1111-2222-333344445555',
     sessionId: 'aaaaaaaa-0000-1111-2222-333344445555',
     startedAt: new Date().toISOString(),
     status: 'OPEN',

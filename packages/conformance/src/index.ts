@@ -1,4 +1,5 @@
 export type {
+  ClosedConformanceSessionStatus,
   ConformanceCheck,
   ConformanceCheckResult,
   ConformancePhase,

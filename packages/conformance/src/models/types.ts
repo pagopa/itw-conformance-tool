@@ -2,6 +2,8 @@ export type ConformancePhase = 'ISSUANCE' | 'PRESENTATION';
 
 export type ConformanceSessionStatus = 'OPEN' | 'PASSED' | 'FAILED' | 'INCOMPLETE';
 
+export type ClosedConformanceSessionStatus = Exclude<ConformanceSessionStatus, 'OPEN'>;
+
 export type ConformanceCheckResult = 'PASS' | 'FAIL' | 'NOT_REACHED';
 
 export type ConformanceStep =
@@ -25,7 +27,6 @@ export interface ConformanceCheck {
 }
 
 export interface ConformanceSession {
-  id: string;
   sessionId: string;
   startedAt: string;
   closedAt?: string;
@@ -37,5 +38,5 @@ export interface IConformanceSessionRepository {
   create(session: ConformanceSession): Promise<void>;
   get(sessionId: string): Promise<ConformanceSession | null>;
   appendCheck(sessionId: string, check: ConformanceCheck): Promise<void>;
-  close(sessionId: string, status: 'PASSED' | 'FAILED' | 'INCOMPLETE'): Promise<void>;
+  close(sessionId: string, status: ClosedConformanceSessionStatus): Promise<void>;
 }

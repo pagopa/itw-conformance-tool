@@ -1,4 +1,5 @@
 import type {
+  ClosedConformanceSessionStatus,
   ConformanceCheck,
   ConformanceSession,
   ConformanceSessionStatus,
@@ -16,7 +17,6 @@ type SessionRow = {
 
 function rowToSession(row: SessionRow): ConformanceSession {
   return {
-    id: row.session_id,
     sessionId: row.session_id,
     startedAt: row.started_at,
     closedAt: row.closed_at ?? undefined,
@@ -70,7 +70,7 @@ export class SqliteConformanceSessionRepository implements IConformanceSessionRe
       .run(JSON.stringify(checks), sessionId);
   }
 
-  async close(sessionId: string, status: 'PASSED' | 'FAILED' | 'INCOMPLETE'): Promise<void> {
+  async close(sessionId: string, status: ClosedConformanceSessionStatus): Promise<void> {
     this.db
       .prepare(
         `UPDATE conformance_sessions
