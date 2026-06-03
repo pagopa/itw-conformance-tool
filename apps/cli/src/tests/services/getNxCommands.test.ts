@@ -17,7 +17,7 @@ function makeFlags(overrides: Partial<CLIFlags> = {}): CLIFlags {
 }
 
 const ISSUER_PROCESS = {
-  prefix: 'itw-credential-issuer', 
+  prefix: 'itw-credential-issuer',
   nxArgs: ['run', 'itw-credential-issuer:serve']
 };
 

@@ -2,11 +2,12 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
 import { searchNx } from '../utils/search.js';
+
 import type { EmitLog, ServiceProcess } from '../types/types.js';
 
-/** Runs the specified Nx CLI commands for the selected services, 
+/** Runs the specified Nx CLI commands for the selected services,
  * streaming their output in real-time.
- * 
+ *
  * @param rootPath - The root directory of the project.
  * @param services - The list of service processes to start.
  * @param env - The environment variables to use for the child processes.
