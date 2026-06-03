@@ -25,6 +25,9 @@ credential_types = pid,mdl,badge,eaa
 ; HTTP port for the itw-relying-party service
 ; Default: 8080
 port = 8080
+; RP OpenID Federation Entity ID (leaf entity)
+; Example: https://rp.example.org
+entity_id =
 ; Trust Anchor URL for Federation validation
 ; Override with env: ITW_CT_RP_TRUST_ANCHOR_URL
 trust_anchor_url = 
@@ -49,6 +52,7 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
     },
     rp: {
       port: 8080,
+      entity_id: '',
       trust_anchor_url: '',
       signing_key_path: join(rootPath, '.itw-conformance-tool', 'rp', 'signing-key.pem'),
       x5c_cert_path: join(rootPath, '.itw-conformance-tool', 'rp', 'x5c-cert.pem')

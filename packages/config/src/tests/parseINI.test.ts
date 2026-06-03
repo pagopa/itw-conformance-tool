@@ -20,6 +20,7 @@ port=4000
 credential_types=pid,mdl,badge,eaa
 
 [rp]
+entity_id=https://rp.example.org
 port=8080
 signing_key_path=/tmp/signing-key.pem
 x5c_cert_path=/tmp/x5c-cert.pem
@@ -40,7 +41,9 @@ port=4000
 credential_types=pid,mdl,badge,eaa
 
 [rp]
+entity_id=https://rp.example.org
 port=8080
+trust_anchor=https://trust-anchor.example.org/.well-known/openid-federation
 `;
 const wrongTypeContent = `[global]
 data_dir=~/.itw-conformance-tool
@@ -86,6 +89,7 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
+        entity_id: 'https://rp.example.org',
         signing_key_path: '/tmp/signing-key.pem',
         x5c_cert_path: '/tmp/x5c-cert.pem',
         trust_anchor_url: 'https://trust-anchor.example.com'
@@ -128,6 +132,7 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
+        entity_id: 'https://rp.example.org',
         signing_key_path: '',
         x5c_cert_path: '',
         trust_anchor_url: ''
@@ -153,6 +158,7 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
+        entity_id: '',
         signing_key_path: '',
         x5c_cert_path: '',
         trust_anchor_url: ''
