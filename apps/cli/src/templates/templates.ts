@@ -28,9 +28,15 @@ port = 8080
 ; RP OpenID Federation Entity ID (leaf entity)
 ; Example: https://rp.example.org
 entity_id =
-; OpenID Federation Trust Anchor Entity Configuration URL
-; Example: https://trust-anchor.example.org/.well-known/openid-federation
-trust_anchor =
+; Trust Anchor URL for Federation validation
+; Override with env: ITW_CT_RP_TRUST_ANCHOR_URL
+trust_anchor_url = 
+; Path to the private key file (PEM or JWK) used to sign the Request Object JWT 
+; Override with env: ITW_CT_RP_SIGNING_KEY_PATH
+signing_key_path = ~/.itw-conformance-tool/rp/signing-key.pem
+; Path to the x5c certificate chain PEM file of the RP 
+; Override with env: ITW_CT_RP_X5C_CERT_PATH
+x5c_cert_path = ~/.itw-conformance-tool/rp/x5c-cert.pem
 `;
 
 export function getDefaultConfigs(rootPath: string): ConfigType {
@@ -47,7 +53,9 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
     rp: {
       port: 8080,
       entity_id: '',
-      trust_anchor: ''
+      trust_anchor_url: '',
+      signing_key_path: join(rootPath, '.itw-conformance-tool', 'rp', 'signing-key.pem'),
+      x5c_cert_path: join(rootPath, '.itw-conformance-tool', 'rp', 'x5c-cert.pem')
     }
   };
 }

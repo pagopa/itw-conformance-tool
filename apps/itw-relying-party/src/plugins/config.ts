@@ -10,9 +10,11 @@ declare module 'fastify' {
       port: number;
       baseUrl: string;
       entityId: string;
-      trustAnchorUrl?: string;
       dataDir: string;
       configFilePath: string;
+      trustAnchorUrl: string;
+      signingKeyPath: string;
+      x5cCertPath: string;
     };
   }
 }
@@ -29,7 +31,9 @@ export default fp(
       entityId: config.entityId,
       trustAnchorUrl: config.trustAnchorUrl,
       dataDir: config.dataDir,
-      configFilePath
+      configFilePath,
+      signingKeyPath: config.signingKeyPath,
+      x5cCertPath: config.x5cCertPath
     });
   },
   { name: 'config' }

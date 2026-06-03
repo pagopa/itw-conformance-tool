@@ -22,7 +22,9 @@ credential_types=pid,mdl,badge,eaa
 [rp]
 entity_id=https://rp.example.org
 port=8080
-trust_anchor=https://trust-anchor.example.org/.well-known/openid-federation
+signing_key_path=/tmp/signing-key.pem
+x5c_cert_path=/tmp/x5c-cert.pem
+trust_anchor_url=https://trust-anchor.example.com
 `;
 
 const emptyConfigContent = ``;
@@ -86,9 +88,11 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        entity_id: 'https://rp.example.org',
         port: 8080,
-        trust_anchor: 'https://trust-anchor.example.org/.well-known/openid-federation'
+        entity_id: 'https://rp.example.org',
+        signing_key_path: '/tmp/signing-key.pem',
+        x5c_cert_path: '/tmp/x5c-cert.pem',
+        trust_anchor_url: 'https://trust-anchor.example.com'
       }
     });
   });
@@ -127,9 +131,11 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        entity_id: 'https://rp.example.org',
         port: 8080,
-        trust_anchor: 'https://trust-anchor.example.org/.well-known/openid-federation'
+        entity_id: 'https://rp.example.org',
+        signing_key_path: '',
+        x5c_cert_path: '',
+        trust_anchor_url: ''
       }
     });
     expect('error' in result).toBe(false);
@@ -151,9 +157,11 @@ describe('parseINI', () => {
         credential_types: 'pid,mdl,badge,eaa'
       },
       rp: {
-        entity_id: '',
         port: 8080,
-        trust_anchor: ''
+        entity_id: '',
+        signing_key_path: '',
+        x5c_cert_path: '',
+        trust_anchor_url: ''
       }
     });
     expect('error' in result).toBe(false);
