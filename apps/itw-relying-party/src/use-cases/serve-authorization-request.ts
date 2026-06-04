@@ -15,6 +15,7 @@ export class SessionNotFoundError extends Error {
 
 export class SessionExpiredError extends Error {
   readonly state: string;
+  readonly statusCode = 410;
 
   constructor(state: string) {
     super('Session has expired');
