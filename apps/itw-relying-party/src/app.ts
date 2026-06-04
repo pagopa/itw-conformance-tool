@@ -42,8 +42,9 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
   app.setErrorHandler(function (err, request, reply) {
     const isKnownError = err instanceof Error && 'statusCode' in err && typeof err.statusCode === 'number';
     const statusCode = isKnownError ? (err as Error & { statusCode: number }).statusCode : 500;
+    const isClientError = isKnownError && statusCode < 500;
 
-    if (!isKnownError) {
+    if (!isClientError) {
       this.log.error(
         {
           err,
@@ -54,12 +55,12 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
             params: request.params
           }
         },
-        'Unexpected error'
+        isKnownError ? 'Server error' : 'Unexpected error'
       );
     }
 
     reply.code(statusCode);
-    reply.send({ message: isKnownError ? err.message : 'Internal Server Error' });
+    reply.send({ message: isClientError ? err.message : 'Internal Server Error' });
   });
 
   // This is used to avoid attacks to find valid routes

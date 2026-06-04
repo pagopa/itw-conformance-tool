@@ -3,29 +3,34 @@ import { isTerminalState } from '@itw-conformance-tool/rp';
 import type { SessionService } from '@itw-conformance-tool/rp';
 
 export class SessionNotFoundError extends Error {
-  readonly statusCode = 404;
+  readonly state: string;
 
   constructor(state: string) {
-    super(`Session not found: ${state}`);
+    super(`Session not found`);
     this.name = 'SessionNotFoundError';
+    this.state = state;
   }
 }
 
 export class SessionExpiredError extends Error {
-  readonly statusCode = 410;
+  readonly state: string;
 
   constructor(state: string) {
-    super(`Session has expired: ${state}`);
+    super('Session has expired');
     this.name = 'SessionExpiredError';
+    this.state = state;
   }
 }
 
 export class SessionNotServableError extends Error {
-  readonly statusCode = 404;
+  readonly state: string;
+  readonly currentState: Parameters<typeof isTerminalState>[0];
 
-  constructor(state: string, currentState: string) {
-    super(`Session ${state} is in terminal state: ${currentState}`);
+  constructor(state: string, currentState: Parameters<typeof isTerminalState>[0]) {
+    super('Session is in a terminal state');
     this.name = 'SessionNotServableError';
+    this.state = state;
+    this.currentState = currentState;
   }
 }
 
