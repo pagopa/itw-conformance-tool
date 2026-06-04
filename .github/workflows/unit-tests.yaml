@@ -1,4 +1,4 @@
-name: Code Review
+name: Unit tests
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   checks:
-    name: Code Review
+    name: Unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -43,14 +43,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check formatting
-        run: pnpm exec prettier --check '**/*.{js,mjs,json,ts,mts,md}'
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
+      - name: Run tests
+        run: pnpm test
