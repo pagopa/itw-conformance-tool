@@ -64,7 +64,9 @@ describe('hashCallback', () => {
   it('SHA-256 of known input matches expected hex value', () => {
     // echo -n "hello" | sha256sum → 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
     const digest = hashCallback(new TextEncoder().encode('hello'), 'sha-256' as HashAlgorithm);
-    expect(Buffer.from(digest).toString('hex')).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+    expect(Buffer.from(digest).toString('hex')).toBe(
+      '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+    );
   });
 
   it('SHA-384 of known input matches expected hex value', () => {
