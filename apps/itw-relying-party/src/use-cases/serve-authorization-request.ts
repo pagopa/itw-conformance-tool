@@ -4,9 +4,10 @@ import type { SessionService } from '@itw-conformance-tool/rp';
 
 export class SessionNotFoundError extends Error {
   readonly state: string;
+  readonly statusCode = 404;
 
   constructor(state: string) {
-    super(`Session not found`);
+    super('Session not found');
     this.name = 'SessionNotFoundError';
     this.state = state;
   }
