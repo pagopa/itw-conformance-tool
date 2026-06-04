@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import FastifyAutoLoad from '@fastify/autoload';
-import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 
 import configPlugin from './plugins/config.js';
 import dbPlugin from './plugins/db.js';
@@ -40,7 +40,10 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
 
   // Set error handler
   app.setErrorHandler(function (err, request, reply) {
-    if (err instanceof Fastify.errorCodes.FST_ERR_BAD_STATUS_CODE) {
+    const isKnownError = err instanceof Error && 'statusCode' in err && typeof err.statusCode === 'number';
+    const statusCode = isKnownError ? (err as Error & { statusCode: number }).statusCode : 500;
+
+    if (!isKnownError) {
       this.log.error(
         {
           err,
@@ -51,20 +54,12 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
             params: request.params
           }
         },
-        'Unhandled error occurred'
+        'Unexpected error'
       );
-
-      reply.code(err.statusCode ?? 500);
-
-      let message = 'Internal Server Error';
-      if (err.statusCode && err.statusCode < 500) {
-        message = err.message;
-      }
-
-      reply.send({ message });
-    } else {
-      reply.send(err);
     }
+
+    reply.code(statusCode);
+    reply.send({ message: isKnownError ? err.message : 'Internal Server Error' });
   });
 
   // This is used to avoid attacks to find valid routes
