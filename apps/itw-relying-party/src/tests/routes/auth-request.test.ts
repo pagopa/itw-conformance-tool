@@ -74,7 +74,8 @@ describe('GET /auth/request/:state', () => {
     expect(res.body).toBe('x.y.z');
 
     const session = await ctx.sessionService.get(state);
-    expect(session?.state).toBe('checking')
+    expect(session?.state).toBe('checking');
+  });
 
   it('returns 410 when session has expired', async () => {
     const state = 'expired-state';
