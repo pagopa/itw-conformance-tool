@@ -64,10 +64,27 @@ function resolveTrustChain(trustChain: [string, ...string[]] | undefined): [stri
   return trustChain;
 }
 
-async function resolveSigningKid(signingPrivateKeyPem: string): Promise<string> {
-  const publicJwk = createPublicKey(createPrivateKey(signingPrivateKeyPem)).export({ format: 'jwk' }) as JWK;
+const SIGNING_KID_CACHE = new Map<string, Promise<string>>();
 
-  return calculateJwkThumbprint(publicJwk);
+async function resolveSigningKid(signingPrivateKeyPem: string): Promise<string> {
+  const cached = SIGNING_KID_CACHE.get(signingPrivateKeyPem);
+  if (cached) {
+    return cached;
+  }
+
+  const promise = (async () => {
+    const publicJwk = createPublicKey(createPrivateKey(signingPrivateKeyPem)).export({ format: 'jwk' }) as JWK;
+    return calculateJwkThumbprint(publicJwk);
+  })();
+
+  SIGNING_KID_CACHE.set(signingPrivateKeyPem, promise);
+
+  try {
+    return await promise;
+  } catch (error) {
+    SIGNING_KID_CACHE.delete(signingPrivateKeyPem);
+    throw error;
+  }
 }
 
 export async function createAuthorizationRequestUseCase(

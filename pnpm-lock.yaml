@@ -250,7 +250,7 @@ importers:
         specifier: catalog:pagopa
         version: 1.4.2
       '@pagopa/io-wallet-utils':
-        specifier: ^1.4.2
+        specifier: catalog:pagopa
         version: 1.4.2
       close-with-grace:
         specifier: ^2.5.0
