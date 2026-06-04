@@ -204,7 +204,7 @@ describe('createVerifyJwtCallback', () => {
   });
 
   it('returns verified: false when JWT is signed with a different key than the signer JWK', async () => {
-    // Sign with signingPem (different key than authRequestPem)
+    // Sign with a fresh ES256 key (different from authRequestPublicJwk)
     const wrongKeyPair = await generateKeyPair('ES256');
     const wrongPem = await exportPKCS8(wrongKeyPair.privateKey);
     const signJwtWrong = createSignJwtCallback(wrongPem, wrongPem);
