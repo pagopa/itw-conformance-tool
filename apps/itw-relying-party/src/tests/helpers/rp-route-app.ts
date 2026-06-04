@@ -9,6 +9,8 @@ import { SessionService } from '@itw-conformance-tool/rp';
 import Fastify from 'fastify';
 import { CompactEncrypt, SignJWT, importJWK, importPKCS8 } from 'jose';
 
+import { generateEphemeralKeyPair } from '../../crypto/ephemeral-keys.js';
+
 import type { INonceRepository } from '@itw-conformance-tool/database';
 import type { FastifyPluginAsync } from 'fastify';
 import type { JWK } from 'jose';
@@ -135,6 +137,7 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
   const sessionRepo = new SqliteSessionRepository(dbClient.db);
   const nonceRepo = new SqliteNonceRepository(dbClient.db);
   const sessionService = new SessionService(sessionRepo);
+  const ephemeralKeys = await generateEphemeralKeyPair();
 
   const app = Fastify({ logger: false });
 
@@ -154,9 +157,11 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     authRequestPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,
     authResponsePrivateKeyPem: options.authResponsePrivateKeyPem ?? TEST_AUTH_RESPONSE_PEM,
     signingPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
-    x5cCertPem: ''
+    x5cCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
   });
 
+  app.decorate('trustChain', ['insecure-http-local-dev']);
+  app.decorate('ephemeralKeys', ephemeralKeys);
   app.decorate('nonceRepository', nonceRepo);
   app.decorate('sessionService', sessionService);
 
