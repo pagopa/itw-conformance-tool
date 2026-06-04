@@ -35,8 +35,7 @@ import {
 
 function requireSearchParam(url: URL, name: string): string {
   const value = url.searchParams.get(name);
-  expect(value).toBeTruthy();
-  if (value === null) {
+  if (value === null || value.length === 0) {
     throw new Error(`Missing ${name} query parameter`);
   }
   return value;

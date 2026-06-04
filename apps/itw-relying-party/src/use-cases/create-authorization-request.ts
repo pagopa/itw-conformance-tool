@@ -1,6 +1,7 @@
 import { createPrivateKey, createPublicKey, randomBytes, randomUUID } from 'node:crypto';
 
 import { createAuthorizationRequest } from '@pagopa/io-wallet-oid4vp';
+import { ItWalletSpecsVersion, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import { calculateJwkThumbprint, type JWK } from 'jose';
 
 import { createSignJwtCallback } from '../crypto/callbacks.js';
@@ -13,7 +14,7 @@ import type { PresentationFlowType, SessionService } from '@itw-conformance-tool
 const TTL_MS = 5 * 60 * 1000;
 const JAR_SIGNING_ALG = 'ES256';
 const INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER = 'insecure-http-local-dev';
-const SDK_CONFIG = { itWalletSpecsVersion: 'V1_4' } as const;
+const SDK_CONFIG = new IoWalletSdkConfig({ itWalletSpecsVersion: ItWalletSpecsVersion.V1_4 });
 
 const CERT_PEM_PATTERN = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g;
 
@@ -81,6 +82,10 @@ export async function createAuthorizationRequestUseCase(
   await input.nonceRepository.insert(nonce, Date.now() + TTL_MS);
 
   const x5c = parseX5cChain(input.rpKeys.x5cCertPem);
+  if (x5c.length === 0) {
+    throw new Error('x5c certificate chain is empty or not a valid PEM-encoded certificate');
+  }
+
   const encryptionJwk = toSdkJwk(input.ephemeralKeys);
   const trustChain = resolveTrustChain(input.trustChain);
   const signingKid = await resolveSigningKid(input.rpKeys.signingPrivateKeyPem);
@@ -113,7 +118,7 @@ export async function createAuthorizationRequestUseCase(
     callbacks: {
       signJwt
     },
-    config: SDK_CONFIG as never,
+    config: SDK_CONFIG,
     jar: {
       expiresInSeconds: TTL_MS / 1000,
       jwtSigner: {

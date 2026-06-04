@@ -4,8 +4,7 @@ import requestObjectRoute from '../../routes/request-object.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
 
 function requireValue<T>(value: T | null | undefined, message: string): T {
-  expect(value).toBeTruthy();
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || (typeof value === 'string' && value.length === 0)) {
     throw new Error(message);
   }
   return value;
