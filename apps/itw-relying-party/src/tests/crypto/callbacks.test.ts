@@ -60,6 +60,20 @@ describe('hashCallback', () => {
     const b = hashCallback(new TextEncoder().encode('bar'), 'sha-256' as HashAlgorithm);
     expect(Buffer.from(a).toString('hex')).not.toBe(Buffer.from(b).toString('hex'));
   });
+
+  it('SHA-256 of known input matches expected hex value', () => {
+    // echo -n "hello" | sha256sum → 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+    const digest = hashCallback(new TextEncoder().encode('hello'), 'sha-256' as HashAlgorithm);
+    expect(Buffer.from(digest).toString('hex')).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+  });
+
+  it('SHA-384 of known input matches expected hex value', () => {
+    // echo -n "hello" | sha384sum → 59e1748777448c69de6b800d7a33bbfb9ff1b463e44354c3553bcdb9c666fa90125a3c79f90397bdf5f6a13de828684f
+    const digest = hashCallback(new TextEncoder().encode('hello'), 'sha-384' as HashAlgorithm);
+    expect(Buffer.from(digest).toString('hex')).toBe(
+      '59e1748777448c69de6b800d7a33bbfb9ff1b463e44354c3553bcdb9c666fa90125a3c79f90397bdf5f6a13de828684f'
+    );
+  });
 });
 
 describe('generateRandomCallback', () => {
@@ -77,6 +91,23 @@ describe('generateRandomCallback', () => {
 });
 
 describe('createSignJwtCallback', () => {
+  it('signs a JWT with method: jwk and signerJwk matches the provided publicJwk exactly', async () => {
+    const signJwt = createSignJwtCallback(authRequestPem, signingPem);
+    const signer: JwtSignerJwk = {
+      method: 'jwk',
+      alg: 'ES256',
+      publicJwk: authRequestPublicJwk as JwtSignerJwk['publicJwk']
+    };
+
+    const result = await signJwt(signer, {
+      header: { alg: 'ES256', typ: 'JWT' },
+      payload: { iss: 'test' }
+    });
+
+    // signerJwk must be exactly the publicJwk from the signer, not derived from the signing key
+    expect(result.signerJwk).toMatchObject(authRequestPublicJwk);
+  });
+
   it('signs a JWT with method: jwk and returns the signer JWK', async () => {
     const signJwt = createSignJwtCallback(authRequestPem, signingPem);
     const signer: JwtSignerJwk = {
@@ -167,6 +198,38 @@ describe('createVerifyJwtCallback', () => {
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
 
     const result = await verifyJwt(signer, { header, payload, compact: tampered });
+    expect(result.verified).toBe(false);
+  });
+
+  it('returns verified: false when JWT is signed with a different key than the signer JWK', async () => {
+    // Sign with signingPem (different key than authRequestPem)
+    const wrongKeyPair = await generateKeyPair('ES256');
+    const wrongPem = await exportPKCS8(wrongKeyPair.privateKey);
+    const signJwtWrong = createSignJwtCallback(wrongPem, wrongPem);
+    const verifyJwt = createVerifyJwtCallback();
+
+    // Produce a JWT signed with wrongKey
+    const wrongSigner: JwtSignerJwk = {
+      method: 'jwk',
+      alg: 'ES256',
+      publicJwk: (await exportJWK(wrongKeyPair.publicKey)) as JwtSignerJwk['publicJwk']
+    };
+    const { jwt } = await signJwtWrong(wrongSigner, {
+      header: { alg: 'ES256', typ: 'JWT' },
+      payload: { iss: 'test' }
+    });
+
+    const [headerB64, payloadB64] = jwt.split('.');
+    const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString());
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+
+    // Verify using authRequestPublicJwk (the correct key for this RP) — must fail
+    const correctSigner: JwtSignerJwk = {
+      method: 'jwk',
+      alg: 'ES256',
+      publicJwk: authRequestPublicJwk as JwtSignerJwk['publicJwk']
+    };
+    const result = await verifyJwt(correctSigner, { header, payload, compact: jwt });
     expect(result.verified).toBe(false);
   });
 });
