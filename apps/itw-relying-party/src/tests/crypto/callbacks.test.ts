@@ -107,7 +107,7 @@ describe('createSignJwtCallback', () => {
     });
 
     // signerJwk must be exactly the publicJwk from the signer, not derived from the signing key
-    expect(result.signerJwk).toMatchObject(authRequestPublicJwk);
+    expect(result.signerJwk).toEqual(authRequestPublicJwk);
   });
 
   it('signs a JWT with method: jwk and returns the signer JWK', async () => {
