@@ -27,9 +27,10 @@ export class SessionExpiredError extends Error {
 export class SessionNotServableError extends Error {
   readonly state: string;
   readonly currentState: Parameters<typeof isTerminalState>[0];
+  readonly statusCode = 404;
 
   constructor(state: string, currentState: Parameters<typeof isTerminalState>[0]) {
-    super('Session is in a terminal state');
+    super('Session not found');
     this.name = 'SessionNotServableError';
     this.state = state;
     this.currentState = currentState;
