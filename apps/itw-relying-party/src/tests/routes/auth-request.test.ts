@@ -72,7 +72,9 @@ describe('GET /auth/request/:state', () => {
     const res = await ctx.app.inject({ method: 'GET', url: `/auth/request/${state}` });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe('x.y.z');
-  });
+
+    const session = await ctx.sessionService.get(state);
+    expect(session?.state).toBe('checking')
 
   it('returns 410 when session has expired', async () => {
     const state = 'expired-state';
