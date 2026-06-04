@@ -1,3 +1,5 @@
+import { serveAuthorizationRequestUseCase } from '../use-cases/serve-authorization-request.js';
+
 import type { FastifyPluginAsync } from 'fastify';
 
 interface AuthRequestParams {
@@ -18,22 +20,33 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
             type: 'string'
           }
         }
+      },
+      response: {
+        200: {
+          type: 'string',
+          description: 'Signed Request Object JWT'
+        },
+        404: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        },
+        410: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
       }
     },
     handler: async (request, reply) => {
       const { state } = request.params;
-      const session = await app.sessionService.get(state);
-      if (session === undefined) {
-        return reply.code(404).send({ message: 'Session not found' });
-      }
-
-      if (session.state === 'expired') {
-        return reply.code(404).send({ message: 'Session not found' });
-      }
-
-      await app.sessionService.update(state, 'checking');
-
-      return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(session.jwt);
+      const jwt = await serveAuthorizationRequestUseCase({
+        state,
+        sessionService: app.sessionService
+      });
+      return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(jwt);
     }
   });
 };
