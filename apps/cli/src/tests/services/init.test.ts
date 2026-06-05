@@ -79,8 +79,8 @@ describe('init', () => {
 
     expect(getTlsCertAndKey).not.toHaveBeenCalled();
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
-    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls-cert.pem');
-    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls-key.pem');
+    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls_cert.pem');
+    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls_key.pem');
   });
 
   it('writes TLS files when https is true', () => {
@@ -88,8 +88,8 @@ describe('init', () => {
 
     expect(getTlsCertAndKey).toHaveBeenCalledOnce();
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
-    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-cert.pem');
-    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-key.pem');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls_cert.pem');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls_key.pem');
   });
 
   it('skips TLS files when https is true but they already exist and --force is not set', () => {

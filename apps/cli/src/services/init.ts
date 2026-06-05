@@ -51,8 +51,8 @@ export function init(
   const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
   const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
   const authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
-  const tlsCertPath = join(dataDirPath, 'tls-cert.pem');
-  const tlsKeyPath = join(dataDirPath, 'tls-key.pem');
+  const tlsCertPath = join(dataDirPath, 'tls_cert.pem');
+  const tlsKeyPath = join(dataDirPath, 'tls_key.pem');
 
   const dirsPaths = [
     { path: dataDirPath, name: 'Data directory' },

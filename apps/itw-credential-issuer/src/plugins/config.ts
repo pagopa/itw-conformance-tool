@@ -13,6 +13,9 @@ declare module 'fastify' {
       DATA_DIR: string;
       DB_CLEANUP_INTERVAL_MS: number;
       AUTH_FLOW: 'direct' | 'l2plus' | 'l3';
+      HTTPS_ENABLED: boolean;
+      TLS_CERT_PATH: string;
+      TLS_KEY_PATH: string;
     };
   }
 }
@@ -25,7 +28,10 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool')),
   DB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
-  AUTH_FLOW: z.enum(AUTH_FLOW_VALUES).default('direct')
+  AUTH_FLOW: z.enum(AUTH_FLOW_VALUES).default('direct'),
+  HTTPS_ENABLED: z.coerce.boolean().default(true),
+  TLS_CERT_PATH: z.string().default(''),
+  TLS_KEY_PATH: z.string().default('')
 });
 
 function resolvePortOverride(variableName: string): string | undefined {
@@ -65,6 +71,29 @@ export default fp(
 
     if (data.ITW_CT_ISSUER_AUTH_FLOW && !data.AUTH_FLOW) {
       data.AUTH_FLOW = data.ITW_CT_ISSUER_AUTH_FLOW;
+    }
+
+    const orchestratedHttpsEnabled = resolvePathOverride('ITW_CT_HTTPS');
+    if (orchestratedHttpsEnabled !== undefined && data.HTTPS_ENABLED === undefined) {
+      const normalized = orchestratedHttpsEnabled.toLowerCase();
+      data.HTTPS_ENABLED = normalized === 'true' || normalized === '1' ? 'true' : 'false';
+    }
+
+    if (!data.BASE_URL_SCHEME) {
+      const httpsEnabledValue = (data.HTTPS_ENABLED ?? '').trim().toLowerCase();
+      if (httpsEnabledValue === 'true' || httpsEnabledValue === '1') {
+        data.BASE_URL_SCHEME = 'https';
+      }
+    }
+
+    const orchestratedTlsCertPath = resolvePathOverride('ITW_CT_TLS_CERT_PATH');
+    if (orchestratedTlsCertPath !== undefined) {
+      data.TLS_CERT_PATH = orchestratedTlsCertPath;
+    }
+
+    const orchestratedTlsKeyPath = resolvePathOverride('ITW_CT_TLS_KEY_PATH');
+    if (orchestratedTlsKeyPath !== undefined) {
+      data.TLS_KEY_PATH = orchestratedTlsKeyPath;
     }
 
     await app.register(FastifyEnv, {
