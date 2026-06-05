@@ -150,11 +150,9 @@ tls_key_path  = ~/.itw-conformance-tool/tls-key.pem
 
 The value is forwarded to the services as an environment variable:
 
-| Variable               | Description                     |
-| ---------------------- | ------------------------------- |
-| `ITW_CT_HTTPS`         | `"true"` / `"false"` (string)   |
-| `ITW_CT_TLS_CERT_PATH` | Path to the TLS certificate PEM |
-| `ITW_CT_TLS_KEY_PATH`  | Path to the TLS private key PEM |
+| Variable       | Description                   |
+| -------------- | ----------------------------- |
+| `ITW_CT_HTTPS` | "true" / "false" (string) |
 
 > The self-signed certificate is intended for local development and conformance testing only. Do not use it in production.
 
