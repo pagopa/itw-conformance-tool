@@ -83,7 +83,9 @@ export async function createAuthResponseJwe({
 
   // Encrypt { state, vp_token } as ECDH-ES JWE
   const payload = new TextEncoder().encode(JSON.stringify({ state, vp_token: { pid: sdJwt } }));
-  return new CompactEncrypt(payload).setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' }).encrypt(rpPubKey);
+  return new CompactEncrypt(payload)
+    .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM', kid: 'test-rp-key-id' })
+    .encrypt(rpPubKey);
 }
 
 // ---------------------------------------------------------------------------
