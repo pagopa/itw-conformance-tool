@@ -60,7 +60,8 @@ async function startServer() {
     await app.listen({
       host: app.config.HOST,
       port: app.config.PORT,
-      listenTextResolver: (address) => `IT Wallet Credential Issuer listening on ${tls ? address.replace('http://', 'https://') : address}`
+      listenTextResolver: (address) =>
+        `IT Wallet Credential Issuer listening on ${tls ? address.replace('http://', 'https://') : address}`
     });
   } catch (err) {
     app.log.error(err);
