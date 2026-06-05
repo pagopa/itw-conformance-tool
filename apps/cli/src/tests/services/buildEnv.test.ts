@@ -86,7 +86,7 @@ describe('buildEnv', () => {
     expect(env.ITW_CT_RP_PORT).toBe('9090');
   });
 
-  it('sets ITW_CT_HTTPS to "true" when https is enabled in config', () => {
+  it('sets ITW_CT_HTTPS to "false" when https is disabled in config', () => {
     const configs: ConfigType = {
       ...mockConfigs,
       global: { ...mockConfigs.global, https: false }
