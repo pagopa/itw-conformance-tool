@@ -49,6 +49,7 @@ describe('config plugin', () => {
     expect(app.config.DB_CLEANUP_INTERVAL_MS).toBe(60_000);
     expect(app.config.DATA_DIR.length).toBeGreaterThan(0);
     expect(app.config.AUTH_FLOW).toBe('direct');
+    expect(app.config.HTTPS_ENABLED).toBe(true);
 
     await app.close();
   });
@@ -144,14 +145,14 @@ describe('config plugin', () => {
     );
   });
 
-  it('defaults HTTPS_ENABLED to false and TLS paths to empty strings', async () => {
+  it('defaults HTTPS_ENABLED to true and TLS paths to empty strings', async () => {
     cleanupEnv();
     const app = Fastify();
 
     await app.register(configPlugin);
     await app.ready();
 
-    expect(app.config.HTTPS_ENABLED).toBe(false);
+    expect(app.config.HTTPS_ENABLED).toBe(true);
     expect(app.config.TLS_CERT_PATH).toBe('');
     expect(app.config.TLS_KEY_PATH).toBe('');
 

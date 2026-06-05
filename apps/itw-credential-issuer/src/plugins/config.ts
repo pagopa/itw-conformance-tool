@@ -29,7 +29,7 @@ const schema = z.object({
   DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool')),
   DB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   AUTH_FLOW: z.enum(AUTH_FLOW_VALUES).default('direct'),
-  HTTPS_ENABLED: z.coerce.boolean().default(false),
+  HTTPS_ENABLED: z.coerce.boolean().default(true),
   TLS_CERT_PATH: z.string().default(''),
   TLS_KEY_PATH: z.string().default('')
 });
