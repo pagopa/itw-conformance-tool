@@ -9,6 +9,13 @@ data_dir = ~/.itw-conformance-tool
 ; Logging level: debug | info | warn | error
 ; Default: info
 log_level = info
+; Enable HTTPS for the issuer service (true | false)
+; Default: false
+https = false
+; Path to the TLS certificate file (PEM) — required when https = true
+tls_cert_path = ~/.itw-conformance-tool/tls/tls-cert.pem
+; Path to the TLS private key file (PEM) — required when https = true
+tls_key_path = ~/.itw-conformance-tool/tls/tls-key.pem
 
 [itw-credential-issuer]
 ; Authentication flow: direct | l2plus | l3
@@ -43,7 +50,10 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
   return {
     global: {
       data_dir: join(rootPath, '.itw-conformance-tool'),
-      log_level: 'info'
+      log_level: 'info',
+      https: false,
+      tls_cert_path: join(rootPath, '.itw-conformance-tool', 'tls-cert.pem'),
+      tls_key_path: join(rootPath, '.itw-conformance-tool', 'tls-key.pem')
     },
     'itw-credential-issuer': {
       auth_flow: 'direct',

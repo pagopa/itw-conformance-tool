@@ -4,11 +4,17 @@ export const ConfigSchema = z.object({
   global: z
     .object({
       data_dir: z.string().min(1).catch('~/.itw-conformance-tool'),
-      log_level: z.enum(['debug', 'info', 'warn', 'error']).catch('info')
+      log_level: z.enum(['debug', 'info', 'warn', 'error']).catch('info'),
+      https: z.boolean().default(false),
+      tls_cert_path: z.string().default(''),
+      tls_key_path: z.string().default('')
     })
     .default({
       data_dir: '~/.itw-conformance-tool',
-      log_level: 'info'
+      log_level: 'info',
+      https: false,
+      tls_cert_path: '',
+      tls_key_path: ''
     }),
   'itw-credential-issuer': z
     .object({

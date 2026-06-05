@@ -31,6 +31,11 @@ interface IacaChain {
   privateKey: string;
 }
 
+interface TlsCertAndKey {
+  cert: string;
+  key: string;
+}
+
 interface CertificateParams {
   subject: ForgeAttribute[];
   issuer: ForgeAttribute[];
@@ -207,4 +212,42 @@ function buildIacaChain(): IacaChain {
 /** Generates and returns a self-signed IACA certificate chain. */
 export function getIACAChain(): IacaChain {
   return buildIacaChain();
+}
+
+/** Generates a self-signed TLS certificate and private key for localhost.
+ * The certificate is valid for 825 days (the maximum accepted by macOS).
+ *
+ * @returns An object containing the certificate and private key in PEM format as separate strings.
+ */
+export function getTlsCertAndKey(): TlsCertAndKey {
+  const keys = generateKeyPair();
+
+  const attrs: ForgeAttribute[] = [
+    { name: 'commonName', value: 'localhost' },
+    { name: 'organizationName', value: 'ITW Conformance Tool' }
+  ];
+
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = '01';
+
+  const now = new Date();
+  cert.validity.notBefore = now;
+  cert.validity.notAfter = new Date(now.getTime() + 825 * 24 * 60 * 60 * 1000);
+
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+
+  cert.setExtensions([
+    { name: 'basicConstraints', cA: false },
+    { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
+    { name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }] }
+  ]);
+
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+
+  return {
+    cert: forge.pki.certificateToPem(cert),
+    key: forge.pki.privateKeyToPem(keys.privateKey)
+  };
 }
