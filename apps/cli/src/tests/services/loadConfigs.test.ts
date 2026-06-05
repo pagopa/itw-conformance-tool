@@ -10,7 +10,11 @@ vi.mock('../../utils/search.js');
 
 vi.mock('../../templates/templates.js', () => ({
   getDefaultConfigs: vi.fn((rootPath: string) => ({
-    global: { data_dir: `${rootPath}/.itw-conformance-tool`, log_level: 'info' },
+    global: {
+      data_dir: `${rootPath}/.itw-conformance-tool`,
+      log_level: 'info',
+      https: false
+    },
     'itw-credential-issuer': { auth_flow: 'direct', port: 3000, credential_types: 'pid,mdl,badge,eaa' },
     rp: { port: 8080 }
   }))
@@ -23,9 +27,19 @@ vi.mock('@itw-conformance-tool/config', () => ({
 const rootPath = '/root';
 
 const parsedConfigs: ConfigType = {
-  global: { data_dir: '/custom/.itw-conformance-tool', log_level: 'warn' },
+  global: {
+    data_dir: '/custom/.itw-conformance-tool',
+    log_level: 'warn',
+    https: false
+  },
   'itw-credential-issuer': { auth_flow: 'direct', port: 4000, credential_types: 'pid' },
-  rp: { port: 9090 }
+  rp: {
+    port: 9090,
+    entity_id: 'https://rp.example.com',
+    trust_anchor_url: 'https://trust-anchor.example.com',
+    signing_key_path: '/custom/rp/signing-key.pem',
+    x5c_cert_path: '/custom/rp/x5c-cert.pem'
+  }
 };
 
 describe('loadConfigs', () => {

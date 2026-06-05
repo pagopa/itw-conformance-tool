@@ -11,6 +11,7 @@ export function buildEnv(configs: ConfigType, emitLog: (event: string, type?: Lo
   const keysToAdd = {
     ITW_CT_DATA_DIR: configs.global.data_dir,
     ITW_CT_LOG_LEVEL: configs.global.log_level,
+    ITW_CT_HTTPS: String(configs['global'].https),
     ITW_CT_ISSUER_PORT: String(configs['itw-credential-issuer'].port),
     ITW_CT_ISSUER_CREDENTIAL_TYPES: String(configs['itw-credential-issuer'].credential_types),
     ITW_CT_RP_PORT: String(configs.rp.port),
