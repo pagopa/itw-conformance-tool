@@ -9,6 +9,9 @@ data_dir = ~/.itw-conformance-tool
 ; Logging level: debug | info | warn | error
 ; Default: info
 log_level = info
+; Enable HTTPS mode (CLI generates/checks local TLS cert/key and forwards ITW_CT_HTTPS) (true | false)
+; Default: false
+https = false
 
 [itw-credential-issuer]
 ; Authentication flow: direct | l2plus | l3
@@ -43,7 +46,8 @@ export function getDefaultConfigs(rootPath: string): ConfigType {
   return {
     global: {
       data_dir: join(rootPath, '.itw-conformance-tool'),
-      log_level: 'info'
+      log_level: 'info',
+      https: false
     },
     'itw-credential-issuer': {
       auth_flow: 'direct',

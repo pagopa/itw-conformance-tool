@@ -5,7 +5,13 @@ import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 import { type Level } from '@itw-conformance-tool/logger';
 
 import { configINITemplate } from '../templates/templates.js';
-import { getAuthRequestKey, getAuthResponseKey, getIACAChain, getSigningKeys } from '../utils/crypto.js';
+import {
+  getAuthRequestKey,
+  getAuthResponseKey,
+  getIACAChain,
+  getSigningKeys,
+  getTlsCertAndKey
+} from '../utils/crypto.js';
 import { existsFileSync, expandPath } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
@@ -45,6 +51,8 @@ export function init(
   const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
   const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
   const authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
+  const tlsCertPath = join(dataDirPath, 'tls-cert.pem');
+  const tlsKeyPath = join(dataDirPath, 'tls-key.pem');
 
   const dirsPaths = [
     { path: dataDirPath, name: 'Data directory' },
@@ -103,6 +111,29 @@ export function init(
     reportMessages.push(
       `- IACA certificate and key already exist at: ${iacaCertPath}, ${iacaKeyPath} (skipped, use --force to regenerate)`
     );
+  }
+
+  /* TLS cert and key are only generated when https is enabled in the config.
+   * They are always overwritten together if --force is used. */
+  if (configs.global.https) {
+    const tlsCertExists = existsFileSync(tlsCertPath);
+    const tlsKeyExists = existsFileSync(tlsKeyPath);
+    const shouldWriteTls = flags.force || !(tlsCertExists && tlsKeyExists);
+
+    if (shouldWriteTls) {
+      const generatedTls = getTlsCertAndKey();
+
+      writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
+      reportMessages.push(`- ${tlsCertExists ? 'Overwriting' : 'Creating'} TLS certificate at: ${tlsCertPath}`);
+      writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
+      reportMessages.push(`- ${tlsKeyExists ? 'Overwriting' : 'Creating'} TLS key at: ${tlsKeyPath}`);
+    } else {
+      reportMessages.push(
+        `- TLS certificate and key already exist at: ${tlsCertPath}, ${tlsKeyPath} (skipped, use --force to regenerate)`
+      );
+    }
+  } else {
+    reportMessages.push('- HTTPS disabled: TLS certificate and key not generated');
   }
 
   emitter('CLI init completed\nSummary of actions:\n' + reportMessages.join('\n'));
