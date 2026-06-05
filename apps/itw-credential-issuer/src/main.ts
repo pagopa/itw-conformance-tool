@@ -17,7 +17,9 @@ function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
   const keyPath = (process.env['ITW_CT_TLS_KEY_PATH'] ?? process.env['TLS_KEY_PATH'] ?? '').trim();
 
   if (!certPath || !keyPath) {
-    throw new Error('HTTPS is enabled but TLS_CERT_PATH or TLS_KEY_PATH is missing');
+    throw new Error(
+      'HTTPS is enabled but TLS_CERT_PATH/TLS_KEY_PATH (or ITW_CT_TLS_CERT_PATH/ITW_CT_TLS_KEY_PATH) is missing'
+    );
   }
 
   return { cert: readFileSync(certPath), key: readFileSync(keyPath) };

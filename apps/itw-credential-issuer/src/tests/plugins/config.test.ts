@@ -158,7 +158,7 @@ describe('config plugin', () => {
     await app.close();
   });
 
-  it('parses HTTPS_ENABLED=true and sets BASE_URL_SCHEME to https when not explicitly set', async () => {
+  it('parses ITW_CT_HTTPS=true and sets BASE_URL_SCHEME to https when not explicitly set', async () => {
     process.env.ITW_CT_HTTPS = 'true';
     const app = Fastify();
 
