@@ -253,7 +253,9 @@ export async function verifyAuthorizationResponseUseCase(
     }
 
     if (firstNonce !== expectedNonce) {
-      throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
+      throw new VerifyAuthorizationResponseError(
+        'The nonce does not match with the one provided in the request object'
+      );
     }
 
     const consumed = await input.nonceRepository.consume(expectedNonce);

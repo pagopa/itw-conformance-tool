@@ -21,7 +21,7 @@ const responseBodySchema = z
       (data.response !== undefined && data.error === undefined && data.state === undefined) ||
       (data.response === undefined && data.error !== undefined && data.state !== undefined),
     {
-    message: "Either 'response' or 'error, state' must be present"
+      message: "Either 'response' or 'error, state' must be present"
     }
   );
 
