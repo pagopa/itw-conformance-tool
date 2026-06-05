@@ -113,23 +113,27 @@ export function init(
     );
   }
 
-  /* TLS cert and key should always be generated and overwritten together if
-   * --force is used, as they are unique for each instance */
-  const tlsCertExists = existsFileSync(tlsCertPath);
-  const tlsKeyExists = existsFileSync(tlsKeyPath);
-  const shouldWriteTls = flags.force || !(tlsCertExists && tlsKeyExists);
+  /* TLS cert and key are only generated when https is enabled in the config.
+   * They are always overwritten together if --force is used. */
+  if (configs.global.https) {
+    const tlsCertExists = existsFileSync(tlsCertPath);
+    const tlsKeyExists = existsFileSync(tlsKeyPath);
+    const shouldWriteTls = flags.force || !(tlsCertExists && tlsKeyExists);
 
-  if (shouldWriteTls) {
-    const generatedTls = getTlsCertAndKey();
+    if (shouldWriteTls) {
+      const generatedTls = getTlsCertAndKey();
 
-    writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
-    reportMessages.push(`- ${tlsCertExists ? 'Overwriting' : 'Creating'} TLS certificate at: ${tlsCertPath}`);
-    writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
-    reportMessages.push(`- ${tlsKeyExists ? 'Overwriting' : 'Creating'} TLS key at: ${tlsKeyPath}`);
+      writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
+      reportMessages.push(`- ${tlsCertExists ? 'Overwriting' : 'Creating'} TLS certificate at: ${tlsCertPath}`);
+      writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
+      reportMessages.push(`- ${tlsKeyExists ? 'Overwriting' : 'Creating'} TLS key at: ${tlsKeyPath}`);
+    } else {
+      reportMessages.push(
+        `- TLS certificate and key already exist at: ${tlsCertPath}, ${tlsKeyPath} (skipped, use --force to regenerate)`
+      );
+    }
   } else {
-    reportMessages.push(
-      `- TLS certificate and key already exist at: ${tlsCertPath}, ${tlsKeyPath} (skipped, use --force to regenerate)`
-    );
+    reportMessages.push('- HTTPS disabled: TLS certificate and key not generated');
   }
 
   emitter('CLI init completed\nSummary of actions:\n' + reportMessages.join('\n'));
