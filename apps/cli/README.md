@@ -148,7 +148,7 @@ tls_key_path  = ~/.itw-conformance-tool/tls-key.pem
 
 `itw-conformance-tool init` generates a self-signed certificate valid for `localhost` and places it at `<data_dir>/tls-cert.pem` and `<data_dir>/tls-key.pem`. The certificate uses RSA 2048 and is valid for 825 days.
 
-The three values are forwarded to the services as environment variables:
+The value is forwarded to the services as an environment variable:
 
 | Variable               | Description                     |
 | ---------------------- | ------------------------------- |
