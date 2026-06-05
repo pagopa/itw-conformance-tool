@@ -34,6 +34,14 @@ describe('deriveBaseUrl', () => {
   it('uses the configured host otherwise', () => {
     expect(deriveBaseUrl({ host: 'rp.example.com', port: 8080 })).toBe('http://rp.example.com:8080');
   });
+
+  it('uses https scheme when scheme is https', () => {
+    expect(deriveBaseUrl({ host: '0.0.0.0', port: 8443, scheme: 'https' })).toBe('https://localhost:8443');
+  });
+
+  it('defaults to http when scheme is omitted', () => {
+    expect(deriveBaseUrl({ host: 'rp.example.com', port: 8080 })).toBe('http://rp.example.com:8080');
+  });
 });
 
 describe('rpConfigSchema', () => {
@@ -295,5 +303,73 @@ describe('loadRpConfig', () => {
         env: {}
       })
     ).toThrow();
+  });
+
+  it('defaults httpsEnabled to false when ITW_CT_HTTPS is not set', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV }
+    });
+    expect(result.config.httpsEnabled).toBe(false);
+    expect(result.config.tlsCertPath).toBe('');
+    expect(result.config.tlsKeyPath).toBe('');
+  });
+
+  it('sets httpsEnabled to true when ITW_CT_HTTPS=true', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'true' }
+    });
+    expect(result.config.httpsEnabled).toBe(true);
+  });
+
+  it('sets httpsEnabled to true when ITW_CT_HTTPS=1', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: '1' }
+    });
+    expect(result.config.httpsEnabled).toBe(true);
+  });
+
+  it('sets httpsEnabled to false when ITW_CT_HTTPS=false', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'false' }
+    });
+    expect(result.config.httpsEnabled).toBe(false);
+  });
+
+  it('reads tlsCertPath and tlsKeyPath from env', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {
+        ...REQUIRED_FIELDS_ENV,
+        ITW_CT_HTTPS: 'true',
+        ITW_CT_TLS_CERT_PATH: '/certs/server.pem',
+        ITW_CT_TLS_KEY_PATH: '/keys/server-key.pem'
+      }
+    });
+    expect(result.config.tlsCertPath).toBe('/certs/server.pem');
+    expect(result.config.tlsKeyPath).toBe('/keys/server-key.pem');
+  });
+
+  it('derives https baseUrl when ITW_CT_HTTPS is enabled and no explicit base URL', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'true' }
+    });
+    expect(result.config.baseUrl).toMatch(/^https:\/\//);
+  });
+
+  it('explicit ITW_CT_RP_BASE_URL wins over https-derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {
+        ...REQUIRED_FIELDS_ENV,
+        ITW_CT_HTTPS: 'true',
+        ITW_CT_RP_BASE_URL: 'http://rp.example.com:8080'
+      }
+    });
+    expect(result.config.baseUrl).toBe('http://rp.example.com:8080');
   });
 });

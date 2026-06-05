@@ -18,7 +18,10 @@ export const rpConfigSchema = z.object({
   configFilePath: z.string().min(1),
   trustAnchorUrl: z.string().url(),
   signingKeyPath: z.string().min(1),
-  x5cCertPath: z.string().min(1)
+  x5cCertPath: z.string().min(1),
+  httpsEnabled: z.boolean().default(false),
+  tlsCertPath: z.string().default(''),
+  tlsKeyPath: z.string().default('')
 });
 
 export type RpConfig = z.infer<typeof rpConfigSchema>;
@@ -55,11 +58,12 @@ function parsePortOverride(env: NodeJS.ProcessEnv, variableName: string): number
   return port;
 }
 
-export function deriveBaseUrl(input: { host: string; port: number }): string {
+export function deriveBaseUrl(input: { host: string; port: number; scheme?: 'http' | 'https' }): string {
   // INI [rp].host can be 0.0.0.0 to listen on all interfaces, but the public
   // base URL should be addressable — fall back to localhost in that case.
   const reachableHost = input.host === '0.0.0.0' ? 'localhost' : input.host;
-  return `http://${reachableHost}:${input.port}`;
+  const scheme = input.scheme ?? 'http';
+  return `${scheme}://${reachableHost}:${input.port}`;
 }
 
 export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
@@ -75,11 +79,22 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
       ? expandHome(dataDirOverride.trim())
       : expandHome(data.global.data_dir);
 
+  const httpsRaw = env.ITW_CT_HTTPS?.trim().toLowerCase();
+  const httpsEnabled = httpsRaw === 'true' || httpsRaw === '1';
+
+  const tlsCertPathOverride = env.ITW_CT_TLS_CERT_PATH?.trim();
+  const tlsCertPath = tlsCertPathOverride && tlsCertPathOverride.length > 0 ? tlsCertPathOverride : '';
+
+  const tlsKeyPathOverride = env.ITW_CT_TLS_KEY_PATH?.trim();
+  const tlsKeyPath = tlsKeyPathOverride && tlsKeyPathOverride.length > 0 ? tlsKeyPathOverride : '';
+
   const host = DEFAULT_HOST;
 
   const baseUrlOverride = env.ITW_CT_RP_BASE_URL?.trim();
   const baseUrlCandidate =
-    baseUrlOverride && baseUrlOverride.length > 0 ? baseUrlOverride : deriveBaseUrl({ host, port });
+    baseUrlOverride && baseUrlOverride.length > 0
+      ? baseUrlOverride
+      : deriveBaseUrl({ host, port, scheme: httpsEnabled ? 'https' : 'http' });
 
   const entityIdOverride = env.ITW_CT_RP_ENTITY_ID?.trim();
   const entityIdFromConfig = data.rp.entity_id?.trim();
@@ -125,7 +140,10 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     configFilePath: input.configFilePath,
     trustAnchorUrl,
     signingKeyPath,
-    x5cCertPath
+    x5cCertPath,
+    httpsEnabled,
+    tlsCertPath,
+    tlsKeyPath
   });
 
   return { config, configFileFound };
