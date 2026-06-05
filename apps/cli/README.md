@@ -137,7 +137,7 @@ The CLI resolves configuration in this order:
 
 ## HTTPS Configuration
 
-By default, all services run over plain HTTP. HTTPS can be enabled for the issuer service by setting the following keys in the `[global]` section of `config.ini`:
+By default, all services run over plain HTTP. HTTPS can be enabled for the issuer service by setting `https = true` in the `[global]` section of `config.ini`:
 
 ```ini
 [global]
