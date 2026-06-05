@@ -73,8 +73,17 @@ export default fp(
       data.AUTH_FLOW = data.ITW_CT_ISSUER_AUTH_FLOW;
     }
 
-    if (data.ITW_CT_HTTPS && !data.HTTPS_ENABLED) {
-      data.HTTPS_ENABLED = data.ITW_CT_HTTPS;
+    const orchestratedHttpsEnabled = resolvePathOverride('ITW_CT_HTTPS');
+    if (orchestratedHttpsEnabled !== undefined && data.HTTPS_ENABLED === undefined) {
+      const normalized = orchestratedHttpsEnabled.toLowerCase();
+      data.HTTPS_ENABLED = normalized === 'true' || normalized === '1' ? 'true' : 'false';
+    }
+
+    if (!data.BASE_URL_SCHEME) {
+      const httpsEnabledValue = (data.HTTPS_ENABLED ?? '').trim().toLowerCase();
+      if (httpsEnabledValue === 'true' || httpsEnabledValue === '1') {
+        data.BASE_URL_SCHEME = 'https';
+      }
     }
 
     const orchestratedTlsCertPath = resolvePathOverride('ITW_CT_TLS_CERT_PATH');

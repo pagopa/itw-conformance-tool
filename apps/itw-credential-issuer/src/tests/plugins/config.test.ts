@@ -14,9 +14,15 @@ const ENV_KEYS = [
   'DB_CLEANUP_INTERVAL_MS',
   'KEYS_DIR',
   'AUTH_FLOW',
+  'HTTPS_ENABLED',
+  'TLS_CERT_PATH',
+  'TLS_KEY_PATH',
   'ITW_CT_DATA_DIR',
   'ITW_CT_ISSUER_PORT',
-  'ITW_CT_ISSUER_AUTH_FLOW'
+  'ITW_CT_ISSUER_AUTH_FLOW',
+  'ITW_CT_HTTPS',
+  'ITW_CT_TLS_CERT_PATH',
+  'ITW_CT_TLS_KEY_PATH'
 ] as const;
 
 function cleanupEnv(): void {
@@ -136,5 +142,74 @@ describe('config plugin', () => {
     await expect(app.register(configPlugin)).rejects.toThrow(
       'env/AUTH_FLOW must be equal to one of the allowed values'
     );
+  });
+
+  it('defaults HTTPS_ENABLED to false and TLS paths to empty strings', async () => {
+    cleanupEnv();
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.HTTPS_ENABLED).toBe(false);
+    expect(app.config.TLS_CERT_PATH).toBe('');
+    expect(app.config.TLS_KEY_PATH).toBe('');
+
+    await app.close();
+  });
+
+  it('parses HTTPS_ENABLED=true and sets BASE_URL_SCHEME to https when not explicitly set', async () => {
+    process.env.ITW_CT_HTTPS = 'true';
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.HTTPS_ENABLED).toBe(true);
+    expect(app.config.BASE_URL_SCHEME).toBe('https');
+
+    await app.close();
+  });
+
+  it('does not override BASE_URL_SCHEME when explicitly set even if HTTPS is enabled', async () => {
+    process.env.ITW_CT_HTTPS = 'true';
+    process.env.BASE_URL_SCHEME = 'http';
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.BASE_URL_SCHEME).toBe('http');
+
+    await app.close();
+  });
+
+  it('maps ITW_CT_TLS_CERT_PATH and ITW_CT_TLS_KEY_PATH into config', async () => {
+    process.env.ITW_CT_TLS_CERT_PATH = '/etc/ssl/cert.pem';
+    process.env.ITW_CT_TLS_KEY_PATH = '/etc/ssl/key.pem';
+    const app = Fastify();
+
+    await app.register(configPlugin);
+    await app.ready();
+
+    expect(app.config.TLS_CERT_PATH).toBe('/etc/ssl/cert.pem');
+    expect(app.config.TLS_KEY_PATH).toBe('/etc/ssl/key.pem');
+
+    await app.close();
+  });
+
+  it('does not enable HTTPS for unexpected values like FALSE or no', async () => {
+    for (const value of ['FALSE', 'No', 'off']) {
+      process.env.ITW_CT_HTTPS = value;
+      const app = Fastify();
+
+      await app.register(configPlugin);
+      await app.ready();
+
+      expect(app.config.HTTPS_ENABLED).toBe(false);
+
+      await app.close();
+      cleanupEnv();
+    }
   });
 });

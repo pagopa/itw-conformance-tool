@@ -8,16 +8,16 @@ import fp from 'fastify-plugin';
 import bootstrap from './app.js';
 
 function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
-  const httpsEnabled = process.env['ITW_CT_HTTPS'] ?? process.env['HTTPS_ENABLED'];
-  if (!httpsEnabled || httpsEnabled === 'false' || httpsEnabled === '0') {
+  const httpsEnabledRaw = (process.env['ITW_CT_HTTPS'] ?? process.env['HTTPS_ENABLED'])?.trim().toLowerCase();
+  if (httpsEnabledRaw !== 'true' && httpsEnabledRaw !== '1') {
     return undefined;
   }
 
-  const certPath = process.env['ITW_CT_TLS_CERT_PATH'] ?? process.env['TLS_CERT_PATH'] ?? '';
-  const keyPath = process.env['ITW_CT_TLS_KEY_PATH'] ?? process.env['TLS_KEY_PATH'] ?? '';
+  const certPath = (process.env['ITW_CT_TLS_CERT_PATH'] ?? process.env['TLS_CERT_PATH'] ?? '').trim();
+  const keyPath = (process.env['ITW_CT_TLS_KEY_PATH'] ?? process.env['TLS_KEY_PATH'] ?? '').trim();
 
   if (!certPath || !keyPath) {
-    throw new Error('HTTPS_ENABLED is true but TLS_CERT_PATH or TLS_KEY_PATH is missing');
+    throw new Error('HTTPS is enabled but TLS_CERT_PATH or TLS_KEY_PATH is missing');
   }
 
   return { cert: readFileSync(certPath), key: readFileSync(keyPath) };
@@ -54,6 +54,9 @@ async function startServer() {
   });
 
   await app.ready();
+
+  // Apply headersTimeout on the underlying server regardless of HTTP/HTTPS
+  app.server.headersTimeout = 15_000;
 
   // Start server
   try {
