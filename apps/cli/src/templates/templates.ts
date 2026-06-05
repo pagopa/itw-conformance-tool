@@ -9,7 +9,7 @@ data_dir = ~/.itw-conformance-tool
 ; Logging level: debug | info | warn | error
 ; Default: info
 log_level = info
-; Enable HTTPS for the issuer service (true | false)
+; Enable HTTPS mode (CLI generates/checks local TLS cert/key and forwards ITW_CT_HTTPS) (true | false)
 ; Default: false
 https = false
 
