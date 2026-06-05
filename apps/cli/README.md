@@ -124,7 +124,7 @@ Service selection:
 
 Before launching Nx, the CLI checks that the required files exist in the resolved data directory. If any required file is missing, the CLI throws and exits before starting the services.
 
-When `https = true` in the `[global]` config section, the CLI additionally verifies that the TLS certificate and key files referenced by `tls_cert_path` and `tls_key_path` exist. If either is missing, startup fails with an explicit error message.
+When `https = true` in the `[global]` config section, the CLI additionally verifies that `<data_dir>/tls-cert.pem` and `<data_dir>/tls-key.pem` exist. If either is missing, startup fails with an explicit error message.
 
 ## Configuration Resolution
 
