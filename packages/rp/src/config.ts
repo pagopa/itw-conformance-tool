@@ -83,10 +83,10 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
   const httpsEnabled = httpsRaw === 'true' || httpsRaw === '1';
 
   const tlsCertPathOverride = env.ITW_CT_TLS_CERT_PATH?.trim();
-  const tlsCertPath = tlsCertPathOverride && tlsCertPathOverride.length > 0 ? tlsCertPathOverride : '';
+  const tlsCertPath = tlsCertPathOverride && tlsCertPathOverride.length > 0 ? expandHome(tlsCertPathOverride) : '';
 
   const tlsKeyPathOverride = env.ITW_CT_TLS_KEY_PATH?.trim();
-  const tlsKeyPath = tlsKeyPathOverride && tlsKeyPathOverride.length > 0 ? tlsKeyPathOverride : '';
+  const tlsKeyPath = tlsKeyPathOverride && tlsKeyPathOverride.length > 0 ? expandHome(tlsKeyPathOverride) : '';
 
   const host = DEFAULT_HOST;
 
