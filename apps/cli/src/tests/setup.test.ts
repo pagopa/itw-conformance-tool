@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 export const findRoot = vi.fn(() => '/root');
 export const searchNx = vi.fn(() => '/root/node_modules/nx/dist/bin/nx.js');
 export const expandPath = vi.fn((path: string) => path);
-export const createFileDirPaths = vi.fn<(filePath: string) => string[]>(() => []);
+export const createFileDirPaths = vi.fn<(filePath: string, httpsEnabled?: boolean) => string[]>(() => []);
 export const existsFileSync = vi.fn(() => true);
 
 // Vi mocks
