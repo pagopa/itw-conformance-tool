@@ -9,9 +9,7 @@ const mockConfigs: ConfigType = {
   global: {
     data_dir: '/data/.itw-conformance-tool',
     log_level: 'info',
-    https: false,
-    tls_cert_path: '/data/.itw-conformance-tool/tls-cert.pem',
-    tls_key_path: '/data/.itw-conformance-tool/tls-key.pem'
+    https: true
   },
   'itw-credential-issuer': {
     auth_flow: 'l3',
@@ -40,9 +38,7 @@ describe('buildEnv', () => {
 
     expect(env.ITW_CT_DATA_DIR).toBe('/data/.itw-conformance-tool');
     expect(env.ITW_CT_LOG_LEVEL).toBe('info');
-    expect(env.ITW_CT_HTTPS).toBe('false');
-    expect(env.ITW_CT_TLS_CERT_PATH).toBe('/data/.itw-conformance-tool/tls-cert.pem');
-    expect(env.ITW_CT_TLS_KEY_PATH).toBe('/data/.itw-conformance-tool/tls-key.pem');
+    expect(env.ITW_CT_HTTPS).toBe('true');
     expect(env.ITW_CT_ISSUER_PORT).toBe('3000');
     expect(env.ITW_CT_ISSUER_CREDENTIAL_TYPES).toBe('pid,mdl,badge,eaa');
     expect(env.ITW_CT_RP_PORT).toBe('8080');
@@ -93,18 +89,11 @@ describe('buildEnv', () => {
   it('sets ITW_CT_HTTPS to "true" when https is enabled in config', () => {
     const configs: ConfigType = {
       ...mockConfigs,
-      global: {
-        ...mockConfigs.global,
-        https: true,
-        tls_cert_path: '/certs/tls-cert.pem',
-        tls_key_path: '/certs/tls-key.pem'
-      }
+      global: { ...mockConfigs.global, https: false }
     };
 
     const env = buildEnv(configs, emitLog);
 
-    expect(env.ITW_CT_HTTPS).toBe('true');
-    expect(env.ITW_CT_TLS_CERT_PATH).toBe('/certs/tls-cert.pem');
-    expect(env.ITW_CT_TLS_KEY_PATH).toBe('/certs/tls-key.pem');
+    expect(env.ITW_CT_HTTPS).toBe('false');
   });
 });

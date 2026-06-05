@@ -48,9 +48,7 @@ const makeConfigs = (https: boolean): ConfigType => ({
   global: {
     data_dir: '/root/.itw-conformance-tool',
     log_level: 'info',
-    https,
-    tls_cert_path: '/root/.itw-conformance-tool/tls-cert.pem',
-    tls_key_path: '/root/.itw-conformance-tool/tls-key.pem'
+    https
   },
   'itw-credential-issuer': { auth_flow: 'direct', port: 3000, credential_types: 'pid' },
   rp: { port: 8080, entity_id: '', trust_anchor_url: '', signing_key_path: '', x5c_cert_path: '' }

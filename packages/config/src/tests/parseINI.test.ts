@@ -31,8 +31,6 @@ const httpsConfigContent = `[global]
 data_dir=~/.itw-conformance-tool
 log_level=info
 https=true
-tls_cert_path=/data/tls-cert.pem
-tls_key_path=/data/tls-key.pem
 
 [itw-credential-issuer]
 auth_flow=direct
@@ -97,9 +95,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false,
-        tls_cert_path: '',
-        tls_key_path: ''
+        https: false
       },
       'itw-credential-issuer': {
         auth_flow: 'l2plus',
@@ -116,24 +112,20 @@ describe('parseINI', () => {
     });
   });
 
-  it('parses https=true and explicit TLS paths', () => {
+  it('parses https=true', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(httpsConfigContent);
     const result = parseINI('./https-config.ini');
     expect(result.ok).toBe(true);
     expect(result.data.global.https).toBe(true);
-    expect(result.data.global.tls_cert_path).toBe('/data/tls-cert.pem');
-    expect(result.data.global.tls_key_path).toBe('/data/tls-key.pem');
   });
 
-  it('defaults https to false and TLS paths to empty string when keys are absent', () => {
+  it('defaults https to false when key is absent', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(validConfigContent);
     const result = parseINI('./config.example.ini');
     expect(result.ok).toBe(true);
     expect(result.data.global.https).toBe(false);
-    expect(result.data.global.tls_cert_path).toBe('');
-    expect(result.data.global.tls_key_path).toBe('');
   });
 
   it('returns default config for empty config file', () => {
@@ -163,9 +155,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false,
-        tls_cert_path: '',
-        tls_key_path: ''
+        https: false
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -192,9 +182,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false,
-        tls_cert_path: '',
-        tls_key_path: ''
+        https: false
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',

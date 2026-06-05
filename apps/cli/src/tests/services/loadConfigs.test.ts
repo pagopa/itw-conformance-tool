@@ -13,9 +13,7 @@ vi.mock('../../templates/templates.js', () => ({
     global: {
       data_dir: `${rootPath}/.itw-conformance-tool`,
       log_level: 'info',
-      https: false,
-      tls_cert_path: `${rootPath}/.itw-conformance-tool/tls-cert.pem`,
-      tls_key_path: `${rootPath}/.itw-conformance-tool/tls-key.pem`
+      https: false
     },
     'itw-credential-issuer': { auth_flow: 'direct', port: 3000, credential_types: 'pid,mdl,badge,eaa' },
     rp: { port: 8080 }
@@ -32,9 +30,7 @@ const parsedConfigs: ConfigType = {
   global: {
     data_dir: '/custom/.itw-conformance-tool',
     log_level: 'warn',
-    https: false,
-    tls_cert_path: '/custom/.itw-conformance-tool/tls-cert.pem',
-    tls_key_path: '/custom/.itw-conformance-tool/tls-key.pem'
+    https: false
   },
   'itw-credential-issuer': { auth_flow: 'direct', port: 4000, credential_types: 'pid' },
   rp: {

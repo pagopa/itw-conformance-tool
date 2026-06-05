@@ -229,7 +229,7 @@ export function getTlsCertAndKey(): TlsCertAndKey {
 
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
-  cert.serialNumber = '01';
+  cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
 
   const now = new Date();
   cert.validity.notBefore = now;
@@ -241,6 +241,8 @@ export function getTlsCertAndKey(): TlsCertAndKey {
   cert.setExtensions([
     { name: 'basicConstraints', cA: false },
     { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
+    { name: 'extKeyUsage', serverAuth: true },
+    { name: 'subjectKeyIdentifier' },
     { name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }] }
   ]);
 
