@@ -5,13 +5,13 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import authResponseRoute from '../../routes/auth-response.js';
 import { TEST_AUTH_RESPONSE_PEM, buildRpRouteApp, createAuthResponseJwe } from '../helpers/rp-route-app.js';
 
-function makeStoredRequestJwt(state: string): string {
+function makeStoredRequestJwt(state: string, nonce = randomBytes(32).toString('hex')): string {
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', typ: 'oauth-authz-req+jwt' })).toString('base64url');
   const payload = Buffer.from(
     JSON.stringify({
       client_id: 'http://localhost:8080',
       dcql_query: { credentials: [{ id: 'pid', format: 'dc+sd-jwt' }] },
-      nonce: randomBytes(32).toString('hex'),
+      nonce,
       response_mode: 'direct_post.jwt',
       response_type: 'vp_token',
       response_uri: 'http://localhost:8080/auth/response',
@@ -39,6 +39,19 @@ describe('POST /auth/response', () => {
       method: 'POST',
       url: '/auth/response',
       payload: { unexpected_field: 'value' }
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when both response and error payload fields are provided', async () => {
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: {
+        response: 'a.b.c',
+        error: 'access_denied',
+        state: 'ambiguous-state'
+      }
     });
     expect(res.statusCode).toBe(400);
   });
@@ -77,15 +90,15 @@ describe('POST /auth/response', () => {
 
   it('returns redirect_uri and marks session verified for a valid encrypted VP response', async () => {
     const state = 'valid-vp-test';
+    const nonce = randomBytes(32).toString('hex');
     await ctx.sessionService.create({
       id: state,
-      jwt: makeStoredRequestJwt(state),
+      jwt: makeStoredRequestJwt(state, nonce),
       flowType: 'cross-device',
       ttlMs: 300_000
     });
     await ctx.sessionService.update(state, 'checking');
 
-    const nonce = randomBytes(32).toString('hex');
     await ctx.nonceRepo.insert(nonce, Date.now() + 300_000);
 
     const jwe = await createAuthResponseJwe({ nonce, state });
@@ -107,9 +120,10 @@ describe('POST /auth/response', () => {
 
   it('marks session as rejected and returns 400 when nonce is unknown', async () => {
     const state = 'unknown-nonce-test';
+    const expectedNonce = randomBytes(32).toString('hex');
     await ctx.sessionService.create({
       id: state,
-      jwt: makeStoredRequestJwt(state),
+      jwt: makeStoredRequestJwt(state, expectedNonce),
       flowType: 'cross-device',
       ttlMs: 300_000
     });

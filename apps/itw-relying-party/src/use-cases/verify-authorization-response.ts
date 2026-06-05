@@ -75,7 +75,12 @@ async function verifyAndExtractKbJwtNonce(kbJwt: string, sdJwt: string, expected
   }
 
   const [headerSegment] = kbJwtSegments;
-  const header = JSON.parse(Buffer.from(headerSegment, 'base64url').toString('utf8')) as { jwk?: JWK };
+  let header: { jwk?: JWK };
+  try {
+    header = JSON.parse(Buffer.from(headerSegment, 'base64url').toString('utf8')) as { jwk?: JWK };
+  } catch {
+    throw new VerifyAuthorizationResponseError('KB-JWT header is not valid JSON');
+  }
 
   if (!header.jwk) {
     throw new VerifyAuthorizationResponseError('KB-JWT header missing required "jwk" claim');
@@ -199,6 +204,16 @@ export async function verifyAuthorizationResponseUseCase(
 
   try {
     const authorizationRequestPayload = decodeAuthorizationRequestPayload(session.jwt);
+    const expectedAudience = authorizationRequestPayload.client_id;
+    const expectedNonce = authorizationRequestPayload.nonce;
+
+    if (typeof expectedAudience !== 'string' || expectedAudience.length === 0) {
+      throw new VerifyAuthorizationResponseError('Stored request JWT payload is missing client_id');
+    }
+    if (typeof expectedNonce !== 'string' || expectedNonce.length === 0) {
+      throw new VerifyAuthorizationResponseError('Stored request JWT payload is missing nonce');
+    }
+
     const verified = await verifyJarmAuthorizationResponse({
       authorizationRequestPayload,
       callbacks: {
@@ -219,7 +234,7 @@ export async function verifyAuthorizationResponseUseCase(
       const kbJwt = parts[parts.length - 1];
 
       try {
-        const nonce = await verifyAndExtractKbJwtNonce(kbJwt, sdJwt, input.baseUrl);
+        const nonce = await verifyAndExtractKbJwtNonce(kbJwt, sdJwt, expectedAudience);
         verifiedNonces.push(nonce);
       } catch (error) {
         throw new VerifyAuthorizationResponseError(
@@ -237,7 +252,11 @@ export async function verifyAuthorizationResponseUseCase(
       throw new VerifyAuthorizationResponseError('Nonce mismatch across credentials');
     }
 
-    const consumed = await input.nonceRepository.consume(firstNonce);
+    if (firstNonce !== expectedNonce) {
+      throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
+    }
+
+    const consumed = await input.nonceRepository.consume(expectedNonce);
     if (!consumed) {
       throw new VerifyAuthorizationResponseError(
         'The nonce does not match with the one provided in the request object'

@@ -16,9 +16,14 @@ const responseBodySchema = z
     response: z.string().optional(),
     state: z.string().optional()
   })
-  .refine((data) => data.response !== undefined || (data.error && data.state), {
+  .refine(
+    (data) =>
+      (data.response !== undefined && data.error === undefined && data.state === undefined) ||
+      (data.response === undefined && data.error !== undefined && data.state !== undefined),
+    {
     message: "Either 'response' or 'error, state' must be present"
-  });
+    }
+  );
 
 export class ParseAuthorizationResponseError extends Error {
   readonly statusCode = 400;
