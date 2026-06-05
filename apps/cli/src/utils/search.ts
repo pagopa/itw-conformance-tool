@@ -86,7 +86,7 @@ export function createFileDirPaths(filePath: string, httpsEnabled = false): stri
   ];
 
   if (httpsEnabled) {
-    paths.push(join(filePath, 'tls-cert.pem'), join(filePath, 'tls-key.pem'));
+    paths.push(join(filePath, 'tls_cert.pem'), join(filePath, 'tls_key.pem'));
   }
 
   return paths;
