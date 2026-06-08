@@ -13,7 +13,7 @@ import { generateEphemeralKeyPair } from '../../crypto/ephemeral-keys.js';
 
 import type { IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 import type { INonceRepository } from '@itw-conformance-tool/database';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import type { JWK } from 'jose';
 
 // ---------------------------------------------------------------------------
@@ -152,6 +152,8 @@ export interface RpRouteAppOptions {
   authResponsePrivateKeyPem?: string;
   baseUrl?: string;
   conformanceSessionRepository?: IConformanceSessionRepository;
+  /** Called after route registration but before app.ready(), allowing tests to add sibling routes. */
+  setup?: (app: FastifyInstance) => void | Promise<void>;
 }
 
 /**
@@ -206,6 +208,11 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
   });
 
   await app.register(route);
+
+  if (options.setup) {
+    await options.setup(app);
+  }
+
   await app.ready();
 
   return { app, dbClient, nonceRepo, sessionService };

@@ -50,7 +50,7 @@ export function registerAuthRequestConformanceHooks(app: FastifyInstance): void 
   });
 }
 
-/** Registers an hook that automatically closes the conformance session
+/** Registers a hook that automatically closes the conformance session
  * as PASSED when the route returns a successful response containing
  * a verified presentation.
  *

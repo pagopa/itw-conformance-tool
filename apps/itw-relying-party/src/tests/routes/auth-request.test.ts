@@ -1,7 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 
 import authRequestRoute from '../../routes/auth-request.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
+
+import type { ConformanceSession, IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 
 describe('GET /auth/request/:state', () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
@@ -108,5 +112,48 @@ describe('GET /auth/request/:state', () => {
       url: `/auth/request/${state}`
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Conformance hook encapsulation — regression guard
+// ---------------------------------------------------------------------------
+
+function makeTrackingConformanceRepo(): IConformanceSessionRepository & { created: ConformanceSession[] } {
+  const created: ConformanceSession[] = [];
+  return {
+    created,
+    async create(session) {
+      created.push(session);
+    },
+    async get(sessionId) {
+      return created.find((s) => s.sessionId === sessionId) ?? null;
+    },
+    async appendCheck() {
+      /* empty */
+    },
+    async close() {
+      /* empty */
+    }
+  };
+}
+
+describe('GET /auth/request/:state — conformance hook encapsulation', () => {
+  it('does not open a conformance session for a sibling route that also has a :state param', async () => {
+    const repo = makeTrackingConformanceRepo();
+    const ctx = await buildRpRouteApp(authRequestRoute, {
+      conformanceSessionRepository: repo,
+      setup: (app) => {
+        app.get<{ Params: { state: string } }>('/other/:state', async (_req, reply) => {
+          return reply.code(200).send('ok');
+        });
+      }
+    });
+
+    const state = randomUUID();
+    await ctx.app.inject({ method: 'GET', url: `/other/${state}` });
+
+    expect(repo.created).toHaveLength(0);
+    await ctx.app.close();
   });
 });
