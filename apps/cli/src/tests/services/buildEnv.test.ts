@@ -8,7 +8,8 @@ import type { ConfigType } from '@itw-conformance-tool/config';
 const mockConfigs: ConfigType = {
   global: {
     data_dir: '/data/.itw-conformance-tool',
-    log_level: 'info'
+    log_level: 'info',
+    https: true
   },
   'itw-credential-issuer': {
     auth_flow: 'l3',
@@ -17,6 +18,7 @@ const mockConfigs: ConfigType = {
   },
   rp: {
     port: 8080,
+    entity_id: 'https://rp.example.com',
     trust_anchor_url: 'https://trust-anchor.example.com',
     signing_key_path: '/keys/signing.pem',
     x5c_cert_path: '/certs/x5c.pem'
@@ -36,6 +38,7 @@ describe('buildEnv', () => {
 
     expect(env.ITW_CT_DATA_DIR).toBe('/data/.itw-conformance-tool');
     expect(env.ITW_CT_LOG_LEVEL).toBe('info');
+    expect(env.ITW_CT_HTTPS).toBe('true');
     expect(env.ITW_CT_ISSUER_PORT).toBe('3000');
     expect(env.ITW_CT_ISSUER_CREDENTIAL_TYPES).toBe('pid,mdl,badge,eaa');
     expect(env.ITW_CT_RP_PORT).toBe('8080');
@@ -70,6 +73,7 @@ describe('buildEnv', () => {
       'itw-credential-issuer': { auth_flow: 'l3', port: 4000, credential_types: 'pid' },
       rp: {
         port: 9090,
+        entity_id: 'https://rp.example.com',
         trust_anchor_url: 'https://ta.example.com',
         signing_key_path: '/k.pem',
         x5c_cert_path: '/c.pem'
@@ -80,5 +84,16 @@ describe('buildEnv', () => {
 
     expect(env.ITW_CT_ISSUER_PORT).toBe('4000');
     expect(env.ITW_CT_RP_PORT).toBe('9090');
+  });
+
+  it('sets ITW_CT_HTTPS to "false" when https is disabled in config', () => {
+    const configs: ConfigType = {
+      ...mockConfigs,
+      global: { ...mockConfigs.global, https: false }
+    };
+
+    const env = buildEnv(configs, emitLog);
+
+    expect(env.ITW_CT_HTTPS).toBe('false');
   });
 });

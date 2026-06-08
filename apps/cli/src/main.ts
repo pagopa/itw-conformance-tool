@@ -36,7 +36,9 @@ async function main(): Promise<void> {
         );
       }
 
-      const missingFiles = createFileDirPaths(configs.global.data_dir).filter((f) => !existsFileSync(f));
+      const missingFiles = createFileDirPaths(configs.global.data_dir, configs.global.https).filter(
+        (f) => !existsFileSync(f)
+      );
       if (missingFiles.length > 0) {
         throw new Error(
           `Missing required files: \n${missingFiles.join('\n')}\nPlease run \`itw-conformance-tool init\` to create the necessary keys and certificates.`

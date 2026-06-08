@@ -22,7 +22,10 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     PORT: 3000,
     DATA_DIR: '/tmp',
     DB_CLEANUP_INTERVAL_MS: 60_000,
-    AUTH_FLOW: 'l2plus'
+    AUTH_FLOW: 'l2plus',
+    HTTPS_ENABLED: false,
+    TLS_CERT_PATH: '',
+    TLS_KEY_PATH: ''
   });
 
   app.decorate('issuerKeys', {

@@ -73,16 +73,23 @@ export function expandPath(path: string, rootPath: string): string {
  * based on the provided file path.
  *
  * @param filePath - The base path for the files.
+ * @param httpsEnabled - Whether HTTPS is enabled; when true, TLS cert/key paths are included.
  * @returns An array of file paths for the required keys and certificates.
  */
-export function createFileDirPaths(filePath: string): string[] {
-  return [
+export function createFileDirPaths(filePath: string, httpsEnabled = false): string[] {
+  const paths = [
     join(filePath, 'issuer', 'signing-keys.jwks.json'),
     join(filePath, 'issuer', 'iaca-cert.pem'),
     join(filePath, 'issuer', 'iaca-key.pem'),
     join(filePath, 'rp', 'auth-request-key.jwk.json'),
     join(filePath, 'rp', 'auth-response-key.jwk.json')
   ];
+
+  if (httpsEnabled) {
+    paths.push(join(filePath, 'tls_cert.pem'), join(filePath, 'tls_key.pem'));
+  }
+
+  return paths;
 }
 
 /** Utility function to check if a given path exists and is a file.
