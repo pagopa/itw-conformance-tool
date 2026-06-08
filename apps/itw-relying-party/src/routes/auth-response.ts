@@ -20,9 +20,9 @@ class InvalidAuthorizationResponseBodyError extends Error {
   }
 }
 
-function parseAuthResponseBody(body: unknown):
-  | { kind: 'oauth-error'; state: string }
-  | { kind: 'jarm'; response: string } {
+function parseAuthResponseBody(
+  body: unknown
+): { kind: 'oauth-error'; state: string } | { kind: 'jarm'; response: string } {
   if (!body || typeof body !== 'object') {
     throw new InvalidAuthorizationResponseBodyError();
   }
