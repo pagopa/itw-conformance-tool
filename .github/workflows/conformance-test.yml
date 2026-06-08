@@ -48,6 +48,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Write CLI config.ini for CI
+        run: |
+          cat > config.ini << 'EOF'
+          [global]
+          data_dir = .ci-data
+          https = false
+          EOF
+
       - name: Initialize data directory
         run: node apps/cli/dist/main.js init
 
