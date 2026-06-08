@@ -78,9 +78,19 @@ export async function createAuthResponseJwe({
   );
   const holderPubJwk = holderPubNode.export({ format: 'jwk' }) as unknown as JWK;
 
+  // Issuer key pair (signs the issuer SD-JWT)
+  const { privateKey: issuerPrivNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const issuerPrivJose = await importPKCS8(issuerPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
+
   // SD-JWT with no disclosures: issuerJwt~kbJwt
   // sd_hash = sha256('') because there are no disclosures
-  const issuerJwt = 'eyJhbGciOiJFUzI1NiJ9.eyJ2Y3QiOiJ0ZXN0In0.fakesig';
+  const issuerJwt = await new SignJWT({
+    iss: 'https://issuer.example',
+    vct: 'test',
+    cnf: { jwk: holderPubJwk }
+  })
+    .setProtectedHeader({ alg: 'ES256', typ: 'dc+sd-jwt' })
+    .sign(issuerPrivJose);
   const sdHash = createHash('sha256').update('').digest('base64url');
 
   const kbJwt = await new SignJWT({ aud: clientId, iat: Math.floor(Date.now() / 1000), nonce, sd_hash: sdHash })

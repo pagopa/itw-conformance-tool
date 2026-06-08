@@ -79,6 +79,17 @@ describe('POST /auth/response', () => {
     expect(session?.state).toBe('rejected');
   });
 
+  it('returns empty body for an error response even when state is unknown', async () => {
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: { error: 'access_denied', error_description: 'User denied', state: 'unknown-session' }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({});
+  });
+
   it('returns 400 when response is not a valid JWE', async () => {
     const res = await ctx.app.inject({
       method: 'POST',

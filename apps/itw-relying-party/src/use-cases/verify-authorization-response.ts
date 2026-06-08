@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 import { verifyJarmAuthorizationResponse } from '@pagopa/io-wallet-oid4vp';
-import { compactDecrypt, importPKCS8, importJWK, jwtVerify, type JWK } from 'jose';
+import { calculateJwkThumbprint, compactDecrypt, importPKCS8, importJWK, jwtVerify, type JWK } from 'jose';
 
 import { createDecryptJweCallback, createVerifyJwtCallback } from '../crypto/callbacks.js';
 
@@ -82,25 +82,80 @@ function decodeJwtSection(section: string, errorMessage: string): Record<string,
   }
 }
 
-function ensureIssuerTrustChainAnchored(sdJwt: string, trustChain: [string, ...string[]] | undefined): void {
-  if (!trustChain || isInsecureLocalDevTrustChain(trustChain)) {
-    return;
-  }
-
+function extractIssuerJwt(sdJwt: string): string {
   const [issuerJwt] = sdJwt.split('~');
-  const issuerJwtSegments = issuerJwt?.split('.') ?? [];
-  if (issuerJwtSegments.length !== 3) {
-    throw new VerifyAuthorizationResponseError('Issuer SD-JWT must be a compact JWT with exactly 3 segments');
+  if (!issuerJwt || issuerJwt.length === 0) {
+    throw new VerifyAuthorizationResponseError('VP token credential is missing issuer SD-JWT segment');
+  }
+  return issuerJwt;
+}
+
+function decodeCompactJwtHeaderAndPayload(
+  jwt: string,
+  headerError: string,
+  payloadError: string
+): { header: Record<string, unknown>; payload: Record<string, unknown> } {
+  const segments = jwt.split('.');
+  if (segments.length !== 3) {
+    throw new VerifyAuthorizationResponseError('JWT must be a compact JWT with exactly 3 segments');
   }
 
-  const issuerHeader = decodeJwtSection(issuerJwtSegments[0], 'Issuer SD-JWT header is not valid JSON');
-  const jwtTrustChain = issuerHeader.trust_chain;
+  return {
+    header: decodeJwtSection(segments[0], headerError),
+    payload: decodeJwtSection(segments[1], payloadError)
+  };
+}
 
-  if (
-    !Array.isArray(jwtTrustChain) ||
-    jwtTrustChain.length === 0 ||
-    jwtTrustChain.some((entry) => typeof entry !== 'string')
-  ) {
+function extractJwksFromEntityStatement(entityStatementJwt: string): JWK[] {
+  const { payload } = decodeCompactJwtHeaderAndPayload(
+    entityStatementJwt,
+    'Entity statement header is not valid JSON',
+    'Entity statement payload is not valid JSON'
+  );
+
+  const metadata = payload.metadata;
+  if (!metadata || typeof metadata !== 'object') {
+    return [];
+  }
+
+  const openidCredentialIssuer = (metadata as Record<string, unknown>).openid_credential_issuer;
+  if (!openidCredentialIssuer || typeof openidCredentialIssuer !== 'object') {
+    return [];
+  }
+
+  const jwks = (openidCredentialIssuer as Record<string, unknown>).jwks;
+  if (!jwks || typeof jwks !== 'object') {
+    return [];
+  }
+
+  const keys = (jwks as Record<string, unknown>).keys;
+  if (!Array.isArray(keys)) {
+    return [];
+  }
+
+  return keys.filter((key): key is JWK => Boolean(key && typeof key === 'object'));
+}
+
+async function verifyIssuerSdJwtAndExtractCnfJwk(sdJwt: string, trustChain: [string, ...string[]] | undefined): Promise<JWK> {
+  const issuerJwt = extractIssuerJwt(sdJwt);
+  const { header, payload } = decodeCompactJwtHeaderAndPayload(
+    issuerJwt,
+    'Issuer SD-JWT header is not valid JSON',
+    'Issuer SD-JWT payload is not valid JSON'
+  );
+
+  const cnf = payload.cnf;
+  const cnfJwk = cnf && typeof cnf === 'object' ? (cnf as Record<string, unknown>).jwk : undefined;
+  if (!cnfJwk || typeof cnfJwk !== 'object') {
+    throw new VerifyAuthorizationResponseError('Issuer SD-JWT payload missing required "cnf.jwk" claim');
+  }
+
+  if (!trustChain || isInsecureLocalDevTrustChain(trustChain)) {
+    return cnfJwk as JWK;
+  }
+
+  const jwtTrustChain = header.trust_chain;
+  if (!Array.isArray(jwtTrustChain) || jwtTrustChain.length === 0 || jwtTrustChain.some((entry) => typeof entry !== 'string')) {
     throw new VerifyAuthorizationResponseError('Issuer SD-JWT header missing required "trust_chain"');
   }
 
@@ -108,6 +163,37 @@ function ensureIssuerTrustChainAnchored(sdJwt: string, trustChain: [string, ...s
   if (!hasAnchorOverlap) {
     throw new VerifyAuthorizationResponseError('Issuer SD-JWT trust chain is not anchored to RP trusted chain');
   }
+
+  const alg = typeof header.alg === 'string' && header.alg.length > 0 ? header.alg : undefined;
+  if (!alg) {
+    throw new VerifyAuthorizationResponseError('Issuer SD-JWT header missing required "alg" claim');
+  }
+
+  const kid = typeof header.kid === 'string' && header.kid.length > 0 ? header.kid : undefined;
+  const candidateKeys = jwtTrustChain.flatMap((statement) => extractJwksFromEntityStatement(statement));
+  const issuerKeys = kid ? candidateKeys.filter((key) => key.kid === kid) : candidateKeys;
+
+  if (issuerKeys.length === 0) {
+    throw new VerifyAuthorizationResponseError('Unable to resolve issuer key from SD-JWT trust chain');
+  }
+
+  let verified = false;
+  for (const issuerJwk of issuerKeys) {
+    try {
+      const issuerPublicKey = await importJWK(issuerJwk, alg);
+      await jwtVerify(issuerJwt, issuerPublicKey, { algorithms: [alg] });
+      verified = true;
+      break;
+    } catch {
+      // Try next key candidate.
+    }
+  }
+
+  if (!verified) {
+    throw new VerifyAuthorizationResponseError('Issuer SD-JWT signature verification failed');
+  }
+
+  return cnfJwk as JWK;
 }
 
 function extractKbJwt(sdJwt: string): string {
@@ -156,14 +242,17 @@ function validateAndConsumeNonceBeforeCredentialChecks(
   return (async () => {
     const consumed = await nonceRepository.consume(expectedNonce);
     if (!consumed) {
-      throw new VerifyAuthorizationResponseError(
-        'The nonce does not match with the one provided in the request object'
-      );
+      throw new VerifyAuthorizationResponseError('The nonce has already been consumed or has expired');
     }
   })();
 }
 
-async function verifyAndExtractKbJwtNonce(kbJwt: string, sdJwt: string, expectedAudience?: string): Promise<string> {
+async function verifyAndExtractKbJwtNonce(
+  kbJwt: string,
+  sdJwt: string,
+  expectedAudience?: string,
+  expectedHolderJwk?: JWK
+): Promise<string> {
   const kbJwtSegments = kbJwt.split('.');
   if (kbJwtSegments.length !== 3) {
     throw new VerifyAuthorizationResponseError('KB-JWT must be a compact JWT with exactly 3 segments');
@@ -179,6 +268,17 @@ async function verifyAndExtractKbJwtNonce(kbJwt: string, sdJwt: string, expected
 
   if (!header.jwk) {
     throw new VerifyAuthorizationResponseError('KB-JWT header missing required "jwk" claim');
+  }
+
+  if (expectedHolderJwk) {
+    const [headerJwkThumbprint, expectedHolderJwkThumbprint] = await Promise.all([
+      calculateJwkThumbprint(header.jwk),
+      calculateJwkThumbprint(expectedHolderJwk)
+    ]);
+
+    if (headerJwkThumbprint !== expectedHolderJwkThumbprint) {
+      throw new VerifyAuthorizationResponseError('KB-JWT holder key does not match issuer SD-JWT "cnf.jwk" binding');
+    }
   }
 
   if (header.alg !== 'ES256') {
@@ -343,11 +443,11 @@ export async function verifyAuthorizationResponseUseCase(
 
     const verifiedNonces: string[] = [];
     for (const [credentialName, sdJwt] of Object.entries(vpToken)) {
-      ensureIssuerTrustChainAnchored(sdJwt, input.trustChain);
+      const holderCnfJwk = await verifyIssuerSdJwtAndExtractCnfJwk(sdJwt, input.trustChain);
       const kbJwt = extractKbJwt(sdJwt);
 
       try {
-        const nonce = await verifyAndExtractKbJwtNonce(kbJwt, sdJwt, expectedAudience);
+        const nonce = await verifyAndExtractKbJwtNonce(kbJwt, sdJwt, expectedAudience, holderCnfJwk);
         verifiedNonces.push(nonce);
       } catch (error) {
         throw new VerifyAuthorizationResponseError(

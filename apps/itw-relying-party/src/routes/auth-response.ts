@@ -14,7 +14,11 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
       const parsedBody = parseAuthorizationResponseUseCase(request.body);
 
       if (parsedBody.kind === 'oauth-error') {
-        await app.sessionService.update(parsedBody.state, 'rejected');
+        try {
+          await app.sessionService.update(parsedBody.state, 'rejected');
+        } catch {
+          // Ignore unknown sessions for OAuth error callbacks.
+        }
         return reply.code(200).send({});
       }
 
