@@ -103,15 +103,15 @@ describe('createFileDirPaths', () => {
     expect(paths).toContain('/data/issuer/iaca-key.pem');
     expect(paths).toContain('/data/rp/auth-request-key.jwk.json');
     expect(paths).toContain('/data/rp/auth-response-key.jwk.json');
-    expect(paths).toContain('/data/tls-cert.pem');
-    expect(paths).toContain('/data/tls-key.pem');
+    expect(paths).toContain('/data/tls_cert.pem');
+    expect(paths).toContain('/data/tls_key.pem');
   });
 
   it('does not include TLS paths when httpsEnabled is explicitly false', () => {
     const paths = createFileDirPaths('/data', false);
     expect(paths).toHaveLength(5);
-    expect(paths).not.toContain('/data/tls-cert.pem');
-    expect(paths).not.toContain('/data/tls-key.pem');
+    expect(paths).not.toContain('/data/tls_cert.pem');
+    expect(paths).not.toContain('/data/tls_key.pem');
   });
 });
 
