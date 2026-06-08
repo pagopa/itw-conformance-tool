@@ -53,7 +53,7 @@ jobs:
           cat > config.ini << 'EOF'
           [global]
           data_dir = .ci-data
-          https = false
+          https = true
           EOF
 
       - name: Initialize data directory
