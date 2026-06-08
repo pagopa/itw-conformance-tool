@@ -5,9 +5,12 @@ export {
   DEFAULT_PORT,
   deriveBaseUrl,
   loadRpConfig,
+  resolveHttpsEnabled,
+  resolveTlsPaths,
   rpConfigSchema,
   type LoadRpConfigInput,
   type LoadRpConfigResult,
+  type RpTlsPaths,
   type RpConfig
 } from './config.js';
 

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { parseINI } from '@itw-conformance-tool/config';
 import { z } from 'zod';
@@ -9,17 +9,39 @@ export const DEFAULT_HOST = '0.0.0.0';
 export const DEFAULT_PORT = 8080;
 export const DEFAULT_DATA_DIR = resolve(homedir(), '.itw-conformance-tool');
 
-export const rpConfigSchema = z.object({
-  host: z.string().min(1),
-  port: z.number().int().min(1).max(65535),
-  baseUrl: z.string().url(),
-  entityId: z.string().url(),
-  dataDir: z.string().min(1),
-  configFilePath: z.string().min(1),
-  trustAnchorUrl: z.string().url(),
-  signingKeyPath: z.string().min(1),
-  x5cCertPath: z.string().min(1)
-});
+export const rpConfigSchema = z
+  .object({
+    host: z.string().min(1),
+    port: z.number().int().min(1).max(65535),
+    baseUrl: z.string().url(),
+    entityId: z.string().url(),
+    dataDir: z.string().min(1),
+    configFilePath: z.string().min(1),
+    trustAnchorUrl: z.string().url(),
+    signingKeyPath: z.string().min(1),
+    x5cCertPath: z.string().min(1),
+    httpsEnabled: z.boolean().default(false),
+    tlsCertPath: z.string().default(''),
+    tlsKeyPath: z.string().default('')
+  })
+  .superRefine((data, ctx) => {
+    if (data.httpsEnabled) {
+      if (!data.tlsCertPath) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tlsCertPath'],
+          message: 'tlsCertPath is required when httpsEnabled is true'
+        });
+      }
+      if (!data.tlsKeyPath) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tlsKeyPath'],
+          message: 'tlsKeyPath is required when httpsEnabled is true'
+        });
+      }
+    }
+  });
 
 export type RpConfig = z.infer<typeof rpConfigSchema>;
 
@@ -31,6 +53,11 @@ export interface LoadRpConfigInput {
 export interface LoadRpConfigResult {
   config: RpConfig;
   configFileFound: boolean;
+}
+
+export interface RpTlsPaths {
+  certPath: string;
+  keyPath: string;
 }
 
 function expandHome(pathValue: string): string {
@@ -55,11 +82,33 @@ function parsePortOverride(env: NodeJS.ProcessEnv, variableName: string): number
   return port;
 }
 
-export function deriveBaseUrl(input: { host: string; port: number }): string {
+export function resolveHttpsEnabled(env: NodeJS.ProcessEnv, fallback: boolean): boolean {
+  const httpsRaw = env.ITW_CT_HTTPS?.trim().toLowerCase();
+  return httpsRaw !== undefined ? httpsRaw === 'true' || httpsRaw === '1' : fallback;
+}
+
+export function resolveTlsPaths(input: { dataDir: string; env: NodeJS.ProcessEnv }): RpTlsPaths {
+  const tlsCertPathOverride = input.env.ITW_CT_TLS_CERT_PATH?.trim();
+  const certPath =
+    tlsCertPathOverride && tlsCertPathOverride.length > 0
+      ? expandHome(tlsCertPathOverride)
+      : join(input.dataDir, 'tls_cert.pem');
+
+  const tlsKeyPathOverride = input.env.ITW_CT_TLS_KEY_PATH?.trim();
+  const keyPath =
+    tlsKeyPathOverride && tlsKeyPathOverride.length > 0
+      ? expandHome(tlsKeyPathOverride)
+      : join(input.dataDir, 'tls_key.pem');
+
+  return { certPath, keyPath };
+}
+
+export function deriveBaseUrl(input: { host: string; port: number; scheme?: 'http' | 'https' }): string {
   // INI [rp].host can be 0.0.0.0 to listen on all interfaces, but the public
   // base URL should be addressable — fall back to localhost in that case.
   const reachableHost = input.host === '0.0.0.0' ? 'localhost' : input.host;
-  return `http://${reachableHost}:${input.port}`;
+  const scheme = input.scheme ?? 'http';
+  return `${scheme}://${reachableHost}:${input.port}`;
 }
 
 export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
@@ -75,11 +124,16 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
       ? expandHome(dataDirOverride.trim())
       : expandHome(data.global.data_dir);
 
+  const httpsEnabled = resolveHttpsEnabled(env, data.global.https);
+  const { certPath: tlsCertPath, keyPath: tlsKeyPath } = resolveTlsPaths({ dataDir, env });
+
   const host = DEFAULT_HOST;
 
   const baseUrlOverride = env.ITW_CT_RP_BASE_URL?.trim();
   const baseUrlCandidate =
-    baseUrlOverride && baseUrlOverride.length > 0 ? baseUrlOverride : deriveBaseUrl({ host, port });
+    baseUrlOverride && baseUrlOverride.length > 0
+      ? baseUrlOverride
+      : deriveBaseUrl({ host, port, scheme: httpsEnabled ? 'https' : 'http' });
 
   const entityIdOverride = env.ITW_CT_RP_ENTITY_ID?.trim();
   const entityIdFromConfig = data.rp.entity_id?.trim();
@@ -125,7 +179,10 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     configFilePath: input.configFilePath,
     trustAnchorUrl,
     signingKeyPath,
-    x5cCertPath
+    x5cCertPath,
+    httpsEnabled,
+    tlsCertPath,
+    tlsKeyPath
   });
 
   return { config, configFileFound };
