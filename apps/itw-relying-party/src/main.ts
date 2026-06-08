@@ -30,7 +30,6 @@ async function startServer() {
     connectionTimeout: 120_000,
     requestTimeout: 60_000,
     keepAliveTimeout: 10_000,
-    ...(tls ? {} : { http: { headersTimeout: 15_000 } }),
     ajv: {
       customOptions: {
         coerceTypes: 'array',
