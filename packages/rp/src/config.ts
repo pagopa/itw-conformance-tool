@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { parseINI } from '@itw-conformance-tool/config';
 import { z } from 'zod';
@@ -36,6 +36,11 @@ export interface LoadRpConfigResult {
   configFileFound: boolean;
 }
 
+export interface RpTlsPaths {
+  certPath: string;
+  keyPath: string;
+}
+
 function expandHome(pathValue: string): string {
   if (pathValue === '~') {
     return homedir();
@@ -56,6 +61,27 @@ function parsePortOverride(env: NodeJS.ProcessEnv, variableName: string): number
     throw new Error(`Invalid ${variableName} value: ${value}`);
   }
   return port;
+}
+
+export function resolveHttpsEnabled(env: NodeJS.ProcessEnv, fallback: boolean): boolean {
+  const httpsRaw = env.ITW_CT_HTTPS?.trim().toLowerCase();
+  return httpsRaw !== undefined ? httpsRaw === 'true' || httpsRaw === '1' : fallback;
+}
+
+export function resolveTlsPaths(input: { dataDir: string; env: NodeJS.ProcessEnv }): RpTlsPaths {
+  const tlsCertPathOverride = input.env.ITW_CT_TLS_CERT_PATH?.trim();
+  const certPath =
+    tlsCertPathOverride && tlsCertPathOverride.length > 0
+      ? expandHome(tlsCertPathOverride)
+      : join(input.dataDir, 'tls_cert.pem');
+
+  const tlsKeyPathOverride = input.env.ITW_CT_TLS_KEY_PATH?.trim();
+  const keyPath =
+    tlsKeyPathOverride && tlsKeyPathOverride.length > 0
+      ? expandHome(tlsKeyPathOverride)
+      : join(input.dataDir, 'tls_key.pem');
+
+  return { certPath, keyPath };
 }
 
 export function deriveBaseUrl(input: { host: string; port: number; scheme?: 'http' | 'https' }): string {
@@ -79,14 +105,8 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
       ? expandHome(dataDirOverride.trim())
       : expandHome(data.global.data_dir);
 
-  const httpsRaw = env.ITW_CT_HTTPS?.trim().toLowerCase();
-  const httpsEnabled = httpsRaw === 'true' || httpsRaw === '1';
-
-  const tlsCertPathOverride = env.ITW_CT_TLS_CERT_PATH?.trim();
-  const tlsCertPath = tlsCertPathOverride && tlsCertPathOverride.length > 0 ? expandHome(tlsCertPathOverride) : '';
-
-  const tlsKeyPathOverride = env.ITW_CT_TLS_KEY_PATH?.trim();
-  const tlsKeyPath = tlsKeyPathOverride && tlsKeyPathOverride.length > 0 ? expandHome(tlsKeyPathOverride) : '';
+  const httpsEnabled = resolveHttpsEnabled(env, data.global.https);
+  const { certPath: tlsCertPath, keyPath: tlsKeyPath } = resolveTlsPaths({ dataDir, env });
 
   const host = DEFAULT_HOST;
 
