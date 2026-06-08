@@ -20,7 +20,7 @@ async function extractStateFromJwe(jwe: string, privateKeyPem: string): Promise<
   }
 }
 
-/** Registers an onSend hook on that automatically opens a conformance
+/** Registers an onSend hook that automatically opens a conformance
  * session when the route returns a successful (2xx) response.
  *
  * @param app Fastify instance to register the hook on
