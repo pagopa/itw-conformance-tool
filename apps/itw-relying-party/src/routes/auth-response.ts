@@ -3,6 +3,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { compactDecrypt, importJWK, importPKCS8, jwtVerify, type JWK } from 'jose';
 import { z } from 'zod';
 
+import { registerAuthResponseConformanceHooks } from '../hooks/conformance.js';
+
 import type { PresentationValues } from '@itw-conformance-tool/rp';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -131,6 +133,8 @@ async function decryptAuthorizationResponse(
 }
 
 const authResponseRoute: FastifyPluginAsync = async (app) => {
+  registerAuthResponseConformanceHooks(app);
+
   app.route({
     url: '/auth/response',
     method: 'POST',
