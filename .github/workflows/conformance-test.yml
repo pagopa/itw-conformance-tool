@@ -90,6 +90,7 @@ jobs:
         working-directory: /tmp/wct
         run: |
           pnpm install
+          pnpm build
           chmod +x ./bin/wct
           pnpm link --global
 
