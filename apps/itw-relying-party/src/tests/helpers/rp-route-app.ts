@@ -69,7 +69,9 @@ export async function createAuthResponseJwe({
 
   // Holder key pair (signs the KB-JWT)
   const holderCurve = kbJwtAlg === 'ES256' ? 'P-256' : kbJwtAlg === 'ES384' ? 'P-384' : 'P-521';
-  const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: holderCurve });
+  const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', {
+    namedCurve: holderCurve
+  });
   const holderPrivJose = await importPKCS8(
     holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(),
     kbJwtAlg

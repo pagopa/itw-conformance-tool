@@ -96,7 +96,11 @@ function ensureIssuerTrustChainAnchored(sdJwt: string, trustChain: [string, ...s
   const issuerHeader = decodeJwtSection(issuerJwtSegments[0], 'Issuer SD-JWT header is not valid JSON');
   const jwtTrustChain = issuerHeader.trust_chain;
 
-  if (!Array.isArray(jwtTrustChain) || jwtTrustChain.length === 0 || jwtTrustChain.some((entry) => typeof entry !== 'string')) {
+  if (
+    !Array.isArray(jwtTrustChain) ||
+    jwtTrustChain.length === 0 ||
+    jwtTrustChain.some((entry) => typeof entry !== 'string')
+  ) {
     throw new VerifyAuthorizationResponseError('Issuer SD-JWT header missing required "trust_chain"');
   }
 
@@ -152,7 +156,9 @@ function validateAndConsumeNonceBeforeCredentialChecks(
   return (async () => {
     const consumed = await nonceRepository.consume(expectedNonce);
     if (!consumed) {
-      throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
+      throw new VerifyAuthorizationResponseError(
+        'The nonce does not match with the one provided in the request object'
+      );
     }
   })();
 }
@@ -356,7 +362,9 @@ export async function verifyAuthorizationResponseUseCase(
 
     const firstNonce = verifiedNonces[0];
     if (!verifiedNonces.every((nonce) => nonce === firstNonce) || firstNonce !== expectedNonce) {
-      throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
+      throw new VerifyAuthorizationResponseError(
+        'The nonce does not match with the one provided in the request object'
+      );
     }
 
     const values = decodeDisclosureValues(vpToken);
