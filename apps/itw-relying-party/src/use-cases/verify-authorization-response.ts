@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { verifyJarmAuthorizationResponse } from '@pagopa/io-wallet-oid4vp';
+import { parseAuthorizationResponse } from '@pagopa/io-wallet-oid4vp';
 import { calculateJwkThumbprint, compactDecrypt, importPKCS8, importJWK, jwtVerify, type JWK } from 'jose';
 
 import { createDecryptJweCallback, createVerifyJwtCallback } from '../crypto/callbacks.js';
@@ -369,11 +369,7 @@ function decodeAuthorizationRequestPayload(jwt: string): Openid4vpAuthorizationR
   }
 }
 
-function extractVpTokenAndState(payload: unknown): {
-  state: string;
-  vpToken: Record<string, string>;
-  presentationSubmission: Record<string, unknown>;
-} {
+function extractVpTokenAndState(payload: unknown): { state: string; vpToken: Record<string, string> } {
   if (!payload || typeof payload !== 'object') {
     throw new VerifyAuthorizationResponseError('JARM response payload is not an object');
   }
@@ -381,7 +377,6 @@ function extractVpTokenAndState(payload: unknown): {
   const objectPayload = payload as Record<string, unknown>;
   const state = objectPayload.state;
   const vpToken = objectPayload.vp_token;
-  const presentationSubmission = objectPayload.presentation_submission;
 
   if (typeof state !== 'string') {
     throw new VerifyAuthorizationResponseError('JARM response payload is missing state');
@@ -389,20 +384,13 @@ function extractVpTokenAndState(payload: unknown): {
   if (!vpToken || typeof vpToken !== 'object') {
     throw new VerifyAuthorizationResponseError('JARM response payload is missing vp_token');
   }
-  if (!presentationSubmission || typeof presentationSubmission !== 'object') {
-    throw new VerifyAuthorizationResponseError('JARM response payload is missing presentation_submission');
-  }
 
   const tokenEntries = Object.entries(vpToken as Record<string, unknown>);
   if (tokenEntries.length === 0 || tokenEntries.some(([, value]) => typeof value !== 'string')) {
     throw new VerifyAuthorizationResponseError('JARM vp_token must contain at least one string credential');
   }
 
-  return {
-    state,
-    vpToken: vpToken as Record<string, string>,
-    presentationSubmission: presentationSubmission as Record<string, unknown>
-  };
+  return { state, vpToken: vpToken as Record<string, string> };
 }
 
 export async function verifyAuthorizationResponseUseCase(
@@ -432,16 +420,16 @@ export async function verifyAuthorizationResponseUseCase(
       throw new VerifyAuthorizationResponseError('Stored request JWT payload is missing nonce');
     }
 
-    const verified = await verifyJarmAuthorizationResponse({
+    const parsed = await parseAuthorizationResponse({
       authorizationRequestPayload,
+      authorizationResponse: { response: input.jarmResponse },
       callbacks: {
         decryptJwe: createDecryptJweCallback(input.privateKeyPem),
         verifyJwt: createVerifyJwtCallback()
-      },
-      jarmAuthorizationResponseJwt: input.jarmResponse
+      }
     });
 
-    const { state, vpToken } = extractVpTokenAndState(verified.jarmAuthorizationResponse);
+    const { state, vpToken } = extractVpTokenAndState(parsed.authorizationResponsePayload);
     if (state !== previewState) {
       throw new VerifyAuthorizationResponseError('JARM state mismatch');
     }
