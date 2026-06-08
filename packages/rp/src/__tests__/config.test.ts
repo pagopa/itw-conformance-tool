@@ -10,6 +10,8 @@ import {
   DEFAULT_PORT,
   deriveBaseUrl,
   loadRpConfig,
+  resolveHttpsEnabled,
+  resolveTlsPaths,
   rpConfigSchema
 } from '../config.js';
 
@@ -34,22 +36,122 @@ describe('deriveBaseUrl', () => {
   it('uses the configured host otherwise', () => {
     expect(deriveBaseUrl({ host: 'rp.example.com', port: 8080 })).toBe('http://rp.example.com:8080');
   });
+
+  it('uses https scheme when scheme is https', () => {
+    expect(deriveBaseUrl({ host: '0.0.0.0', port: 8443, scheme: 'https' })).toBe('https://localhost:8443');
+  });
+
+  it('defaults to http when scheme is omitted', () => {
+    expect(deriveBaseUrl({ host: 'rp.example.com', port: 8080 })).toBe('http://rp.example.com:8080');
+  });
+});
+
+describe('resolveHttpsEnabled', () => {
+  it('uses the fallback when ITW_CT_HTTPS is not set', () => {
+    expect(resolveHttpsEnabled({}, true)).toBe(true);
+    expect(resolveHttpsEnabled({}, false)).toBe(false);
+  });
+
+  it('accepts true-like values from env', () => {
+    expect(resolveHttpsEnabled({ ITW_CT_HTTPS: 'true' }, false)).toBe(true);
+    expect(resolveHttpsEnabled({ ITW_CT_HTTPS: '1' }, false)).toBe(true);
+  });
+
+  it('treats other env values as disabled', () => {
+    expect(resolveHttpsEnabled({ ITW_CT_HTTPS: 'false' }, true)).toBe(false);
+    expect(resolveHttpsEnabled({ ITW_CT_HTTPS: 'no' }, true)).toBe(false);
+  });
+});
+
+describe('resolveTlsPaths', () => {
+  it('derives TLS paths from dataDir when env overrides are not set', () => {
+    const result = resolveTlsPaths({ dataDir: '/tmp/itw', env: {} });
+
+    expect(result.certPath).toBe('/tmp/itw/tls_cert.pem');
+    expect(result.keyPath).toBe('/tmp/itw/tls_key.pem');
+  });
+
+  it('uses explicit env overrides when provided', () => {
+    const result = resolveTlsPaths({
+      dataDir: '/tmp/itw',
+      env: {
+        ITW_CT_TLS_CERT_PATH: '/certs/server.pem',
+        ITW_CT_TLS_KEY_PATH: '/keys/server-key.pem'
+      }
+    });
+
+    expect(result.certPath).toBe('/certs/server.pem');
+    expect(result.keyPath).toBe('/keys/server-key.pem');
+  });
+
+  it('expands ~ in ITW_CT_TLS_CERT_PATH and ITW_CT_TLS_KEY_PATH', () => {
+    const result = resolveTlsPaths({
+      dataDir: '/tmp/itw',
+      env: {
+        ITW_CT_TLS_CERT_PATH: '~/certs/cert.pem',
+        ITW_CT_TLS_KEY_PATH: '~/certs/key.pem'
+      }
+    });
+
+    expect(result.certPath).not.toContain('~');
+    expect(result.certPath).toContain('certs/cert.pem');
+    expect(result.keyPath).not.toContain('~');
+    expect(result.keyPath).toContain('certs/key.pem');
+  });
 });
 
 describe('rpConfigSchema', () => {
+  const BASE_VALID = {
+    host: '0.0.0.0',
+    port: 8080,
+    baseUrl: 'http://localhost:8080',
+    entityId: 'http://localhost:8080',
+    dataDir: '/tmp/itw',
+    configFilePath: '/tmp/config.ini',
+    trustAnchorUrl: 'https://trust-anchor.example.com',
+    signingKeyPath: '/tmp/signing-key.pem',
+    x5cCertPath: '/tmp/x5c-cert.pem'
+  };
+
   it('accepts a valid config', () => {
+    const parsed = rpConfigSchema.safeParse(BASE_VALID);
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts httpsEnabled: true when cert and key paths are provided', () => {
     const parsed = rpConfigSchema.safeParse({
-      host: '0.0.0.0',
-      port: 8080,
-      baseUrl: 'http://localhost:8080',
-      entityId: 'http://localhost:8080',
-      dataDir: '/tmp/itw',
-      configFilePath: '/tmp/config.ini',
-      trustAnchorUrl: 'https://trust-anchor.example.com',
-      signingKeyPath: '/tmp/signing-key.pem',
-      x5cCertPath: '/tmp/x5c-cert.pem'
+      ...BASE_VALID,
+      httpsEnabled: true,
+      tlsCertPath: '/tmp/tls_cert.pem',
+      tlsKeyPath: '/tmp/tls_key.pem'
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it('rejects httpsEnabled: true with empty tlsCertPath', () => {
+    const parsed = rpConfigSchema.safeParse({
+      ...BASE_VALID,
+      httpsEnabled: true,
+      tlsCertPath: '',
+      tlsKeyPath: '/tmp/tls_key.pem'
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes('tlsCertPath'))).toBe(true);
+    }
+  });
+
+  it('rejects httpsEnabled: true with empty tlsKeyPath', () => {
+    const parsed = rpConfigSchema.safeParse({
+      ...BASE_VALID,
+      httpsEnabled: true,
+      tlsCertPath: '/tmp/tls_cert.pem',
+      tlsKeyPath: ''
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes('tlsKeyPath'))).toBe(true);
+    }
   });
 
   it('rejects out-of-range ports', () => {
@@ -295,5 +397,125 @@ describe('loadRpConfig', () => {
         env: {}
       })
     ).toThrow();
+  });
+
+  it('defaults httpsEnabled to false when ITW_CT_HTTPS is not set', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV }
+    });
+    expect(result.config.httpsEnabled).toBe(false);
+    expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls_cert.pem'));
+    expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls_key.pem'));
+  });
+
+  it('sets httpsEnabled to true when ITW_CT_HTTPS=true', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'true' }
+    });
+    expect(result.config.httpsEnabled).toBe(true);
+  });
+
+  it('sets httpsEnabled to true when ITW_CT_HTTPS=1', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: '1' }
+    });
+    expect(result.config.httpsEnabled).toBe(true);
+  });
+
+  it('sets httpsEnabled to false when ITW_CT_HTTPS=false', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'false' }
+    });
+    expect(result.config.httpsEnabled).toBe(false);
+  });
+
+  it('reads httpsEnabled from [global] https = true in the INI file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, `[global]\nhttps = true\n${REQUIRED_FIELDS_INI}`);
+
+    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+    expect(result.config.httpsEnabled).toBe(true);
+  });
+
+  it('env ITW_CT_HTTPS=false overrides [global] https = true in the INI file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, `[global]\nhttps = true\n${REQUIRED_FIELDS_INI}`);
+
+    const result = loadRpConfig({ configFilePath: cfgPath, env: { ITW_CT_HTTPS: 'false' } });
+    expect(result.config.httpsEnabled).toBe(false);
+  });
+
+  it('reads tlsCertPath and tlsKeyPath from env when explicitly set', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {
+        ...REQUIRED_FIELDS_ENV,
+        ITW_CT_HTTPS: 'true',
+        ITW_CT_TLS_CERT_PATH: '/certs/server.pem',
+        ITW_CT_TLS_KEY_PATH: '/keys/server-key.pem'
+      }
+    });
+    expect(result.config.tlsCertPath).toBe('/certs/server.pem');
+    expect(result.config.tlsKeyPath).toBe('/keys/server-key.pem');
+  });
+
+  it('expands ~ in ITW_CT_TLS_CERT_PATH and ITW_CT_TLS_KEY_PATH', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {
+        ...REQUIRED_FIELDS_ENV,
+        ITW_CT_HTTPS: 'true',
+        ITW_CT_TLS_CERT_PATH: '~/certs/cert.pem',
+        ITW_CT_TLS_KEY_PATH: '~/certs/key.pem'
+      }
+    });
+    expect(result.config.tlsCertPath).not.toContain('~');
+    expect(result.config.tlsCertPath).toContain('certs/cert.pem');
+    expect(result.config.tlsKeyPath).not.toContain('~');
+    expect(result.config.tlsKeyPath).toContain('certs/key.pem');
+  });
+
+  it('derives tlsCertPath and tlsKeyPath from dataDir when env vars are not set', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'true' }
+    });
+    expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls_cert.pem'));
+    expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls_key.pem'));
+  });
+
+  it('derives tlsCertPath and tlsKeyPath from dataDir when HTTPS comes from the INI file', () => {
+    const cfgPath = join(workDir, 'config.ini');
+    writeFileSync(cfgPath, `[global]\nhttps = true\ndata_dir = /opt/itw-data\n${REQUIRED_FIELDS_INI}`);
+
+    const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
+
+    expect(result.config.httpsEnabled).toBe(true);
+    expect(result.config.tlsCertPath).toBe('/opt/itw-data/tls_cert.pem');
+    expect(result.config.tlsKeyPath).toBe('/opt/itw-data/tls_key.pem');
+  });
+
+  it('derives https baseUrl when ITW_CT_HTTPS is enabled and no explicit base URL', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'true' }
+    });
+    expect(result.config.baseUrl).toMatch(/^https:\/\//);
+  });
+
+  it('explicit ITW_CT_RP_BASE_URL wins over https-derived baseUrl', () => {
+    const result = loadRpConfig({
+      configFilePath: join(workDir, 'missing.ini'),
+      env: {
+        ...REQUIRED_FIELDS_ENV,
+        ITW_CT_HTTPS: 'true',
+        ITW_CT_RP_BASE_URL: 'http://rp.example.com:8080'
+      }
+    });
+    expect(result.config.baseUrl).toBe('http://rp.example.com:8080');
   });
 });

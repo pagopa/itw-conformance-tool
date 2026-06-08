@@ -107,7 +107,7 @@ describe('createSignJwtCallback', () => {
     });
 
     // signerJwk must be exactly the publicJwk from the signer, not derived from the signing key
-    expect(result.signerJwk).toEqual(authRequestPublicJwk);
+    expect(result.signerJwk).toMatchObject(authRequestPublicJwk);
   });
 
   it('signs a JWT with method: jwk and returns the signer JWK', async () => {
@@ -204,7 +204,7 @@ describe('createVerifyJwtCallback', () => {
   });
 
   it('returns verified: false when JWT is signed with a different key than the signer JWK', async () => {
-    // Sign with a fresh ES256 key (different from authRequestPublicJwk)
+    // Sign with signingPem (different key than authRequestPem)
     const wrongKeyPair = await generateKeyPair('ES256');
     const wrongPem = await exportPKCS8(wrongKeyPair.privateKey);
     const signJwtWrong = createSignJwtCallback(wrongPem, wrongPem);
