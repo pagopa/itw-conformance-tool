@@ -15,6 +15,14 @@ describe('extractIssuerSessionId', () => {
     expect(extractIssuerSessionId(upperCaseUri)).toBe(VALID_UUID.toUpperCase());
   });
 
+  // The prefix check is intentionally case-sensitive: the issuer always generates
+  // request_uri values with a lowercase URN prefix and the wallet returns them verbatim.
+  // A case-insensitive match would accept values that cannot be looked up in the PAR store.
+  it('returns null for an uppercase URN prefix (prefix match is case-sensitive by design)', () => {
+    const upperPrefixUri = `URN:IETF:PARAMS:OAUTH:REQUEST_URI:${VALID_UUID}`;
+    expect(extractIssuerSessionId(upperPrefixUri)).toBeNull();
+  });
+
   it('returns null when the prefix is missing', () => {
     expect(extractIssuerSessionId(VALID_UUID)).toBeNull();
   });

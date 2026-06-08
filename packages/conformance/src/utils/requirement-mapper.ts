@@ -72,5 +72,5 @@ const REQUIREMENT_MAP: Partial<Record<RequirementKey, RequirementDefinition[]>> 
  */
 export function getRequirements(step: ConformanceStep, phase: ConformancePhase): RequirementDefinition[] {
   const key: RequirementKey = `${step}:${phase}`;
-  return REQUIREMENT_MAP[key] ?? [];
+  return (REQUIREMENT_MAP[key] ?? []).map((req) => ({ ...req }));
 }
