@@ -136,7 +136,10 @@ function extractJwksFromEntityStatement(entityStatementJwt: string): JWK[] {
   return keys.filter((key): key is JWK => Boolean(key && typeof key === 'object'));
 }
 
-async function verifyIssuerSdJwtAndExtractCnfJwk(sdJwt: string, trustChain: [string, ...string[]] | undefined): Promise<JWK> {
+async function verifyIssuerSdJwtAndExtractCnfJwk(
+  sdJwt: string,
+  trustChain: [string, ...string[]] | undefined
+): Promise<JWK> {
   const issuerJwt = extractIssuerJwt(sdJwt);
   const { header, payload } = decodeCompactJwtHeaderAndPayload(
     issuerJwt,
@@ -155,7 +158,11 @@ async function verifyIssuerSdJwtAndExtractCnfJwk(sdJwt: string, trustChain: [str
   }
 
   const jwtTrustChain = header.trust_chain;
-  if (!Array.isArray(jwtTrustChain) || jwtTrustChain.length === 0 || jwtTrustChain.some((entry) => typeof entry !== 'string')) {
+  if (
+    !Array.isArray(jwtTrustChain) ||
+    jwtTrustChain.length === 0 ||
+    jwtTrustChain.some((entry) => typeof entry !== 'string')
+  ) {
     throw new VerifyAuthorizationResponseError('Issuer SD-JWT header missing required "trust_chain"');
   }
 
