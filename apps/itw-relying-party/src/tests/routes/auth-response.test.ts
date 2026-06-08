@@ -143,4 +143,31 @@ describe('POST /auth/response', () => {
     const session = await ctx.sessionService.get(state);
     expect(session?.state).toBe('rejected');
   });
+
+  it('marks session as rejected and returns 400 when KB-JWT uses an unsupported algorithm', async () => {
+    const state = 'unsupported-kb-alg-test';
+    const nonce = randomBytes(32).toString('hex');
+    await ctx.sessionService.create({
+      id: state,
+      jwt: makeStoredRequestJwt(state, nonce),
+      flowType: 'cross-device',
+      ttlMs: 300_000
+    });
+    await ctx.sessionService.update(state, 'checking');
+
+    await ctx.nonceRepo.insert(nonce, Date.now() + 300_000);
+
+    const jwe = await createAuthResponseJwe({ nonce, state, kbJwtAlg: 'ES384' });
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: { response: jwe }
+    });
+
+    expect(res.statusCode).toBe(400);
+
+    const session = await ctx.sessionService.get(state);
+    expect(session?.state).toBe('rejected');
+  });
 });

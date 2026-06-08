@@ -53,11 +53,13 @@ function publicJwkFromPem(pem: string): Record<string, unknown> {
 export async function createAuthResponseJwe({
   authResponsePrivateKeyPem = TEST_AUTH_RESPONSE_PEM,
   clientId = TEST_CLIENT_ID,
+  kbJwtAlg = 'ES256',
   nonce,
   state
 }: {
   authResponsePrivateKeyPem?: string;
   clientId?: string;
+  kbJwtAlg?: 'ES256' | 'ES384' | 'ES512';
   nonce: string;
   state: string;
 }): Promise<string> {
@@ -66,8 +68,12 @@ export async function createAuthResponseJwe({
   const rpPubKey = await importJWK(rpPubJwk as unknown as JWK);
 
   // Holder key pair (signs the KB-JWT)
-  const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  const holderPrivJose = await importPKCS8(holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
+  const holderCurve = kbJwtAlg === 'ES256' ? 'P-256' : kbJwtAlg === 'ES384' ? 'P-384' : 'P-521';
+  const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: holderCurve });
+  const holderPrivJose = await importPKCS8(
+    holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(),
+    kbJwtAlg
+  );
   const holderPubJwk = holderPubNode.export({ format: 'jwk' }) as unknown as JWK;
 
   // SD-JWT with no disclosures: issuerJwt~kbJwt
@@ -76,13 +82,19 @@ export async function createAuthResponseJwe({
   const sdHash = createHash('sha256').update('').digest('base64url');
 
   const kbJwt = await new SignJWT({ aud: clientId, iat: Math.floor(Date.now() / 1000), nonce, sd_hash: sdHash })
-    .setProtectedHeader({ alg: 'ES256', typ: 'kb+jwt', jwk: holderPubJwk })
+    .setProtectedHeader({ alg: kbJwtAlg, typ: 'kb+jwt', jwk: holderPubJwk })
     .sign(holderPrivJose);
 
   const sdJwt = `${issuerJwt}~${kbJwt}`;
 
-  // Encrypt { state, vp_token } as ECDH-ES JWE
-  const payload = new TextEncoder().encode(JSON.stringify({ state, vp_token: { pid: sdJwt } }));
+  // Encrypt { state, vp_token, presentation_submission } as ECDH-ES JWE
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      state,
+      vp_token: { pid: sdJwt },
+      presentation_submission: { id: 'test-submission' }
+    })
+  );
   return new CompactEncrypt(payload)
     .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM', kid: 'test-rp-key-id' })
     .encrypt(rpPubKey);

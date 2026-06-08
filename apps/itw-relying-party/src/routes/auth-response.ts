@@ -23,7 +23,8 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
         jarmResponse: parsedBody.response,
         nonceRepository: app.nonceRepository,
         privateKeyPem: app.rpKeys.authResponsePrivateKeyPem,
-        sessionService: app.sessionService
+        sessionService: app.sessionService,
+        trustChain: app.trustChain
       });
 
       return reply.code(200).send({ redirect_uri: result.redirectUri });

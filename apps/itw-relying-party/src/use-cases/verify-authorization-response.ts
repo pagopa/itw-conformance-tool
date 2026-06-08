@@ -10,8 +10,7 @@ import type { PresentationValues, SessionService } from '@itw-conformance-tool/r
 import type { Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 
 const PREVIEW_PAYLOAD_SCHEMA = {
-  state: 'state',
-  vp_token: 'vp_token'
+  state: 'state'
 } as const;
 
 export interface VerifyAuthorizationResponseInput {
@@ -20,6 +19,7 @@ export interface VerifyAuthorizationResponseInput {
   nonceRepository: INonceRepository;
   privateKeyPem: string;
   sessionService: SessionService;
+  trustChain?: [string, ...string[]];
 }
 
 export interface VerifyAuthorizationResponseResult {
@@ -68,6 +68,95 @@ function decodeDisclosureValues(vpToken: Record<string, string>): PresentationVa
   return values;
 }
 
+const INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER = 'insecure-http-local-dev';
+
+function isInsecureLocalDevTrustChain(trustChain: [string, ...string[]] | undefined): boolean {
+  return Boolean(trustChain && trustChain[0] === INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER);
+}
+
+function decodeJwtSection(section: string, errorMessage: string): Record<string, unknown> {
+  try {
+    return JSON.parse(Buffer.from(section, 'base64url').toString('utf8')) as Record<string, unknown>;
+  } catch {
+    throw new VerifyAuthorizationResponseError(errorMessage);
+  }
+}
+
+function ensureIssuerTrustChainAnchored(sdJwt: string, trustChain: [string, ...string[]] | undefined): void {
+  if (!trustChain || isInsecureLocalDevTrustChain(trustChain)) {
+    return;
+  }
+
+  const [issuerJwt] = sdJwt.split('~');
+  const issuerJwtSegments = issuerJwt?.split('.') ?? [];
+  if (issuerJwtSegments.length !== 3) {
+    throw new VerifyAuthorizationResponseError('Issuer SD-JWT must be a compact JWT with exactly 3 segments');
+  }
+
+  const issuerHeader = decodeJwtSection(issuerJwtSegments[0], 'Issuer SD-JWT header is not valid JSON');
+  const jwtTrustChain = issuerHeader.trust_chain;
+
+  if (!Array.isArray(jwtTrustChain) || jwtTrustChain.length === 0 || jwtTrustChain.some((entry) => typeof entry !== 'string')) {
+    throw new VerifyAuthorizationResponseError('Issuer SD-JWT header missing required "trust_chain"');
+  }
+
+  const hasAnchorOverlap = jwtTrustChain.some((entry) => trustChain.includes(entry));
+  if (!hasAnchorOverlap) {
+    throw new VerifyAuthorizationResponseError('Issuer SD-JWT trust chain is not anchored to RP trusted chain');
+  }
+}
+
+function extractKbJwt(sdJwt: string): string {
+  const parts = sdJwt.split('~');
+  const kbJwt = parts[parts.length - 1];
+  if (!kbJwt || kbJwt.length === 0) {
+    throw new VerifyAuthorizationResponseError('VP token credential is missing KB-JWT segment');
+  }
+  return kbJwt;
+}
+
+function extractNonceFromKbJwtPayload(kbJwt: string): string {
+  const kbJwtSegments = kbJwt.split('.');
+  if (kbJwtSegments.length !== 3) {
+    throw new VerifyAuthorizationResponseError('KB-JWT must be a compact JWT with exactly 3 segments');
+  }
+
+  const claims = decodeJwtSection(kbJwtSegments[1], 'KB-JWT payload is not valid JSON');
+  if (typeof claims.nonce !== 'string' || claims.nonce.length === 0) {
+    throw new VerifyAuthorizationResponseError('KB-JWT missing required "nonce" claim');
+  }
+
+  return claims.nonce;
+}
+
+function validateAndConsumeNonceBeforeCredentialChecks(
+  vpToken: Record<string, string>,
+  expectedNonce: string,
+  nonceRepository: INonceRepository
+): Promise<void> {
+  const extractedNonces = Object.values(vpToken).map((sdJwt) => extractNonceFromKbJwtPayload(extractKbJwt(sdJwt)));
+
+  if (extractedNonces.length === 0) {
+    throw new VerifyAuthorizationResponseError('No key-binding nonce found in presented credentials');
+  }
+
+  const firstNonce = extractedNonces[0];
+  if (!extractedNonces.every((nonce) => nonce === firstNonce)) {
+    throw new VerifyAuthorizationResponseError('Nonce mismatch across credentials');
+  }
+
+  if (firstNonce !== expectedNonce) {
+    throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
+  }
+
+  return (async () => {
+    const consumed = await nonceRepository.consume(expectedNonce);
+    if (!consumed) {
+      throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
+    }
+  })();
+}
+
 async function verifyAndExtractKbJwtNonce(kbJwt: string, sdJwt: string, expectedAudience?: string): Promise<string> {
   const kbJwtSegments = kbJwt.split('.');
   if (kbJwtSegments.length !== 3) {
@@ -75,7 +164,7 @@ async function verifyAndExtractKbJwtNonce(kbJwt: string, sdJwt: string, expected
   }
 
   const [headerSegment] = kbJwtSegments;
-  let header: { jwk?: JWK };
+  let header: { alg?: string; jwk?: JWK };
   try {
     header = JSON.parse(Buffer.from(headerSegment, 'base64url').toString('utf8')) as { jwk?: JWK };
   } catch {
@@ -86,9 +175,13 @@ async function verifyAndExtractKbJwtNonce(kbJwt: string, sdJwt: string, expected
     throw new VerifyAuthorizationResponseError('KB-JWT header missing required "jwk" claim');
   }
 
-  const holderPublicKey = await importJWK(header.jwk);
+  if (header.alg !== 'ES256') {
+    throw new VerifyAuthorizationResponseError('KB-JWT must use "ES256" algorithm');
+  }
 
-  const payload = await jwtVerify(kbJwt, holderPublicKey, { clockTolerance: 300 });
+  const holderPublicKey = await importJWK(header.jwk, 'ES256');
+
+  const payload = await jwtVerify(kbJwt, holderPublicKey, { algorithms: ['ES256'], clockTolerance: 300 });
   const claims = payload.payload as Record<string, unknown>;
 
   if (typeof claims.nonce !== 'string') {
@@ -163,7 +256,11 @@ function decodeAuthorizationRequestPayload(jwt: string): Openid4vpAuthorizationR
   }
 }
 
-function extractVpTokenAndState(payload: unknown): { state: string; vpToken: Record<string, string> } {
+function extractVpTokenAndState(payload: unknown): {
+  state: string;
+  vpToken: Record<string, string>;
+  presentationSubmission: Record<string, unknown>;
+} {
   if (!payload || typeof payload !== 'object') {
     throw new VerifyAuthorizationResponseError('JARM response payload is not an object');
   }
@@ -171,6 +268,7 @@ function extractVpTokenAndState(payload: unknown): { state: string; vpToken: Rec
   const objectPayload = payload as Record<string, unknown>;
   const state = objectPayload.state;
   const vpToken = objectPayload.vp_token;
+  const presentationSubmission = objectPayload.presentation_submission;
 
   if (typeof state !== 'string') {
     throw new VerifyAuthorizationResponseError('JARM response payload is missing state');
@@ -178,13 +276,20 @@ function extractVpTokenAndState(payload: unknown): { state: string; vpToken: Rec
   if (!vpToken || typeof vpToken !== 'object') {
     throw new VerifyAuthorizationResponseError('JARM response payload is missing vp_token');
   }
+  if (!presentationSubmission || typeof presentationSubmission !== 'object') {
+    throw new VerifyAuthorizationResponseError('JARM response payload is missing presentation_submission');
+  }
 
   const tokenEntries = Object.entries(vpToken as Record<string, unknown>);
   if (tokenEntries.length === 0 || tokenEntries.some(([, value]) => typeof value !== 'string')) {
     throw new VerifyAuthorizationResponseError('JARM vp_token must contain at least one string credential');
   }
 
-  return { state, vpToken: vpToken as Record<string, string> };
+  return {
+    state,
+    vpToken: vpToken as Record<string, string>,
+    presentationSubmission: presentationSubmission as Record<string, unknown>
+  };
 }
 
 export async function verifyAuthorizationResponseUseCase(
@@ -228,10 +333,12 @@ export async function verifyAuthorizationResponseUseCase(
       throw new VerifyAuthorizationResponseError('JARM state mismatch');
     }
 
+    await validateAndConsumeNonceBeforeCredentialChecks(vpToken, expectedNonce, input.nonceRepository);
+
     const verifiedNonces: string[] = [];
     for (const [credentialName, sdJwt] of Object.entries(vpToken)) {
-      const parts = sdJwt.split('~');
-      const kbJwt = parts[parts.length - 1];
+      ensureIssuerTrustChainAnchored(sdJwt, input.trustChain);
+      const kbJwt = extractKbJwt(sdJwt);
 
       try {
         const nonce = await verifyAndExtractKbJwtNonce(kbJwt, sdJwt, expectedAudience);
@@ -248,21 +355,8 @@ export async function verifyAuthorizationResponseUseCase(
     }
 
     const firstNonce = verifiedNonces[0];
-    if (!verifiedNonces.every((nonce) => nonce === firstNonce)) {
-      throw new VerifyAuthorizationResponseError('Nonce mismatch across credentials');
-    }
-
-    if (firstNonce !== expectedNonce) {
-      throw new VerifyAuthorizationResponseError(
-        'The nonce does not match with the one provided in the request object'
-      );
-    }
-
-    const consumed = await input.nonceRepository.consume(expectedNonce);
-    if (!consumed) {
-      throw new VerifyAuthorizationResponseError(
-        'The nonce does not match with the one provided in the request object'
-      );
+    if (!verifiedNonces.every((nonce) => nonce === firstNonce) || firstNonce !== expectedNonce) {
+      throw new VerifyAuthorizationResponseError('The nonce does not match with the one provided in the request object');
     }
 
     const values = decodeDisclosureValues(vpToken);
