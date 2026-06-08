@@ -83,22 +83,75 @@ describe('resolveTlsPaths', () => {
     expect(result.certPath).toBe('/certs/server.pem');
     expect(result.keyPath).toBe('/keys/server-key.pem');
   });
+
+  it('expands ~ in ITW_CT_TLS_CERT_PATH and ITW_CT_TLS_KEY_PATH', () => {
+    const result = resolveTlsPaths({
+      dataDir: '/tmp/itw',
+      env: {
+        ITW_CT_TLS_CERT_PATH: '~/certs/cert.pem',
+        ITW_CT_TLS_KEY_PATH: '~/certs/key.pem'
+      }
+    });
+
+    expect(result.certPath).not.toContain('~');
+    expect(result.certPath).toContain('certs/cert.pem');
+    expect(result.keyPath).not.toContain('~');
+    expect(result.keyPath).toContain('certs/key.pem');
+  });
 });
 
 describe('rpConfigSchema', () => {
+  const BASE_VALID = {
+    host: '0.0.0.0',
+    port: 8080,
+    baseUrl: 'http://localhost:8080',
+    entityId: 'http://localhost:8080',
+    dataDir: '/tmp/itw',
+    configFilePath: '/tmp/config.ini',
+    trustAnchorUrl: 'https://trust-anchor.example.com',
+    signingKeyPath: '/tmp/signing-key.pem',
+    x5cCertPath: '/tmp/x5c-cert.pem'
+  };
+
   it('accepts a valid config', () => {
+    const parsed = rpConfigSchema.safeParse(BASE_VALID);
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts httpsEnabled: true when cert and key paths are provided', () => {
     const parsed = rpConfigSchema.safeParse({
-      host: '0.0.0.0',
-      port: 8080,
-      baseUrl: 'http://localhost:8080',
-      entityId: 'http://localhost:8080',
-      dataDir: '/tmp/itw',
-      configFilePath: '/tmp/config.ini',
-      trustAnchorUrl: 'https://trust-anchor.example.com',
-      signingKeyPath: '/tmp/signing-key.pem',
-      x5cCertPath: '/tmp/x5c-cert.pem'
+      ...BASE_VALID,
+      httpsEnabled: true,
+      tlsCertPath: '/tmp/tls_cert.pem',
+      tlsKeyPath: '/tmp/tls_key.pem'
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it('rejects httpsEnabled: true with empty tlsCertPath', () => {
+    const parsed = rpConfigSchema.safeParse({
+      ...BASE_VALID,
+      httpsEnabled: true,
+      tlsCertPath: '',
+      tlsKeyPath: '/tmp/tls_key.pem'
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes('tlsCertPath'))).toBe(true);
+    }
+  });
+
+  it('rejects httpsEnabled: true with empty tlsKeyPath', () => {
+    const parsed = rpConfigSchema.safeParse({
+      ...BASE_VALID,
+      httpsEnabled: true,
+      tlsCertPath: '/tmp/tls_cert.pem',
+      tlsKeyPath: ''
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes('tlsKeyPath'))).toBe(true);
+    }
   });
 
   it('rejects out-of-range ports', () => {

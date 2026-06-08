@@ -9,20 +9,39 @@ export const DEFAULT_HOST = '0.0.0.0';
 export const DEFAULT_PORT = 8080;
 export const DEFAULT_DATA_DIR = resolve(homedir(), '.itw-conformance-tool');
 
-export const rpConfigSchema = z.object({
-  host: z.string().min(1),
-  port: z.number().int().min(1).max(65535),
-  baseUrl: z.string().url(),
-  entityId: z.string().url(),
-  dataDir: z.string().min(1),
-  configFilePath: z.string().min(1),
-  trustAnchorUrl: z.string().url(),
-  signingKeyPath: z.string().min(1),
-  x5cCertPath: z.string().min(1),
-  httpsEnabled: z.boolean().default(false),
-  tlsCertPath: z.string().default(''),
-  tlsKeyPath: z.string().default('')
-});
+export const rpConfigSchema = z
+  .object({
+    host: z.string().min(1),
+    port: z.number().int().min(1).max(65535),
+    baseUrl: z.string().url(),
+    entityId: z.string().url(),
+    dataDir: z.string().min(1),
+    configFilePath: z.string().min(1),
+    trustAnchorUrl: z.string().url(),
+    signingKeyPath: z.string().min(1),
+    x5cCertPath: z.string().min(1),
+    httpsEnabled: z.boolean().default(false),
+    tlsCertPath: z.string().default(''),
+    tlsKeyPath: z.string().default('')
+  })
+  .superRefine((data, ctx) => {
+    if (data.httpsEnabled) {
+      if (!data.tlsCertPath) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tlsCertPath'],
+          message: 'tlsCertPath is required when httpsEnabled is true'
+        });
+      }
+      if (!data.tlsKeyPath) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tlsKeyPath'],
+          message: 'tlsKeyPath is required when httpsEnabled is true'
+        });
+      }
+    }
+  });
 
 export type RpConfig = z.infer<typeof rpConfigSchema>;
 
