@@ -202,7 +202,7 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
     });
     expect(firstSubmit.statusCode).toBe(200);
 
-    // Create a second session, then replay the already-consumed nonce → expect 500
+    // Create a second session, then replay the already-consumed nonce → expect 400
     const secondReq = await ctx.app.inject({
       method: 'POST',
       url: '/request-object',
@@ -217,6 +217,6 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
       url: '/auth/response',
       payload: { response: jwe2 }
     });
-    expect(replayRes.statusCode).toBe(500);
+    expect(replayRes.statusCode).toBe(400);
   });
 });
