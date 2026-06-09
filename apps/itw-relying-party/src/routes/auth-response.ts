@@ -1,3 +1,4 @@
+import { registerAuthResponseConformanceHooks } from '../hooks/conformance.js';
 import { verifyAuthorizationResponseUseCase } from '../use-cases/verify-authorization-response.js';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -47,6 +48,8 @@ function parseAuthResponseBody(
 }
 
 const authResponseRoute: FastifyPluginAsync = async (app) => {
+  registerAuthResponseConformanceHooks(app);
+
   app.route({
     url: '/auth/response',
     method: 'POST',
