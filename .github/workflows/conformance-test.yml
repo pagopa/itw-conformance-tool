@@ -22,7 +22,7 @@ jobs:
 
     env:
       HUSKY: 0
-      HOST: 0.0.0.0
+      HOST: 127.0.0.1
       PORT: '3000'
 
     steps:
@@ -104,7 +104,7 @@ jobs:
           wct test:issuance \
             --unsafe-tls \
             --tests happy \
-            --credential-issuer-uri https://localhost:3000
+            --credential-issuer-uri https://127.0.0.1:3000
 
       - name: Upload conformance report
         if: always()
