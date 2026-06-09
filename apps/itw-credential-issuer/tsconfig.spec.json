@@ -11,14 +11,19 @@
   },
   "include": [
     "src/app.ts",
+    "src/hooks/**/*.ts",
     "src/plugins/**/*.ts",
     "src/routes/**/*.ts",
+    "src/tests/**/*.ts",
     "vite.config.ts",
     "vite.config.mts",
     "vitest.config.ts",
     "vitest.config.mts"
   ],
   "references": [
+    {
+      "path": "../../packages/conformance/tsconfig.lib.json"
+    },
     {
       "path": "../../packages/logger/tsconfig.lib.json"
     },
