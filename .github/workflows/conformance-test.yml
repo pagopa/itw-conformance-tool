@@ -51,31 +51,11 @@ jobs:
           cp config.example.ini config.ini
 
       - name: Initialize data directory
-        run: node apps/cli/dist/main.js init
+        run: pnpm itw-conformance-tool:init
 
       - name: Patch /etc/hosts for wct federation servers
         run: |
           sudo sh -c 'echo "127.0.0.1  trust-anchor.wct.example.org wallet-provider.wct.example.org credential-issuer.wct.example.org" >> /etc/hosts'
-
-      - name: Start itw-credential-issuer
-        run: pnpm itw-conformance-tool:start:issuer &
-
-      - name: Wait for issuer health check
-        run: |
-          READY=false
-          for i in $(seq 1 15); do
-            if curl -sf https://localhost:3000/health > /dev/null 2>&1; then
-              echo "Issuer is ready after $i attempt(s)"
-              READY=true
-              break
-            fi
-            echo "Attempt $i/15: issuer not ready, retrying in 2s..."
-            sleep 2
-          done
-          if [ "$READY" != "true" ]; then
-            echo "ERROR: issuer did not become ready within 30s"
-            exit 1
-          fi
 
       - name: Clone wallet-conformance-test
         run: git clone --depth 1 https://github.com/pagopa/wallet-conformance-test.git /tmp/wct
@@ -92,6 +72,35 @@ jobs:
       - name: Run issuance conformance tests
         working-directory: /tmp/wct
         run: |
+          set -euo pipefail
+
+          pnpm --dir "$GITHUB_WORKSPACE" itw-conformance-tool:start:issuer > /tmp/issuer.log 2>&1 &
+          ISSUER_PID=$!
+
+          cleanup() {
+            if kill -0 "$ISSUER_PID" > /dev/null 2>&1; then
+              kill "$ISSUER_PID" || true
+            fi
+            echo "----- issuer log -----"
+            cat /tmp/issuer.log || true
+          }
+          trap cleanup EXIT
+
+          READY=false
+          for i in $(seq 1 15); do
+            if curl -sf https://localhost:3000/health > /dev/null 2>&1; then
+              echo "Issuer is ready after $i attempt(s)"
+              READY=true
+              break
+            fi
+            echo "Attempt $i/15: issuer not ready, retrying in 2s..."
+            sleep 2
+          done
+          if [ "$READY" != "true" ]; then
+            echo "ERROR: issuer did not become ready within 30s"
+            exit 1
+          fi
+
           wct test:issuance \
             --unsafe-tls \
             --tests happy \
