@@ -56,6 +56,13 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     update: async () => undefined
   });
 
+  app.decorate('conformanceSessionRepository', {
+    appendCheck: async () => undefined,
+    close: async () => undefined,
+    create: async () => undefined,
+    get: async () => null
+  });
+
   app.decorate('dbClient', {
     db: {
       prepare: () => ({

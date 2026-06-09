@@ -27,6 +27,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/conformance/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
