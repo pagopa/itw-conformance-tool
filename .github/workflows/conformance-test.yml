@@ -70,7 +70,7 @@ jobs:
         run: |
           READY=false
           for i in $(seq 1 15); do
-            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            if curl -sf https://localhost:3000/health > /dev/null 2>&1; then
               echo "Issuer is ready after $i attempt(s)"
               READY=true
               break
