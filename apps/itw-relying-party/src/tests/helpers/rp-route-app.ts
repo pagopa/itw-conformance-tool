@@ -11,8 +11,9 @@ import { CompactEncrypt, SignJWT, importJWK, importPKCS8 } from 'jose';
 
 import { generateEphemeralKeyPair } from '../../crypto/ephemeral-keys.js';
 
+import type { IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 import type { INonceRepository } from '@itw-conformance-tool/database';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import type { JWK } from 'jose';
 
 // ---------------------------------------------------------------------------
@@ -53,11 +54,13 @@ function publicJwkFromPem(pem: string): Record<string, unknown> {
 export async function createAuthResponseJwe({
   authResponsePrivateKeyPem = TEST_AUTH_RESPONSE_PEM,
   clientId = TEST_CLIENT_ID,
+  kbJwtAlg = 'ES256',
   nonce,
   state
 }: {
   authResponsePrivateKeyPem?: string;
   clientId?: string;
+  kbJwtAlg?: 'ES256' | 'ES384' | 'ES512';
   nonce: string;
   state: string;
 }): Promise<string> {
@@ -66,24 +69,48 @@ export async function createAuthResponseJwe({
   const rpPubKey = await importJWK(rpPubJwk as unknown as JWK);
 
   // Holder key pair (signs the KB-JWT)
-  const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  const holderPrivJose = await importPKCS8(holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
+  const holderCurve = kbJwtAlg === 'ES256' ? 'P-256' : kbJwtAlg === 'ES384' ? 'P-384' : 'P-521';
+  const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', {
+    namedCurve: holderCurve
+  });
+  const holderPrivJose = await importPKCS8(
+    holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(),
+    kbJwtAlg
+  );
   const holderPubJwk = holderPubNode.export({ format: 'jwk' }) as unknown as JWK;
+
+  // Issuer key pair (signs the issuer SD-JWT)
+  const { privateKey: issuerPrivNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const issuerPrivJose = await importPKCS8(issuerPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
 
   // SD-JWT with no disclosures: issuerJwt~kbJwt
   // sd_hash = sha256('') because there are no disclosures
-  const issuerJwt = 'eyJhbGciOiJFUzI1NiJ9.eyJ2Y3QiOiJ0ZXN0In0.fakesig';
+  const issuerJwt = await new SignJWT({
+    iss: 'https://issuer.example',
+    vct: 'test',
+    cnf: { jwk: holderPubJwk }
+  })
+    .setProtectedHeader({ alg: 'ES256', typ: 'dc+sd-jwt' })
+    .sign(issuerPrivJose);
   const sdHash = createHash('sha256').update('').digest('base64url');
 
   const kbJwt = await new SignJWT({ aud: clientId, iat: Math.floor(Date.now() / 1000), nonce, sd_hash: sdHash })
-    .setProtectedHeader({ alg: 'ES256', typ: 'kb+jwt', jwk: holderPubJwk })
+    .setProtectedHeader({ alg: kbJwtAlg, typ: 'kb+jwt', jwk: holderPubJwk })
     .sign(holderPrivJose);
 
   const sdJwt = `${issuerJwt}~${kbJwt}`;
 
-  // Encrypt { state, vp_token } as ECDH-ES JWE
-  const payload = new TextEncoder().encode(JSON.stringify({ state, vp_token: { pid: sdJwt } }));
-  return new CompactEncrypt(payload).setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' }).encrypt(rpPubKey);
+  // Encrypt { state, vp_token, presentation_submission } as ECDH-ES JWE
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      state,
+      vp_token: { pid: sdJwt },
+      presentation_submission: { id: 'test-submission' }
+    })
+  );
+  return new CompactEncrypt(payload)
+    .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM', kid: 'test-rp-key-id' })
+    .encrypt(rpPubKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +151,9 @@ export interface RpRouteAppOptions {
   authRequestPrivateKeyPem?: string;
   authResponsePrivateKeyPem?: string;
   baseUrl?: string;
+  conformanceSessionRepository?: IConformanceSessionRepository;
+  /** Called after route registration but before app.ready(), allowing tests to add sibling routes. */
+  setup?: (app: FastifyInstance) => void | Promise<void>;
 }
 
 /**
@@ -168,12 +198,21 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
   app.decorate('nonceRepository', nonceRepo);
   app.decorate('sessionService', sessionService);
 
+  if (options.conformanceSessionRepository) {
+    app.decorate('conformanceSessionRepository', options.conformanceSessionRepository);
+  }
+
   app.addHook('onClose', async () => {
     await dbClient.close();
     await rm(dataDir, { recursive: true, force: true });
   });
 
   await app.register(route);
+
+  if (options.setup) {
+    await options.setup(app);
+  }
+
   await app.ready();
 
   return { app, dbClient, nonceRepo, sessionService };

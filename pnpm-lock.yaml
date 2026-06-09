@@ -297,6 +297,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: catalog:fastify
         version: 5.2.6
+      '@itw-conformance-tool/conformance':
+        specifier: 'workspace:'
+        version: link:../../packages/conformance
       '@itw-conformance-tool/database':
         specifier: 'workspace:'
         version: link:../../packages/database
