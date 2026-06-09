@@ -24,8 +24,6 @@ jobs:
       HUSKY: 0
       HOST: 0.0.0.0
       PORT: '3000'
-      ITW_CT_HTTPS: 'false'
-      ITW_CT_DATA_DIR: ${{ github.workspace }}/.ci-data
 
     steps:
       - name: Checkout
@@ -50,11 +48,7 @@ jobs:
 
       - name: Write CLI config.ini for CI
         run: |
-          cat > config.ini << 'EOF'
-          [global]
-          data_dir = .ci-data
-          https = true
-          EOF
+          cp config.example.ini config.ini
 
       - name: Initialize data directory
         run: node apps/cli/dist/main.js init
@@ -64,7 +58,7 @@ jobs:
           sudo sh -c 'echo "127.0.0.1  trust-anchor.wct.example.org wallet-provider.wct.example.org credential-issuer.wct.example.org" >> /etc/hosts'
 
       - name: Start itw-credential-issuer
-        run: node apps/itw-credential-issuer/dist/main.js &
+        run: pnpm itw-conformance-tool:start:issuer &
 
       - name: Wait for issuer health check
         run: |
