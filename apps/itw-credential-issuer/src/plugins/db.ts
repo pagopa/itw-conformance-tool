@@ -1,4 +1,4 @@
-import { SqliteConformanceSessionRepository } from '@itw-conformance-tool/conformance';
+import { SqliteConformanceSessionRepository, startConformanceCleanupJob } from '@itw-conformance-tool/conformance';
 import {
   DatabaseClient,
   SqliteNonceRepository,
@@ -27,13 +27,20 @@ export default fp(
       cleanupIntervalMs: app.config.DB_CLEANUP_INTERVAL_MS
     });
 
-    app.decorate('conformanceSessionRepository', new SqliteConformanceSessionRepository(dbClient.db));
+    const conformanceSessionRepository = new SqliteConformanceSessionRepository(dbClient.db);
+    const stopConformanceCleanup = startConformanceCleanupJob({
+      logger: app.log,
+      repository: conformanceSessionRepository
+    });
+
+    app.decorate('conformanceSessionRepository', conformanceSessionRepository);
     app.decorate('dbClient', dbClient);
     app.decorate('nonceRepository', new SqliteNonceRepository(dbClient.db));
     app.decorate('parRepository', new SqlitePARRepository(dbClient.db));
     app.decorate('sessionRepository', new SqliteSessionRepository(dbClient.db));
 
     app.addHook('onClose', async () => {
+      stopConformanceCleanup();
       await dbClient.close();
     });
   },

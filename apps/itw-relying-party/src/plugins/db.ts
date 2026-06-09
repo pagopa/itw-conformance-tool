@@ -1,4 +1,4 @@
-import { SqliteConformanceSessionRepository } from '@itw-conformance-tool/conformance';
+import { SqliteConformanceSessionRepository, startConformanceCleanupJob } from '@itw-conformance-tool/conformance';
 import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
 import { SessionService } from '@itw-conformance-tool/rp';
 import fp from 'fastify-plugin';
@@ -22,13 +22,20 @@ export default fp(
     const sessionRepository = new SqliteSessionRepository(dbClient.db);
     const nonceRepository = new SqliteNonceRepository(dbClient.db);
 
+    const conformanceSessionRepository = new SqliteConformanceSessionRepository(dbClient.db);
+    const stopConformanceCleanup = startConformanceCleanupJob({
+      logger: app.log,
+      repository: conformanceSessionRepository
+    });
+
     app.decorate('dbClient', dbClient);
-    app.decorate('conformanceSessionRepository', new SqliteConformanceSessionRepository(dbClient.db));
+    app.decorate('conformanceSessionRepository', conformanceSessionRepository);
     app.decorate('sessionRepository', sessionRepository);
     app.decorate('nonceRepository', nonceRepository);
     app.decorate('sessionService', new SessionService(sessionRepository));
 
     app.addHook('onClose', () => {
+      stopConformanceCleanup();
       dbClient.close();
     });
   },

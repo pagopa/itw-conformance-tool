@@ -39,4 +39,5 @@ export interface IConformanceSessionRepository {
   get(sessionId: string): Promise<ConformanceSession | null>;
   appendCheck(sessionId: string, check: ConformanceCheck): Promise<void>;
   close(sessionId: string, status: ClosedConformanceSessionStatus): Promise<void>;
+  markOpenSessionsIncompleteOlderThan(cutoffIso: string): Promise<number>;
 }

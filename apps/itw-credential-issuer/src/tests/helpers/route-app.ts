@@ -60,7 +60,8 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     appendCheck: async () => undefined,
     close: async () => undefined,
     create: async () => undefined,
-    get: async () => null
+    get: async () => null,
+    markOpenSessionsIncompleteOlderThan: async () => 0
   });
 
   app.decorate('dbClient', {
