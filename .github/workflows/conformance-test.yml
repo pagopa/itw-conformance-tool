@@ -89,30 +89,19 @@ jobs:
       - name: Install wct dependencies and link globally
         working-directory: /tmp/wct
         run: |
+          cp config.example.ini config.ini
           pnpm install
           pnpm build
           chmod +x ./bin/wct
           pnpm link --global
 
-      - name: Write wct config.ini
-        working-directory: /tmp/wct
-        run: |
-          cat > config.ini << 'EOF'
-          [wallet]
-          wallet_version = V1_3
-
-          [network]
-          tls_reject_unauthorized = false
-
-          [issuance]
-          url = https://localhost:3000
-          EOF
-
       - name: Run issuance conformance tests
         working-directory: /tmp/wct
         run: |
           wct test:issuance \
+            --unsafe-tls \
             --tests happy \
+            --credential-issuer-uri https://localhost:3000
 
       - name: Upload conformance report
         if: always()
