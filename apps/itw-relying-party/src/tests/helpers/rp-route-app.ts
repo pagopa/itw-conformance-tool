@@ -11,8 +11,9 @@ import { CompactEncrypt, SignJWT, importJWK, importPKCS8 } from 'jose';
 
 import { generateEphemeralKeyPair } from '../../crypto/ephemeral-keys.js';
 
+import type { IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 import type { INonceRepository } from '@itw-conformance-tool/database';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import type { JWK } from 'jose';
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,9 @@ export interface RpRouteAppOptions {
   authRequestPrivateKeyPem?: string;
   authResponsePrivateKeyPem?: string;
   baseUrl?: string;
+  conformanceSessionRepository?: IConformanceSessionRepository;
+  /** Called after route registration but before app.ready(), allowing tests to add sibling routes. */
+  setup?: (app: FastifyInstance) => void | Promise<void>;
 }
 
 /**
@@ -194,12 +198,21 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
   app.decorate('nonceRepository', nonceRepo);
   app.decorate('sessionService', sessionService);
 
+  if (options.conformanceSessionRepository) {
+    app.decorate('conformanceSessionRepository', options.conformanceSessionRepository);
+  }
+
   app.addHook('onClose', async () => {
     await dbClient.close();
     await rm(dataDir, { recursive: true, force: true });
   });
 
   await app.register(route);
+
+  if (options.setup) {
+    await options.setup(app);
+  }
+
   await app.ready();
 
   return { app, dbClient, nonceRepo, sessionService };

@@ -1,3 +1,4 @@
+import { registerAuthRequestConformanceHooks } from '../hooks/conformance.js';
 import { serveAuthorizationRequestUseCase } from '../use-cases/serve-authorization-request.js';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -7,6 +8,8 @@ interface AuthRequestParams {
 }
 
 const authRequestRoute: FastifyPluginAsync = async (app) => {
+  registerAuthRequestConformanceHooks(app);
+
   app.route<{ Params: AuthRequestParams }>({
     url: '/auth/request/:state',
     method: 'GET',

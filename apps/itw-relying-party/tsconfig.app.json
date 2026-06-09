@@ -36,6 +36,9 @@
     },
     {
       "path": "../../packages/database/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/conformance/tsconfig.lib.json"
     }
   ]
 }

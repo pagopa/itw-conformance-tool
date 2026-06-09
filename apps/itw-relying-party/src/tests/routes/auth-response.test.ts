@@ -1,9 +1,11 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 
 import authResponseRoute from '../../routes/auth-response.js';
 import { TEST_AUTH_RESPONSE_PEM, buildRpRouteApp, createAuthResponseJwe } from '../helpers/rp-route-app.js';
+
+import type { ConformanceSession, IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 
 function makeStoredRequestJwt(state: string, nonce = randomBytes(32).toString('hex')): string {
   const header = Buffer.from(JSON.stringify({ alg: 'ES256', typ: 'oauth-authz-req+jwt' })).toString('base64url');
@@ -180,5 +182,87 @@ describe('POST /auth/response', () => {
 
     const session = await ctx.sessionService.get(state);
     expect(session?.state).toBe('rejected');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Conformance hook integration — verify the hook is wired to the route
+// ---------------------------------------------------------------------------
+
+function makeTrackingConformanceRepo(): IConformanceSessionRepository & {
+  closed: { sessionId: string; status: string }[];
+} {
+  const created: ConformanceSession[] = [];
+  const closed: { sessionId: string; status: string }[] = [];
+  return {
+    closed,
+    async create(session) {
+      created.push(session);
+    },
+    async get(sessionId) {
+      return created.find((s) => s.sessionId === sessionId) ?? null;
+    },
+    async appendCheck() {
+      /* empty */
+    },
+    async close(sessionId, status) {
+      closed.push({ sessionId, status });
+    }
+  };
+}
+
+describe('POST /auth/response — conformance hook integration', () => {
+  it('closes the conformance session as PASSED on a successful VP response', async () => {
+    const repo = makeTrackingConformanceRepo();
+    const ctx = await buildRpRouteApp(authResponseRoute, {
+      authResponsePrivateKeyPem: TEST_AUTH_RESPONSE_PEM,
+      conformanceSessionRepository: repo
+    });
+
+    const state = randomUUID();
+    const nonce = randomBytes(32).toString('hex');
+
+    await ctx.sessionService.create({
+      id: state,
+      jwt: makeStoredRequestJwt(state, nonce),
+      flowType: 'cross-device',
+      ttlMs: 300_000
+    });
+    await ctx.sessionService.update(state, 'checking');
+    await ctx.nonceRepo.insert(nonce, Date.now() + 300_000);
+
+    const jwe = await createAuthResponseJwe({ nonce, state });
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: { response: jwe }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(repo.closed).toHaveLength(1);
+    expect(repo.closed[0].sessionId).toBe(state);
+    expect(repo.closed[0].status).toBe('PASSED');
+
+    await ctx.app.close();
+  });
+
+  it('does not close the conformance session on a failed VP response', async () => {
+    const repo = makeTrackingConformanceRepo();
+    const ctx = await buildRpRouteApp(authResponseRoute, {
+      authResponsePrivateKeyPem: TEST_AUTH_RESPONSE_PEM,
+      conformanceSessionRepository: repo
+    });
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: { response: 'not.a.valid.jwe.token' }
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(repo.closed).toHaveLength(0);
+
+    await ctx.app.close();
   });
 });
