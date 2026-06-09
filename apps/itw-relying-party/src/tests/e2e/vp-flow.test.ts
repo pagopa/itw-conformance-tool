@@ -64,7 +64,10 @@ async function buildFullRpApp() {
     configFilePath: join(dataDir, 'config.ini'),
     trustAnchorUrl: 'https://trust-anchor.example.com',
     signingKeyPath: join(dataDir, 'signing-key.pem'),
-    x5cCertPath: join(dataDir, 'x5c-cert.pem')
+    x5cCertPath: join(dataDir, 'x5c-cert.pem'),
+    httpsEnabled: false,
+    tlsCertPath: join(dataDir, 'tls_cert.pem'),
+    tlsKeyPath: join(dataDir, 'tls_key.pem')
   });
 
   app.decorate('rpKeys', {
