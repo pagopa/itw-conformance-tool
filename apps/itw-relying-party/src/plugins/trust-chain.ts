@@ -9,6 +9,8 @@ declare module 'fastify' {
 }
 
 const DEFAULT_TRUST_CHAIN_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_TRUST_CHAIN_FETCH_RETRIES = 3;
+const DEFAULT_TRUST_CHAIN_RETRY_DELAY_MS = 300;
 const INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER = 'insecure-http-local-dev';
 
 function isHttpUrl(value: string): boolean {
@@ -32,6 +34,25 @@ function resolveFetchTimeoutMs(value: string | undefined): number {
   return parsed;
 }
 
+function resolvePositiveInt(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim().length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function waitMs(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
 export default fp(
   async function trustChainPlugin(app) {
     const { entityId, trustAnchorUrl } = app.config;
@@ -41,6 +62,11 @@ export default fp(
     }
 
     const timeoutMs = resolveFetchTimeoutMs(process.env.ITW_CT_TRUST_CHAIN_FETCH_TIMEOUT_MS);
+    const maxRetries = resolvePositiveInt(process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRIES, DEFAULT_TRUST_CHAIN_FETCH_RETRIES);
+    const retryDelayMs = resolvePositiveInt(
+      process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRY_DELAY_MS,
+      DEFAULT_TRUST_CHAIN_RETRY_DELAY_MS
+    );
 
     if (isHttpUrl(entityId) || isHttpUrl(trustAnchorUrl)) {
       app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
@@ -54,34 +80,58 @@ export default fp(
       return;
     }
 
-    try {
-      const trustChain = await fetchTrustChain({
-        entityId,
-        logger: app.log,
-        timeoutMs,
-        trustAnchorUrl
-      });
+    let lastError: unknown;
 
-      app.decorate('trustChain', trustChain);
-      app.log.info(
-        {
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+      try {
+        const trustChain = await fetchTrustChain({
           entityId,
-          trustAnchorUrl,
-          trustChainLength: trustChain.length
-        },
-        'Trust chain loaded in memory'
-      );
-    } catch (err) {
-      app.log.error(
-        {
-          entityId,
-          err,
+          logger: app.log,
+          timeoutMs,
           trustAnchorUrl
-        },
-        'Trust chain bootstrap failed, server startup aborted'
-      );
-      throw err;
+        });
+
+        app.decorate('trustChain', trustChain);
+        app.log.info(
+          {
+            attempt,
+            entityId,
+            trustAnchorUrl,
+            trustChainLength: trustChain.length
+          },
+          'Trust chain loaded in memory'
+        );
+        return;
+      } catch (err) {
+        lastError = err;
+
+        if (attempt < maxRetries) {
+          app.log.warn(
+            {
+              attempt,
+              maxRetries,
+              retryDelayMs,
+              entityId,
+              trustAnchorUrl,
+              err
+            },
+            'Trust chain bootstrap failed, retrying'
+          );
+          await waitMs(retryDelayMs);
+        }
+      }
     }
+
+    app.log.error(
+      {
+        attempts: maxRetries,
+        entityId,
+        err: lastError,
+        trustAnchorUrl
+      },
+      'Trust chain bootstrap failed, server startup aborted'
+    );
+    throw lastError;
   },
   { name: 'trust-chain', dependencies: ['config'] }
 );
