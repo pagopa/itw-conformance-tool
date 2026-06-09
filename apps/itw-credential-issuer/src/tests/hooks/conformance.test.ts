@@ -102,7 +102,14 @@ async function buildHookApp(
 
   await app.register(FastifyRateLimit, { global: false });
   // Register a stub 'db' plugin to satisfy the conformanceHooks dependency declaration
-  await app.register(fp(async () => { /* stub db plugin for tests */ }, { name: 'db' }));
+  await app.register(
+    fp(
+      async () => {
+        /* stub db plugin for tests */
+      },
+      { name: 'db' }
+    )
+  );
   await app.register(conformanceHooks);
   await app.register(route);
   await app.ready();
@@ -296,7 +303,14 @@ describe('conformanceHooks', () => {
       app2.decorate('issuerKeys', { signingKeysJwks: { keys: [] }, iacaCertPem: '', iacaKeyPem: '' });
 
       await app2.register(FastifyRateLimit, { global: false });
-      await app2.register(fp(async () => { /* stub db plugin for tests */ }, { name: 'db' }));
+      await app2.register(
+        fp(
+          async () => {
+            /* stub db plugin for tests */
+          },
+          { name: 'db' }
+        )
+      );
       await app2.register(conformanceHooks);
       await app2.register(tokenRoute);
       await app2.register(credRoute2);
@@ -377,7 +391,14 @@ describe('conformanceHooks', () => {
       };
 
       await app3.register(FastifyRateLimit, { global: false });
-      await app3.register(fp(async () => { /* stub db plugin for tests */ }, { name: 'db' }));
+      await app3.register(
+        fp(
+          async () => {
+            /* stub db plugin for tests */
+          },
+          { name: 'db' }
+        )
+      );
       await app3.register(conformanceHooks);
       await app3.register(tokenRoute);
       await app3.register(nonceRoute);
