@@ -1,17 +1,16 @@
 import { existsSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
-/** Utility function to find the root directory of an
- * Nx workspace by searching for the presence of 'nx.json' file.
+/** Utility function to find the root directory of the Nx workspace
+ * by looking for the presence of 'nx.json'.
  *
  * @param startDir - The directory to start the search from. Defaults to the current working directory.
  * @returns The root directory of the Nx workspace if found.
  */
-export function findRoot(startDir = process.cwd()): string {
+export function findNxRoot(startDir = process.cwd()): string {
   let dir = startDir;
   while (true) {
-    if (existsSync(join(dir, 'nx.json'))) return dir;
+    if (existsSync(resolve(dir, 'nx.json'))) return dir;
 
     const parent = resolve(dir, '..');
     if (parent === dir) break;
@@ -46,37 +45,13 @@ export function searchNx(rootPath: string): string {
   throw new Error(`Unable to locate the local Nx CLI in node_modules. Checked paths: ${candidatePaths.join(', ')}`);
 }
 
-/** Expands a file path that may contain a tilde (~) or be enclosed in quotes,
- * replacing the tilde with the user's home directory.
- *
- * @param path - The path that may contain a tilde.
- * @param rootPath - The root path used to resolve relative paths (not tilde).
- * @returns The expanded path with ~ replaced by the home directory.
- */
-export function expandPath(path: string, rootPath: string): string {
-  if ((path.startsWith('"') && path.endsWith('"')) || (path.startsWith("'") && path.endsWith("'"))) {
-    path = path.slice(1, -1);
-  }
-
-  if (path.startsWith('~')) {
-    path = path.replace('~', homedir());
-  }
-
-  if (!isAbsolute(path)) {
-    return join(rootPath, path);
-  }
-
-  return join(path);
-}
-
-/** Creates the file paths for the required keys and certificates
- * based on the provided file path.
+/** Utility function to create an array of file paths that need to be checked for existence,
  *
  * @param filePath - The base path for the files.
  * @param httpsEnabled - Whether HTTPS is enabled; when true, TLS cert/key paths are included.
  * @returns An array of file paths for the required keys and certificates.
  */
-export function createFileDirPaths(filePath: string, httpsEnabled = false): string[] {
+export function filesToSearch(filePath: string, httpsEnabled = false): string[] {
   const paths = [
     join(filePath, 'issuer', 'signing-keys.jwks.json'),
     join(filePath, 'issuer', 'iaca-cert.pem'),

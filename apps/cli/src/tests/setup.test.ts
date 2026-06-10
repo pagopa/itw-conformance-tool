@@ -1,10 +1,9 @@
 import { vi } from 'vitest';
 
 // Mocks for utils/search.ts
-export const findRoot = vi.fn(() => '/root');
+export const findNxRoot = vi.fn(() => '/root');
 export const searchNx = vi.fn(() => '/root/node_modules/nx/dist/bin/nx.js');
-export const expandPath = vi.fn((path: string) => path);
-export const createFileDirPaths = vi.fn<(filePath: string, httpsEnabled?: boolean) => string[]>(() => []);
+export const filesToSearch = vi.fn<(filePath: string, httpsEnabled?: boolean) => string[]>(() => []);
 export const existsFileSync = vi.fn(() => true);
 
 // Vi mocks

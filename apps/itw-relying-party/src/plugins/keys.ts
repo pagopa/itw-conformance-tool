@@ -49,39 +49,6 @@ async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
   }
 }
 
-async function loadSigningKey(signingKeyPath: string): Promise<string> {
-  let content: string;
-
-  try {
-    content = await readFile(signingKeyPath, 'utf8');
-  } catch {
-    throw new Error(
-      `Missing required signing key: file not found at ${signingKeyPath}. ` +
-        `Please ensure the signing key file exists before starting the server.`
-    );
-  }
-
-  try {
-    // Auto-detect format: try JWK (JSON) first, then treat as PEM
-    let keyInput: Parameters<typeof createPrivateKey>[0];
-    const trimmed = content.trim();
-    if (trimmed.startsWith('{')) {
-      const jwk = JSON.parse(trimmed);
-      keyInput = { key: jwk, format: 'jwk' };
-    } else {
-      keyInput = { key: trimmed, format: 'pem' };
-    }
-    const privateKey = createPrivateKey(keyInput);
-    const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
-    return pem;
-  } catch (err) {
-    throw new Error(
-      `Invalid signing key at ${signingKeyPath}: ${err instanceof Error ? err.message : String(err)}. ` +
-        `Please ensure the file contains a valid PEM or JWK private key.`
-    );
-  }
-}
-
 async function loadX5cCert(x5cCertPath: string): Promise<string> {
   let content: string;
 
@@ -108,11 +75,10 @@ async function loadX5cCert(x5cCertPath: string): Promise<string> {
 
 export default fp(
   async function keysPlugin(app) {
-    const { signingKeyPath, x5cCertPath, dataDir } = app.config;
+    const { x5cCertPath, dataDir } = app.config;
 
     const [authRequestPrivateKeyPem, authResponsePrivateKeyPem, signingPrivateKeyPem, x5cCertPem] = await Promise.all([
       ...KEY_FILES.map((kf) => loadKeyFile(dataDir, kf.file)),
-      loadSigningKey(signingKeyPath),
       loadX5cCert(x5cCertPath)
     ]);
 

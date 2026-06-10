@@ -1,10 +1,8 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
-import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
-import { type Level } from '@itw-conformance-tool/logger';
+import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
 
-import { configINITemplate } from '../templates/templates.js';
 import {
   getAuthRequestKey,
   getAuthResponseKey,
@@ -12,129 +10,115 @@ import {
   getSigningKeys,
   getTlsCertAndKey
 } from '../utils/crypto.js';
-import { existsFileSync, expandPath } from '../utils/search.js';
+import { expandPath } from '../utils/path.js';
+import { existsFileSync } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
 
-/** Initializes the configuration and necessary files for the CLI tool.
- * It creates the required directory structure and files based on the
- * provided flags. If the --force flag is used, it will overwrite
- * existing files and directories without prompting.
+/** Initializes the configuration file.
  *
- * @param flags - The command-line flags.
- * @param configs - The current configuration object.
- * @param emitter - A function used to emit structured log messages.
- * @returns It performs file system operations and exits the process upon completion.
+ * @param flags - The command-line flags, which may include a `force` flag to overwrite existing configuration.
+ * @returns The parsed configuration object.
  */
-export function init(
-  rootPath: string,
-  flags: CLIFlags,
-  configs: ConfigType,
-  emitter: (event: string, type?: Level) => void
-): void {
-  emitter('CLI init started.');
-  const reportMessages = [`- Force overwrite: ${flags.force ? 'yes' : 'no'}`];
+function checkConfig(flags: CLIFlags): ConfigType {
+  const configFilePath = resolve(process.cwd(), 'config.ini');
+  if (!existsFileSync(configFilePath) || flags.force) {
+    writeFileSync(configFilePath, ConfigINITemplate, { encoding: 'utf8', flag: 'w' });
 
-  const configFilePath =
-    flags.config.value && existsFileSync(flags.config.path)
-      ? expandPath(flags.config.path, rootPath)
-      : join(rootPath, 'config.ini');
+    console.log(`✓ ${flags.force ? 'Overwritten' : 'Created'} config.ini → ./config.ini`);
+  } else {
+    console.log(`✓ config.ini already exists → skipped (use --force to overwrite)`);
+  }
 
-  const dataDirPath = flags.force
-    ? join(rootPath, '.itw-conformance-tool')
-    : expandPath(configs.global.data_dir, rootPath);
-  const issuerDirPath = join(dataDirPath, 'issuer');
-  const rpDirPath = join(dataDirPath, 'rp');
+  const configs = parseINI(configFilePath).data;
+  const previousDataDir = configs.global.data_dir;
+  configs.global.data_dir = expandPath(configs.global.data_dir);
 
-  const signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
+  const dataDirExists = existsSync(configs.global.data_dir) && statSync(configs.global.data_dir).isDirectory();
+  mkdirSync(configs.global.data_dir, { recursive: true });
+  if (!dataDirExists || flags.force) {
+    console.log(`✓ ${flags.force ? 'Overwritten' : 'Created'} data_dir → ${previousDataDir}`);
+  }
+
+  return configs;
+}
+
+/** Creates necessary mandatory directories and files.
+ *
+ * @param configs - The parsed configuration object.
+ * @param flags - The command-line flags.
+ * @returns It performs file system operations to create directories and files as needed based on the configuration and flags.
+ */
+function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
+  const issuerDirPath = join(configs.global.data_dir, 'issuer');
+  mkdirSync(issuerDirPath, { recursive: true });
+
+  const rpDirPath = join(configs.global.data_dir, 'rp');
+  mkdirSync(rpDirPath, { recursive: true });
+
+  const tlsCertPath = join(configs.global.data_dir, 'tls-cert.pem');
+  const tlsKeyPath = join(configs.global.data_dir, 'tls-key.pem');
+  if (!(existsFileSync(tlsCertPath) && existsFileSync(tlsKeyPath)) || flags.force) {
+    const generatedTls = getTlsCertAndKey();
+    writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
+    writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
+
+    console.log(`✓ Generated local TLS certificate → ${tlsCertPath}`);
+  }
+
   const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
   const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
-  const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
-  const authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
-  const tlsCertPath = join(dataDirPath, 'tls_cert.pem');
-  const tlsKeyPath = join(dataDirPath, 'tls_key.pem');
-
-  const dirsPaths = [
-    { path: dataDirPath, name: 'Data directory' },
-    { path: issuerDirPath, name: 'Issuer directory' },
-    { path: rpDirPath, name: 'Relying Party directory' }
-  ];
-  for (const dir of dirsPaths) {
-    mkdirSync(dir.path, { recursive: true });
-    reportMessages.push(`- ${dir.name} at: ${dir.path}`);
-  }
-
-  // Create config file if it doesn't exist or if --force is used, then read the config values
-  const configTargetExists = existsFileSync(configFilePath);
-  if (!configTargetExists || flags.force) {
-    writeFileSync(configFilePath, configINITemplate, { encoding: 'utf8', flag: 'w' });
-    configs = parseINI(configFilePath).data;
-    reportMessages.push(
-      `- Config file ${configTargetExists ? 'overwritten' : 'created'} at: ${configFilePath}\n` +
-        '  Content:\n' +
-        JSON.stringify(configs, null, 2)
-    );
-  }
-
-  const filesPaths = [
-    { path: signingKeysPath, content: getSigningKeys(), name: 'Signing keys file' },
-    { path: authRequestKeyPath, content: getAuthRequestKey(), name: 'Auth request key file' },
-    { path: authResponseKeyPath, content: getAuthResponseKey(), name: 'Auth response key file' }
-  ];
-  for (const file of filesPaths) {
-    const fileExists = existsFileSync(file.path);
-    const shouldWriteFile = flags.force || !fileExists;
-    if (shouldWriteFile) {
-      reportMessages.push(`- ${fileExists ? 'Overwriting' : 'Creating'} file at: ${file.path}`);
-      writeFileSync(file.path, file.content, { encoding: 'utf8', flag: 'w' });
-    } else {
-      reportMessages.push(`- ${file.name} already exists at: ${file.path} (skipped, use --force to regenerate)`);
-    }
-  }
-
-  /* IACA cert and key should always be generated and overwritten together if
-   * --force is used, as they are unique for each instance */
-  const iacaCertExists = existsFileSync(iacaCertPath);
-  const iacaKeyExists = existsFileSync(iacaKeyPath);
-  const shouldWriteIaca = flags.force || !(iacaCertExists && iacaKeyExists);
-
-  if (shouldWriteIaca) {
+  if (!(existsFileSync(iacaCertPath) && existsFileSync(iacaKeyPath)) || flags.force) {
     const generatedIacaChain = getIACAChain();
     const generatedIacaCert = generatedIacaChain.certificate;
     const generatedIacaKey = generatedIacaChain.privateKey;
 
     writeFileSync(iacaCertPath, generatedIacaCert, { encoding: 'utf8', flag: 'w' });
-    reportMessages.push(`- ${iacaCertExists ? 'Overwriting' : 'Creating'} IACA certificate at: ${iacaCertPath}`);
     writeFileSync(iacaKeyPath, generatedIacaKey, { encoding: 'utf8', flag: 'w' });
-    reportMessages.push(`- ${iacaKeyExists ? 'Overwriting' : 'Creating'} IACA key at: ${iacaKeyPath}`);
-  } else {
-    reportMessages.push(
-      `- IACA certificate and key already exist at: ${iacaCertPath}, ${iacaKeyPath} (skipped, use --force to regenerate)`
-    );
+
+    console.log(`✓ Generated mock IACA certificates → ${iacaCertPath}`);
   }
 
-  /* TLS cert and key are only generated when https is enabled in the config.
-   * They are always overwritten together if --force is used. */
-  if (configs.global.https) {
-    const tlsCertExists = existsFileSync(tlsCertPath);
-    const tlsKeyExists = existsFileSync(tlsKeyPath);
-    const shouldWriteTls = flags.force || !(tlsCertExists && tlsKeyExists);
-
-    if (shouldWriteTls) {
-      const generatedTls = getTlsCertAndKey();
-
-      writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
-      reportMessages.push(`- ${tlsCertExists ? 'Overwriting' : 'Creating'} TLS certificate at: ${tlsCertPath}`);
-      writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
-      reportMessages.push(`- ${tlsKeyExists ? 'Overwriting' : 'Creating'} TLS key at: ${tlsKeyPath}`);
-    } else {
-      reportMessages.push(
-        `- TLS certificate and key already exist at: ${tlsCertPath}, ${tlsKeyPath} (skipped, use --force to regenerate)`
-      );
-    }
+  const signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
+  if (!existsFileSync(signingKeysPath) || flags.force) {
+    const signingKeys = getSigningKeys();
+    writeFileSync(signingKeysPath, signingKeys, { encoding: 'utf8', flag: 'w' });
+    console.log(`✓ Generated issuer signing keys → ${signingKeysPath}`);
   } else {
-    reportMessages.push('- HTTPS disabled: TLS certificate and key not generated');
+    console.log(`⚠ Issuer keys already exist → skipped (use --force to regenerate)`);
   }
 
-  emitter('CLI init completed\nSummary of actions:\n' + reportMessages.join('\n'));
+  const rpKeysExist = [false, false];
+
+  const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
+  if (!existsFileSync(authRequestKeyPath) || flags.force) {
+    const authRequestKey = getAuthRequestKey();
+    writeFileSync(authRequestKeyPath, authRequestKey, { encoding: 'utf8', flag: 'w' });
+  } else {
+    rpKeysExist[0] = true;
+  }
+
+  const authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
+  if (!existsFileSync(authResponseKeyPath) || flags.force) {
+    const authResponseKey = getAuthResponseKey();
+    writeFileSync(authResponseKeyPath, authResponseKey, { encoding: 'utf8', flag: 'w' });
+  } else {
+    rpKeysExist[1] = true;
+  }
+
+  if (rpKeysExist.every(Boolean)) {
+    console.log(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)`);
+  } else {
+    console.log(`✓ Generated relying-party keys → ${authRequestKeyPath}, ${authResponseKeyPath}`);
+  }
+}
+
+/** Initializes the configuration file and necessary keys/certificates for the conformance tool.
+ *
+ * @param flags - The command-line flags.
+ * @returns It performs file system operations and exits the process upon completion.
+ */
+export function init(flags: CLIFlags): void {
+  const configs = checkConfig(flags);
+  createFilesAndDirs(configs, flags);
 }

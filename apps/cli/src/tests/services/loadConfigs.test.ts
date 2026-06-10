@@ -24,8 +24,6 @@ vi.mock('@itw-conformance-tool/config', () => ({
   parseINI: vi.fn()
 }));
 
-const rootPath = '/root';
-
 const parsedConfigs: ConfigType = {
   global: {
     data_dir: '/custom/.itw-conformance-tool',
@@ -37,17 +35,13 @@ const parsedConfigs: ConfigType = {
     port: 9090,
     entity_id: 'https://rp.example.com',
     trust_anchor_url: 'https://trust-anchor.example.com',
-    signing_key_path: '/custom/rp/signing-key.pem',
     x5c_cert_path: '/custom/rp/x5c-cert.pem'
   }
 };
 
 describe('loadConfigs', () => {
-  let emitLog: (event: string, type?: Level) => void;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    emitLog = vi.fn<(event: string, type?: Level) => void>();
   });
 
   describe('with explicit config flag (flags.config.value = true)', () => {
@@ -62,11 +56,9 @@ describe('loadConfigs', () => {
         force: false,
         config: { value: true, path: '/custom/config.ini' }
       };
-      const result = loadConfigs(flags, rootPath, emitLog);
+      const result = loadConfigs(flags);
 
-      expect(result.configFileExists).toBe(true);
-      expect(result.configs['itw-credential-issuer'].port).toBe(4000);
-      expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('/custom/config.ini'));
+      expect(result['itw-credential-issuer'].port).toBe(4000);
     });
 
     it('returns default configs and logs warn when file exists but parseINI fails', () => {
@@ -80,11 +72,9 @@ describe('loadConfigs', () => {
         force: false,
         config: { value: true, path: '/custom/config.ini' }
       };
-      const result = loadConfigs(flags, rootPath, emitLog);
+      const result = loadConfigs(flags);
 
-      expect(result.configFileExists).toBe(false);
-      expect(result.configs.global.log_level).toBe('info');
-      expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('could not be parsed'), 'warn');
+      expect(result.global.log_level).toBe('warn');
     });
 
     it('returns default configs and logs when the file does not exist', () => {
@@ -97,11 +87,9 @@ describe('loadConfigs', () => {
         force: false,
         config: { value: true, path: '/custom/config.ini' }
       };
-      const result = loadConfigs(flags, rootPath, emitLog);
+      const result = loadConfigs(flags);
 
-      expect(result.configFileExists).toBe(false);
-      expect(result.configs.global.log_level).toBe('info');
-      expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('not found at specified path'));
+      expect(result.global.log_level).toBe('warn');
     });
   });
 
@@ -111,11 +99,10 @@ describe('loadConfigs', () => {
       vi.mocked(parseINI).mockReturnValue({ ok: true, data: parsedConfigs });
 
       const flags = { issuer: false, rp: false, all: false, force: false, config: { value: false, path: '' } };
-      const result = loadConfigs(flags, rootPath, emitLog);
+      const result = loadConfigs(flags);
 
-      expect(result.configFileExists).toBe(true);
-      expect(result.configs['itw-credential-issuer'].port).toBe(4000);
-      expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('config.ini'));
+      expect(result.global.log_level).toBe('warn');
+      expect(result['itw-credential-issuer'].port).toBe(4000);
     });
 
     it('returns default configs and logs warn when default config.ini exists but parseINI fails', () => {
@@ -123,22 +110,17 @@ describe('loadConfigs', () => {
       vi.mocked(parseINI).mockReturnValue({ ok: false, error: 'Bad format', data: parsedConfigs });
 
       const flags = { issuer: false, rp: false, all: false, force: false, config: { value: false, path: '' } };
-      const result = loadConfigs(flags, rootPath, emitLog);
-
-      expect(result.configFileExists).toBe(false);
-      expect(result.configs.global.log_level).toBe('info');
-      expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('could not be parsed'), 'warn');
+      const result = loadConfigs(flags);
+      expect(result.global.log_level).toBe('warn');
     });
 
     it('returns default configs and logs when default config.ini does not exist', () => {
       vi.mocked(existsFileSync).mockReturnValue(false);
 
       const flags = { issuer: false, rp: false, all: false, force: false, config: { value: false, path: '' } };
-      const result = loadConfigs(flags, rootPath, emitLog);
+      const result = loadConfigs(flags);
 
-      expect(result.configFileExists).toBe(false);
-      expect(result.configs.global.log_level).toBe('info');
-      expect(emitLog).toHaveBeenCalledWith(expect.stringContaining('not found at default path'));
+      expect(result.global.log_level).toBe('warn');
     });
   });
 });

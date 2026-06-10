@@ -17,14 +17,12 @@ import {
 
 const REQUIRED_FIELDS_ENV = {
   ITW_CT_RP_TRUST_ANCHOR_URL: 'https://trust-anchor.example.com',
-  ITW_CT_RP_SIGNING_KEY_PATH: '/tmp/signing-key.pem',
   ITW_CT_RP_X5C_CERT_PATH: '/tmp/x5c-cert.pem'
 };
 
 const REQUIRED_FIELDS_INI = `
 [rp]
 trust_anchor_url = https://trust-anchor.example.com
-signing_key_path = /tmp/signing-key.pem
 x5c_cert_path = /tmp/x5c-cert.pem
 `;
 
@@ -109,7 +107,6 @@ describe('rpConfigSchema', () => {
     dataDir: '/tmp/itw',
     configFilePath: '/tmp/config.ini',
     trustAnchorUrl: 'https://trust-anchor.example.com',
-    signingKeyPath: '/tmp/signing-key.pem',
     x5cCertPath: '/tmp/x5c-cert.pem'
   };
 
@@ -162,7 +159,6 @@ describe('rpConfigSchema', () => {
       dataDir: '/tmp',
       configFilePath: '/tmp/c.ini',
       trustAnchorUrl: 'https://trust-anchor.example.com',
-      signingKeyPath: '/tmp/signing-key.pem',
       x5cCertPath: '/tmp/x5c-cert.pem'
     });
     expect(parsed.success).toBe(false);
@@ -176,7 +172,6 @@ describe('rpConfigSchema', () => {
       dataDir: '/tmp/itw',
       configFilePath: '/tmp/config.ini',
       trustAnchorUrl: 'not-a-url',
-      signingKeyPath: '/tmp/signing-key.pem',
       x5cCertPath: '/tmp/x5c-cert.pem'
     });
     expect(parsed.success).toBe(false);
@@ -189,7 +184,6 @@ describe('rpConfigSchema', () => {
       baseUrl: 'http://localhost:8080',
       dataDir: '/tmp/itw',
       configFilePath: '/tmp/config.ini',
-      signingKeyPath: '/tmp/signing-key.pem',
       x5cCertPath: '/tmp/x5c-cert.pem'
     });
     expect(parsed.success).toBe(false);
@@ -225,7 +219,7 @@ describe('loadRpConfig', () => {
     const cfgPath = join(workDir, 'config.ini');
     writeFileSync(
       cfgPath,
-      `[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\nentity_id = https://rp.example.org\ntrust_anchor_url = https://trust-anchor.example.org/.well-known/openid-federation\nsigning_key_path = /tmp/signing-key.pem\nx5c_cert_path = /tmp/x5c-cert.pem\n`
+      `[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\nentity_id = https://rp.example.org\ntrust_anchor_url = https://trust-anchor.example.org/.well-known/openid-federation\nx5c_cert_path = /tmp/x5c-cert.pem\n`
     );
 
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
@@ -349,32 +343,26 @@ describe('loadRpConfig', () => {
     expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
   });
 
-  it('reads trustAnchorUrl, signingKeyPath, x5cCertPath from env', () => {
+  it('reads trustAnchorUrl, x5cCertPath from env', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
       env: {
         ITW_CT_RP_TRUST_ANCHOR_URL: 'https://ta.example.org',
-        ITW_CT_RP_SIGNING_KEY_PATH: '/keys/signing.pem',
         ITW_CT_RP_X5C_CERT_PATH: '/certs/x5c.pem'
       }
     });
 
     expect(result.config.trustAnchorUrl).toBe('https://ta.example.org');
-    expect(result.config.signingKeyPath).toBe('/keys/signing.pem');
     expect(result.config.x5cCertPath).toBe('/certs/x5c.pem');
   });
 
-  it('reads trustAnchorUrl, signingKeyPath, x5cCertPath from the ini file', () => {
+  it('reads trustAnchorUrl, x5cCertPath from the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(
-      cfgPath,
-      '[rp]\nport = 8080\ntrust_anchor_url = https://ta.from.ini\nsigning_key_path = /ini/signing.pem\nx5c_cert_path = /ini/x5c.pem\n'
-    );
+    writeFileSync(cfgPath, '[rp]\nport = 8080\ntrust_anchor_url = https://ta.from.ini\nx5c_cert_path = /ini/x5c.pem\n');
 
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
 
     expect(result.config.trustAnchorUrl).toBe('https://ta.from.ini');
-    expect(result.config.signingKeyPath).toBe('/ini/signing.pem');
     expect(result.config.x5cCertPath).toBe('/ini/x5c.pem');
   });
 
@@ -390,7 +378,7 @@ describe('loadRpConfig', () => {
     expect(result.config.trustAnchorUrl).toBe('https://ta.from.env');
   });
 
-  it('throws when trustAnchorUrl, signingKeyPath, and x5cCertPath are all missing', () => {
+  it('throws when trustAnchorUrl and x5cCertPath are both missing', () => {
     expect(() =>
       loadRpConfig({
         configFilePath: join(workDir, 'missing.ini'),

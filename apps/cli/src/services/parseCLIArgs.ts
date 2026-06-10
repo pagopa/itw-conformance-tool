@@ -1,5 +1,5 @@
+import { expandPath } from '../utils/path.js';
 import { printHelp, printVersion } from '../utils/prompt.js';
-import { expandPath } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
 
@@ -111,7 +111,7 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
 
       if (result?.value) {
         flags.config.value = true;
-        flags.config.path = expandPath(result.value.trim(), rootPath);
+        flags.config.path = expandPath(result.value.trim());
         i += result.skip;
       }
 

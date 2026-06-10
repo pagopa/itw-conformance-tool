@@ -17,7 +17,6 @@ export function buildEnv(configs: ConfigType, emitLog: (event: string, type?: Lo
     ITW_CT_RP_PORT: String(configs.rp.port),
     ITW_CT_ISSUER_AUTH_FLOW: String(configs['itw-credential-issuer'].auth_flow),
     ITW_CT_RP_TRUST_ANCHOR_URL: String(configs.rp.trust_anchor_url),
-    ITW_CT_RP_SIGNING_KEY_PATH: String(configs.rp.signing_key_path),
     ITW_CT_RP_X5C_CERT_PATH: String(configs.rp.x5c_cert_path)
   };
 

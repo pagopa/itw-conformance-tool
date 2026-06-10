@@ -18,7 +18,6 @@ export const rpConfigSchema = z
     dataDir: z.string().min(1),
     configFilePath: z.string().min(1),
     trustAnchorUrl: z.string().url(),
-    signingKeyPath: z.string().min(1),
     x5cCertPath: z.string().min(1),
     httpsEnabled: z.boolean().default(false),
     tlsCertPath: z.string().default(''),
@@ -158,12 +157,6 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0 ? trustAnchorUrlOverride : data.rp.trust_anchor_url;
   const trustAnchorUrl = trustAnchorUrlCandidate.trim();
 
-  const signingKeyPathOverride = env.ITW_CT_RP_SIGNING_KEY_PATH?.trim();
-  const signingKeyPathCandidate =
-    signingKeyPathOverride && signingKeyPathOverride.length > 0 ? signingKeyPathOverride : data.rp.signing_key_path;
-  const signingKeyPathTrimmed = signingKeyPathCandidate.trim();
-  const signingKeyPath = signingKeyPathTrimmed.length > 0 ? expandHome(signingKeyPathTrimmed) : signingKeyPathTrimmed;
-
   const x5cCertPathOverride = env.ITW_CT_RP_X5C_CERT_PATH?.trim();
   const x5cCertPathCandidate =
     x5cCertPathOverride && x5cCertPathOverride.length > 0 ? x5cCertPathOverride : data.rp.x5c_cert_path;
@@ -178,7 +171,6 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     dataDir,
     configFilePath: input.configFilePath,
     trustAnchorUrl,
-    signingKeyPath,
     x5cCertPath,
     httpsEnabled,
     tlsCertPath,
