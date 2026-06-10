@@ -163,7 +163,7 @@ describe('parseINI', () => {
       rp: {
         port: 8080,
         entity_id: 'https://rp.example.org',
-        x5c_cert_path: '',
+        x5c_cert_path: '~/.itw-conformance-tool/rp/x5c-cert.pem',
         trust_anchor_url: ''
       }
     });
@@ -189,7 +189,7 @@ describe('parseINI', () => {
       rp: {
         port: 8080,
         entity_id: '',
-        x5c_cert_path: '',
+        x5c_cert_path: '~/.itw-conformance-tool/rp/x5c-cert.pem',
         trust_anchor_url: ''
       }
     });

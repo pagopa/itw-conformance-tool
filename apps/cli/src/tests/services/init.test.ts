@@ -37,7 +37,8 @@ vi.mock('../../templates/templates.js', () => ({
 }));
 
 vi.mock('@itw-conformance-tool/config', () => ({
-  parseINI: vi.fn()
+  parseINI: vi.fn(),
+  ConfigINITemplate: '[global]\ndata_dir=~/.itw-conformance-tool\n'
 }));
 
 const baseFlags: CLIFlags = {
