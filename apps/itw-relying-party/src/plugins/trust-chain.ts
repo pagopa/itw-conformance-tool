@@ -62,7 +62,10 @@ export default fp(
     }
 
     const timeoutMs = resolveFetchTimeoutMs(process.env.ITW_CT_TRUST_CHAIN_FETCH_TIMEOUT_MS);
-    const maxRetries = resolvePositiveInt(process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRIES, DEFAULT_TRUST_CHAIN_FETCH_RETRIES);
+    const maxRetries = resolvePositiveInt(
+      process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRIES,
+      DEFAULT_TRUST_CHAIN_FETCH_RETRIES
+    );
     const retryDelayMs = resolvePositiveInt(
       process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRY_DELAY_MS,
       DEFAULT_TRUST_CHAIN_RETRY_DELAY_MS
