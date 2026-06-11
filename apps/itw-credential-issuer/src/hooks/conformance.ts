@@ -224,12 +224,12 @@ export default fp(
             step,
             timestamp
           })
-          .catch((_err) => {
+          .catch((_err: unknown) => {
             // silently swallow — conformance errors must not affect the response
           });
       }
 
-      void repo.close(sessionId, 'FAILED').catch((_err) => {
+      void repo.close(sessionId, 'FAILED').catch((_err: unknown) => {
         // silently swallow — conformance errors must not affect the response
       });
     });

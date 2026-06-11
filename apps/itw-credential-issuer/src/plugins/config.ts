@@ -26,7 +26,7 @@ const schema = z.object({
   BASE_URL_SCHEME: z.enum(['http', 'https']).default('http'),
   HOST: z.string().default('localhost'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  DATA_DIR: z.string().default(path.join(process.cwd(), '.itw-conformance-tool')),
+  DATA_DIR: z.string().default(path.resolve(process.cwd(), '.itw-conformance-tool')),
   DB_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   AUTH_FLOW: z.enum(AUTH_FLOW_VALUES).default('direct'),
   HTTPS_ENABLED: z.coerce.boolean().default(true),

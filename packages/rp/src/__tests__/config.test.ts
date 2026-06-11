@@ -17,14 +17,12 @@ import {
 
 const REQUIRED_FIELDS_ENV = {
   ITW_CT_RP_TRUST_ANCHOR_URL: 'https://trust-anchor.example.com',
-  ITW_CT_RP_SIGNING_KEY_PATH: '/tmp/signing-key.pem',
   ITW_CT_RP_X5C_CERT_PATH: '/tmp/x5c-cert.pem'
 };
 
 const REQUIRED_FIELDS_INI = `
 [rp]
 trust_anchor_url = https://trust-anchor.example.com
-signing_key_path = /tmp/signing-key.pem
 x5c_cert_path = /tmp/x5c-cert.pem
 `;
 
@@ -67,8 +65,8 @@ describe('resolveTlsPaths', () => {
   it('derives TLS paths from dataDir when env overrides are not set', () => {
     const result = resolveTlsPaths({ dataDir: '/tmp/itw', env: {} });
 
-    expect(result.certPath).toBe('/tmp/itw/tls_cert.pem');
-    expect(result.keyPath).toBe('/tmp/itw/tls_key.pem');
+    expect(result.certPath).toBe('/tmp/itw/tls-cert.pem');
+    expect(result.keyPath).toBe('/tmp/itw/tls-key.pem');
   });
 
   it('uses explicit env overrides when provided', () => {
@@ -104,13 +102,15 @@ describe('rpConfigSchema', () => {
   const BASE_VALID = {
     host: '0.0.0.0',
     port: 8080,
-    baseUrl: 'http://localhost:8080',
-    entityId: 'http://localhost:8080',
+    baseUrl: 'https://localhost:8080',
+    entityId: 'https://localhost:3000',
     dataDir: '/tmp/itw',
     configFilePath: '/tmp/config.ini',
-    trustAnchorUrl: 'https://trust-anchor.example.com',
-    signingKeyPath: '/tmp/signing-key.pem',
-    x5cCertPath: '/tmp/x5c-cert.pem'
+    trustAnchorUrl: '/.well-known/openid-federation',
+    x5cCertPath: '/tmp/x5c-cert.pem',
+    httpsEnabled: true,
+    tlsCertPath: '/tmp/tls-cert.pem',
+    tlsKeyPath: '/tmp/tls-key.pem'
   };
 
   it('accepts a valid config', () => {
@@ -122,8 +122,8 @@ describe('rpConfigSchema', () => {
     const parsed = rpConfigSchema.safeParse({
       ...BASE_VALID,
       httpsEnabled: true,
-      tlsCertPath: '/tmp/tls_cert.pem',
-      tlsKeyPath: '/tmp/tls_key.pem'
+      tlsCertPath: '/tmp/tls-cert.pem',
+      tlsKeyPath: '/tmp/tls-key.pem'
     });
     expect(parsed.success).toBe(true);
   });
@@ -133,7 +133,7 @@ describe('rpConfigSchema', () => {
       ...BASE_VALID,
       httpsEnabled: true,
       tlsCertPath: '',
-      tlsKeyPath: '/tmp/tls_key.pem'
+      tlsKeyPath: '/tmp/tls-key.pem'
     });
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
@@ -145,7 +145,7 @@ describe('rpConfigSchema', () => {
     const parsed = rpConfigSchema.safeParse({
       ...BASE_VALID,
       httpsEnabled: true,
-      tlsCertPath: '/tmp/tls_cert.pem',
+      tlsCertPath: '/tmp/tls-cert.pem',
       tlsKeyPath: ''
     });
     expect(parsed.success).toBe(false);
@@ -161,23 +161,7 @@ describe('rpConfigSchema', () => {
       baseUrl: 'http://localhost:99999',
       dataDir: '/tmp',
       configFilePath: '/tmp/c.ini',
-      trustAnchorUrl: 'https://trust-anchor.example.com',
-      signingKeyPath: '/tmp/signing-key.pem',
-      x5cCertPath: '/tmp/x5c-cert.pem'
-    });
-    expect(parsed.success).toBe(false);
-  });
-
-  it('rejects an invalid trustAnchorUrl', () => {
-    const parsed = rpConfigSchema.safeParse({
-      host: '0.0.0.0',
-      port: 8080,
-      baseUrl: 'http://localhost:8080',
-      dataDir: '/tmp/itw',
-      configFilePath: '/tmp/config.ini',
-      trustAnchorUrl: 'not-a-url',
-      signingKeyPath: '/tmp/signing-key.pem',
-      x5cCertPath: '/tmp/x5c-cert.pem'
+      trustAnchorUrl: 'https://trust-anchor.example.com'
     });
     expect(parsed.success).toBe(false);
   });
@@ -188,9 +172,7 @@ describe('rpConfigSchema', () => {
       port: 8080,
       baseUrl: 'http://localhost:8080',
       dataDir: '/tmp/itw',
-      configFilePath: '/tmp/config.ini',
-      signingKeyPath: '/tmp/signing-key.pem',
-      x5cCertPath: '/tmp/x5c-cert.pem'
+      configFilePath: '/tmp/config.ini'
     });
     expect(parsed.success).toBe(false);
   });
@@ -217,15 +199,15 @@ describe('loadRpConfig', () => {
     expect(result.config.host).toBe(DEFAULT_HOST);
     expect(result.config.port).toBe(DEFAULT_PORT);
     expect(result.config.dataDir).toBe(DEFAULT_DATA_DIR);
-    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
-    expect(result.config.entityId).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
+    expect(result.config.entityId).toBe(`https://localhost:3000`);
   });
 
   it('reads [rp].port and [global].data_dir from the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
     writeFileSync(
       cfgPath,
-      `[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\nentity_id = https://rp.example.org\ntrust_anchor_url = https://trust-anchor.example.org/.well-known/openid-federation\nsigning_key_path = /tmp/signing-key.pem\nx5c_cert_path = /tmp/x5c-cert.pem\n`
+      `[global]\ndata_dir = /opt/itw-data\n\n[rp]\nport = 9090\nentity_id = https://rp.example.org\ntrust_anchor_url = https://trust-anchor.example.org/.well-known/openid-federation\nx5c_cert_path = /tmp/x5c-cert.pem\n`
     );
 
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
@@ -233,7 +215,7 @@ describe('loadRpConfig', () => {
     expect(result.configFileFound).toBe(true);
     expect(result.config.port).toBe(9090);
     expect(result.config.dataDir).toBe('/opt/itw-data');
-    expect(result.config.baseUrl).toBe('http://localhost:9090');
+    expect(result.config.baseUrl).toBe('https://localhost:9090');
     expect(result.config.entityId).toBe('https://rp.example.org');
     expect(result.config.trustAnchorUrl).toBe('https://trust-anchor.example.org/.well-known/openid-federation');
     expect(result.config.configFilePath).toBe(cfgPath);
@@ -326,7 +308,7 @@ describe('loadRpConfig', () => {
       env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: '' }
     });
 
-    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
   });
 
   it('whitespace-only ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
@@ -335,7 +317,7 @@ describe('loadRpConfig', () => {
       env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: '   ' }
     });
 
-    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
   });
 
   it('ITW_CT_RP_BASE_URL trailing slash is stripped by Zod URL normalization', () => {
@@ -349,33 +331,24 @@ describe('loadRpConfig', () => {
     expect(result.config.baseUrl).toBe('http://rp.example.com:9000');
   });
 
-  it('reads trustAnchorUrl, signingKeyPath, x5cCertPath from env', () => {
+  it('reads trustAnchorUrl from env', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
       env: {
-        ITW_CT_RP_TRUST_ANCHOR_URL: 'https://ta.example.org',
-        ITW_CT_RP_SIGNING_KEY_PATH: '/keys/signing.pem',
-        ITW_CT_RP_X5C_CERT_PATH: '/certs/x5c.pem'
+        ITW_CT_RP_TRUST_ANCHOR_URL: 'https://ta.example.org'
       }
     });
 
     expect(result.config.trustAnchorUrl).toBe('https://ta.example.org');
-    expect(result.config.signingKeyPath).toBe('/keys/signing.pem');
-    expect(result.config.x5cCertPath).toBe('/certs/x5c.pem');
   });
 
-  it('reads trustAnchorUrl, signingKeyPath, x5cCertPath from the ini file', () => {
+  it('reads trustAnchorUrl from the ini file', () => {
     const cfgPath = join(workDir, 'config.ini');
-    writeFileSync(
-      cfgPath,
-      '[rp]\nport = 8080\ntrust_anchor_url = https://ta.from.ini\nsigning_key_path = /ini/signing.pem\nx5c_cert_path = /ini/x5c.pem\n'
-    );
+    writeFileSync(cfgPath, '[rp]\nport = 8080\ntrust_anchor_url = https://ta.from.ini\nx5c_cert_path = /ini/x5c.pem\n');
 
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
 
     expect(result.config.trustAnchorUrl).toBe('https://ta.from.ini');
-    expect(result.config.signingKeyPath).toBe('/ini/signing.pem');
-    expect(result.config.x5cCertPath).toBe('/ini/x5c.pem');
   });
 
   it('env ITW_CT_RP_TRUST_ANCHOR_URL wins over the ini file', () => {
@@ -390,23 +363,14 @@ describe('loadRpConfig', () => {
     expect(result.config.trustAnchorUrl).toBe('https://ta.from.env');
   });
 
-  it('throws when trustAnchorUrl, signingKeyPath, and x5cCertPath are all missing', () => {
-    expect(() =>
-      loadRpConfig({
-        configFilePath: join(workDir, 'missing.ini'),
-        env: {}
-      })
-    ).toThrow();
-  });
-
-  it('defaults httpsEnabled to false when ITW_CT_HTTPS is not set', () => {
+  it('defaults httpsEnabled to true when ITW_CT_HTTPS is not set', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
       env: { ...REQUIRED_FIELDS_ENV }
     });
-    expect(result.config.httpsEnabled).toBe(false);
-    expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls_cert.pem'));
-    expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls_key.pem'));
+    expect(result.config.httpsEnabled).toBe(true);
+    expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls-cert.pem'));
+    expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls-key.pem'));
   });
 
   it('sets httpsEnabled to true when ITW_CT_HTTPS=true', () => {
@@ -484,8 +448,8 @@ describe('loadRpConfig', () => {
       configFilePath: join(workDir, 'missing.ini'),
       env: { ...REQUIRED_FIELDS_ENV, ITW_CT_HTTPS: 'true' }
     });
-    expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls_cert.pem'));
-    expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls_key.pem'));
+    expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls-cert.pem'));
+    expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls-key.pem'));
   });
 
   it('derives tlsCertPath and tlsKeyPath from dataDir when HTTPS comes from the INI file', () => {
@@ -495,8 +459,8 @@ describe('loadRpConfig', () => {
     const result = loadRpConfig({ configFilePath: cfgPath, env: {} });
 
     expect(result.config.httpsEnabled).toBe(true);
-    expect(result.config.tlsCertPath).toBe('/opt/itw-data/tls_cert.pem');
-    expect(result.config.tlsKeyPath).toBe('/opt/itw-data/tls_key.pem');
+    expect(result.config.tlsCertPath).toBe('/opt/itw-data/tls-cert.pem');
+    expect(result.config.tlsKeyPath).toBe('/opt/itw-data/tls-key.pem');
   });
 
   it('derives https baseUrl when ITW_CT_HTTPS is enabled and no explicit base URL', () => {

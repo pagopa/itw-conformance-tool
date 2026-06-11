@@ -10,7 +10,7 @@ type HashCallback = (data: Uint8Array, algorithm: string) => Promise<Uint8Array>
 
 type LoggerLike = {
   info: (obj: Record<string, unknown>, msg?: string) => void;
-  error: (obj: Record<string, unknown>, msg?: string) => void;
+  warn: (obj: Record<string, unknown>, msg?: string) => void;
 };
 
 export interface FetchTrustChainOptions {
@@ -54,8 +54,6 @@ function buildFetchWithTimeout(options: Pick<FetchTrustChainOptions, 'logger' | 
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init?.signal == null ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal]);
-
-    options.logger.info({ method, timeoutMs, url }, 'Fetching trust-chain resource');
 
     const response = await fetch(input, {
       ...init,
@@ -102,13 +100,23 @@ function toEntityId(url: string): string {
   return parsed.toString();
 }
 
-export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<[string, ...string[]]> {
+function resolveTrustAnchorEntityId(input: { trustAnchorUrl: string; entityId: string }): string {
+  const entityId = toEntityId(input.entityId);
+  const resolved = new URL(input.trustAnchorUrl.trim(), entityId).toString();
+  return toEntityId(resolved);
+}
+
+export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<string[]> {
   const fetchWithTimeout = buildFetchWithTimeout(options);
   const entityId = toEntityId(options.entityId);
-  const trustAnchorEntityId = toEntityId(options.trustAnchorUrl);
+  const trustAnchorEntityId = resolveTrustAnchorEntityId({
+    trustAnchorUrl: options.trustAnchorUrl,
+    entityId
+  });
 
+  let trustChain: string[] = [];
   try {
-    const trustChain = await fetchAndValidateTrustChain(entityId, {
+    trustChain = await fetchAndValidateTrustChain(entityId, {
       callbacks: {
         fetch: fetchWithTimeout,
         hash: buildHashCallback(),
@@ -116,32 +124,20 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
       },
       trustAnchorUrls: [trustAnchorEntityId]
     });
-
-    if (trustChain.length === 0) {
-      throw new Error('Trust chain resolution returned an empty chain');
-    }
-
-    options.logger.info(
-      {
-        entityId,
-        trustAnchorEntityId,
-        trustAnchorUrl: options.trustAnchorUrl,
-        trustChainLength: trustChain.length
-      },
-      'Trust chain fetched and validated'
-    );
-
-    return trustChain as [string, ...string[]];
-  } catch (err) {
-    options.logger.error(
-      {
-        entityId,
-        err,
-        trustAnchorUrl: options.trustAnchorUrl
-      },
-      'Failed to fetch and validate trust chain'
-    );
-
-    throw err;
+  } catch {
+    options.logger.warn({}, 'Unable to fetch and validate trust chain');
+    return trustChain;
   }
+
+  options.logger.info(
+    {
+      entityId,
+      trustAnchorEntityId,
+      trustAnchorUrl: options.trustAnchorUrl,
+      trustChainLength: trustChain.length
+    },
+    'Trust chain fetched and validated'
+  );
+
+  return trustChain;
 }

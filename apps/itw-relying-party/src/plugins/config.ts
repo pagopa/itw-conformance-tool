@@ -13,7 +13,6 @@ declare module 'fastify' {
       dataDir: string;
       configFilePath: string;
       trustAnchorUrl: string;
-      signingKeyPath: string;
       x5cCertPath: string;
       httpsEnabled: boolean;
       tlsCertPath: string;
@@ -35,7 +34,6 @@ export default fp(
       trustAnchorUrl: config.trustAnchorUrl,
       dataDir: config.dataDir,
       configFilePath,
-      signingKeyPath: config.signingKeyPath,
       x5cCertPath: config.x5cCertPath,
       httpsEnabled: config.httpsEnabled,
       tlsCertPath: config.tlsCertPath,
