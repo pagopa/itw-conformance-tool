@@ -57,7 +57,7 @@ const makeConfigs = (): ConfigType => ({
     https: false
   },
   'itw-credential-issuer': { auth_flow: 'direct', port: 3000, credential_types: 'pid' },
-  rp: { port: 8080, entity_id: '', trust_anchor_url: '', x5c_cert_path: '' }
+  rp: { port: 8080, entity_id: '', trust_anchor_url: '' }
 });
 
 describe('init', () => {
@@ -79,19 +79,37 @@ describe('init', () => {
     expect(mkdirSync).toHaveBeenCalledWith('/root/.itw-conformance-tool/rp', { recursive: true });
   });
 
-  it('writes TLS files when they do not exist', () => {
+  it('skips TLS files when https is false', () => {
+    init(baseFlags);
+
+    expect(getTlsCertAndKey).not.toHaveBeenCalled();
+    const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
+    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls-cert.pem');
+    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls-key.pem');
+  });
+
+  it('writes TLS files when https is true and they do not exist', () => {
+    vi.mocked(parseINI).mockReturnValue({
+      ok: true,
+      data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
+    });
+
     init(baseFlags);
 
     expect(getTlsCertAndKey).toHaveBeenCalledOnce();
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
-    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls_cert.pem');
-    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls_key.pem');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-cert.pem');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-key.pem');
   });
 
   it('skips TLS files when they already exist and --force is not set', () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as ReturnType<typeof statSync>);
+    vi.mocked(parseINI).mockReturnValue({
+      ok: true,
+      data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
+    });
 
     init(baseFlags);
 
@@ -102,6 +120,10 @@ describe('init', () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as ReturnType<typeof statSync>);
+    vi.mocked(parseINI).mockReturnValue({
+      ok: true,
+      data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
+    });
 
     init({ ...baseFlags, force: true });
 

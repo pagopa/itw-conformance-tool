@@ -57,9 +57,9 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
   const rpDirPath = join(configs.global.data_dir, 'rp');
   mkdirSync(rpDirPath, { recursive: true });
 
-  const tlsCertPath = join(configs.global.data_dir, 'tls_cert.pem');
-  const tlsKeyPath = join(configs.global.data_dir, 'tls_key.pem');
-  if (!(existsFileSync(tlsCertPath) && existsFileSync(tlsKeyPath)) || flags.force) {
+  const tlsCertPath = join(configs.global.data_dir, 'tls-cert.pem');
+  const tlsKeyPath = join(configs.global.data_dir, 'tls-key.pem');
+  if (configs.global.https && (!(existsFileSync(tlsCertPath) && existsFileSync(tlsKeyPath)) || flags.force)) {
     const generatedTls = getTlsCertAndKey();
     writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
     writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });

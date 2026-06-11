@@ -77,10 +77,11 @@ export default fp(
   async function keysPlugin(app) {
     const { x5cCertPath, dataDir } = app.config;
 
-    const [authRequestPrivateKeyPem, authResponsePrivateKeyPem, signingPrivateKeyPem, x5cCertPem] = await Promise.all([
+    const [authRequestPrivateKeyPem, authResponsePrivateKeyPem, x5cCertPem] = await Promise.all([
       ...KEY_FILES.map((kf) => loadKeyFile(dataDir, kf.file)),
       loadX5cCert(x5cCertPath)
     ]);
+    const signingPrivateKeyPem = authRequestPrivateKeyPem;
 
     app.decorate('rpKeys', {
       authRequestPrivateKeyPem,
