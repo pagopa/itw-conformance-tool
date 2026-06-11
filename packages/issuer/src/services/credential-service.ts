@@ -76,11 +76,12 @@ export class CredentialService {
     let dpopProof: string;
     let proofs: { jwt: string }[];
     try {
-      ({ accessToken, credentialRequest, dpopProof, proofs } = parseCredentialRequest({
+      ({ accessToken, credentialRequest, dpopProof, proofs } = (await parseCredentialRequest({
+        callbacks: options.callbacks,
         config: options.config,
         credentialRequest: parsedCredentialRequest,
         headers: options.headers
-      }) as {
+      })) as {
         accessToken: string;
         credentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
         dpopProof: string;

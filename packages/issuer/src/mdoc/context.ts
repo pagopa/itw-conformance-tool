@@ -115,7 +115,14 @@ export const mdocContext: MdocContext = {
     calculateEphemeralMacKey: unsupportedMacKeyCalculation,
     digest: async ({ bytes, digestAlgorithm }) =>
       createHash(digestAlgorithmToNode(digestAlgorithm)).update(bytes).digest(),
-    random: (length) => randomBytes(length)
+    random: (length) => {
+      const bytes = randomBytes(length);
+      if (length === 4) {
+        // eslint-disable-next-line no-bitwise
+        bytes[0] &= 0x7f;
+      }
+      return bytes;
+    }
   },
   x509: {
     getCertificateData: async ({ certificate }) =>
