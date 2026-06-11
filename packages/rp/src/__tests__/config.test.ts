@@ -199,7 +199,7 @@ describe('loadRpConfig', () => {
     expect(result.config.host).toBe(DEFAULT_HOST);
     expect(result.config.port).toBe(DEFAULT_PORT);
     expect(result.config.dataDir).toBe(DEFAULT_DATA_DIR);
-    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
     expect(result.config.entityId).toBe(`https://localhost:3000`);
   });
 
@@ -215,7 +215,7 @@ describe('loadRpConfig', () => {
     expect(result.configFileFound).toBe(true);
     expect(result.config.port).toBe(9090);
     expect(result.config.dataDir).toBe('/opt/itw-data');
-    expect(result.config.baseUrl).toBe('http://localhost:9090');
+    expect(result.config.baseUrl).toBe('https://localhost:9090');
     expect(result.config.entityId).toBe('https://rp.example.org');
     expect(result.config.trustAnchorUrl).toBe('https://trust-anchor.example.org/.well-known/openid-federation');
     expect(result.config.configFilePath).toBe(cfgPath);
@@ -308,7 +308,7 @@ describe('loadRpConfig', () => {
       env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: '' }
     });
 
-    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
   });
 
   it('whitespace-only ITW_CT_RP_BASE_URL falls back to derived baseUrl', () => {
@@ -317,7 +317,7 @@ describe('loadRpConfig', () => {
       env: { ...REQUIRED_FIELDS_ENV, ITW_CT_RP_BASE_URL: '   ' }
     });
 
-    expect(result.config.baseUrl).toBe(`http://localhost:${DEFAULT_PORT}`);
+    expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
   });
 
   it('ITW_CT_RP_BASE_URL trailing slash is stripped by Zod URL normalization', () => {
@@ -363,12 +363,12 @@ describe('loadRpConfig', () => {
     expect(result.config.trustAnchorUrl).toBe('https://ta.from.env');
   });
 
-  it('defaults httpsEnabled to false when ITW_CT_HTTPS is not set', () => {
+  it('defaults httpsEnabled to true when ITW_CT_HTTPS is not set', () => {
     const result = loadRpConfig({
       configFilePath: join(workDir, 'missing.ini'),
       env: { ...REQUIRED_FIELDS_ENV }
     });
-    expect(result.config.httpsEnabled).toBe(false);
+    expect(result.config.httpsEnabled).toBe(true);
     expect(result.config.tlsCertPath).toBe(join(result.config.dataDir, 'tls-cert.pem'));
     expect(result.config.tlsKeyPath).toBe(join(result.config.dataDir, 'tls-key.pem'));
   });

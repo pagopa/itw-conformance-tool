@@ -93,7 +93,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false
+        https: true
       },
       'itw-credential-issuer': {
         auth_flow: 'l2plus',
@@ -116,12 +116,12 @@ describe('parseINI', () => {
     expect(result.data.global.https).toBe(true);
   });
 
-  it('defaults https to false when key is absent', () => {
+  it('defaults https to true when key is absent', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(validConfigContent);
     const result = parseINI('./config.example.ini');
     expect(result.ok).toBe(true);
-    expect(result.data.global.https).toBe(false);
+    expect(result.data.global.https).toBe(true);
   });
 
   it('returns default config for empty config file', () => {
@@ -151,7 +151,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false
+        https: true
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -176,7 +176,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false
+        https: true
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
