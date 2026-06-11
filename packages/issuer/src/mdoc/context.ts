@@ -122,7 +122,7 @@ export const mdocContext: MdocContext = {
         bytes[0] &= 0x7f;
       }
       return bytes;
-    },
+    }
   },
   x509: {
     getCertificateData: async ({ certificate }) =>
