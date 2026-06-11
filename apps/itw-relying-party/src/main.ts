@@ -23,8 +23,6 @@ function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
 async function startServer() {
   const tls = resolveTlsOptions();
 
-  console.log(tls);
-
   const app = Fastify({
     loggerInstance: logger,
     ...(tls ? { https: tls } : {}),

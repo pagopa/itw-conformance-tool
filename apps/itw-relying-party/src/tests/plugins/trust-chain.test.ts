@@ -150,4 +150,18 @@ describe('trust-chain plugin', () => {
     expect(app.trustChain).toEqual(['insecure-http-local-dev']);
     await app.close();
   });
+
+  it('starts in degraded mode when fetch returns an empty trust chain', async () => {
+    mocked.fetchTrustChain.mockResolvedValue([]);
+
+    const app = Fastify({ logger: false });
+    await app.register(configDependencyPlugin);
+
+    await app.register(trustChainPlugin);
+    await app.ready();
+
+    expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(1);
+    expect(app.trustChain).toEqual(['insecure-http-local-dev']);
+    await app.close();
+  });
 });

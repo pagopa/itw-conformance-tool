@@ -10,7 +10,7 @@ type HashCallback = (data: Uint8Array, algorithm: string) => Promise<Uint8Array>
 
 type LoggerLike = {
   info: (obj: Record<string, unknown>, msg?: string) => void;
-  error: (obj: Record<string, unknown>, msg?: string) => void;
+  warn: (obj: Record<string, unknown>, msg?: string) => void;
 };
 
 export interface FetchTrustChainOptions {
@@ -108,7 +108,7 @@ function resolveTrustAnchorEntityId(input: { trustAnchorUrl: string; entityId: s
   return toEntityId(resolved);
 }
 
-export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<[string, ...string[]]> {
+export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<string[]> {
   const fetchWithTimeout = buildFetchWithTimeout(options);
   const entityId = toEntityId(options.entityId);
   const trustAnchorEntityId = resolveTrustAnchorEntityId({
@@ -140,17 +140,17 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
       'Trust chain fetched and validated'
     );
 
-    return trustChain as [string, ...string[]];
-  } catch (err) {
-    options.logger.error(
+    return trustChain;
+  } catch (err: unknown) {
+    options.logger.warn(
       {
         entityId,
-        err,
-        trustAnchorUrl: options.trustAnchorUrl
+        trustAnchorEntityId,
+        trustAnchorUrl: options.trustAnchorUrl,
+        err: err instanceof Error ? err.message : String(err)
       },
-      'Failed to fetch and validate trust chain'
+      'Unable to fetch and validate trust chain'
     );
-
     throw err;
   }
 }

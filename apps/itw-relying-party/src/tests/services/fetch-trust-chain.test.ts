@@ -15,7 +15,7 @@ describe('fetchTrustChain', () => {
   const trustAnchorUrl = 'https://trust-anchor.example.org/.well-known/openid-federation';
   const logger = {
     info: vi.fn<(obj: Record<string, unknown>, msg?: string) => void>(),
-    error: vi.fn<(obj: Record<string, unknown>, msg?: string) => void>()
+    warn: vi.fn<(obj: Record<string, unknown>, msg?: string) => void>()
   };
 
   beforeEach(() => {
@@ -116,7 +116,7 @@ describe('fetchTrustChain', () => {
       })
     ).rejects.toThrow('Trust chain resolution returned an empty chain');
 
-    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
   it('propagates resolver errors', async () => {
@@ -130,6 +130,15 @@ describe('fetchTrustChain', () => {
       })
     ).rejects.toThrow('resolver unavailable');
 
-    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityId: 'https://rp.example.org',
+        trustAnchorEntityId: 'https://trust-anchor.example.org',
+        trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
+        err: 'resolver unavailable'
+      }),
+      'Unable to fetch and validate trust chain'
+    );
   });
 });

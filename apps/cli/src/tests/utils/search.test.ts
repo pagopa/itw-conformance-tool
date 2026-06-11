@@ -56,31 +56,33 @@ describe('searchNx', () => {
 });
 
 describe('filesToSearch', () => {
-  it('returns the expected five file paths when HTTPS is disabled', () => {
+  it('returns the expected six file paths when HTTPS is disabled', () => {
     const paths = filesToSearch('/data');
-    expect(paths).toHaveLength(5);
+    expect(paths).toHaveLength(6);
     expect(paths).toContain('/data/issuer/signing-keys.jwks.json');
     expect(paths).toContain('/data/issuer/iaca-cert.pem');
     expect(paths).toContain('/data/issuer/iaca-key.pem');
     expect(paths).toContain('/data/rp/auth-request-key.jwk.json');
     expect(paths).toContain('/data/rp/auth-response-key.jwk.json');
+    expect(paths).toContain('/data/rp/x5c-cert.pem');
   });
 
-  it('returns seven file paths when HTTPS is enabled', () => {
+  it('returns eight file paths when HTTPS is enabled', () => {
     const paths = filesToSearch('/data', true);
-    expect(paths).toHaveLength(7);
+    expect(paths).toHaveLength(8);
     expect(paths).toContain('/data/issuer/signing-keys.jwks.json');
     expect(paths).toContain('/data/issuer/iaca-cert.pem');
     expect(paths).toContain('/data/issuer/iaca-key.pem');
     expect(paths).toContain('/data/rp/auth-request-key.jwk.json');
     expect(paths).toContain('/data/rp/auth-response-key.jwk.json');
+    expect(paths).toContain('/data/rp/x5c-cert.pem');
     expect(paths).toContain('/data/tls-cert.pem');
     expect(paths).toContain('/data/tls-key.pem');
   });
 
   it('does not include TLS paths when httpsEnabled is explicitly false', () => {
     const paths = filesToSearch('/data', false);
-    expect(paths).toHaveLength(5);
+    expect(paths).toHaveLength(6);
     expect(paths).not.toContain('/data/tls-cert.pem');
     expect(paths).not.toContain('/data/tls-key.pem');
   });

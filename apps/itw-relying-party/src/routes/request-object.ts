@@ -64,7 +64,7 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
         nonceRepository: app.nonceRepository,
         rpKeys: app.rpKeys,
         sessionService: app.sessionService,
-        trustChain: app.trustChain,
+        trustChain: app.trustChain as [string, ...string[]], // The trustChain plugin guarantees this type
         walletAuthBaseUri: parsed.data.walletAuthBaseUri
       });
 

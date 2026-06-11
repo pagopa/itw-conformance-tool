@@ -4,7 +4,7 @@ import { fetchTrustChain } from '../trust-chain/fetch-trust-chain.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    trustChain: [string, ...string[]];
+    trustChain: string[];
   }
 }
 
@@ -94,6 +94,11 @@ export default fp(
           trustAnchorUrl
         });
 
+        if (trustChain.length === 0) {
+          app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
+          return;
+        }
+
         app.decorate('trustChain', trustChain);
         app.log.info(
           {
@@ -125,7 +130,7 @@ export default fp(
       }
     }
 
-    app.log.error(
+    app.log.warn(
       {
         attempts: maxRetries,
         entityId,
