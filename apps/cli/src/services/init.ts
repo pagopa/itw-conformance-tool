@@ -8,7 +8,8 @@ import {
   getAuthResponseKey,
   getIACAChain,
   getSigningKeys,
-  getTlsCertAndKey
+  getTlsCertAndKey,
+  getX5cCert
 } from '../utils/crypto.js';
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
@@ -56,8 +57,8 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
   const rpDirPath = join(configs.global.data_dir, 'rp');
   mkdirSync(rpDirPath, { recursive: true });
 
-  const tlsCertPath = join(configs.global.data_dir, 'tls-cert.pem');
-  const tlsKeyPath = join(configs.global.data_dir, 'tls-key.pem');
+  const tlsCertPath = join(configs.global.data_dir, 'tls_cert.pem');
+  const tlsKeyPath = join(configs.global.data_dir, 'tls_key.pem');
   if (!(existsFileSync(tlsCertPath) && existsFileSync(tlsKeyPath)) || flags.force) {
     const generatedTls = getTlsCertAndKey();
     writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
@@ -88,7 +89,7 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
     console.log(`⚠ Issuer keys already exist → skipped (use --force to regenerate)`);
   }
 
-  const rpKeysExist = [false, false];
+  const rpKeysExist = [false, false, false];
 
   const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
   if (!existsFileSync(authRequestKeyPath) || flags.force) {
@@ -106,10 +107,18 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
     rpKeysExist[1] = true;
   }
 
+  const x5cCertPath = join(rpDirPath, 'x5c-cert.pem');
+  if (!existsFileSync(x5cCertPath) || flags.force) {
+    const x5cCert = getX5cCert();
+    writeFileSync(x5cCertPath, x5cCert, { encoding: 'utf8', flag: 'w' });
+  } else {
+    rpKeysExist[2] = true;
+  }
+
   if (rpKeysExist.every(Boolean)) {
     console.log(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)`);
   } else {
-    console.log(`✓ Generated relying-party keys → ${authRequestKeyPath}, ${authResponseKeyPath}`);
+    console.log(`✓ Generated relying-party keys → ${authRequestKeyPath}, ${authResponseKeyPath}, ${x5cCertPath}`);
   }
 }
 

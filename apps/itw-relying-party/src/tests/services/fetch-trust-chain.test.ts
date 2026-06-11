@@ -63,6 +63,23 @@ describe('fetchTrustChain', () => {
     );
   });
 
+  it('resolves relative trust anchor URLs against entityId origin', async () => {
+    mocked.fetchAndValidateTrustChain.mockResolvedValue(['leaf.jwt', 'anchor.jwt']);
+
+    await fetchTrustChain({
+      entityId,
+      trustAnchorUrl: '/.well-known/openid-federation',
+      logger
+    });
+
+    expect(mocked.fetchAndValidateTrustChain).toHaveBeenCalledWith(
+      'https://rp.example.org',
+      expect.objectContaining({
+        trustAnchorUrls: ['https://rp.example.org']
+      })
+    );
+  });
+
   it('provides a fetch callback that applies a timeout', async () => {
     mocked.fetchAndValidateTrustChain.mockImplementation(
       async (_url: string, options: { callbacks: { fetch: typeof fetch } }) => {

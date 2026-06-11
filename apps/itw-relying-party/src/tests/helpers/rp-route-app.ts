@@ -181,8 +181,8 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     trustAnchorUrl: 'https://trust-anchor.example.com',
     x5cCertPath: join(dataDir, 'x5c-cert.pem'),
     httpsEnabled: false,
-    tlsCertPath: join(dataDir, 'tls_cert.pem'),
-    tlsKeyPath: join(dataDir, 'tls_key.pem')
+    tlsCertPath: join(dataDir, 'tls-cert.pem'),
+    tlsKeyPath: join(dataDir, 'tls-key.pem')
   });
 
   app.decorate('rpKeys', {

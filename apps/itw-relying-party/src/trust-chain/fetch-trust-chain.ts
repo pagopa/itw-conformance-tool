@@ -102,10 +102,19 @@ function toEntityId(url: string): string {
   return parsed.toString();
 }
 
+function resolveTrustAnchorEntityId(input: { trustAnchorUrl: string; entityId: string }): string {
+  const entityId = toEntityId(input.entityId);
+  const resolved = new URL(input.trustAnchorUrl.trim(), entityId).toString();
+  return toEntityId(resolved);
+}
+
 export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<[string, ...string[]]> {
   const fetchWithTimeout = buildFetchWithTimeout(options);
   const entityId = toEntityId(options.entityId);
-  const trustAnchorEntityId = toEntityId(options.trustAnchorUrl);
+  const trustAnchorEntityId = resolveTrustAnchorEntityId({
+    trustAnchorUrl: options.trustAnchorUrl,
+    entityId
+  });
 
   try {
     const trustChain = await fetchAndValidateTrustChain(entityId, {

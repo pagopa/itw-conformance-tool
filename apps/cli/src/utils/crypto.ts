@@ -253,3 +253,39 @@ export function getTlsCertAndKey(): TlsCertAndKey {
     key: forge.pki.privateKeyToPem(keys.privateKey)
   };
 }
+
+/** Generates a self-signed X.509 certificate for use in JWT x5c header (Relying Party).
+ * The certificate is valid for 1 year.
+ *
+ * @returns The certificate in PEM format as a string.
+ */
+export function getX5cCert(): string {
+  const keys = generateKeyPair();
+
+  const attrs: ForgeAttribute[] = [
+    { name: 'commonName', value: 'Relying Party' },
+    { name: 'organizationName', value: 'ITW Conformance Tool' }
+  ];
+
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
+
+  const now = new Date();
+  cert.validity.notBefore = now;
+  cert.validity.notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+
+  cert.setExtensions([
+    { name: 'basicConstraints', cA: false },
+    { name: 'keyUsage', digitalSignature: true },
+    { name: 'extKeyUsage', clientAuth: true },
+    { name: 'subjectKeyIdentifier' }
+  ]);
+
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+
+  return forge.pki.certificateToPem(cert);
+}

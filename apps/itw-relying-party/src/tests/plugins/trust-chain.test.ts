@@ -135,7 +135,7 @@ describe('trust-chain plugin', () => {
     await app.close();
   });
 
-  it('fails startup after all retry attempts fail', async () => {
+  it('starts in degraded mode after all retry attempts fail', async () => {
     vi.stubEnv('ITW_CT_TRUST_CHAIN_FETCH_RETRIES', '2');
     vi.stubEnv('ITW_CT_TRUST_CHAIN_FETCH_RETRY_DELAY_MS', '1');
     mocked.fetchTrustChain.mockRejectedValue(new Error('resolver unavailable'));
@@ -143,8 +143,11 @@ describe('trust-chain plugin', () => {
     const app = Fastify({ logger: false });
     await app.register(configDependencyPlugin);
 
-    await expect(app.register(trustChainPlugin)).rejects.toThrow('resolver unavailable');
+    await app.register(trustChainPlugin);
+    await app.ready();
+
     expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(2);
+    expect(app.trustChain).toEqual(['insecure-http-local-dev']);
     await app.close();
   });
 });

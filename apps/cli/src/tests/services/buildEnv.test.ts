@@ -19,8 +19,7 @@ const mockConfigs: ConfigType = {
   rp: {
     port: 8080,
     entity_id: 'https://rp.example.com',
-    trust_anchor_url: 'https://trust-anchor.example.com',
-    x5c_cert_path: '/certs/x5c.pem'
+    trust_anchor_url: 'https://trust-anchor.example.com'
   }
 };
 
@@ -43,7 +42,6 @@ describe('buildEnv', () => {
     expect(env.ITW_CT_RP_PORT).toBe('8080');
     expect(env.ITW_CT_ISSUER_AUTH_FLOW).toBe('l3');
     expect(env.ITW_CT_RP_TRUST_ANCHOR_URL).toBe('https://trust-anchor.example.com');
-    expect(env.ITW_CT_RP_X5C_CERT_PATH).toBe('/certs/x5c.pem');
   });
 
   it('merges with existing process.env variables', () => {
@@ -72,8 +70,7 @@ describe('buildEnv', () => {
       rp: {
         port: 9090,
         entity_id: 'https://rp.example.com',
-        trust_anchor_url: 'https://ta.example.com',
-        x5c_cert_path: '/c.pem'
+        trust_anchor_url: 'https://ta.example.com'
       }
     };
 

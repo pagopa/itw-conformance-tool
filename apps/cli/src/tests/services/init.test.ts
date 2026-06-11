@@ -28,6 +28,7 @@ vi.mock('../../utils/crypto.js', () => ({
   getSigningKeys: vi.fn(() => '{"keys":[]}'),
   getAuthRequestKey: vi.fn(() => '{"kty":"EC"}'),
   getAuthResponseKey: vi.fn(() => '{"kty":"EC"}'),
+  getX5cCert: vi.fn(() => '---X5C-CERT---'),
   getIACAChain: vi.fn(() => ({ certificate: '---CERT---', privateKey: '---KEY---' })),
   getTlsCertAndKey: vi.fn(() => ({ cert: '---TLS-CERT---', key: '---TLS-KEY---' }))
 }));
@@ -83,8 +84,8 @@ describe('init', () => {
 
     expect(getTlsCertAndKey).toHaveBeenCalledOnce();
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
-    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-cert.pem');
-    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-key.pem');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls_cert.pem');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls_key.pem');
   });
 
   it('skips TLS files when they already exist and --force is not set', () => {

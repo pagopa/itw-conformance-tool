@@ -132,9 +132,9 @@ export default fp(
         err: lastError,
         trustAnchorUrl
       },
-      'Trust chain bootstrap failed, server startup aborted'
+      'Trust chain bootstrap failed after retries; starting in degraded mode without strict federation validation'
     );
-    throw lastError;
+    app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
   },
   { name: 'trust-chain', dependencies: ['config'] }
 );

@@ -28,14 +28,10 @@ credential_types = pid,mdl,badge,eaa
 port = 8080
 ; RP OpenID Federation Entity ID (leaf entity)
 ; Example: https://rp.example.org
-entity_id =
+entity_id = https://localhost:3000
 ; Trust Anchor URL for Federation validation
 ; Override with env: ITW_CT_RP_TRUST_ANCHOR_URL
-trust_anchor_url = 
-; Path to the x5c certificate chain PEM file of the RP 
-; Override with env: ITW_CT_RP_X5C_CERT_PATH
-; Default: ~/.itw-conformance-tool/rp/x5c-cert.pem
-x5c_cert_path = ~/.itw-conformance-tool/rp/x5c-cert.pem
+trust_anchor_url = /.well-known/openid-federation
 `;
 
 export const ConfigSchema = z.object({
@@ -74,15 +70,13 @@ export const ConfigSchema = z.object({
   rp: z
     .object({
       port: z.coerce.number().int().min(1).max(65535).catch(8080),
-      entity_id: z.string().url().catch(''),
-      trust_anchor_url: z.string().catch(''),
-      x5c_cert_path: z.string().catch('~/.itw-conformance-tool/rp/x5c-cert.pem')
+      entity_id: z.string().url().catch('https://localhost:3000'),
+      trust_anchor_url: z.string().min(1).catch('/.well-known/openid-federation')
     })
     .default({
       port: 8080,
-      entity_id: '',
-      trust_anchor_url: '',
-      x5c_cert_path: '~/.itw-conformance-tool/rp/x5c-cert.pem'
+      entity_id: 'https://localhost:3000',
+      trust_anchor_url: '/.well-known/openid-federation'
     })
 });
 
