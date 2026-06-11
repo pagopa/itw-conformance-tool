@@ -3,10 +3,18 @@ import FastifyHelmet, { type FastifyHelmetOptions } from '@fastify/helmet';
 export const autoConfig: FastifyHelmetOptions = {
   global: true,
   contentSecurityPolicy: {
+    useDefaults: false,
     directives: {
-      'script-src': ["'self'", 'cdn.jsdelivr.net/npm/@scalar/api-reference', "'unsafe-inline'"]
-    }
-  }
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://cdn.jsdelivr.net', "'unsafe-inline'"],
+      styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
 };
 
 export default FastifyHelmet;
