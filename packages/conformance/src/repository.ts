@@ -79,4 +79,17 @@ export class SqliteConformanceSessionRepository implements IConformanceSessionRe
       )
       .run(status, new Date().toISOString(), sessionId);
   }
+
+  async markOpenSessionsIncompleteOlderThan(cutoffIso: string): Promise<number> {
+    const result = this.db
+      .prepare(
+        `UPDATE conformance_sessions
+         SET status = 'INCOMPLETE', closed_at = ?
+         WHERE status = 'OPEN'
+           AND started_at < ?`
+      )
+      .run(new Date().toISOString(), cutoffIso) as { changes?: number };
+
+    return result.changes ?? 0;
+  }
 }

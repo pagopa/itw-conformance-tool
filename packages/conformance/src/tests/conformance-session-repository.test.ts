@@ -221,4 +221,32 @@ describe('SqliteConformanceSessionRepository', () => {
       expect(result?.checks).toHaveLength(2);
     });
   });
+
+  describe('markOpenSessionsIncompleteOlderThan', () => {
+    it('updates only OPEN sessions older than cutoff', async () => {
+      const cutoff = '2026-06-09T12:00:00.000Z';
+
+      await repo.create(
+        makeSession({ sessionId: 'old-open', startedAt: '2026-06-09T11:00:00.000Z', status: 'OPEN', checks: [] })
+      );
+      await repo.create(
+        makeSession({ sessionId: 'new-open', startedAt: '2026-06-09T12:30:00.000Z', status: 'OPEN', checks: [] })
+      );
+      await repo.create(
+        makeSession({ sessionId: 'old-passed', startedAt: '2026-06-09T10:00:00.000Z', status: 'PASSED', checks: [] })
+      );
+
+      const updated = await repo.markOpenSessionsIncompleteOlderThan(cutoff);
+      expect(updated).toBe(1);
+
+      const oldOpen = await repo.get('old-open');
+      const newOpen = await repo.get('new-open');
+      const oldPassed = await repo.get('old-passed');
+
+      expect(oldOpen?.status).toBe('INCOMPLETE');
+      expect(oldOpen?.closedAt).toBeDefined();
+      expect(newOpen?.status).toBe('OPEN');
+      expect(oldPassed?.status).toBe('PASSED');
+    });
+  });
 });
