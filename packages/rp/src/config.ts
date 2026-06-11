@@ -19,7 +19,7 @@ export const rpConfigSchema = z
     configFilePath: z.string().min(1),
     trustAnchorUrl: z.string().min(1),
     x5cCertPath: z.string().min(1),
-    httpsEnabled: z.boolean().default(false),
+    httpsEnabled: z.boolean().default(true),
     tlsCertPath: z.string().default(''),
     tlsKeyPath: z.string().default('')
   })

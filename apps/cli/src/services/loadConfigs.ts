@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 
 import { expandPath } from '../utils/path.js';
@@ -20,6 +22,12 @@ export function loadConfigs(flags: CLIFlags): ConfigType {
 
     if (alreadyExists) {
       configs = parseINI(configFilePath).data;
+      configFileExists = true;
+    }
+  } else {
+    const defaultConfigPath = resolve(process.cwd(), 'config.ini');
+    if (existsFileSync(defaultConfigPath)) {
+      configs = parseINI(defaultConfigPath).data;
       configFileExists = true;
     }
   }
