@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { createAccessTokenResponseMock } = vi.hoisted(() => ({
-  createAccessTokenResponseMock: vi.fn()
+const { createAccessTokenResponseMock, parseAccessTokenRequestMock, verifyAccessTokenRequestMock } = vi.hoisted(() => ({
+  createAccessTokenResponseMock: vi.fn(),
+  parseAccessTokenRequestMock: vi.fn(),
+  verifyAccessTokenRequestMock: vi.fn()
 }));
 
 vi.mock('@pagopa/io-wallet-oauth2', () => ({
-  createAccessTokenResponse: createAccessTokenResponseMock
+  createAccessTokenResponse: createAccessTokenResponseMock,
+  parseAccessTokenRequest: parseAccessTokenRequestMock,
+  verifyAccessTokenRequest: verifyAccessTokenRequestMock
 }));
 
 import {
@@ -39,11 +43,23 @@ function makeJwksRepo(): JwksRepository {
 describe('TokenService', () => {
   describe('createAccessToken', () => {
     it('returns access token response and consumes the PAR entry', async () => {
-      const response = { access_token: 'token-123', expires_in: 300, token_type: 'Bearer' };
+      const response = { access_token: 'token-123', expires_in: 300, token_type: 'DPoP' };
       createAccessTokenResponseMock.mockResolvedValue(response);
+      parseAccessTokenRequestMock.mockReturnValue({
+        accessTokenRequest: { grant_type: 'authorization_code', code: 'good' },
+        clientAttestation: undefined,
+        dpop: { jwt: 'dpop-jwt' },
+        grant: { grantType: 'authorization_code' },
+        pkceCodeVerifier: 'verifier123'
+      });
+      verifyAccessTokenRequestMock.mockResolvedValue({ dpop: { jwt: 'dpop-jwt' } });
 
       const parRequest = {
+        authorization_details: [],
         client_id: 'client',
+        code: 'good',
+        code_challenge: 'challenge',
+        code_challenge_method: 'S256',
         redirect_uri: 'https://client.example.com/cb',
         request_uri: 'urn:test'
       };
@@ -54,15 +70,26 @@ describe('TokenService', () => {
 
       const result = await svc.createAccessToken({
         baseURL: 'https://example.com',
-        callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+        callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
         config: { isVersion: vi.fn().mockReturnValue(false) } as never,
         tokenRequest: {
-          bodyString: 'code=good&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb'
+          bodyString: 'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
+          headers: new Headers({ dpop: 'dpop-jwt' }),
+          method: 'POST',
+          url: 'https://example.com/token'
         }
       });
 
       expect(result).toEqual(response);
+      expect(parseAccessTokenRequestMock).toHaveBeenCalledOnce();
+      expect(verifyAccessTokenRequestMock).toHaveBeenCalledOnce();
       expect(createAccessTokenResponseMock).toHaveBeenCalledOnce();
+      expect(createAccessTokenResponseMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dpop: { jwt: 'dpop-jwt' },
+          tokenType: 'DPoP'
+        })
+      );
       expect(lookup.consume).toHaveBeenCalledWith('urn:test');
     });
 
@@ -72,47 +99,82 @@ describe('TokenService', () => {
       await expect(
         svc.createAccessToken({
           baseURL: 'https://example.com',
-          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
-          tokenRequest: { bodyString: 'grant_type=authorization_code' }
+          tokenRequest: {
+            bodyString: 'grant_type=authorization_code',
+            headers: new Headers(),
+            method: 'POST',
+            url: 'https://example.com/token'
+          }
         })
       ).rejects.toBeInstanceOf(CreateAccessTokenError);
     });
 
     it('throws UnsupportedGrantTypeError when grant_type is not authorization_code', async () => {
+      parseAccessTokenRequestMock.mockReturnValue({
+        accessTokenRequest: { grant_type: 'refresh_token' },
+        clientAttestation: undefined,
+        dpop: { jwt: 'dpop-jwt' },
+        grant: { grantType: 'refresh_token' },
+        pkceCodeVerifier: 'verifier123'
+      });
       const svc = new TokenService(makeParLookup(), makeJwksRepo());
 
       await expect(
         svc.createAccessToken({
           baseURL: 'https://example.com',
-          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=abc&grant_type=refresh_token&redirect_uri=https%3A%2F%2Fclient.example.com'
+            bodyString: 'code=abc&code_verifier=verifier123&grant_type=refresh_token&redirect_uri=https%3A%2F%2Fclient.example.com',
+            headers: new Headers({ dpop: 'dpop-jwt' }),
+            method: 'POST',
+            url: 'https://example.com/token'
           }
         })
       ).rejects.toBeInstanceOf(UnsupportedGrantTypeError);
     });
 
     it('throws InvalidGrantError when code not found', async () => {
+      parseAccessTokenRequestMock.mockReturnValue({
+        accessTokenRequest: { grant_type: 'authorization_code', code: 'bad' },
+        clientAttestation: undefined,
+        dpop: { jwt: 'dpop-jwt' },
+        grant: { grantType: 'authorization_code' },
+        pkceCodeVerifier: 'verifier123'
+      });
       const svc = new TokenService(makeParLookup({ getByCode: vi.fn().mockResolvedValue(undefined) }), makeJwksRepo());
 
       await expect(
         svc.createAccessToken({
           baseURL: 'https://example.com',
-          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=bad&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com'
+            bodyString: 'code=bad&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com',
+            headers: new Headers({ dpop: 'dpop-jwt' }),
+            method: 'POST',
+            url: 'https://example.com/token'
           }
         })
       ).rejects.toBeInstanceOf(InvalidGrantError);
     });
 
     it('throws InvalidGrantError when redirect_uri does not match', async () => {
+      parseAccessTokenRequestMock.mockReturnValue({
+        accessTokenRequest: { grant_type: 'authorization_code', code: 'good' },
+        clientAttestation: undefined,
+        dpop: { jwt: 'dpop-jwt' },
+        grant: { grantType: 'authorization_code' },
+        pkceCodeVerifier: 'verifier123'
+      });
       const parRequest = {
         authorization_details: [],
         client_id: 'client',
+        code: 'good',
+        code_challenge: 'challenge',
+        code_challenge_method: 'S256',
         redirect_uri: 'https://client.example.com/cb',
         request_uri: 'urn:test'
       };
@@ -124,10 +186,13 @@ describe('TokenService', () => {
       await expect(
         svc.createAccessToken({
           baseURL: 'https://example.com',
-          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+          callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=good&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fwrong.example.com'
+            bodyString: 'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fwrong.example.com',
+            headers: new Headers({ dpop: 'dpop-jwt' }),
+            method: 'POST',
+            url: 'https://example.com/token'
           }
         })
       ).rejects.toBeInstanceOf(InvalidGrantError);
@@ -136,11 +201,23 @@ describe('TokenService', () => {
 
     it('passes auth_flow to createAccessTokenResponse when present in PAR request', async () => {
       createAccessTokenResponseMock.mockClear();
-      const response = { access_token: 'token-123', expires_in: 300, token_type: 'Bearer' };
+      const response = { access_token: 'token-123', expires_in: 300, token_type: 'DPoP' };
       createAccessTokenResponseMock.mockResolvedValue(response);
+      parseAccessTokenRequestMock.mockReturnValue({
+        accessTokenRequest: { grant_type: 'authorization_code', code: 'good' },
+        clientAttestation: undefined,
+        dpop: { jwt: 'dpop-jwt' },
+        grant: { grantType: 'authorization_code' },
+        pkceCodeVerifier: 'verifier123'
+      });
+      verifyAccessTokenRequestMock.mockResolvedValue({ dpop: { jwt: 'dpop-jwt' } });
 
       const parRequest = {
+        authorization_details: [],
         client_id: 'client',
+        code: 'good',
+        code_challenge: 'challenge',
+        code_challenge_method: 'S256',
         redirect_uri: 'https://client.example.com/cb',
         request_uri: 'urn:test',
         pid_auth_flow: 'l2plus'
@@ -152,10 +229,13 @@ describe('TokenService', () => {
 
       await svc.createAccessToken({
         baseURL: 'https://example.com',
-        callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn() },
+        callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
         config: { isVersion: vi.fn().mockReturnValue(false) } as never,
         tokenRequest: {
-          bodyString: 'code=good&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb'
+          bodyString: 'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
+          headers: new Headers({ dpop: 'dpop-jwt' }),
+          method: 'POST',
+          url: 'https://example.com/token'
         }
       });
 

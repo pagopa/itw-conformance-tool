@@ -7,6 +7,7 @@ import {
 
 import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '../plugins/index.js';
 
+import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 
 const tokenRoute: FastifyPluginAsync = async (app) => {
@@ -37,16 +38,25 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const service = new TokenService(makeTokenParRepository(app), makeJwksRepository(app));
+        const tokenRequestHeaders = new Headers(
+          Object.entries(request.headers)
+            .filter(([, value]) => typeof value === 'string' || Array.isArray(value))
+            .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value] as [string, string])
+        );
         const response = await service.createAccessToken({
           baseURL,
           callbacks: {
             generateRandom: oauthCallbacks.generateRandom,
             hash: oauthCallbacks.hash,
-            signJwt: oauthCallbacks.signJwt
+            signJwt: oauthCallbacks.signJwt,
+            verifyJwt: oauthCallbacks.verifyJwt
           },
           config: sdkConfig,
           tokenRequest: {
-            bodyString
+            bodyString,
+            headers: tokenRequestHeaders,
+            method: request.method as HttpMethod,
+            url: `${baseURL}/token`
           }
         });
 

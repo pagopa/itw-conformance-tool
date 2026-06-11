@@ -27,15 +27,15 @@ describe('POST /token', () => {
     mocked.createAccessToken.mockResolvedValue({
       access_token: 'token',
       expires_in: 300,
-      token_type: 'Bearer'
+      token_type: 'DPoP'
     });
 
     const app = await buildRouteApp(tokenRoute);
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
-      headers: { 'content-type': 'text/plain' }
+      payload: 'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 
     expect(response.statusCode).toBe(200);
@@ -44,7 +44,7 @@ describe('POST /token', () => {
     expect(response.json()).toEqual({
       access_token: 'token',
       expires_in: 300,
-      token_type: 'Bearer'
+      token_type: 'DPoP'
     });
 
     await app.close();
@@ -57,8 +57,8 @@ describe('POST /token', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
-      headers: { 'content-type': 'text/plain' }
+      payload: 'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 
     expect(response.statusCode).toBe(400);
