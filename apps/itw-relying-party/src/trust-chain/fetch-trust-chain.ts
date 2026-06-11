@@ -55,8 +55,6 @@ function buildFetchWithTimeout(options: Pick<FetchTrustChainOptions, 'logger' | 
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init?.signal == null ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal]);
 
-    options.logger.info({ method, timeoutMs, url }, 'Fetching trust-chain resource');
-
     const response = await fetch(input, {
       ...init,
       signal
