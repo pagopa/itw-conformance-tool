@@ -12,9 +12,9 @@ export const autoConfig: FastifyHelmetOptions = {
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
-    },
-  },
+      frameAncestors: ["'none'"]
+    }
+  }
 };
 
 export default FastifyHelmet;
