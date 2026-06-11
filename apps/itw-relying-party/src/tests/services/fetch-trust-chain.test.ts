@@ -108,37 +108,27 @@ describe('fetchTrustChain', () => {
   it('fails when trust chain resolution returns an empty chain', async () => {
     mocked.fetchAndValidateTrustChain.mockResolvedValue([]);
 
-    await expect(
-      fetchTrustChain({
-        entityId,
-        trustAnchorUrl,
-        logger
-      })
-    ).rejects.toThrow('Trust chain resolution returned an empty chain');
+    const result = await fetchTrustChain({
+      entityId,
+      trustAnchorUrl,
+      logger
+    });
 
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledTimes(0);
   });
 
-  it('propagates resolver errors', async () => {
+  it('returns default chain on resolver errors', async () => {
     mocked.fetchAndValidateTrustChain.mockRejectedValue(new Error('resolver unavailable'));
 
-    await expect(
-      fetchTrustChain({
-        entityId,
-        trustAnchorUrl,
-        logger
-      })
-    ).rejects.toThrow('resolver unavailable');
+    const result = await fetchTrustChain({
+      entityId,
+      trustAnchorUrl,
+      logger
+    });
 
+    expect(result).toEqual([]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entityId: 'https://rp.example.org',
-        trustAnchorEntityId: 'https://trust-anchor.example.org',
-        trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
-        err: 'resolver unavailable'
-      }),
-      'Unable to fetch and validate trust chain'
-    );
+    expect(logger.warn).toHaveBeenCalledWith({}, 'Unable to fetch and validate trust chain');
   });
 });

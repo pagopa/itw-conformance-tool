@@ -116,8 +116,9 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
     entityId
   });
 
+  let trustChain: string[] = [];
   try {
-    const trustChain = await fetchAndValidateTrustChain(entityId, {
+    trustChain = await fetchAndValidateTrustChain(entityId, {
       callbacks: {
         fetch: fetchWithTimeout,
         hash: buildHashCallback(),
@@ -125,32 +126,20 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
       },
       trustAnchorUrls: [trustAnchorEntityId]
     });
-
-    if (trustChain.length === 0) {
-      throw new Error('Trust chain resolution returned an empty chain');
-    }
-
-    options.logger.info(
-      {
-        entityId,
-        trustAnchorEntityId,
-        trustAnchorUrl: options.trustAnchorUrl,
-        trustChainLength: trustChain.length
-      },
-      'Trust chain fetched and validated'
-    );
-
+  } catch {
+    options.logger.warn({}, 'Unable to fetch and validate trust chain');
     return trustChain;
-  } catch (err: unknown) {
-    options.logger.warn(
-      {
-        entityId,
-        trustAnchorEntityId,
-        trustAnchorUrl: options.trustAnchorUrl,
-        err: err instanceof Error ? err.message : String(err)
-      },
-      'Unable to fetch and validate trust chain'
-    );
-    throw err;
   }
+
+  options.logger.info(
+    {
+      entityId,
+      trustAnchorEntityId,
+      trustAnchorUrl: options.trustAnchorUrl,
+      trustChainLength: trustChain.length
+    },
+    'Trust chain fetched and validated'
+  );
+
+  return trustChain;
 }
