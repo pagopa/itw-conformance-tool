@@ -251,7 +251,7 @@ export const mso_mdoc_mDL = (baseURL: string) => ({
       value_type: 'string'
     }
   ],
-  credential_signing_alg_values_supported: ['ES256', 'ES384', 'ES512'],
+  credential_signing_alg_values_supported: [-7, -9],
   cryptographic_binding_methods_supported: ['cose_key'],
   display: [
     {
@@ -500,7 +500,7 @@ export const mso_mdoc_PersonIdentificationData = (baseURL: string, specVersion: 
           }
         ])
   ],
-  credential_signing_alg_values_supported: ['ES256', 'ES384', 'ES512'],
+  credential_signing_alg_values_supported: [-7, -9],
   cryptographic_binding_methods_supported: ['cose_key'],
   display: [
     {
