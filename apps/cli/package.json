@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:",
+    "@itw-conformance-tool/crypto": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "node-forge": "^1.4.0"
   },

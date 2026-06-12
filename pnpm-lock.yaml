@@ -155,6 +155,9 @@ importers:
       '@itw-conformance-tool/config':
         specifier: 'workspace:'
         version: link:../../packages/config
+      '@itw-conformance-tool/crypto':
+        specifier: 'workspace:'
+        version: link:../../packages/crypto
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
@@ -300,6 +303,9 @@ importers:
       '@itw-conformance-tool/conformance':
         specifier: 'workspace:'
         version: link:../../packages/conformance
+      '@itw-conformance-tool/crypto':
+        specifier: 'workspace:'
+        version: link:../../packages/crypto
       '@itw-conformance-tool/database':
         specifier: 'workspace:'
         version: link:../../packages/database
@@ -368,6 +374,43 @@ importers:
       '@types/node':
         specifier: ^22.19.9
         version: 22.19.17
+      vitest:
+        specifier: ~4.1.0
+        version: 4.1.5(@types/node@22.19.17)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(yaml@2.8.3))
+
+  packages/crypto:
+    dependencies:
+      '@pagopa/io-wallet-oauth2':
+        specifier: catalog:pagopa
+        version: 1.5.2
+      '@pagopa/io-wallet-utils':
+        specifier: catalog:pagopa
+        version: 1.5.2
+      '@peculiar/x509':
+        specifier: ^1.12.4
+        version: 1.14.3
+      '@sd-jwt/crypto-nodejs':
+        specifier: ^0.19.0
+        version: 0.19.0
+      '@sd-jwt/types':
+        specifier: ^0.19.0
+        version: 0.19.0
+      jose:
+        specifier: 5.2.4
+        version: 5.2.4
+      node-forge:
+        specifier: ^1.3.0
+        version: 1.4.0
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@types/node-forge':
+        specifier: 1.3.14
+        version: 1.3.14
       vitest:
         specifier: ~4.1.0
         version: 4.1.5(@types/node@22.19.17)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(yaml@2.8.3))

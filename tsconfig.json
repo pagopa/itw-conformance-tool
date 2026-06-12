@@ -29,6 +29,9 @@
     },
     {
       "path": "./packages/rp"
+    },
+    {
+      "path": "./packages/crypto"
     }
   ]
 }

@@ -30,6 +30,9 @@
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
+      "path": "../../packages/crypto/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/config/tsconfig.lib.json"
     }
   ]
