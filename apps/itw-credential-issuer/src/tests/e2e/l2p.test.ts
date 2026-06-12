@@ -26,7 +26,7 @@ const REQUEST_URI = 'urn:ietf:params:oauth:request_uri:e2e-test';
 const CLIENT_ID = 'test-e2e-wallet-client';
 const REDIRECT_URI = 'https://example.com/callback';
 const STATE = 'e2e-state-123';
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://127.0.0.1:3000';
 
 const ENV_KEYS = ['DATA_DIR', 'PORT', 'HOST', 'DB_CLEANUP_INTERVAL_MS', 'AUTH_FLOW'] as const;
 
