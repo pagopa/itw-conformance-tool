@@ -31,7 +31,6 @@ async function toPublicJwk(privateKeyPem: string, x5c: string[]): Promise<JsonWe
   return {
     ...publicJwk,
     kid,
-    kty: publicJwk.kty,
     x5c
   };
 }
@@ -41,9 +40,7 @@ async function toPrivateJwk(privateKeyPem: string, kid: string): Promise<JsonWeb
 
   return {
     ...privateJwk,
-    alg: ENTITY_STATEMENT_SIGNING_ALG,
-    kid,
-    kty: privateJwk.kty
+    kid
   };
 }
 
