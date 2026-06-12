@@ -37,13 +37,13 @@ async function toPublicJwk(privateKeyPem: string, x5c: string[]): Promise<JsonWe
 }
 
 async function toPrivateJwk(privateKeyPem: string, kid: string): Promise<JsonWebKey> {
-  const privateJwk = createPrivateKey(privateKeyPem).export({ format: 'jwk' });
+  const privateJwk = createPrivateKey(privateKeyPem).export({ format: 'jwk' }) as JWK;
 
   return {
     ...privateJwk,
     alg: ENTITY_STATEMENT_SIGNING_ALG,
     kid,
-    kty: String(privateJwk.kty)
+    kty: privateJwk.kty
   };
 }
 
