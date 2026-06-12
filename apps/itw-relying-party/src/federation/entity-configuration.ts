@@ -8,15 +8,11 @@ import { calculateJwkThumbprint, type JWK } from 'jose';
 
 import { signJwtCallback } from './signer.js';
 
-import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type {
   ItWalletEntityConfigurationClaimsOptions,
   ItWalletMetadataV1_3,
   JsonWebKey
 } from '@pagopa/io-wallet-oid-federation';
-
-type EntityConfigurationJwk = ItWalletEntityConfigurationClaimsOptions['jwks']['keys'][number];
-type EntityConfigurationJwkSet = ItWalletEntityConfigurationClaimsOptions['jwks'];
 
 const ENTITY_STATEMENT_TTL_SECONDS = 3600;
 const ENTITY_STATEMENT_SIGNING_ALG = 'ES256';
@@ -28,19 +24,19 @@ function parseCertificateChain(pemChain: string): string[] {
   });
 }
 
-async function toPublicJwk(privateKeyPem: string, x5c: string[]): Promise<EntityConfigurationJwk> {
+async function toPublicJwk(privateKeyPem: string, x5c: string[]): Promise<JsonWebKey> {
   const publicJwk = createPublicKey(createPrivateKey(privateKeyPem)).export({ format: 'jwk' }) as JWK;
   const kid = await calculateJwkThumbprint(publicJwk);
 
   return {
     ...publicJwk,
     kid,
-    kty: String(publicJwk.kty),
+    kty: publicJwk.kty,
     x5c
   };
 }
 
-async function toPrivateJwk(privateKeyPem: string, kid: string): Promise<JsonWebKey & Jwk> {
+async function toPrivateJwk(privateKeyPem: string, kid: string): Promise<JsonWebKey> {
   const privateJwk = createPrivateKey(privateKeyPem).export({ format: 'jwk' });
 
   return {
@@ -55,7 +51,7 @@ function buildEntityConfigurationMetadata(input: {
   entityId: string;
   requestUri: string;
   responseUri: string;
-  verifierJwks: EntityConfigurationJwkSet;
+  verifierJwks: { keys: JsonWebKey[] };
 }): ItWalletEntityConfigurationClaimsOptions['metadata'] {
   const metadata = {
     federation_entity: {
@@ -106,7 +102,7 @@ export async function createEntityConfigurationJwt(input: {
   const verifierSigningJwk = await toPublicJwk(input.authRequestPrivateKeyPem, x5c);
   const encryptionJwk = await toPublicJwk(input.authResponsePrivateKeyPem, x5c);
   const federationSigningJwk = await toPublicJwk(input.federationPrivateKeyPem, x5c);
-  const signingPrivateJwk = await toPrivateJwk(input.federationPrivateKeyPem, String(federationSigningJwk.kid));
+  const signingPrivateJwk = await toPrivateJwk(input.federationPrivateKeyPem, federationSigningJwk.kid);
   const metadata = buildEntityConfigurationMetadata({
     entityId,
     requestUri: `${entityId}/auth/request`,
@@ -129,7 +125,7 @@ export async function createEntityConfigurationJwt(input: {
     },
     header: {
       alg: ENTITY_STATEMENT_SIGNING_ALG,
-      kid: String(federationSigningJwk.kid),
+      kid: federationSigningJwk.kid,
       typ: 'entity-statement+jwt'
     },
     signJwtCallback: async ({ toBeSigned }) => signJwtCallback({ jwk: signingPrivateJwk, toBeSigned })
