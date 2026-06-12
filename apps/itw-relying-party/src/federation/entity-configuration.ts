@@ -9,7 +9,11 @@ import { calculateJwkThumbprint, type JWK } from 'jose';
 import { signJwtCallback } from './signer.js';
 
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
-import type { ItWalletEntityConfigurationClaimsOptions, ItWalletMetadataV1_3, JsonWebKey } from '@pagopa/io-wallet-oid-federation';
+import type {
+  ItWalletEntityConfigurationClaimsOptions,
+  ItWalletMetadataV1_3,
+  JsonWebKey
+} from '@pagopa/io-wallet-oid-federation';
 
 type EntityConfigurationJwk = ItWalletEntityConfigurationClaimsOptions['jwks']['keys'][number];
 type EntityConfigurationJwkSet = ItWalletEntityConfigurationClaimsOptions['jwks'];
