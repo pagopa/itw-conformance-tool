@@ -2,7 +2,7 @@ import { webcrypto } from 'node:crypto';
 
 import * as x509 from '@peculiar/x509';
 import { X509Certificate } from '@peculiar/x509';
-import { exportJWK, importX509 } from 'jose';
+import { exportJWK, importX509, type JWK } from 'jose';
 
 /** Parses an X.509 certificate and returns basic metadata
  * (issuer/subject, validity, serial number, PEM, and thumbprint)
@@ -104,3 +104,52 @@ export const validateCertificateChain = async (input: {
 // Utility function to convert a base64 DER-encoded certificate to PEM format
 export const convertBase64DerToPem = (certificate: string): string =>
   `-----BEGIN CERTIFICATE-----\n${certificate}\n-----END CERTIFICATE-----`;
+
+export const convertPemToBase64Der = (certificatePem: string): string =>
+  Buffer.from(new X509Certificate(certificatePem).rawData).toString('base64');
+
+export const createSelfSignedCertificateFromJwk = async (jwk: JWK): Promise<string> => {
+  const publicJwk = stripPrivateKeyMaterial(jwk);
+
+  const publicKey = await webcrypto.subtle.importKey(
+    'jwk',
+    publicJwk,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['verify']
+  );
+
+  const privateKey = await webcrypto.subtle.importKey(
+    'jwk',
+    jwk,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['sign']
+  );
+
+  const now = new Date();
+  const notAfter = new Date(now);
+  notAfter.setFullYear(notAfter.getFullYear() + 1);
+
+  const certificate = await x509.X509CertificateGenerator.createSelfSigned({
+    keys: { privateKey, publicKey },
+    name: 'C=IT, O=ITW Conformance Tool, CN=Issuer Signing Certificate',
+    notBefore: now,
+    notAfter,
+    signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
+    extensions: [
+      new x509.BasicConstraintsExtension(false, undefined, true),
+      new x509.KeyUsagesExtension(0x0080, true),
+      await x509.SubjectKeyIdentifierExtension.create(publicKey)
+    ]
+  });
+
+  return certificate.toString();
+};
+
+function stripPrivateKeyMaterial(jwk: JWK): JWK {
+  const { d, key_ops, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
+  void d;
+  void key_ops;
+  return publicJwk;
+}
