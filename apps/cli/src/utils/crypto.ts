@@ -130,6 +130,15 @@ export function getAuthResponseKey(): string {
     keyOps: ['decrypt']
   });
 }
+/** Generates and returns an EC P-256 private key JWK for federation entity-statement signing. */
+export function getFederationKey(): string {
+  return generateEcPrivateJwk({
+    kid: 'federation-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+}
 
 /** Generates a 2048-bit RSA key pair using node-forge. */
 function generateKeyPair(): forge.pki.rsa.KeyPair {

@@ -321,6 +321,9 @@ importers:
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
         version: 1.5.2
+      '@peculiar/x509':
+        specifier: ^1.12.4
+        version: 1.14.3
       close-with-grace:
         specifier: ^2.5.0
         version: 2.5.0
