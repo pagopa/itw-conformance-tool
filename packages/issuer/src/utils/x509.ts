@@ -111,21 +111,13 @@ export const convertPemToBase64Der = (certificatePem: string): string =>
 export const createSelfSignedCertificateFromJwk = async (jwk: JWK): Promise<string> => {
   const publicJwk = stripPrivateKeyMaterial(jwk);
 
-  const publicKey = await webcrypto.subtle.importKey(
-    'jwk',
-    publicJwk,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['verify']
-  );
+  const publicKey = await webcrypto.subtle.importKey('jwk', publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'verify'
+  ]);
 
-  const privateKey = await webcrypto.subtle.importKey(
-    'jwk',
-    jwk,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign']
-  );
+  const privateKey = await webcrypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign'
+  ]);
 
   const now = new Date();
   const notAfter = new Date(now);
