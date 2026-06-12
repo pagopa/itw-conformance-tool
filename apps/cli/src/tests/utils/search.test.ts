@@ -1,19 +1,17 @@
 import { existsSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { findRoot, searchNx, expandPath, createFileDirPaths, existsFileSync } from '../../utils/search.js';
+import { findNxRoot, searchNx, filesToSearch, existsFileSync } from '../../utils/search.js';
 
-describe('findRoot', () => {
+describe('findNxRoot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('returns the start directory if nx.json is present there', () => {
     vi.mocked(existsSync).mockImplementation((p) => String(p).endsWith('nx.json'));
-    const result = findRoot('/some/workspace');
+    const result = findNxRoot('/some/workspace');
     expect(result).toBe('/some/workspace');
   });
 
@@ -22,13 +20,13 @@ describe('findRoot', () => {
       return String(p) === '/some/nx.json';
     });
 
-    const result = findRoot('/some/workspace/apps/cli');
+    const result = findNxRoot('/some/workspace/apps/cli');
     expect(result).toBe('/some');
   });
 
   it('throws when nx.json is not found in any ancestor directory', () => {
     vi.mocked(existsSync).mockReturnValue(false);
-    expect(() => findRoot('/some/workspace')).toThrow('Could not find the root of the Nx workspace');
+    expect(() => findNxRoot('/some/workspace')).toThrow('Could not find the root of the Nx workspace');
   });
 });
 
@@ -57,61 +55,36 @@ describe('searchNx', () => {
   });
 });
 
-describe('expandPath', () => {
-  it('replaces leading ~ with the home directory', () => {
-    const result = expandPath('~/.itw-conformance-tool', '/root');
-    expect(result).toBe(join(homedir(), '.itw-conformance-tool'));
-  });
-
-  it('strips surrounding double quotes before expanding', () => {
-    const result = expandPath('"config/my config.ini"', '/root');
-    expect(result).toBe('/root/config/my config.ini');
-  });
-
-  it('strips surrounding single quotes before expanding', () => {
-    const result = expandPath("'config/my config.ini'", '/root');
-    expect(result).toBe('/root/config/my config.ini');
-  });
-
-  it('resolves a relative path against rootPath', () => {
-    const result = expandPath('config.ini', '/root');
-    expect(result).toBe('/root/config.ini');
-  });
-
-  it('returns an absolute path unchanged', () => {
-    const result = expandPath('/absolute/path/config.ini', '/root');
-    expect(result).toBe('/absolute/path/config.ini');
-  });
-});
-
-describe('createFileDirPaths', () => {
-  it('returns the expected five file paths when HTTPS is disabled', () => {
-    const paths = createFileDirPaths('/data');
-    expect(paths).toHaveLength(5);
+describe('filesToSearch', () => {
+  it('returns the expected six file paths when HTTPS is disabled', () => {
+    const paths = filesToSearch('/data');
+    expect(paths).toHaveLength(6);
     expect(paths).toContain('/data/issuer/signing-keys.jwks.json');
     expect(paths).toContain('/data/issuer/iaca-cert.pem');
     expect(paths).toContain('/data/issuer/iaca-key.pem');
     expect(paths).toContain('/data/rp/auth-request-key.jwk.json');
     expect(paths).toContain('/data/rp/auth-response-key.jwk.json');
+    expect(paths).toContain('/data/rp/x5c-cert.pem');
   });
 
-  it('returns seven file paths when HTTPS is enabled', () => {
-    const paths = createFileDirPaths('/data', true);
-    expect(paths).toHaveLength(7);
+  it('returns eight file paths when HTTPS is enabled', () => {
+    const paths = filesToSearch('/data', true);
+    expect(paths).toHaveLength(8);
     expect(paths).toContain('/data/issuer/signing-keys.jwks.json');
     expect(paths).toContain('/data/issuer/iaca-cert.pem');
     expect(paths).toContain('/data/issuer/iaca-key.pem');
     expect(paths).toContain('/data/rp/auth-request-key.jwk.json');
     expect(paths).toContain('/data/rp/auth-response-key.jwk.json');
-    expect(paths).toContain('/data/tls_cert.pem');
-    expect(paths).toContain('/data/tls_key.pem');
+    expect(paths).toContain('/data/rp/x5c-cert.pem');
+    expect(paths).toContain('/data/tls-cert.pem');
+    expect(paths).toContain('/data/tls-key.pem');
   });
 
   it('does not include TLS paths when httpsEnabled is explicitly false', () => {
-    const paths = createFileDirPaths('/data', false);
-    expect(paths).toHaveLength(5);
-    expect(paths).not.toContain('/data/tls_cert.pem');
-    expect(paths).not.toContain('/data/tls_key.pem');
+    const paths = filesToSearch('/data', false);
+    expect(paths).toHaveLength(6);
+    expect(paths).not.toContain('/data/tls-cert.pem');
+    expect(paths).not.toContain('/data/tls-key.pem');
   });
 });
 
@@ -122,7 +95,7 @@ describe('existsFileSync', () => {
 
   it('returns true when the path exists and is a file', () => {
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(statSync).mockReturnValue({ isFile: () => true } as ReturnType<typeof statSync>);
+    vi.mocked(statSync).mockReturnValue({ isFile: () => true });
 
     expect(existsFileSync('/some/file.json')).toBe(true);
   });
@@ -136,7 +109,7 @@ describe('existsFileSync', () => {
 
   it('returns false when the path exists but is a directory', () => {
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(statSync).mockReturnValue({ isFile: () => false } as ReturnType<typeof statSync>);
+    vi.mocked(statSync).mockReturnValue({ isFile: () => false });
 
     expect(existsFileSync('/some/directory')).toBe(false);
   });

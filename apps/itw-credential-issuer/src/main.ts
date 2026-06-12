@@ -15,15 +15,15 @@ function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
   }
 
   const dataDir = (process.env['ITW_CT_DATA_DIR'] ?? process.env['DATA_DIR'] ?? '').trim();
-  const defaultCertPath = dataDir.length > 0 ? path.join(dataDir, 'tls_cert.pem') : '';
-  const defaultKeyPath = dataDir.length > 0 ? path.join(dataDir, 'tls_key.pem') : '';
+  const defaultCertPath = dataDir.length > 0 ? path.join(dataDir, 'tls-cert.pem') : '';
+  const defaultKeyPath = dataDir.length > 0 ? path.join(dataDir, 'tls-key.pem') : '';
 
   const certPath = (process.env['ITW_CT_TLS_CERT_PATH'] ?? process.env['TLS_CERT_PATH'] ?? defaultCertPath).trim();
   const keyPath = (process.env['ITW_CT_TLS_KEY_PATH'] ?? process.env['TLS_KEY_PATH'] ?? defaultKeyPath).trim();
 
   if (!certPath || !keyPath) {
     throw new Error(
-      'HTTPS is enabled but no TLS cert/key could be resolved. Provide TLS_CERT_PATH/TLS_KEY_PATH (or ITW_CT_TLS_CERT_PATH/ITW_CT_TLS_KEY_PATH), or ensure DATA_DIR contains tls_cert.pem and tls_key.pem.'
+      'HTTPS is enabled but no TLS cert/key could be resolved. Provide TLS_CERT_PATH/TLS_KEY_PATH (or ITW_CT_TLS_CERT_PATH/ITW_CT_TLS_KEY_PATH), or ensure DATA_DIR contains tls-cert.pem and tls-key.pem.'
     );
   }
 

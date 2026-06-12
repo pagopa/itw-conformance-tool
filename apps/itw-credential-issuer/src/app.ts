@@ -3,6 +3,7 @@ import path from 'node:path';
 import FastifyAutoLoad from '@fastify/autoload';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 
+import conformanceHooks from './hooks/conformance.js';
 import configPlugin from './plugins/config.js';
 import dbPlugin from './plugins/db.js';
 import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
@@ -17,6 +18,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
   await app.register(configPlugin);
   await app.register(dbPlugin);
   await app.register(keysPlugin);
+  await app.register(conformanceHooks);
 
   await app.register(corsPlugin, corsConfig);
   await app.register(helmetPlugin, helmetConfig);

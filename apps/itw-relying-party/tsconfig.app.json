@@ -6,6 +6,7 @@
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "paths": {
+      "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"],
       "@itw-conformance-tool/database": ["../../packages/database/dist/index.d.ts"],
       "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"],
       "@itw-conformance-tool/rp": ["../../packages/rp/dist/index.d.ts"]
@@ -29,6 +30,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/conformance/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/rp/tsconfig.lib.json"
     },
     {
@@ -36,9 +40,6 @@
     },
     {
       "path": "../../packages/database/tsconfig.lib.json"
-    },
-    {
-      "path": "../../packages/conformance/tsconfig.lib.json"
     }
   ]
 }

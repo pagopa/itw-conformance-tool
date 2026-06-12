@@ -44,6 +44,7 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
   app.decorate('parRepository', {
     delete: async () => undefined,
     get: async () => undefined,
+    getByJti: async () => undefined,
     getByMrtdAuthSession: async () => undefined,
     insert: async () => undefined,
     update: async () => undefined
@@ -54,6 +55,14 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
     get: async () => undefined,
     insert: async () => undefined,
     update: async () => undefined
+  });
+
+  app.decorate('conformanceSessionRepository', {
+    appendCheck: async () => undefined,
+    close: async () => undefined,
+    create: async () => undefined,
+    get: async () => null,
+    markOpenSessionsIncompleteOlderThan: async () => 0
   });
 
   app.decorate('dbClient', {

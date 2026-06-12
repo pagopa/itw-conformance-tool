@@ -21,7 +21,11 @@ const configDependencyPlugin = fp(
       entityId: 'https://rp.example.org',
       trustAnchorUrl: 'https://trust-anchor.example.org/.well-known/openid-federation',
       dataDir: '/tmp',
-      configFilePath: '/tmp/config.ini'
+      configFilePath: '/tmp/config.ini',
+      x5cCertPath: '/tmp/x5c-cert.pem',
+      httpsEnabled: false,
+      tlsCertPath: '',
+      tlsKeyPath: ''
     });
   },
   { name: 'config' }
@@ -30,6 +34,7 @@ const configDependencyPlugin = fp(
 describe('trust-chain plugin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('decorates app with trust chain at bootstrap', async () => {
@@ -56,9 +61,13 @@ describe('trust-chain plugin', () => {
             port: 8080,
             baseUrl: 'http://localhost:8080',
             entityId: 'http://localhost:8080',
-            trustAnchorUrl: undefined,
+            trustAnchorUrl: '',
             dataDir: '/tmp',
-            configFilePath: '/tmp/config.ini'
+            configFilePath: '/tmp/config.ini',
+            x5cCertPath: '/tmp/x5c-cert.pem',
+            httpsEnabled: false,
+            tlsCertPath: '',
+            tlsKeyPath: ''
           });
         },
         { name: 'config' }
@@ -87,7 +96,11 @@ describe('trust-chain plugin', () => {
             entityId: 'http://localhost:8080',
             trustAnchorUrl: 'http://localhost:3000/.well-known/openid-federation',
             dataDir: '/tmp',
-            configFilePath: '/tmp/config.ini'
+            configFilePath: '/tmp/config.ini',
+            x5cCertPath: '/tmp/x5c-cert.pem',
+            httpsEnabled: false,
+            tlsCertPath: '',
+            tlsKeyPath: ''
           });
         },
         { name: 'config' }
@@ -98,6 +111,56 @@ describe('trust-chain plugin', () => {
     await app.ready();
 
     expect(mocked.fetchTrustChain).not.toHaveBeenCalled();
+    expect(app.trustChain).toEqual(['insecure-http-local-dev']);
+    await app.close();
+  });
+
+  it('retries trust chain fetch and succeeds on a subsequent attempt', async () => {
+    vi.stubEnv('ITW_CT_TRUST_CHAIN_FETCH_RETRIES', '3');
+    vi.stubEnv('ITW_CT_TRUST_CHAIN_FETCH_RETRY_DELAY_MS', '1');
+
+    mocked.fetchTrustChain
+      .mockRejectedValueOnce(new Error('resolver timeout'))
+      .mockRejectedValueOnce(new Error('resolver timeout'))
+      .mockResolvedValueOnce(['leaf.jwt', 'anchor.jwt']);
+
+    const app = Fastify({ logger: false });
+    await app.register(configDependencyPlugin);
+
+    await app.register(trustChainPlugin);
+    await app.ready();
+
+    expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(3);
+    expect(app.trustChain).toEqual(['leaf.jwt', 'anchor.jwt']);
+    await app.close();
+  });
+
+  it('starts in degraded mode after all retry attempts fail', async () => {
+    vi.stubEnv('ITW_CT_TRUST_CHAIN_FETCH_RETRIES', '2');
+    vi.stubEnv('ITW_CT_TRUST_CHAIN_FETCH_RETRY_DELAY_MS', '1');
+    mocked.fetchTrustChain.mockRejectedValue(new Error('resolver unavailable'));
+
+    const app = Fastify({ logger: false });
+    await app.register(configDependencyPlugin);
+
+    await app.register(trustChainPlugin);
+    await app.ready();
+
+    expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(2);
+    expect(app.trustChain).toEqual(['insecure-http-local-dev']);
+    await app.close();
+  });
+
+  it('starts in degraded mode when fetch returns an empty trust chain', async () => {
+    mocked.fetchTrustChain.mockResolvedValue([]);
+
+    const app = Fastify({ logger: false });
+    await app.register(configDependencyPlugin);
+
+    await app.register(trustChainPlugin);
+    await app.ready();
+
+    expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(1);
     expect(app.trustChain).toEqual(['insecure-http-local-dev']);
     await app.close();
   });

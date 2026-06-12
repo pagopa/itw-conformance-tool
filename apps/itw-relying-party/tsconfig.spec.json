@@ -9,6 +9,7 @@
     "outDir": "./out-tsc/vitest",
     "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
     "paths": {
+      "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"],
       "@itw-conformance-tool/database": ["../../packages/database/dist/index.d.ts"],
       "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"],
       "@itw-conformance-tool/rp": ["../../packages/rp/dist/index.d.ts"]
@@ -28,6 +29,9 @@
   "references": [
     {
       "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "../../packages/conformance/tsconfig.lib.json"
     },
     {
       "path": "../../packages/rp/tsconfig.lib.json"

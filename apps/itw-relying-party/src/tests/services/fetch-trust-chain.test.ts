@@ -15,7 +15,7 @@ describe('fetchTrustChain', () => {
   const trustAnchorUrl = 'https://trust-anchor.example.org/.well-known/openid-federation';
   const logger = {
     info: vi.fn<(obj: Record<string, unknown>, msg?: string) => void>(),
-    error: vi.fn<(obj: Record<string, unknown>, msg?: string) => void>()
+    warn: vi.fn<(obj: Record<string, unknown>, msg?: string) => void>()
   };
 
   beforeEach(() => {
@@ -63,6 +63,23 @@ describe('fetchTrustChain', () => {
     );
   });
 
+  it('resolves relative trust anchor URLs against entityId origin', async () => {
+    mocked.fetchAndValidateTrustChain.mockResolvedValue(['leaf.jwt', 'anchor.jwt']);
+
+    await fetchTrustChain({
+      entityId,
+      trustAnchorUrl: '/.well-known/openid-federation',
+      logger
+    });
+
+    expect(mocked.fetchAndValidateTrustChain).toHaveBeenCalledWith(
+      'https://rp.example.org',
+      expect.objectContaining({
+        trustAnchorUrls: ['https://rp.example.org']
+      })
+    );
+  });
+
   it('provides a fetch callback that applies a timeout', async () => {
     mocked.fetchAndValidateTrustChain.mockImplementation(
       async (_url: string, options: { callbacks: { fetch: typeof fetch } }) => {
@@ -91,28 +108,27 @@ describe('fetchTrustChain', () => {
   it('fails when trust chain resolution returns an empty chain', async () => {
     mocked.fetchAndValidateTrustChain.mockResolvedValue([]);
 
-    await expect(
-      fetchTrustChain({
-        entityId,
-        trustAnchorUrl,
-        logger
-      })
-    ).rejects.toThrow('Trust chain resolution returned an empty chain');
+    const result = await fetchTrustChain({
+      entityId,
+      trustAnchorUrl,
+      logger
+    });
 
-    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledTimes(0);
   });
 
-  it('propagates resolver errors', async () => {
+  it('returns default chain on resolver errors', async () => {
     mocked.fetchAndValidateTrustChain.mockRejectedValue(new Error('resolver unavailable'));
 
-    await expect(
-      fetchTrustChain({
-        entityId,
-        trustAnchorUrl,
-        logger
-      })
-    ).rejects.toThrow('resolver unavailable');
+    const result = await fetchTrustChain({
+      entityId,
+      trustAnchorUrl,
+      logger
+    });
 
-    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith({}, 'Unable to fetch and validate trust chain');
   });
 });

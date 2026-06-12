@@ -74,7 +74,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
         nonceRepository: app.nonceRepository,
         privateKeyPem: app.rpKeys.authResponsePrivateKeyPem,
         sessionService: app.sessionService,
-        trustChain: app.trustChain
+        trustChain: app.trustChain as [string, ...string[]] // The trustChain plugin guarantees this type
       });
 
       return reply.code(200).send({ redirect_uri: result.redirectUri });

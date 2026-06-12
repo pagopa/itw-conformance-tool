@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { parseCLIArgs } from '../../services/parseCLIArgs.js';
-import { expandPath } from '../../utils/search.js';
+import { expandPath } from '../../utils/path.js';
 
-vi.mock('../../utils/search.js');
+vi.mock('../../utils/path.js');
 vi.mock('../../utils/prompt.js', () => ({
   printHelp: vi.fn(),
   printVersion: vi.fn()

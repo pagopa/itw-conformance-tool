@@ -22,7 +22,6 @@ credential_types=pid,mdl,badge,eaa
 [rp]
 entity_id=https://rp.example.org
 port=8080
-signing_key_path=/tmp/signing-key.pem
 x5c_cert_path=/tmp/x5c-cert.pem
 trust_anchor_url=https://trust-anchor.example.com
 `;
@@ -55,9 +54,8 @@ port=4000
 credential_types=pid,mdl,badge,eaa
 
 [rp]
-entity_id=https://rp.example.org
 port=8080
-trust_anchor=https://trust-anchor.example.org/.well-known/openid-federation
+trust_anchor=/.well-known/openid-federation
 `;
 const wrongTypeContent = `[global]
 data_dir=~/.itw-conformance-tool
@@ -95,7 +93,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false
+        https: true
       },
       'itw-credential-issuer': {
         auth_flow: 'l2plus',
@@ -105,8 +103,6 @@ describe('parseINI', () => {
       rp: {
         port: 8080,
         entity_id: 'https://rp.example.org',
-        signing_key_path: '/tmp/signing-key.pem',
-        x5c_cert_path: '/tmp/x5c-cert.pem',
         trust_anchor_url: 'https://trust-anchor.example.com'
       }
     });
@@ -120,12 +116,12 @@ describe('parseINI', () => {
     expect(result.data.global.https).toBe(true);
   });
 
-  it('defaults https to false when key is absent', () => {
+  it('defaults https to true when key is absent', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(validConfigContent);
     const result = parseINI('./config.example.ini');
     expect(result.ok).toBe(true);
-    expect(result.data.global.https).toBe(false);
+    expect(result.data.global.https).toBe(true);
   });
 
   it('returns default config for empty config file', () => {
@@ -155,7 +151,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false
+        https: true
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -164,10 +160,8 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
-        entity_id: 'https://rp.example.org',
-        signing_key_path: '',
-        x5c_cert_path: '',
-        trust_anchor_url: ''
+        entity_id: 'https://localhost:3000',
+        trust_anchor_url: '/.well-known/openid-federation'
       }
     });
     expect('error' in result).toBe(false);
@@ -182,7 +176,7 @@ describe('parseINI', () => {
       global: {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
-        https: false
+        https: true
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -191,10 +185,8 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
-        entity_id: '',
-        signing_key_path: '',
-        x5c_cert_path: '',
-        trust_anchor_url: ''
+        entity_id: 'https://localhost:3000',
+        trust_anchor_url: '/.well-known/openid-federation'
       }
     });
     expect('error' in result).toBe(false);

@@ -1,77 +1,44 @@
-import { join } from 'node:path';
+import { resolve } from 'node:path';
 
 import { parseINI, type ConfigType } from '@itw-conformance-tool/config';
 
-import { getDefaultConfigs } from '../templates/templates.js';
-import { existsFileSync, expandPath } from '../utils/search.js';
+import { expandPath } from '../utils/path.js';
+import { existsFileSync } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
-import type { Level } from '@itw-conformance-tool/logger';
 
 /** It loads the configuration file based on the provided CLI flags and root path.
  *
  * @param flags - The command-line flags that may contain the path to the configuration file.
- * @param rootPath - The root directory of the project.
- * @param emitLog - A function used to emit structured log messages.
- * @returns An object containing the loaded configuration and a boolean indicating whether the configuration file exists.
+ * @returns The loaded configuration object.
  */
-export function loadConfigs(
-  flags: CLIFlags,
-  rootPath: string,
-  emitLog: (event: string, type?: Level) => void
-): { configs: ConfigType; configFileExists: boolean } {
-  let configs = getDefaultConfigs(rootPath);
+export function loadConfigs(flags: CLIFlags): ConfigType {
+  let configs = parseINI('.').data;
   let configFileExists = false;
 
   if (flags.config.value) {
-    configFileExists = existsFileSync(flags.config.path);
-    if (configFileExists) {
-      const parsedINI = parseINI(flags.config.path);
-      configs = parsedINI.data;
-      if (parsedINI.ok) {
-        emitLog(`Config file found at: ${flags.config.path}\n` + `Content:\n${JSON.stringify(configs, null, 2)}`);
-        configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
-      } else {
-        configFileExists = false;
-        configs = getDefaultConfigs(rootPath);
-        emitLog(
-          `Config file at ${flags.config.path} could not be parsed: ${parsedINI.error}. Starting with default values.\n` +
-            `Content:\n${JSON.stringify(configs, null, 2)}`,
-          'warn'
-        );
-      }
-    } else {
-      emitLog(
-        `Config file not found at specified path: ${flags.config.path}. Starting with default values.\n` +
-          `Content:\n${JSON.stringify(configs, null, 2)}`
-      );
-    }
-    return { configs, configFileExists };
-  }
+    const configFilePath = expandPath(flags.config.path);
+    const alreadyExists = existsFileSync(configFilePath);
 
-  const defaultConfigPath = join(rootPath, 'config.ini');
-  configFileExists = existsFileSync(defaultConfigPath);
-  if (configFileExists) {
-    const parsedINI = parseINI(defaultConfigPath);
-    configs = parsedINI.data;
-    if (parsedINI.ok) {
-      emitLog(`Config file found at: ${defaultConfigPath}` + '\n' + `Content:\n${JSON.stringify(configs, null, 2)}`);
-      configs.global.data_dir = expandPath(configs.global.data_dir, rootPath);
-    } else {
-      configFileExists = false;
-      configs = getDefaultConfigs(rootPath);
-      emitLog(
-        `Config file at ${defaultConfigPath} could not be parsed: ${parsedINI.error}. Starting with default values.
-` + `Content:\n${JSON.stringify(configs, null, 2)}`,
-        'warn'
-      );
+    if (alreadyExists) {
+      configs = parseINI(configFilePath).data;
+      configFileExists = true;
     }
   } else {
-    emitLog(
-      `Config file not found at default path: ${defaultConfigPath}.\nStarting with default values.\n` +
-        `Content:\n${JSON.stringify(configs, null, 2)}`
+    const defaultConfigPath = resolve(process.cwd(), 'config.ini');
+    if (existsFileSync(defaultConfigPath)) {
+      configs = parseINI(defaultConfigPath).data;
+      configFileExists = true;
+    }
+  }
+
+  if (!configFileExists) {
+    console.log(
+      `WARN: config.ini not found. Starting with default values.` +
+        `\n      Run \`itw-conformance-tool init\` to create the configuration file.`
     );
   }
 
-  return { configs, configFileExists };
+  configs.global.data_dir = expandPath(configs.global.data_dir);
+  return configs;
 }

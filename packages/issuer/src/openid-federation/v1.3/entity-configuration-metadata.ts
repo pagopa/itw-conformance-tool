@@ -78,5 +78,5 @@ export const getEntityConfigurationClaimsMetadataV1_3 = (
     throw new ValidationError('Invalid entity configuration metadata', parsedMetadata.error);
   }
 
-  return parsedMetadata.data;
+  return parsedMetadata.data as ItWalletEntityConfigurationClaimsOptions['metadata'];
 };

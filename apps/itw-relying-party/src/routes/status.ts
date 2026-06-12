@@ -1,3 +1,5 @@
+import { SessionNotFoundError, getPresentationStatusUseCase } from '../use-cases/get-presentation-status.js';
+
 import type { FastifyPluginAsync } from 'fastify';
 
 interface StatusParams {
@@ -22,44 +24,20 @@ const statusRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const { state } = request.params;
-      const session = await app.sessionService.get(state);
-      if (session === undefined) {
-        return reply.code(404).send({ message: 'Session not found' });
-      }
+      try {
+        const result = await getPresentationStatusUseCase({
+          state,
+          sessionService: app.sessionService
+        });
 
-      const { redirectUri, state: rpState, values } = session;
-
-      if (rpState === 'verified') {
-        if (redirectUri === null) {
-          await app.sessionService.delete(state);
-          return { redirect_uri: 'error.html?response_code=unexpected' };
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof SessionNotFoundError) {
+          return reply.code(404).send({ message: 'Session not found' });
         }
-        return {
-          redirect_uri: redirectUri,
-          values
-        };
-      }
 
-      if (rpState === 'rejected') {
-        await app.sessionService.delete(state);
-        return { redirect_uri: 'rejected-error.html?response_code=rejected' };
+        throw error;
       }
-
-      if (rpState === 'denied') {
-        await app.sessionService.delete(state);
-        return { redirect_uri: 'error.html?response_code=denied' };
-      }
-
-      if (rpState === 'expired') {
-        await app.sessionService.delete(state);
-        return { redirect_uri: 'timeout.html?response_code=expired' };
-      }
-
-      if (rpState === 'checking') {
-        return { redirect_uri: '?response_code=checking' };
-      }
-
-      return { redirect_uri: '?response_code=pending' };
     }
   });
 };
