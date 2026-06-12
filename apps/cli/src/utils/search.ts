@@ -58,6 +58,7 @@ export function filesToSearch(filePath: string, httpsEnabled = false): string[] 
     join(filePath, 'issuer', 'iaca-key.pem'),
     join(filePath, 'rp', 'auth-request-key.jwk.json'),
     join(filePath, 'rp', 'auth-response-key.jwk.json'),
+    join(filePath, 'rp', 'federation-key.jwk.json'),
     join(filePath, 'rp', 'x5c-cert.pem')
   ];
 

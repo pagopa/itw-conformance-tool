@@ -95,6 +95,7 @@ Generated structure:
 - `<data_dir>/issuer/iaca-key.pem`
 - `<data_dir>/rp/auth-request-key.jwk.json`
 - `<data_dir>/rp/auth-response-key.jwk.json`
+- `<data_dir>/rp/federation-key.jwk.json`
 - `<data_dir>/rp/x5c-cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`

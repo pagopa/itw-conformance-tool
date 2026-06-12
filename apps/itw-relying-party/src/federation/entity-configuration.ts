@@ -92,20 +92,22 @@ export async function createEntityConfigurationJwt(input: {
   trustAnchorUrl: string;
   authRequestPrivateKeyPem: string;
   authResponsePrivateKeyPem: string;
+  federationPrivateKeyPem: string;
   x5cCertPem: string;
 }): Promise<string> {
   const issuedAt = Math.floor(Date.now() / 1000);
   const entityId = input.entityId;
   const authorityHint = new URL(input.trustAnchorUrl.trim(), entityId).origin;
   const x5c = parseCertificateChain(input.x5cCertPem);
-  const federationSigningJwk = await toPublicJwk(input.authRequestPrivateKeyPem, x5c);
+  const verifierSigningJwk = await toPublicJwk(input.authRequestPrivateKeyPem, x5c);
   const encryptionJwk = await toPublicJwk(input.authResponsePrivateKeyPem, x5c);
-  const signingPrivateJwk = await toPrivateJwk(input.authRequestPrivateKeyPem, String(federationSigningJwk.kid));
+  const federationSigningJwk = await toPublicJwk(input.federationPrivateKeyPem, x5c);
+  const signingPrivateJwk = await toPrivateJwk(input.federationPrivateKeyPem, String(federationSigningJwk.kid));
   const metadata = buildEntityConfigurationMetadata({
     entityId,
     requestUri: `${entityId}/auth/request`,
     responseUri: `${entityId}/auth/response`,
-    verifierJwks: { keys: [federationSigningJwk, encryptionJwk] }
+    verifierJwks: { keys: [verifierSigningJwk, encryptionJwk] }
   });
 
   return createItWalletEntityConfiguration({

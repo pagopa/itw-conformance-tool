@@ -7,6 +7,7 @@ import fp from 'fastify-plugin';
 type RpKeys = {
   authRequestPrivateKeyPem: string;
   authResponsePrivateKeyPem: string;
+  federationPrivateKeyPem: string;
   signingPrivateKeyPem: string;
   x5cCertPem: string;
 };
@@ -19,7 +20,8 @@ declare module 'fastify' {
 
 const KEY_FILES = [
   { key: 'authRequestPrivateKeyPem', file: 'rp/auth-request-key.jwk.json' },
-  { key: 'authResponsePrivateKeyPem', file: 'rp/auth-response-key.jwk.json' }
+  { key: 'authResponsePrivateKeyPem', file: 'rp/auth-response-key.jwk.json' },
+  { key: 'federationPrivateKeyPem', file: 'rp/federation-key.jwk.json' }
 ] as const;
 
 async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
@@ -30,7 +32,7 @@ async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
     content = await readFile(keyPath, 'utf8');
   } catch {
     throw new Error(
-      `Missing required auth key: ${fileName} not found in ${dataDir}. ` +
+      `Missing required key: ${fileName} not found in ${dataDir}. ` +
         `Please ensure the key file exists before starting the server.`
     );
   }
@@ -43,7 +45,7 @@ async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
     return pem;
   } catch (err) {
     throw new Error(
-      `Invalid auth key format in ${fileName}: ${err instanceof Error ? err.message : String(err)}. ` +
+      `Invalid key format in ${fileName}: ${err instanceof Error ? err.message : String(err)}. ` +
         `Please ensure the key file contains a valid JWK.`
     );
   }
@@ -77,7 +79,7 @@ export default fp(
   async function keysPlugin(app) {
     const { x5cCertPath, dataDir } = app.config;
 
-    const [authRequestPrivateKeyPem, authResponsePrivateKeyPem, x5cCertPem] = await Promise.all([
+    const [authRequestPrivateKeyPem, authResponsePrivateKeyPem, federationPrivateKeyPem, x5cCertPem] = await Promise.all([
       ...KEY_FILES.map((kf) => loadKeyFile(dataDir, kf.file)),
       loadX5cCert(x5cCertPath)
     ]);
@@ -86,6 +88,7 @@ export default fp(
     app.decorate('rpKeys', {
       authRequestPrivateKeyPem,
       authResponsePrivateKeyPem,
+      federationPrivateKeyPem,
       signingPrivateKeyPem,
       x5cCertPem
     });

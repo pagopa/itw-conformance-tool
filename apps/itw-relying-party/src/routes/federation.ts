@@ -16,6 +16,7 @@ const federationRoute: FastifyPluginAsync = async (app) => {
           trustAnchorUrl: app.config.trustAnchorUrl,
           authRequestPrivateKeyPem: app.rpKeys.authRequestPrivateKeyPem,
           authResponsePrivateKeyPem: app.rpKeys.authResponsePrivateKeyPem,
+          federationPrivateKeyPem: app.rpKeys.federationPrivateKeyPem,
           x5cCertPem: app.rpKeys.x5cCertPem
         });
 
