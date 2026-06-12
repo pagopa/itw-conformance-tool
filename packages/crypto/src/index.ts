@@ -11,4 +11,4 @@ export {
   createDecryptJweCallback,
   createEncryptJweCallback
 } from './services/callbacks.js';
-export { generateSigningJwks, generateEcPrivateJwk, generateConfigurableJwks } from './services/jwk.js';
+export { generateSigningJwks, generateEcPrivateJwk, generateJWKS } from './services/jwk.js';
