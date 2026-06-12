@@ -44,7 +44,7 @@ describe('config plugin', () => {
     await app.ready();
 
     expect(app.config.BASE_URL_SCHEME).toBe('http');
-    expect(app.config.HOST).toBe('localhost');
+    expect(app.config.HOST).toBe('127.0.0.1');
     expect(app.config.PORT).toBe(3000);
     expect(app.config.DB_CLEANUP_INTERVAL_MS).toBe(60_000);
     expect(app.config.DATA_DIR.length).toBeGreaterThan(0);

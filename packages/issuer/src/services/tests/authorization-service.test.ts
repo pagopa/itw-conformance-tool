@@ -14,6 +14,7 @@ function makeParRepository(requestObject: Record<string, unknown>): IPARReposito
       requestUri: 'urn:ietf:params:oauth:request_uri:test'
     }),
     getByMrtdAuthSession: vi.fn().mockResolvedValue(undefined),
+    getByJti: vi.fn().mockResolvedValue(undefined),
     insert: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(undefined)
   };

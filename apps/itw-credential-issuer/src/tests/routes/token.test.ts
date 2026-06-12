@@ -1,4 +1,5 @@
 import { InvalidGrantError } from '@itw-conformance-tool/issuer';
+import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocked = vi.hoisted(() => ({
@@ -27,15 +28,16 @@ describe('POST /token', () => {
     mocked.createAccessToken.mockResolvedValue({
       access_token: 'token',
       expires_in: 300,
-      token_type: 'Bearer'
+      token_type: 'DPoP'
     });
 
     const app = await buildRouteApp(tokenRoute);
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
-      headers: { 'content-type': 'text/plain' }
+      payload:
+        'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 
     expect(response.statusCode).toBe(200);
@@ -44,7 +46,7 @@ describe('POST /token', () => {
     expect(response.json()).toEqual({
       access_token: 'token',
       expires_in: 300,
-      token_type: 'Bearer'
+      token_type: 'DPoP'
     });
 
     await app.close();
@@ -57,8 +59,9 @@ describe('POST /token', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
-      headers: { 'content-type': 'text/plain' }
+      payload:
+        'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 
     expect(response.statusCode).toBe(400);
@@ -67,6 +70,29 @@ describe('POST /token', () => {
     expect(response.json()).toEqual({
       error: 'invalid_grant',
       error_description: 'code expired'
+    });
+
+    await app.close();
+  });
+
+  it('returns invalid_request for oauth2 parsing/verification errors', async () => {
+    mocked.createAccessToken.mockRejectedValue(new Oauth2Error('missing OAuth-Client-Attestation header'));
+
+    const app = await buildRouteApp(tokenRoute);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/token',
+      payload:
+        'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers.pragma).toBe('no-cache');
+    expect(response.json()).toEqual({
+      error: 'invalid_request',
+      error_description: 'missing OAuth-Client-Attestation header'
     });
 
     await app.close();
