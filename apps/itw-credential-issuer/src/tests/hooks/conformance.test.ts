@@ -31,7 +31,8 @@ function makeConformanceRepo(): IConformanceSessionRepository & {
     close: vi.fn(async (sessionId, status) => {
       const s = _sessions.get(sessionId);
       if (s) s.status = status;
-    })
+    }),
+    markOpenSessionsIncompleteOlderThan: vi.fn(async () => 0)
   };
 }
 
@@ -84,6 +85,7 @@ async function buildHookApp(
   app.decorate('parRepository', {
     delete: vi.fn(async () => undefined),
     get: vi.fn(async () => undefined),
+    getByJti: vi.fn(async () => undefined),
     getByMrtdAuthSession: vi.fn(async () => undefined),
     insert: vi.fn(async () => undefined),
     update: vi.fn(async () => undefined)
@@ -290,6 +292,7 @@ describe('conformanceHooks', () => {
       app2.decorate('parRepository', {
         delete: vi.fn(async () => undefined),
         get: vi.fn(async () => undefined),
+        getByJti: vi.fn(async () => undefined),
         getByMrtdAuthSession: vi.fn(async () => undefined),
         insert: vi.fn(async () => undefined),
         update: vi.fn(async () => undefined)
@@ -371,6 +374,7 @@ describe('conformanceHooks', () => {
       app3.decorate('parRepository', {
         delete: vi.fn(async () => undefined),
         get: vi.fn(async () => undefined),
+        getByJti: vi.fn(async () => undefined),
         getByMrtdAuthSession: vi.fn(async () => undefined),
         insert: vi.fn(async () => undefined),
         update: vi.fn(async () => undefined)

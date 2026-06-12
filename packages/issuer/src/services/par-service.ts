@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
-import { parsePushedAuthorizationRequest } from '@pagopa/io-wallet-oauth2';
+import { decodeJwt, parsePushedAuthorizationRequest, verifyPushedAuthorizationRequest } from '@pagopa/io-wallet-oauth2';
 
 import { PAR_TTL_MS } from '../models/par-entry.js';
-import { getPushedAuthorizationRequestSchema, type ParRequest } from '../z-par.js';
+import { getEntityConfigurationClaimsMetadata } from '../openid-federation/index.js';
+import { getPushedAuthorizationRequestSchema } from '../z-par.js';
 
+import type { JwksRepository } from '../signer.js';
+import type { ParRequest } from '../z-par.js';
 import type { IPARRepository } from '@itw-conformance-tool/database';
-import type { CallbackContext } from '@pagopa/io-wallet-oauth2';
+import type { CallbackContext, JwtSignerJwk } from '@pagopa/io-wallet-oauth2';
 import type { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
 export class PostPushedAuthorizationError extends Error {
@@ -19,8 +22,9 @@ export class PostPushedAuthorizationError extends Error {
 
 export interface ParseAndStoreOptions {
   readonly baseURL: string;
-  readonly callbacks: Pick<CallbackContext, 'fetch'>;
+  readonly callbacks: Pick<CallbackContext, 'fetch' | 'hash' | 'verifyJwt'>;
   readonly config: IoWalletSdkConfig;
+  readonly jwksRepository: JwksRepository;
   readonly parRequest: {
     readonly bodyString: string;
     readonly headers: Headers;
@@ -51,9 +55,10 @@ export class PARService {
 
     let authorizationRequest: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['authorizationRequest'];
     let authorizationRequestJwt: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['authorizationRequestJwt'];
+    let clientAttestation: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['clientAttestation'];
 
     try {
-      ({ authorizationRequest, authorizationRequestJwt } = await parsePushedAuthorizationRequest({
+      ({ authorizationRequest, authorizationRequestJwt, clientAttestation } = await parsePushedAuthorizationRequest({
         authorizationRequest: parRequestFormUrl,
         callbacks: options.callbacks,
         config: options.config,
@@ -71,6 +76,61 @@ export class PARService {
     if (!authorizationRequestJwt) {
       throw new PostPushedAuthorizationError('signed authorization request is required');
     }
+
+    if (!clientAttestation) {
+      throw new PostPushedAuthorizationError('client attestation is required');
+    }
+
+    const existingParByJti = await this.#parRepository.getByJti(authorizationRequest.jti);
+    if (existingParByJti) {
+      throw new PostPushedAuthorizationError(`PAR request with jti "${authorizationRequest.jti}" has already been used`);
+    }
+
+    const federationMetadata = getEntityConfigurationClaimsMetadata(
+      options.baseURL,
+      options.jwksRepository,
+      options.config
+    );
+
+    if (!federationMetadata?.oauth_authorization_server) {
+      throw new PostPushedAuthorizationError('OAuth2 authorization server metadata not found');
+    }
+
+    const walletAttestationPayload = decodeJwt({
+      jwt: clientAttestation.walletAttestationJwt
+    }).payload;
+
+    if (!walletAttestationPayload.cnf?.jwk) {
+      throw new PostPushedAuthorizationError('wallet attestation cnf.jwk is required');
+    }
+
+    const publicJwk = walletAttestationPayload.cnf.jwk;
+
+    const signer: JwtSignerJwk = {
+      alg: 'ES256',
+      method: 'jwk',
+      publicJwk
+    };
+
+    await verifyPushedAuthorizationRequest({
+      authorizationRequest,
+      authorizationRequestJwt: {
+        jwt: authorizationRequestJwt,
+        signer
+      },
+      authorizationServerMetadata: federationMetadata.oauth_authorization_server,
+      callbacks: options.callbacks,
+      clientAttestation: {
+        ...clientAttestation,
+        ensureConfirmationKeyMatchesDpopKey: true
+      },
+      config: options.config,
+      request: {
+        headers: options.parRequest.headers,
+        method: options.parRequest.method,
+        url: options.parRequest.url
+      }
+    });
 
     const requestUri = `urn:ietf:params:oauth:request_uri:${randomUUID()}`;
     const parSchema = getPushedAuthorizationRequestSchema(options.config);

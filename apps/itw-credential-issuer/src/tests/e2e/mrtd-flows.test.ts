@@ -1,19 +1,35 @@
 import crypto from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import Fastify from 'fastify';
-import fp from 'fastify-plugin';
-import { calculateJwkThumbprint, decodeJwt, exportJWK, generateKeyPair, importJWK, importPKCS8, SignJWT } from 'jose';
+import { calculateJwkThumbprint, decodeJwt, exportJWK, generateKeyPair, importPKCS8, SignJWT } from 'jose';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import bootstrap from '../../app.js';
 import { generateIaca, generateJwks } from '../../crypto/auto-keygen.js';
+import conformanceHooks from '../../hooks/conformance.js';
+import configPlugin from '../../plugins/config.js';
+import dbPlugin from '../../plugins/db.js';
+import corsPlugin, { autoConfig as corsConfig } from '../../plugins/external/cors.js';
+import formbodyPlugin from '../../plugins/external/formbody.js';
+import helmetPlugin, { autoConfig as helmetConfig } from '../../plugins/external/helmet.js';
+import rateLimitPlugin, { autoConfig as rateLimitConfig } from '../../plugins/external/rate-limit.js';
+import sensiblePlugin from '../../plugins/external/sensible.js';
+import keysPlugin from '../../plugins/keys.js';
+import authorizeRoute from '../../routes/authorize.js';
+import codeJwtRoute from '../../routes/code-jwt.js';
+import credentialRoute from '../../routes/credential.js';
+import edocProofRoute from '../../routes/edoc-proof.js';
+import edocRoute from '../../routes/edoc.js';
+import idpCallbackRoute from '../../routes/idp-callback.js';
+import mockIdpRoute from '../../routes/mock-idp.js';
+import nonceRoute from '../../routes/nonce.js';
+import parRoute from '../../routes/par.js';
+import presentationResponseRoute from '../../routes/presentation-response.js';
+import tokenRoute from '../../routes/token.js';
 
 import type { FastifyInstance } from 'fastify';
-
-const CLIENT_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 const REDIRECT_URI = 'https://example.com/callback';
 
@@ -61,7 +77,27 @@ async function createApp(authFlow: 'direct' | 'l2plus' | 'l3'): Promise<FastifyI
     logger: false
   });
 
-  await app.register(fp(bootstrap));
+  await app.register(configPlugin);
+  await app.register(dbPlugin);
+  await app.register(keysPlugin);
+  await app.register(conformanceHooks);
+  await app.register(corsPlugin, corsConfig);
+  await app.register(helmetPlugin, helmetConfig);
+  await app.register(formbodyPlugin);
+  await app.register(rateLimitPlugin, rateLimitConfig);
+  await app.register(sensiblePlugin);
+
+  await app.register(parRoute);
+  await app.register(authorizeRoute);
+  await app.register(mockIdpRoute);
+  await app.register(edocRoute);
+  await app.register(edocProofRoute);
+  await app.register(idpCallbackRoute);
+  await app.register(presentationResponseRoute);
+  await app.register(codeJwtRoute);
+  await app.register(tokenRoute);
+  await app.register(nonceRoute);
+  await app.register(credentialRoute);
 
   await app.ready();
 
@@ -95,9 +131,78 @@ async function buildWallet() {
   };
 }
 
-async function getAttestations(wallet: any, audience: string) {
+async function getAttestations(wallet: any, audience: string, clientId: string, isV13: boolean) {
+
+  const attestationJwt = isV13
+    ? await (async () => {
+        const providerMaterial = await generateIaca();
+        const cleanCert = providerMaterial.certPem
+          .replace(/-----\s*BEGIN CERTIFICATE\s*-----/, '')
+          .replace(/-----\s*END CERTIFICATE\s*-----/, '')
+          .replace(/\s/g, '');
+        const providerPrivateKey = await importPKCS8(providerMaterial.keyPem, 'ES256');
+
+        return new SignJWT({
+          cnf: { jwk: wallet.walletPublicJwk },
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          iat: Math.floor(Date.now() / 1000),
+          iss: 'https://wallet-provider.example',
+          status: {
+            status_list: {
+              idx: 0,
+              uri: 'https://wallet-provider.example/statuslist'
+            }
+          },
+          sub: clientId
+        })
+          .setProtectedHeader({
+            alg: 'ES256',
+            kid: 'provider-key-id',
+            typ: 'oauth-client-attestation+jwt',
+            x5c: [cleanCert]
+          })
+          .sign(providerPrivateKey);
+      })()
+    : await new SignJWT({
+        aal: 'https://trust-list.eu/aal/high',
+        sub: clientId,
+        cnf: {
+          jwk: wallet.walletPublicJwk
+        }
+      })
+        .setProtectedHeader({
+          alg: 'ES256',
+          jwk: wallet.pureJwk,
+          typ: 'oauth-client-attestation+jwt',
+          trust_chain: ['test-trust-chain']
+        })
+        .setIssuer('https://wallet-provider.example')
+        .setIssuedAt()
+        .setExpirationTime('1h')
+        .sign(wallet.privateKey);
+
+  const attestationPopJwt = await new SignJWT({
+    iss: clientId,
+    jti: crypto.randomUUID()
+  })
+    .setProtectedHeader({
+      alg: 'ES256',
+      typ: 'oauth-client-attestation-pop+jwt'
+    })
+    .setAudience(audience)
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(wallet.privateKey);
+
+  return {
+    attestationJwt,
+    attestationPopJwt
+  };
+}
+
+async function getLegacyEdocAttestations(wallet: any, audience: string, clientId: string) {
   const attestationJwt = await new SignJWT({
-    sub: CLIENT_ID,
+    sub: clientId,
     cnf: {
       jwk: wallet.walletPublicJwk
     }
@@ -113,7 +218,7 @@ async function getAttestations(wallet: any, audience: string) {
     .sign(wallet.privateKey);
 
   const attestationPopJwt = await new SignJWT({
-    iss: CLIENT_ID,
+    iss: clientId,
     jti: crypto.randomUUID()
   })
     .setProtectedHeader({
@@ -133,7 +238,7 @@ async function getAttestations(wallet: any, audience: string) {
 
 async function createRequestObject(wallet: any, authFlow: 'direct' | 'l2plus' | 'l3', baseUrl: string) {
   const payload = {
-    client_id: CLIENT_ID,
+    client_id: wallet.clientId,
     response_type: 'code',
     response_mode: 'query',
     redirect_uri: REDIRECT_URI,
@@ -156,9 +261,11 @@ async function createRequestObject(wallet: any, authFlow: 'direct' | 'l2plus' | 
 
   return new SignJWT(payload)
     .setProtectedHeader({
-      alg: 'ES256'
+      alg: 'ES256',
+      kid: wallet.walletPublicJwk.kid,
+      typ: 'oauth-authz-req+jwt'
     })
-    .setIssuer(CLIENT_ID)
+    .setIssuer(wallet.clientId)
     .setAudience(baseUrl)
     .setIssuedAt()
     .setExpirationTime('1h')
@@ -201,7 +308,7 @@ async function createCredentialProof(audience: string, nonce: string, wallet: an
   return new SignJWT({
     aud: audience,
     nonce,
-    iss: CLIENT_ID,
+    iss: wallet.clientId,
     jti: crypto.randomUUID()
   })
     .setProtectedHeader(header)
@@ -210,40 +317,155 @@ async function createCredentialProof(audience: string, nonce: string, wallet: an
     .sign(wallet.privateKey);
 }
 
-/**
- * Generates mock AT signed with runtime issuer keys.
- */
-async function generateMockAccessToken(authFlow: string, wallet: any, baseUrl: string) {
-  const jwksRaw = readFileSync(path.join(process.env.DATA_DIR!, 'issuer/signing-keys.jwks.json'), 'utf8');
-
-  const jwks = JSON.parse(jwksRaw);
-
-  const serverPrivateKey = await importJWK(jwks.keys[0], 'ES256');
-
-  const now = Math.floor(Date.now() / 1000);
-
-  return new SignJWT({
-    iss: baseUrl,
-    sub: CLIENT_ID,
-    client_id: CLIENT_ID,
-    aud: baseUrl,
-
-    cnf: {
-      jkt: await calculateJwkThumbprint(wallet.pureJwk, 'sha256')
+async function getAuthorizationCode(
+  app: FastifyInstance,
+  host: string,
+  authFlow: 'direct' | 'l2plus' | 'l3',
+  wallet: any,
+  clientId: string,
+  baseUrl: string,
+  attestationJwt: string,
+  attestationPopJwt: string,
+  requestJwt: string,
+  specVersionHeader: Record<string, string | undefined>
+): Promise<string> {
+  const parResponse = await app.inject({
+    method: 'POST',
+    url: `${baseUrl}/as/par`,
+    headers: {
+      host,
+      'content-type': 'application/x-www-form-urlencoded',
+      'oauth-client-attestation': attestationJwt,
+      'oauth-client-attestation-pop': attestationPopJwt,
+      ...specVersionHeader
     },
+    payload: new URLSearchParams({
+      client_id: clientId,
+      request: requestJwt
+    }).toString()
+  });
 
-    auth_flow: authFlow,
+  expect(parResponse.statusCode).toBe(201);
 
-    jti: crypto.randomUUID()
+  const requestUri = parResponse.json().request_uri as string;
+
+  const authorizeResponse = await app.inject({
+    method: 'GET',
+    url: `${baseUrl}/authorize?client_id=${clientId}&request_uri=${encodeURIComponent(requestUri)}`,
+    headers: {
+      host,
+      ...specVersionHeader
+    }
+  });
+
+  expect(authorizeResponse.statusCode).toBe(302);
+
+  const authorizeLocation = new URL(authorizeResponse.headers.location as string);
+
+  if (authFlow === 'direct') {
+    return authorizeLocation.searchParams.get('code') as string;
+  }
+
+  const idpResponse = await app.inject({
+    method: 'GET',
+    url: authorizeLocation.pathname + authorizeLocation.search,
+    headers: {
+      host,
+      ...specVersionHeader
+    }
+  });
+
+  expect(idpResponse.statusCode).toBe(302);
+
+  if (authFlow === 'l3') {
+    const walletLocation = new URL(idpResponse.headers.location as string);
+    return walletLocation.searchParams.get('code') as string;
+  }
+
+  const walletLocation = new URL(idpResponse.headers.location as string);
+  const challengeInfo = walletLocation.searchParams.get('challenge_info');
+  if (!challengeInfo) {
+    throw new Error('Missing challenge_info in MRTD flow redirect');
+  }
+
+  const challengePayload = decodeJwt(challengeInfo) as Record<string, unknown>;
+  const mrtdAuthSession = challengePayload['mrtd_auth_session'] as string;
+  const mrtdPopJwtNonce = challengePayload['mrtd_pop_jwt_nonce'] as string;
+
+  const { attestationJwt: edocAttestationJwt, attestationPopJwt: edocAttestationPopJwt } =
+    await getLegacyEdocAttestations(wallet, baseUrl, clientId);
+
+  const initResponse = await app.inject({
+    method: 'POST',
+    url: '/edoc-proof/init',
+    headers: {
+      host,
+      'content-type': 'application/json',
+      'oauth-client-attestation': edocAttestationJwt,
+      'oauth-client-attestation-pop': edocAttestationPopJwt
+    },
+    payload: JSON.stringify({ mrtd_auth_session: mrtdAuthSession, mrtd_pop_jwt_nonce: mrtdPopJwtNonce })
+  });
+
+  expect(initResponse.statusCode).toBe(202);
+
+  const popPayload = decodeJwt(initResponse.body) as Record<string, unknown>;
+  const mrtdPopNonce = popPayload['mrtd_pop_nonce'] as string;
+
+  const fakeB64 = Buffer.from('fake').toString('base64');
+  const validationJwt = await new SignJWT({
+    aud: baseUrl,
+    document_type: 'cie',
+    ias: { challenge_signed: fakeB64, ias_pk: fakeB64, sod_ias: fakeB64 },
+    iss: clientId,
+    mrtd: { dg1: fakeB64, dg11: fakeB64, sod_mrtd: fakeB64 }
   })
-    .setProtectedHeader({
-      alg: 'ES256',
-      kid: jwks.keys[0].kid,
-      typ: 'at+jwt'
+    .setProtectedHeader({ alg: 'ES256', kid: wallet.walletPublicJwk.kid, typ: 'mrtd-ias+jwt' })
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(wallet.privateKey);
+
+  const verifyResponse = await app.inject({
+    method: 'POST',
+    url: '/edoc-proof/verify',
+    headers: {
+      host,
+      'content-type': 'application/json',
+      'oauth-client-attestation': edocAttestationJwt,
+      'oauth-client-attestation-pop': edocAttestationPopJwt
+    },
+    payload: JSON.stringify({
+      mrtd_auth_session: mrtdAuthSession,
+      mrtd_pop_nonce: mrtdPopNonce,
+      mrtd_validation_jwt: validationJwt
     })
-    .setIssuedAt(now)
-    .setExpirationTime(now + 3600)
-    .sign(serverPrivateKey);
+  });
+
+  expect(verifyResponse.statusCode).toBe(202);
+
+  const verifyBody = verifyResponse.json() as Record<string, unknown>;
+  const mrtdValPopNonce = verifyBody['mrtd_val_pop_nonce'] as string;
+
+  const valPopNonceJwt = await new SignJWT({ nonce: mrtdValPopNonce })
+    .setProtectedHeader({ alg: 'ES256', typ: 'mrtd-val-pop+jwt' })
+    .setAudience(baseUrl)
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(wallet.privateKey);
+
+  const callbackResponse = await app.inject({
+    method: 'GET',
+    url: `/idp/callback?mrtd_auth_session=${mrtdAuthSession}&mrtd_val_pop_nonce=${encodeURIComponent(valPopNonceJwt)}`,
+    headers: {
+      host,
+      ...specVersionHeader
+    }
+  });
+
+  expect(callbackResponse.statusCode).toBe(302);
+
+  const callbackLocation = new URL(callbackResponse.headers.location as string);
+  return callbackLocation.searchParams.get('code') as string;
 }
 function decodeSdJwt(sdJwt: string): Record<string, any> {
   const parts = sdJwt.split('~');
@@ -298,46 +520,49 @@ describe('E2E PID Issuance Flows (MRTD)', () => {
     await setupEnvironment(authFlow);
 
     const wallet = await buildWallet();
+    const clientId = wallet.clientId;
 
-    const { attestationJwt, attestationPopJwt } = await getAttestations(wallet, BASE_URL);
+    const isV13 = authFlow === 'l3' || authFlow === 'l2plus';
+    const { attestationJwt, attestationPopJwt } = await getAttestations(wallet, BASE_URL, clientId, isV13);
 
     const requestJwt = await createRequestObject(wallet, authFlow, BASE_URL);
 
-    const isV13 = authFlow === 'l3' || authFlow === 'l2plus';
     const specVersionHeader = isV13 ? { 'x-spec-version': '1.3' } : {};
 
-    /**
-     * PAR
-     */
-    const parResponse = await app.inject({
+    const authorizationCode = await getAuthorizationCode(
+      app,
+      HOST,
+      authFlow,
+      wallet,
+      clientId,
+      BASE_URL,
+      attestationJwt,
+      attestationPopJwt,
+      requestJwt,
+      specVersionHeader
+    );
+
+    const tokenResponse = await app.inject({
       method: 'POST',
-
-      url: `${BASE_URL}/as/par`,
-
+      url: `${BASE_URL}/token`,
       headers: {
         host: HOST,
-
-        'content-type': 'application/x-www-form-urlencoded',
-
+        'content-type': 'text/plain',
         'oauth-client-attestation': attestationJwt,
-
         'oauth-client-attestation-pop': attestationPopJwt,
-
+        dpop: await createDPoP(`${BASE_URL}/token`, 'POST', wallet),
         ...specVersionHeader
       },
-
       payload: new URLSearchParams({
-        client_id: CLIENT_ID,
-        request: requestJwt
+        code: authorizationCode,
+        code_verifier: CODE_VERIFIER,
+        grant_type: 'authorization_code',
+        redirect_uri: REDIRECT_URI
       }).toString()
     });
 
-    expect(parResponse.statusCode).toBe(201);
-
-    /**
-     * Mock Access Token
-     */
-    const access_token = await generateMockAccessToken(authFlow, wallet, BASE_URL);
+    expect(tokenResponse.statusCode).toBe(200);
+    const { access_token } = tokenResponse.json() as { access_token: string };
 
     /**
      * NONCE

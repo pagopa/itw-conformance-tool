@@ -23,14 +23,19 @@ const parRoute: FastifyPluginAsync = async (app) => {
                 .filter(([, value]) => value !== undefined && value !== null)
                 .map(([key, value]) => [key, String(value)] as [string, string])
             ).toString();
-      const { baseURL, headers, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
+      const { baseURL, headers, jwksRepository, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
       try {
         const service = new PARService(app.parRepository);
         const requestUri = await service.parseAndStore({
           baseURL,
-          callbacks: { fetch: oauthCallbacks.fetch },
+          callbacks: {
+            fetch: oauthCallbacks.fetch,
+            hash: oauthCallbacks.hash,
+            verifyJwt: oauthCallbacks.verifyJwt
+          },
           config: sdkConfig,
+          jwksRepository,
           parRequest: {
             bodyString,
             headers,

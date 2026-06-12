@@ -140,10 +140,17 @@ export class EdocProofService {
  * Uses HMAC-SHA256(key=prevNonceBytes, data=32 random bytes), taking the first 16 bytes.
  */
 function deriveNewNonce(previousNonce: string): string {
-  const prevNonceBytes = Buffer.from(previousNonce, 'base64url');
+  const prevNonceBytes = decodeNonce(previousNonce);
   const randomMaterial = randomBytes(32);
   const derived = createHmac('sha256', prevNonceBytes).update(randomMaterial).digest();
   return derived.subarray(0, 16).toString('base64url');
+}
+
+function decodeNonce(previousNonce: string): Buffer {
+  if (/^[0-9a-fA-F]+$/.test(previousNonce) && previousNonce.length % 2 === 0) {
+    return Buffer.from(previousNonce, 'hex');
+  }
+  return Buffer.from(previousNonce, 'base64url');
 }
 
 /**

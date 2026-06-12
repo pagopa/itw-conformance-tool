@@ -44,6 +44,7 @@ export async function buildRouteApp(route: FastifyPluginAsync) {
   app.decorate('parRepository', {
     delete: async () => undefined,
     get: async () => undefined,
+    getByJti: async () => undefined,
     getByMrtdAuthSession: async () => undefined,
     insert: async () => undefined,
     update: async () => undefined

@@ -4,6 +4,7 @@ import {
   TokenService,
   UnsupportedGrantTypeError
 } from '@itw-conformance-tool/issuer';
+import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 
 import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '../plugins/index.js';
 
@@ -79,8 +80,15 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             .send({ error: 'unsupported_grant_type', error_description: error.message });
         }
 
+        if (error instanceof Oauth2Error) {
+          return withNoCache(reply).code(400).send({
+            error: 'invalid_request',
+            error_description: error.message
+          });
+        }
+
         request.log.error({ err: error }, 'Token request failed');
-        return reply.code(500).send({ error: 'internal_server_error' });
+        return withNoCache(reply).code(500).send({ error: 'internal_server_error' });
       }
     }
   });
