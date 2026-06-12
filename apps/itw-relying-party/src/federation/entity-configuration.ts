@@ -4,15 +4,12 @@ import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { createItWalletEntityConfiguration, itWalletMetadataV1_3 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
 import { PemConverter, X509Certificate } from '@peculiar/x509';
-import { CompactSign, calculateJwkThumbprint, importJWK, type JWK } from 'jose';
+import { calculateJwkThumbprint, type JWK } from 'jose';
+
+import { signJwtCallback } from './signer.js';
 
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
-import type {
-  ItWalletEntityConfigurationClaimsOptions,
-  ItWalletMetadataV1_3,
-  JsonWebKey,
-  SignCallback
-} from '@pagopa/io-wallet-oid-federation';
+import type { ItWalletEntityConfigurationClaimsOptions, ItWalletMetadataV1_3, JsonWebKey } from '@pagopa/io-wallet-oid-federation';
 
 type EntityConfigurationJwk = ItWalletEntityConfigurationClaimsOptions['jwks']['keys'][number];
 type EntityConfigurationJwkSet = ItWalletEntityConfigurationClaimsOptions['jwks'];
@@ -90,19 +87,6 @@ function buildEntityConfigurationMetadata(input: {
   return parsed.data;
 }
 
-const signEntityStatement: SignCallback = async ({ jwk, toBeSigned }) => {
-  const alg = jwk.alg ?? ENTITY_STATEMENT_SIGNING_ALG;
-  const key = await importJWK(jwk, alg);
-  const jws = await new CompactSign(toBeSigned).setProtectedHeader({ alg }).sign(key);
-  const signature = jws.split('.')[2];
-
-  if (!signature) {
-    throw new Error('Entity statement signature is missing');
-  }
-
-  return new Uint8Array(Buffer.from(signature, 'base64'));
-};
-
 export async function createEntityConfigurationJwt(input: {
   entityId: string;
   trustAnchorUrl: string;
@@ -142,6 +126,6 @@ export async function createEntityConfigurationJwt(input: {
       kid: String(federationSigningJwk.kid),
       typ: 'entity-statement+jwt'
     },
-    signJwtCallback: async ({ toBeSigned }) => signEntityStatement({ jwk: signingPrivateJwk, toBeSigned })
+    signJwtCallback: async ({ toBeSigned }) => signJwtCallback({ jwk: signingPrivateJwk, toBeSigned })
   });
 }
