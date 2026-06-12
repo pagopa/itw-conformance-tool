@@ -35,7 +35,8 @@ describe('POST /token', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      payload:
+        'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
       headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 
@@ -58,7 +59,8 @@ describe('POST /token', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      payload:
+        'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
       headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 
@@ -80,7 +82,8 @@ describe('POST /token', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/token',
-      payload: 'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
+      payload:
+        'code=abc&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example',
       headers: { 'content-type': 'text/plain', dpop: 'dpop-jwt' }
     });
 

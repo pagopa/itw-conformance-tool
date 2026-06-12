@@ -132,8 +132,8 @@ async function runL2PlusUpToVerify(app: Awaited<ReturnType<typeof createApp>>) {
     url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}`
   });
   const walletLocation = new URL(idpResponse.headers.location as string);
-    const challengeInfoJwt = getRequiredSearchParam(walletLocation, 'challenge_info');
-    const challengePayload = decodeJwt(challengeInfoJwt) as Record<string, unknown>;
+  const challengeInfoJwt = getRequiredSearchParam(walletLocation, 'challenge_info');
+  const challengePayload = decodeJwt(challengeInfoJwt) as Record<string, unknown>;
   const mrtdAuthSession = challengePayload['mrtd_auth_session'] as string;
   const mrtdPopJwtNonce = challengePayload['mrtd_pop_jwt_nonce'] as string;
 
@@ -343,7 +343,10 @@ describe('E2E: L2+ partial path (POST /edoc-proof/init)', () => {
       url: `/idp/authorize?request_uri=${encodeURIComponent(REQUEST_URI)}`
     });
     const walletLocation = new URL(idpResponse.headers.location as string);
-    const challengePayload = decodeJwt(getRequiredSearchParam(walletLocation, 'challenge_info')) as Record<string, unknown>;
+    const challengePayload = decodeJwt(getRequiredSearchParam(walletLocation, 'challenge_info')) as Record<
+      string,
+      unknown
+    >;
 
     const initResponse = await app.inject({
       method: 'POST',

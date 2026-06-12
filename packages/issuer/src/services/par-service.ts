@@ -83,7 +83,9 @@ export class PARService {
 
     const existingParByJti = await this.#parRepository.getByJti(authorizationRequest.jti);
     if (existingParByJti) {
-      throw new PostPushedAuthorizationError(`PAR request with jti "${authorizationRequest.jti}" has already been used`);
+      throw new PostPushedAuthorizationError(
+        `PAR request with jti "${authorizationRequest.jti}" has already been used`
+      );
     }
 
     const federationMetadata = getEntityConfigurationClaimsMetadata(

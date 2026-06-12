@@ -132,7 +132,6 @@ async function buildWallet() {
 }
 
 async function getAttestations(wallet: any, audience: string, clientId: string, isV13: boolean) {
-
   const attestationJwt = isV13
     ? await (async () => {
         const providerMaterial = await generateIaca();

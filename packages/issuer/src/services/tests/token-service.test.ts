@@ -73,7 +73,8 @@ describe('TokenService', () => {
         callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
         config: { isVersion: vi.fn().mockReturnValue(false) } as never,
         tokenRequest: {
-          bodyString: 'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
+          bodyString:
+            'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
           headers: new Headers({ dpop: 'dpop-jwt' }),
           method: 'POST',
           url: 'https://example.com/token'
@@ -127,7 +128,8 @@ describe('TokenService', () => {
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=abc&code_verifier=verifier123&grant_type=refresh_token&redirect_uri=https%3A%2F%2Fclient.example.com',
+            bodyString:
+              'code=abc&code_verifier=verifier123&grant_type=refresh_token&redirect_uri=https%3A%2F%2Fclient.example.com',
             headers: new Headers({ dpop: 'dpop-jwt' }),
             method: 'POST',
             url: 'https://example.com/token'
@@ -152,7 +154,8 @@ describe('TokenService', () => {
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=bad&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com',
+            bodyString:
+              'code=bad&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com',
             headers: new Headers({ dpop: 'dpop-jwt' }),
             method: 'POST',
             url: 'https://example.com/token'
@@ -189,7 +192,8 @@ describe('TokenService', () => {
           callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
           tokenRequest: {
-            bodyString: 'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fwrong.example.com',
+            bodyString:
+              'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fwrong.example.com',
             headers: new Headers({ dpop: 'dpop-jwt' }),
             method: 'POST',
             url: 'https://example.com/token'
@@ -232,7 +236,8 @@ describe('TokenService', () => {
         callbacks: { generateRandom: vi.fn(), hash: vi.fn(), signJwt: vi.fn(), verifyJwt: vi.fn() },
         config: { isVersion: vi.fn().mockReturnValue(false) } as never,
         tokenRequest: {
-          bodyString: 'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
+          bodyString:
+            'code=good&code_verifier=verifier123&grant_type=authorization_code&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
           headers: new Headers({ dpop: 'dpop-jwt' }),
           method: 'POST',
           url: 'https://example.com/token'

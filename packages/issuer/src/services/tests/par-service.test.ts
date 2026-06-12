@@ -5,7 +5,12 @@ import { PARService, PostPushedAuthorizationError } from '../par-service.js';
 
 import type { IPARRepository, PAREntry } from '@itw-conformance-tool/database';
 
-const { decodeJwtMock, federationMetadataMock, parsePushedAuthorizationRequestMock, verifyPushedAuthorizationRequestMock } = vi.hoisted(() => ({
+const {
+  decodeJwtMock,
+  federationMetadataMock,
+  parsePushedAuthorizationRequestMock,
+  verifyPushedAuthorizationRequestMock
+} = vi.hoisted(() => ({
   decodeJwtMock: vi.fn(),
   federationMetadataMock: vi.fn(),
   parsePushedAuthorizationRequestMock: vi.fn(),
@@ -84,8 +89,8 @@ describe('PARService', () => {
 
       expect(requestUri).toMatch(/^urn:ietf:params:oauth:request_uri:/);
       expect(repo.insert).toHaveBeenCalledOnce();
-  expect(repo.getByJti).toHaveBeenCalledWith('jti-123');
-  expect(verifyPushedAuthorizationRequestMock).toHaveBeenCalledOnce();
+      expect(repo.getByJti).toHaveBeenCalledWith('jti-123');
+      expect(verifyPushedAuthorizationRequestMock).toHaveBeenCalledOnce();
       const [inserted] = (repo.insert as ReturnType<typeof vi.fn>).mock.calls[0] as [PAREntry];
       expect(inserted.clientId).toBe('client');
       expect(inserted.requestUri).toBe(requestUri);

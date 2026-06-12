@@ -107,7 +107,9 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
             return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid attestation JWT typ' });
           }
         } catch {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid attestation JWT header' });
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Invalid attestation JWT header' });
         }
 
         const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as
@@ -216,10 +218,12 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         const claimedIdentity = payload.identity as Record<string, unknown> | undefined;
         if (claimedIdentity) {
           const hasMismatch =
-            (typeof claimedIdentity.given_name === 'string' && claimedIdentity.given_name !== session.identity.given_name) ||
+            (typeof claimedIdentity.given_name === 'string' &&
+              claimedIdentity.given_name !== session.identity.given_name) ||
             (typeof claimedIdentity.family_name === 'string' &&
               claimedIdentity.family_name !== session.identity.family_name) ||
-            (typeof claimedIdentity.birthdate === 'string' && claimedIdentity.birthdate !== session.identity.birthdate) ||
+            (typeof claimedIdentity.birthdate === 'string' &&
+              claimedIdentity.birthdate !== session.identity.birthdate) ||
             (typeof claimedIdentity.personal_administrative_number === 'string' &&
               claimedIdentity.personal_administrative_number !== session.identity.personal_administrative_number);
 
