@@ -14,8 +14,9 @@
     "itw-conformance-tool:start:issuer": "nx run itw-conformance-cli:run --args=\"start --issuer\"",
     "itw-conformance-tool:start:rp": "nx run itw-conformance-cli:run --args=\"start --rp\"",
     "format": "prettier --write '**/*.{js,mjs,json,ts,mts,md}'",
+    "format:check": "prettier --check '**/*.{js,mjs,json,ts,mts,md}'",
     "clean": "nx run-many -t clean && rimraf node_modules .nx",
-    "pre-commit": "nx affected -t lint typecheck",
+    "pre-commit": "pnpm format:check && nx affected -t lint typecheck",
     "prepare": "husky",
     "issuer": "nx serve itw-credential-issuer",
     "rp": "nx serve itw-relying-party"

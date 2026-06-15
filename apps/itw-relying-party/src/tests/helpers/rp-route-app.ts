@@ -188,6 +188,7 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
   app.decorate('rpKeys', {
     authRequestPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,
     authResponsePrivateKeyPem: options.authResponsePrivateKeyPem ?? TEST_AUTH_RESPONSE_PEM,
+    federationPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
     signingPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
     x5cCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
   });
