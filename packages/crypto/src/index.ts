@@ -20,5 +20,5 @@ export {
   createEncryptJweCallback
 } from './services/callbacks.js';
 export { generateKeyPair } from './services/keys.js';
-export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
+export { generateEcPrivateJwk, generateJWKS } from './services/jwk.js';
 export { validateIACAKeyPair, validateJWKS } from './services/validate.js';

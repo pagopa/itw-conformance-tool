@@ -4,7 +4,7 @@ import { exportJWK, generateKeyPair as joseGenerateKeyPair } from 'jose';
 
 import { generateKeyPair } from './keys.js';
 
-import type { GenerateJwksOptions, JwkDescriptor, JwkRecord, JwkSet, KeyDescriptor } from '../types/types.js';
+import type { GenerateJwksOptions, JwkDescriptor, JwkRecord, JwkSet } from '../types/types.js';
 
 const allOps = new Set(['sign', 'verify', 'encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey']);
 
