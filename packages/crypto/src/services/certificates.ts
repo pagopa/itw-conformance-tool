@@ -1,120 +1,87 @@
-import { createPrivateKey, createPublicKey } from 'node:crypto';
+import {
+  BasicConstraintsExtension,
+  KeyUsagesExtension,
+  SubjectKeyIdentifierExtension,
+  X509CertificateGenerator
+} from '@peculiar/x509';
 
-import forge from 'node-forge';
+import type { IacaChain, IacaChainParams, TlsCertAndKey, TlsCertParams, X5cCertParams } from '../types/types.js';
 
-import type {
-  CertificateParams,
-  ForgeAttribute,
-  GenerateKeyPairResult,
-  IacaChain,
-  IacaChainParams,
-  TlsCertAndKey,
-  TlsCertParams,
-  X5cCertParams
-} from '../types/types.js';
-
-/** Generates an RSA key pair and returns the private key
- * in both PEM and JWK formats.
- *
- * @returns An object containing the private key in PEM
- * format and as a JWK record.
- */
-function generateRsaKeyPair(): GenerateKeyPairResult {
-  const { privateKey, publicKey } = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
-  const privateKeyPem = forge.pki.privateKeyToPem(privateKey);
-  const publicKeyPem = forge.pki.publicKeyToPem(publicKey);
-
-  return {
-    privateKey,
-    publicKey,
-    privateKeyPem,
-    publicKeyPem,
-    privateJwk: createPrivateKey(privateKeyPem).export({ format: 'jwk' }),
-    publicJwk: createPublicKey(publicKeyPem).export({ format: 'jwk' })
-  };
+interface CertificateOptions {
+  commonName: string;
+  organizationName?: string;
+  countryName?: string;
+  notAfterDays: number;
+  isCA?: boolean;
+  keyUsageBits: number;
 }
 
-/** Creates and signs an X.509 certificate.
+/** Generates a self-signed X.509 certificate using ECDSA P-256.
  *
- * @param params - Certificate parameters including subject, issuer, keys, serial number, and CA flag.
- * @returns The signed forge certificate object.
+ * @param options - Certificate options including subject, validity period, and extensions.
+ * @returns An object containing the certificate and private key in PEM format.
  */
-function createCertificate({
-  subject,
-  issuer,
-  publicKey,
-  issuerPrivateKey,
-  serialNumber,
-  isCA = false
-}: CertificateParams) {
-  const cert = forge.pki.createCertificate();
+async function generateCertificate({
+  commonName,
+  organizationName = 'ITW Conformance Tool',
+  countryName = 'IT',
+  notAfterDays,
+  isCA = false,
+  keyUsageBits
+}: CertificateOptions): Promise<{ certPem: string; keyPem: string }> {
+  const keyPair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 
-  cert.publicKey = publicKey;
-  cert.serialNumber = serialNumber;
+  const now = new Date();
+  const notAfter = new Date(now);
+  notAfter.setDate(notAfter.getDate() + notAfterDays);
 
-  cert.validity.notBefore = new Date();
-  cert.validity.notAfter = new Date();
-  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10);
-
-  cert.setSubject(subject);
-  cert.setIssuer(issuer);
+  const name = `C=${countryName}, O=${organizationName}, CN=${commonName}`;
 
   const extensions = [
-    {
-      name: 'basicConstraints',
-      cA: isCA,
-      pathLenConstraint: isCA ? 0 : undefined
-    },
-    {
-      name: 'keyUsage',
-      keyCertSign: isCA,
-      digitalSignature: true,
-      cRLSign: isCA
-    },
-    {
-      name: 'subjectKeyIdentifier'
-    }
+    new BasicConstraintsExtension(isCA, isCA ? 0 : undefined, true),
+    new KeyUsagesExtension(keyUsageBits, true),
+    await SubjectKeyIdentifierExtension.create(keyPair.publicKey)
   ];
 
-  cert.setExtensions(extensions);
+  const cert = await X509CertificateGenerator.createSelfSigned({
+    keys: keyPair,
+    name,
+    notBefore: now,
+    notAfter,
+    signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
+    extensions
+  });
 
-  cert.sign(issuerPrivateKey, forge.md.sha256.create());
+  const pkcs8 = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+  const b64 = Buffer.from(pkcs8).toString('base64');
+  const lines = b64.match(/.{1,64}/g) ?? [b64];
+  const keyPem = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
 
-  return cert;
+  return { certPem: cert.toString(), keyPem };
 }
 
 /** Generates and returns a self-signed IACA certificate chain.
  *
- * @param params - Optional parameters to customize the certificate
- * subject and serial number.
- * @returns An object containing the certificate and private key
- * in PEM format as separate strings.
+ * @param params - Optional parameters to customize the certificate subject.
+ * @returns An object containing the certificate and private key in PEM format.
  */
-export function getIACAChain({
+export async function getIACAChain({
   commonName = 'IACA CA',
   countryName = 'IT',
-  organizationName = 'Example Issuer',
-  serialNumber = '01'
-}: IacaChainParams = {}): IacaChain {
-  const iacaKeys = generateRsaKeyPair();
-  const iacaSubject: ForgeAttribute[] = [
-    { name: 'commonName', value: commonName },
-    { name: 'countryName', value: countryName },
-    { name: 'organizationName', value: organizationName }
-  ];
-
-  const iacaCert = createCertificate({
-    subject: iacaSubject,
-    issuer: iacaSubject,
-    publicKey: iacaKeys.publicKey,
-    issuerPrivateKey: iacaKeys.privateKey,
-    serialNumber,
-    isCA: true
+  organizationName = 'Example Issuer'
+}: IacaChainParams = {}): Promise<IacaChain> {
+  const { certPem, keyPem } = await generateCertificate({
+    commonName,
+    countryName,
+    organizationName,
+    notAfterDays: 365 * 10,
+    isCA: true,
+    keyUsageBits: 0x0004 | 0x0002 | 0x0080 // keyCertSign | cRLSign | digitalSignature
   });
 
   return {
-    certificate: forge.pki.certificateToPem(iacaCert),
-    privateKey: forge.pki.privateKeyToPem(iacaKeys.privateKey)
+    certificate: certPem,
+    privateKey: keyPem
   };
 }
 
@@ -122,44 +89,23 @@ export function getIACAChain({
  * The certificate is valid for 825 days (the maximum accepted by macOS).
  *
  * @param params - Optional parameters to customize the certificate subject and alternative names.
- * @returns An object containing the certificate and private key in PEM format as separate strings.
+ * @returns An object containing the certificate and private key in PEM format.
  */
-export function getTlsCertAndKey({
+export async function getTlsCertAndKey({
   commonName = 'localhost',
-  organizationName = 'ITW Conformance Tool',
-  altNames = ['localhost']
-}: TlsCertParams = {}): TlsCertAndKey {
-  const keys = generateRsaKeyPair();
-
-  const attrs: ForgeAttribute[] = [
-    { name: 'commonName', value: commonName },
-    { name: 'organizationName', value: organizationName }
-  ];
-
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
-
-  const now = new Date();
-  cert.validity.notBefore = now;
-  cert.validity.notAfter = new Date(now.getTime() + 825 * 24 * 60 * 60 * 1000);
-
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-
-  cert.setExtensions([
-    { name: 'basicConstraints', cA: false },
-    { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
-    { name: 'extKeyUsage', serverAuth: true },
-    { name: 'subjectKeyIdentifier' },
-    { name: 'subjectAltName', altNames: altNames.map((value) => ({ type: 2, value })) }
-  ]);
-
-  cert.sign(keys.privateKey, forge.md.sha256.create());
+  organizationName = 'ITW Conformance Tool'
+}: TlsCertParams = {}): Promise<TlsCertAndKey> {
+  const { certPem, keyPem } = await generateCertificate({
+    commonName,
+    organizationName,
+    notAfterDays: 825,
+    isCA: false,
+    keyUsageBits: 0x04 | 0x10 // digitalSignature | keyEncipherment
+  });
 
   return {
-    cert: forge.pki.certificateToPem(cert),
-    key: forge.pki.privateKeyToPem(keys.privateKey)
+    cert: certPem,
+    key: keyPem
   };
 }
 
@@ -169,36 +115,17 @@ export function getTlsCertAndKey({
  * @param params - Optional parameters to customize the certificate subject.
  * @returns The certificate in PEM format as a string.
  */
-export function getX5cCert({
+export async function getX5cCert({
   commonName = 'Relying Party',
   organizationName = 'ITW Conformance Tool'
-}: X5cCertParams = {}): string {
-  const keys = generateRsaKeyPair();
+}: X5cCertParams = {}): Promise<string> {
+  const { certPem } = await generateCertificate({
+    commonName,
+    organizationName,
+    notAfterDays: 365,
+    isCA: false,
+    keyUsageBits: 0x80 // digitalSignature
+  });
 
-  const attrs: ForgeAttribute[] = [
-    { name: 'commonName', value: commonName },
-    { name: 'organizationName', value: organizationName }
-  ];
-
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
-
-  const now = new Date();
-  cert.validity.notBefore = now;
-  cert.validity.notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-
-  cert.setExtensions([
-    { name: 'basicConstraints', cA: false },
-    { name: 'keyUsage', digitalSignature: true },
-    { name: 'extKeyUsage', clientAuth: true },
-    { name: 'subjectKeyIdentifier' }
-  ]);
-
-  cert.sign(keys.privateKey, forge.md.sha256.create());
-
-  return forge.pki.certificateToPem(cert);
+  return certPem;
 }

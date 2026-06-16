@@ -1,5 +1,9 @@
-import * as crypto from 'node:crypto';
-
+import {
+  getCertificateChainPublicKey,
+  generateRandomBytes,
+  hashCallback,
+  type HashAlgorithm
+} from '@itw-conformance-tool/crypto';
 import {
   type CallbackContext,
   type DecryptJweCallback,
@@ -14,17 +18,14 @@ import {
 import { decodeBase64, encodeToUtf8String } from '@pagopa/io-wallet-utils';
 import { CompactEncrypt, type JWK, SignJWT, compactDecrypt, decodeJwt, importJWK, jwtVerify } from 'jose';
 
-import { getCertificateChainPublicKey } from './utils/x509.js';
-
 import type { ItWalletEntityConfigurationClaims } from '@pagopa/io-wallet-oid-federation';
 
 export const callbacks = {
   clientAuthentication: clientAuthenticationAnonymous(),
 
-  generateRandom: async (bytes: number) => new Uint8Array(crypto.randomBytes(bytes)),
+  generateRandom: async (bytes: number) => generateRandomBytes(bytes),
 
-  hash: async (data: Uint8Array, alg: string) =>
-    new Uint8Array(crypto.createHash(alg.replace('-', '').toLowerCase()).update(data).digest()),
+  hash: async (data: Uint8Array, alg: string) => hashCallback(data, alg as HashAlgorithm),
 
   verifyJwt: async (
     signer: Parameters<NonNullable<CallbackContext['verifyJwt']>>[0],

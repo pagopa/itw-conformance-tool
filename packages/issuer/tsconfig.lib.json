@@ -12,6 +12,9 @@
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "src/tests/**"],
   "references": [
     {
+      "path": "../crypto/tsconfig.lib.json"
+    },
+    {
       "path": "../database/tsconfig.lib.json"
     }
   ]

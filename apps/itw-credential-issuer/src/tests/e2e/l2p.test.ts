@@ -2,11 +2,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { generateJWKS, getIACAChain } from '@itw-conformance-tool/crypto';
 import Fastify from 'fastify';
 import { SignJWT, decodeJwt, exportJWK, generateKeyPair } from 'jose';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { generateIaca, generateJwks } from '../../crypto/auto-keygen.js';
 import conformanceHooks from '../../hooks/conformance.js';
 import configPlugin from '../../plugins/config.js';
 import dbPlugin from '../../plugins/db.js';
@@ -42,10 +42,18 @@ async function setupKeyMaterial(): Promise<string> {
   const rootDir = mkdtempSync(path.join(tmpdir(), 'issuer-e2e-'));
   const issuerDir = path.join(rootDir, 'issuer');
   mkdirSync(issuerDir);
-  const [jwksJson, iaca] = await Promise.all([generateJwks(), generateIaca()]);
-  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), jwksJson);
-  writeFileSync(path.join(issuerDir, 'iaca-cert.pem'), iaca.certPem);
-  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), iaca.keyPem);
+  const [jwksJson, iaca] = await Promise.all([
+    generateJWKS({
+      keys: [
+        { alg: 'ES256', use: 'sig', count: 1, keyOps: ['sign'] },
+        { alg: 'ECDH-ES', use: 'enc', count: 1, keyOps: ['deriveKey'] }
+      ]
+    }),
+    getIACAChain()
+  ]);
+  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), JSON.stringify(jwksJson));
+  writeFileSync(path.join(issuerDir, 'iaca-cert.pem'), iaca.certificate);
+  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), iaca.privateKey);
   return rootDir;
 }
 

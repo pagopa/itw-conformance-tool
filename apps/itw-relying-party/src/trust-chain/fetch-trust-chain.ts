@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-
+import { hashCallback, type HashAlgorithm } from '@itw-conformance-tool/crypto';
 import { fetchAndValidateTrustChain } from '@pagopa/io-wallet-oid-federation';
 import { importJWK, jwtVerify } from 'jose';
 
@@ -21,19 +20,6 @@ export interface FetchTrustChainOptions {
 }
 
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
-
-function normalizeHashAlgorithm(algorithm: string): 'sha256' | 'sha384' | 'sha512' {
-  switch (algorithm) {
-    case 'sha-256':
-      return 'sha256';
-    case 'sha-384':
-      return 'sha384';
-    case 'sha-512':
-      return 'sha512';
-    default:
-      throw new Error(`Unsupported hash algorithm: ${algorithm}`);
-  }
-}
 
 const verifyJwtWithJwk: VerifyJwtWithJwkCallback = async (jwtSigner, jwt) => {
   const verificationKey = await importJWK(jwtSigner.publicJwk as JWK, jwtSigner.alg);
@@ -74,13 +60,8 @@ function buildFetchWithTimeout(options: Pick<FetchTrustChainOptions, 'logger' | 
   };
 }
 
-function buildHashCallback(): HashCallback {
-  return async (value, algorithm) => {
-    const hashAlgorithm = normalizeHashAlgorithm(String(algorithm));
-    const digest = createHash(hashAlgorithm).update(value).digest();
-    return new Uint8Array(digest);
-  };
-}
+const buildHashCallback = (): HashCallback => async (value, algorithm) =>
+  hashCallback(value, algorithm as HashAlgorithm);
 
 function toEntityId(url: string): string {
   const parsed = new URL(url);

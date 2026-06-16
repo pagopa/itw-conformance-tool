@@ -1,3 +1,4 @@
+import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '@itw-conformance-tool/crypto';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
 import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
@@ -5,7 +6,6 @@ import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
 import { createSRIHash, createSignerVerifier } from '../sd-jwt.js';
 import { createBase64Portrait } from '../utils/portrait.js';
 import { STATUS_LIST_URI } from '../utils/status-list.js';
-import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '../utils/x509.js';
 import { DISABILITY_CARD_SCOPE, DISABILITY_CARD_VCT } from '../z-credential.js';
 
 import type { FakeUser } from '../faker.js';

@@ -1,10 +1,10 @@
 import { createPrivateKey, createPublicKey, randomBytes, randomUUID } from 'node:crypto';
 
+import { createSignJwtCallback } from '@itw-conformance-tool/crypto';
 import { createAuthorizationRequest } from '@pagopa/io-wallet-oid4vp';
 import { ItWalletSpecsVersion, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import { calculateJwkThumbprint, type JWK } from 'jose';
 
-import { createSignJwtCallback } from '../crypto/callbacks.js';
 import { extractClientId } from '../crypto/client-id.js';
 
 import type { EphemeralKeyPair } from '../crypto/ephemeral-keys.js';

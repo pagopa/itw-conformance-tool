@@ -3,11 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { generateJWKS, getIACAChain } from '@itw-conformance-tool/crypto';
 import Fastify from 'fastify';
 import { calculateJwkThumbprint, decodeJwt, exportJWK, generateKeyPair, importPKCS8, SignJWT } from 'jose';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { generateIaca, generateJwks } from '../../crypto/auto-keygen.js';
 import conformanceHooks from '../../hooks/conformance.js';
 import configPlugin from '../../plugins/config.js';
 import dbPlugin from '../../plugins/db.js';
@@ -48,13 +48,21 @@ async function setupKeyMaterial(): Promise<string> {
 
   mkdirSync(issuerDir);
 
-  const [jwksJson, iaca] = await Promise.all([generateJwks(), generateIaca()]);
+  const [jwksJson, iaca] = await Promise.all([
+    generateJWKS({
+      keys: [
+        { alg: 'ES256', use: 'sig', count: 1, keyOps: ['sign'] },
+        { alg: 'ECDH-ES', use: 'enc', count: 1, keyOps: ['deriveKey'] }
+      ]
+    }),
+    getIACAChain()
+  ]);
 
-  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), jwksJson);
+  writeFileSync(path.join(issuerDir, 'signing-keys.jwks.json'), JSON.stringify(jwksJson));
 
-  writeFileSync(path.join(issuerDir, 'iaca-cert.pem'), iaca.certPem);
+  writeFileSync(path.join(issuerDir, 'iaca-cert.pem'), iaca.certificate);
 
-  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), iaca.keyPem);
+  writeFileSync(path.join(issuerDir, 'iaca-key.pem'), iaca.privateKey);
 
   return rootDir;
 }
@@ -134,12 +142,12 @@ async function buildWallet() {
 async function getAttestations(wallet: any, audience: string, clientId: string, isV13: boolean) {
   const attestationJwt = isV13
     ? await (async () => {
-        const providerMaterial = await generateIaca();
-        const cleanCert = providerMaterial.certPem
+        const providerMaterial = await getIACAChain();
+        const cleanCert = providerMaterial.certificate
           .replace(/-----\s*BEGIN CERTIFICATE\s*-----/, '')
           .replace(/-----\s*END CERTIFICATE\s*-----/, '')
           .replace(/\s/g, '');
-        const providerPrivateKey = await importPKCS8(providerMaterial.keyPem, 'ES256');
+        const providerPrivateKey = await importPKCS8(providerMaterial.privateKey, 'ES256');
 
         return new SignJWT({
           cnf: { jwk: wallet.walletPublicJwk },
@@ -590,12 +598,12 @@ describe('E2E PID Issuance Flows (MRTD)', () => {
 
     let keyAttestationJwt: string | undefined;
     if (isV13) {
-      const providerMaterial = await generateIaca();
-      const cleanCert = providerMaterial.certPem
+      const providerMaterial = await getIACAChain();
+      const cleanCert = providerMaterial.certificate
         .replace(/-----\s*BEGIN CERTIFICATE\s*-----/, '')
         .replace(/-----\s*END CERTIFICATE\s*-----/, '')
         .replace(/\s/g, '');
-      const providerPrivateKey = await importPKCS8(providerMaterial.keyPem, 'ES256');
+      const providerPrivateKey = await importPKCS8(providerMaterial.privateKey, 'ES256');
 
       keyAttestationJwt = await new SignJWT({
         attested_keys: [wallet.walletPublicJwk],

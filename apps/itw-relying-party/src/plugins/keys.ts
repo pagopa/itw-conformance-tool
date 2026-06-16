@@ -1,8 +1,10 @@
-import { X509Certificate, createPrivateKey } from 'node:crypto';
+import { X509Certificate, createPrivateKey, type JsonWebKey } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import fp from 'fastify-plugin';
+
+const CERT_PEM_PATTERN = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 
 type RpKeys = {
   authRequestPrivateKeyPem: string;
@@ -38,9 +40,15 @@ async function loadKeyFile(dataDir: string, fileName: string): Promise<string> {
   }
 
   try {
-    const jwk = JSON.parse(content);
+    const firstPass = JSON.parse(content) as unknown;
+    const jwk = typeof firstPass === 'string' ? (JSON.parse(firstPass) as unknown) : firstPass;
+
+    if (!jwk || typeof jwk !== 'object' || Array.isArray(jwk)) {
+      throw new Error('JWK payload must be a JSON object');
+    }
+
     // Convert JWK to PEM PKCS8
-    const privateKey = createPrivateKey({ key: jwk, format: 'jwk' });
+    const privateKey = createPrivateKey({ key: jwk as JsonWebKey, format: 'jwk' });
     const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
     return pem;
   } catch (err) {
@@ -64,7 +72,31 @@ async function loadX5cCert(x5cCertPath: string): Promise<string> {
   }
 
   try {
-    new X509Certificate(content);
+    const firstPass = JSON.parse(content) as unknown;
+    if (typeof firstPass === 'string') {
+      content = firstPass;
+    } else if (Array.isArray(firstPass) && firstPass.every((entry) => typeof entry === 'string')) {
+      content = firstPass
+        .map((entry) =>
+          entry.includes('-----BEGIN CERTIFICATE-----')
+            ? entry
+            : `-----BEGIN CERTIFICATE-----\n${entry}\n-----END CERTIFICATE-----`
+        )
+        .join('\n');
+    }
+  } catch {
+    // Keep raw content when x5c file is plain PEM text.
+  }
+
+  try {
+    const certificates = content.match(CERT_PEM_PATTERN) ?? [];
+    if (certificates.length === 0) {
+      throw new Error('no PEM certificates found');
+    }
+
+    for (const certPem of certificates) {
+      new X509Certificate(certPem);
+    }
   } catch (err) {
     throw new Error(
       `Invalid x5c certificate at ${x5cCertPath}: ${err instanceof Error ? err.message : String(err)}. ` +

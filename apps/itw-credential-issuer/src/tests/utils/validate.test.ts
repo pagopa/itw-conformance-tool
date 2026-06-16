@@ -1,9 +1,7 @@
+import { getIACAChain, validateIACAKeyPair, validateJWKS } from '@itw-conformance-tool/crypto';
 import { exportJWK, generateKeyPair, type JWK } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
-
-import { generateIaca } from '../../crypto/auto-keygen.js';
-import { validateIACAKeyPair, validateJWKS } from '../../utils/validate.js';
 
 let sigKey: JWK;
 let encKey: JWK;
@@ -110,7 +108,9 @@ describe('validateIACAKeyPair', () => {
   let keyPem: string;
 
   beforeAll(async () => {
-    ({ certPem, keyPem } = await generateIaca());
+    const iaca = await getIACAChain();
+    certPem = iaca.certificate;
+    keyPem = iaca.privateKey;
   });
 
   it('resolves for a valid matching cert and key', async () => {
@@ -126,7 +126,8 @@ describe('validateIACAKeyPair', () => {
   });
 
   it('rejects when cert and key are from different pairs', async () => {
-    const { keyPem: otherKeyPem } = await generateIaca();
+    const other = await getIACAChain();
+    const otherKeyPem = other.privateKey;
     await expect(validateIACAKeyPair(certPem, otherKeyPem)).rejects.toThrow(
       'IACA certificate and private key do not correspond'
     );

@@ -204,6 +204,9 @@ importers:
       '@itw-conformance-tool/conformance':
         specifier: workspace:*
         version: link:../../packages/conformance
+      '@itw-conformance-tool/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -436,6 +439,9 @@ importers:
       '@faker-js/faker':
         specifier: ^10.4.0
         version: 10.4.0
+      '@itw-conformance-tool/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database

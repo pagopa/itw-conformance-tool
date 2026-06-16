@@ -1,10 +1,9 @@
 import { type JsonWebKey, createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify } from 'node:crypto';
 
+import { getCertificateData, validateCertificateChain } from '@itw-conformance-tool/crypto';
 import { CoseKey } from '@owf/mdoc';
 import { X509Certificate } from '@peculiar/x509';
 import { exportJWK, importX509 } from 'jose';
-
-import { getCertificateData, validateCertificateChain } from '../utils/x509.js';
 
 import type { DigestAlgorithm, MdocContext, Sign1 } from '@owf/mdoc';
 

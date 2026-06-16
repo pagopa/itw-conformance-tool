@@ -22,7 +22,7 @@ async function main(): Promise<void> {
 
     // __ Init section
     if (command === 'init') {
-      init(flags);
+      await init(flags);
       console.log('\nStart services with:\n  itw-conformance-tool start --all\n');
       process.exit(0);
     }

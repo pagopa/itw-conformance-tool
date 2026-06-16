@@ -1,18 +1,12 @@
-import type forge from 'node-forge';
-import type { JsonWebKey } from 'node:crypto';
-
 // Types
 export {
   type EncryptJweCallback,
   type DecryptJweCallback,
-  type GenerateRandomCallback,
   type HashAlgorithm,
   type Jwk,
   type SignJwtCallback,
   type VerifyJwtCallback
 } from '@pagopa/io-wallet-oauth2';
-
-export type ForgeAttribute = { name: string; value: string } | { shortName: string; value: string };
 
 export type GenerateKeyMaterialOptions =
   | {
@@ -37,23 +31,6 @@ export type KeyType = 'rsa' | 'ec' | 'ed25519';
 export type KeyUse = 'sig' | 'enc';
 
 // Interfaces
-export interface CertificateParams {
-  subject: ForgeAttribute[];
-  issuer: ForgeAttribute[];
-  publicKey: forge.pki.rsa.PublicKey;
-  issuerPrivateKey: forge.pki.rsa.PrivateKey;
-  serialNumber: string;
-  isCA?: boolean;
-}
-
-export interface GenerateKeyPairResult {
-  privateKey: forge.pki.rsa.PrivateKey;
-  publicKey: forge.pki.rsa.PublicKey;
-  privateKeyPem: string;
-  publicKeyPem: string;
-  privateJwk: JsonWebKey;
-  publicJwk: JsonWebKey;
-}
 
 export interface IacaChain {
   certificate: string;
@@ -64,7 +41,6 @@ export interface IacaChainParams {
   commonName?: string;
   countryName?: string;
   organizationName?: string;
-  serialNumber?: string;
 }
 
 export interface JwkDescriptor {
