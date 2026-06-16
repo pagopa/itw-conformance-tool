@@ -1,4 +1,9 @@
-import { createAccessTokenResponse } from '@pagopa/io-wallet-oauth2';
+import {
+  createAccessTokenResponse,
+  parseAccessTokenRequest,
+  verifyAccessTokenRequest,
+  PkceCodeChallengeMethod
+} from '@pagopa/io-wallet-oauth2';
 
 import { ACCESS_TOKEN_TTL_SECONDS } from '../models/token.js';
 import { getEntityConfigurationClaimsMetadata } from '../openid-federation/index.js';
@@ -6,6 +11,7 @@ import { getEntityConfigurationClaimsMetadata } from '../openid-federation/index
 import type { JwksRepository } from '../signer.js';
 import type { ParRequest } from '../z-par.js';
 import type { CallbackContext, JwtSignerJwk } from '@pagopa/io-wallet-oauth2';
+import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
 export class CreateAccessTokenError extends Error {
@@ -43,10 +49,13 @@ export interface ITokenParRepository {
 
 export interface CreateAccessTokenOptions {
   readonly baseURL: string;
-  readonly callbacks: Pick<CallbackContext, 'generateRandom' | 'hash' | 'signJwt'>;
+  readonly callbacks: Pick<CallbackContext, 'generateRandom' | 'hash' | 'signJwt' | 'verifyJwt'>;
   readonly config: IoWalletSdkConfig;
   readonly tokenRequest: {
     readonly bodyString: string;
+    readonly headers: Headers;
+    readonly method: HttpMethod;
+    readonly url: string;
   };
 }
 
@@ -62,12 +71,22 @@ export class TokenService {
   async createAccessToken(options: CreateAccessTokenOptions): Promise<Record<string, unknown>> {
     const form = Object.fromEntries(new URLSearchParams(options.tokenRequest.bodyString));
 
-    if (!form.code || !form.grant_type || !form.redirect_uri) {
-      throw new CreateAccessTokenError('code, grant_type and redirect_uri must be present');
+    if (!form.code || !form.code_verifier || !form.grant_type || !form.redirect_uri) {
+      throw new CreateAccessTokenError('code, code_verifier, grant_type and redirect_uri must be present');
     }
 
-    if (form.grant_type !== 'authorization_code') {
-      throw new UnsupportedGrantTypeError(`Unsupported grant type: ${form.grant_type}`);
+    // Parse the token request to extract DPoP, PKCE verifier, and client attestation
+    const { accessTokenRequest, clientAttestation, dpop, grant, pkceCodeVerifier } = parseAccessTokenRequest({
+      accessTokenRequest: form,
+      request: options.tokenRequest
+    });
+
+    if (grant.grantType !== 'authorization_code') {
+      throw new UnsupportedGrantTypeError(`Unsupported grant type: ${accessTokenRequest.grant_type}`);
+    }
+
+    if (!pkceCodeVerifier) {
+      throw new CreateAccessTokenError('code_verifier is required');
     }
 
     const lookup = await this.#parLookup.getByCode(form.code);
@@ -77,8 +96,20 @@ export class TokenService {
 
     const { requestUri, parRequest } = lookup;
 
+    if (!parRequest.code) {
+      throw new InvalidGrantError('Authorization code missing in PAR request');
+    }
+
     if (parRequest.redirect_uri !== form.redirect_uri) {
       throw new InvalidGrantError('redirect_uri mismatch');
+    }
+
+    if (!parRequest.code_challenge) {
+      throw new CreateAccessTokenError('code_challenge is missing in PAR request');
+    }
+
+    if (!parRequest.code_challenge_method) {
+      throw new CreateAccessTokenError('code_challenge_method is missing in PAR request');
     }
 
     const federationMetadata = getEntityConfigurationClaimsMetadata(
@@ -86,6 +117,36 @@ export class TokenService {
       this.#jwksRepository,
       options.config
     );
+
+    if (!federationMetadata?.oauth_authorization_server) {
+      throw new CreateAccessTokenError('OAuth2 authorization server metadata not found');
+    }
+
+    // Verify the access token request with DPoP and PKCE validation
+    const verifyAccessToken = await verifyAccessTokenRequest({
+      accessTokenRequest,
+      authorizationServerMetadata: federationMetadata.oauth_authorization_server,
+      callbacks: options.callbacks,
+      clientAttestation,
+      config: options.config,
+      dpop: {
+        jwt: dpop.jwt
+      },
+      expectedCode: parRequest.code,
+      grant: {
+        code: form.code,
+        grantType: grant.grantType
+      },
+      pkce: {
+        codeChallenge: parRequest.code_challenge,
+        codeChallengeMethod: parRequest.code_challenge_method as PkceCodeChallengeMethod,
+        codeVerifier: pkceCodeVerifier
+      },
+      request: options.tokenRequest
+    });
+
+    // Consume the authorization code only after all validations succeed
+    await this.#parLookup.consume(requestUri);
 
     const signer: JwtSignerJwk = {
       alg: 'ES256',
@@ -102,14 +163,12 @@ export class TokenService {
       authorizationServer: options.baseURL,
       callbacks: options.callbacks,
       clientId: parRequest.client_id,
+      dpop: verifyAccessToken.dpop,
       expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
       signer,
       subject: parRequest.client_id,
-      tokenType: 'Bearer'
+      tokenType: 'DPoP'
     });
-
-    // Consume code only after all validations succeed
-    await this.#parLookup.consume(requestUri);
 
     return accessTokenResponse;
   }

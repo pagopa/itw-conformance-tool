@@ -5,12 +5,26 @@ import { PARService, PostPushedAuthorizationError } from '../par-service.js';
 
 import type { IPARRepository, PAREntry } from '@itw-conformance-tool/database';
 
-const { parsePushedAuthorizationRequestMock } = vi.hoisted(() => ({
-  parsePushedAuthorizationRequestMock: vi.fn()
+const {
+  decodeJwtMock,
+  federationMetadataMock,
+  parsePushedAuthorizationRequestMock,
+  verifyPushedAuthorizationRequestMock
+} = vi.hoisted(() => ({
+  decodeJwtMock: vi.fn(),
+  federationMetadataMock: vi.fn(),
+  parsePushedAuthorizationRequestMock: vi.fn(),
+  verifyPushedAuthorizationRequestMock: vi.fn()
 }));
 
 vi.mock('@pagopa/io-wallet-oauth2', () => ({
-  parsePushedAuthorizationRequest: parsePushedAuthorizationRequestMock
+  decodeJwt: decodeJwtMock,
+  parsePushedAuthorizationRequest: parsePushedAuthorizationRequestMock,
+  verifyPushedAuthorizationRequest: verifyPushedAuthorizationRequestMock
+}));
+
+vi.mock('../../openid-federation/index.js', () => ({
+  getEntityConfigurationClaimsMetadata: federationMetadataMock
 }));
 
 vi.mock('../../z-par.js', () => ({
@@ -23,6 +37,7 @@ function makeRepo(overrides: Partial<IPARRepository> = {}): IPARRepository {
   return {
     delete: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(undefined),
+    getByJti: vi.fn().mockResolvedValue(undefined),
     getByMrtdAuthSession: vi.fn().mockResolvedValue(undefined),
     insert: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(undefined),
@@ -36,18 +51,34 @@ describe('PARService', () => {
       const repo = makeRepo();
       const svc = new PARService(repo);
 
+      federationMetadataMock.mockReturnValue({
+        oauth_authorization_server: { issuer: 'https://issuer.example' }
+      });
+      decodeJwtMock.mockReturnValue({
+        payload: {
+          cnf: {
+            jwk: { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' }
+          }
+        }
+      });
+
       parsePushedAuthorizationRequestMock.mockResolvedValue({
         authorizationRequest: {
           client_id: 'client',
+          jti: 'jti-123',
           redirect_uri: 'https://wallet.example/callback'
         },
-        authorizationRequestJwt: 'signed-jwt'
+        authorizationRequestJwt: 'signed-jwt',
+        clientAttestation: {
+          walletAttestationJwt: 'wallet-attestation'
+        }
       });
 
       const requestUri = await svc.parseAndStore({
         baseURL: 'https://issuer.example',
-        callbacks: { fetch: vi.fn() },
+        callbacks: { fetch: vi.fn(), hash: vi.fn(), verifyJwt: vi.fn() },
         config: { isVersion: vi.fn().mockReturnValue(false) } as never,
+        jwksRepository: { getSign: vi.fn(), getEncrypt: vi.fn(), iacaX509: vi.fn() } as never,
         parRequest: {
           bodyString: 'client_id=client&request=signed-jwt',
           headers: new Headers(),
@@ -58,6 +89,8 @@ describe('PARService', () => {
 
       expect(requestUri).toMatch(/^urn:ietf:params:oauth:request_uri:/);
       expect(repo.insert).toHaveBeenCalledOnce();
+      expect(repo.getByJti).toHaveBeenCalledWith('jti-123');
+      expect(verifyPushedAuthorizationRequestMock).toHaveBeenCalledOnce();
       const [inserted] = (repo.insert as ReturnType<typeof vi.fn>).mock.calls[0] as [PAREntry];
       expect(inserted.clientId).toBe('client');
       expect(inserted.requestUri).toBe(requestUri);
@@ -72,16 +105,24 @@ describe('PARService', () => {
       const repo = makeRepo();
       const svc = new PARService(repo);
 
+      federationMetadataMock.mockReturnValue({
+        oauth_authorization_server: { issuer: 'https://issuer.example' }
+      });
+
       parsePushedAuthorizationRequestMock.mockResolvedValue({
         authorizationRequest: { client_id: 'client' },
-        authorizationRequestJwt: undefined
+        authorizationRequestJwt: undefined,
+        clientAttestation: {
+          walletAttestationJwt: 'wallet-attestation'
+        }
       });
 
       await expect(
         svc.parseAndStore({
           baseURL: 'https://issuer.example',
-          callbacks: { fetch: vi.fn() },
+          callbacks: { fetch: vi.fn(), hash: vi.fn(), verifyJwt: vi.fn() },
           config: { isVersion: vi.fn().mockReturnValue(false) } as never,
+          jwksRepository: { getSign: vi.fn(), getEncrypt: vi.fn(), iacaX509: vi.fn() } as never,
           parRequest: {
             bodyString: 'client_id=client&request=signed-jwt',
             headers: new Headers(),
@@ -90,6 +131,66 @@ describe('PARService', () => {
           }
         })
       ).rejects.toBeInstanceOf(PostPushedAuthorizationError);
+    });
+
+    it('throws when client attestation is missing', async () => {
+      const repo = makeRepo();
+      const svc = new PARService(repo);
+
+      parsePushedAuthorizationRequestMock.mockResolvedValue({
+        authorizationRequest: {
+          client_id: 'client',
+          jti: 'jti-123'
+        },
+        authorizationRequestJwt: 'signed-jwt',
+        clientAttestation: undefined
+      });
+
+      await expect(
+        svc.parseAndStore({
+          baseURL: 'https://issuer.example',
+          callbacks: { fetch: vi.fn(), hash: vi.fn(), verifyJwt: vi.fn() },
+          config: { isVersion: vi.fn().mockReturnValue(false) } as never,
+          jwksRepository: { getSign: vi.fn(), getEncrypt: vi.fn(), iacaX509: vi.fn() } as never,
+          parRequest: {
+            bodyString: 'client_id=client&request=signed-jwt',
+            headers: new Headers(),
+            method: 'POST' as never,
+            url: 'https://issuer.example/par'
+          }
+        })
+      ).rejects.toThrow('client attestation is required');
+    });
+
+    it('throws when jti was already used', async () => {
+      const repo = makeRepo({ getByJti: vi.fn().mockResolvedValue({ requestUri: 'urn:test' }) as never });
+      const svc = new PARService(repo);
+
+      parsePushedAuthorizationRequestMock.mockResolvedValue({
+        authorizationRequest: {
+          client_id: 'client',
+          jti: 'jti-123'
+        },
+        authorizationRequestJwt: 'signed-jwt',
+        clientAttestation: {
+          walletAttestationJwt: 'wallet-attestation'
+        }
+      });
+
+      await expect(
+        svc.parseAndStore({
+          baseURL: 'https://issuer.example',
+          callbacks: { fetch: vi.fn(), hash: vi.fn(), verifyJwt: vi.fn() },
+          config: { isVersion: vi.fn().mockReturnValue(false) } as never,
+          jwksRepository: { getSign: vi.fn(), getEncrypt: vi.fn(), iacaX509: vi.fn() } as never,
+          parRequest: {
+            bodyString: 'client_id=client&request=signed-jwt',
+            headers: new Headers(),
+            method: 'POST' as never,
+            url: 'https://issuer.example/par'
+          }
+        })
+      ).rejects.toThrow('has already been used');
     });
   });
 

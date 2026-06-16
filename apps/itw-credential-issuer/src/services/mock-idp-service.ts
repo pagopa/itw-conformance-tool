@@ -118,7 +118,7 @@ export class MockIdpService {
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = (now + 300) * 1000;
     const mrtdAuthSessionId = randomUUID();
-    const mrtdPopJwtNonce = randomBytes(16).toString('hex');
+    const mrtdPopJwtNonce = randomBytes(16).toString('base64url');
 
     const payload: MrtdChallengePayload = {
       htu: new URL('/edoc-proof/init', options.baseURL).toString(),

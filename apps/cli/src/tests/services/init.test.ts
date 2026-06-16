@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync, type Stats } from 'node:fs';
 
 import { parseINI } from '@itw-conformance-tool/config';
 import { getTlsCertAndKey } from '@itw-conformance-tool/crypto';
@@ -27,6 +27,7 @@ vi.mock('../../utils/path.js', () => ({
 vi.mock('../../utils/crypto.js', () => ({
   getAuthRequestKey: vi.fn(() => '{"kty":"EC"}'),
   getAuthResponseKey: vi.fn(() => '{"kty":"EC"}'),
+  getFederationKey: vi.fn(() => '{"kty":"EC"}'),
   getSigningKeys: vi.fn(() => '{"keys":[]}')
 }));
 
@@ -108,7 +109,7 @@ describe('init', () => {
   it('skips TLS files when they already exist and --force is not set', () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as ReturnType<typeof statSync>);
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
     vi.mocked(parseINI).mockReturnValue({
       ok: true,
       data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
@@ -122,7 +123,7 @@ describe('init', () => {
   it('overwrites TLS files when --force is set', () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as ReturnType<typeof statSync>);
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
     vi.mocked(parseINI).mockReturnValue({
       ok: true,
       data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
@@ -164,23 +165,25 @@ describe('init', () => {
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/issuer/signing-keys.jwks.json');
   });
 
-  it('generates auth request and response keys when they do not exist', () => {
+  it('generates auth request, auth response, and federation keys when they do not exist', () => {
     init(baseFlags);
 
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/auth-request-key.jwk.json');
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/auth-response-key.jwk.json');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/federation-key.jwk.json');
   });
 
   it('skips relying-party keys when they already exist and --force is not set', () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as ReturnType<typeof statSync>);
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
 
     init(baseFlags);
 
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
     expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/rp/auth-request-key.jwk.json');
     expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/rp/auth-response-key.jwk.json');
+    expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/rp/federation-key.jwk.json');
   });
 });

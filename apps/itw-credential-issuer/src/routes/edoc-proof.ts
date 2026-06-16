@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { decodeJwt, importJWK, jwtVerify } from 'jose';
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 
 import { makeOauthCallbacks } from '../plugins/index.js';
 
@@ -14,6 +14,20 @@ const isBase64 = (str: unknown): boolean => {
     return false;
   }
   return Buffer.from(str, 'base64').toString('base64') === str;
+};
+
+const isBase64Url = (str: unknown): boolean => {
+  if (typeof str !== 'string' || str.length === 0) {
+    return false;
+  }
+  return /^[A-Za-z0-9_-]+$/.test(str);
+};
+
+const isBase64Like = (str: unknown): boolean => isBase64(str) || isBase64Url(str);
+
+const isSessionExpired = (expiresAt: number): boolean => {
+  const expiresAtMs = expiresAt > 1_000_000_000_000 ? expiresAt : expiresAt * 1000;
+  return Date.now() > expiresAtMs;
 };
 
 interface EdocProofVerifyRequest {
@@ -56,8 +70,26 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request: FastifyRequest<EdocProofVerifyRequest>, reply) => {
       const { headers, body } = request;
+      const { baseURL } = makeOauthCallbacks(app, request);
 
       try {
+        const parEntry = await app.parRepository.getByMrtdAuthSession(body.mrtd_auth_session);
+        if (!parEntry) {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Session not found or expired' });
+        }
+
+        let parRequest;
+        try {
+          parRequest = JSON.parse(parEntry.requestObject);
+        } catch {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Corrupted session data' });
+        }
+
+        const session = parRequest.mrtd_auth_session;
+        if (!session) {
+          return reply.code(400).send({ error: 'invalid_request', error_description: 'Session invalid' });
+        }
+
         let decodedAttestation;
         try {
           decodedAttestation = decodeJwt(headers['oauth-client-attestation']);
@@ -65,6 +97,19 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
           return reply
             .code(400)
             .send({ error: 'invalid_request', error_description: 'Malformed oauth-client-attestation' });
+        }
+
+        try {
+          const protectedHeader = decodeProtectedHeader(headers['oauth-client-attestation']);
+          const validAttestationTyp =
+            protectedHeader.typ === 'oauth-client-attestation+jwt' || protectedHeader.typ === 'wallet-attestation+jwt';
+          if (!validAttestationTyp) {
+            return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid attestation JWT typ' });
+          }
+        } catch {
+          return reply
+            .code(400)
+            .send({ error: 'invalid_request', error_description: 'Invalid attestation JWT header' });
         }
 
         const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as
@@ -85,36 +130,33 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         try {
-          await jwtVerify(headers['oauth-client-attestation-pop'], walletPublicKey);
+          const { payload: popPayload } = await jwtVerify(headers['oauth-client-attestation-pop'], walletPublicKey, {
+            audience: baseURL,
+            clockTolerance: 300,
+            typ: 'oauth-client-attestation-pop+jwt'
+          });
+
+          if (popPayload.iss !== parRequest.client_id) {
+            return reply
+              .code(400)
+              .send({ error: 'invalid_request', error_description: 'PoP issuer does not match PAR client_id' });
+          }
+
+          if (typeof popPayload.jti !== 'string' || popPayload.jti.length === 0) {
+            return reply.code(400).send({ error: 'invalid_request', error_description: 'Missing PoP jti claim' });
+          }
         } catch {
           return reply
             .code(400)
             .send({ error: 'invalid_request', error_description: 'Invalid oauth-client-attestation-pop signature' });
         }
 
-        const parEntry = await app.parRepository.getByMrtdAuthSession(body.mrtd_auth_session);
-        if (!parEntry) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Session not found or expired' });
-        }
-
-        let parRequest;
-        try {
-          parRequest = JSON.parse(parEntry.requestObject);
-        } catch {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Corrupted session data' });
-        }
-
-        const session = parRequest.mrtd_auth_session;
-        if (!session) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Session invalid' });
-        }
-
         if (session.status !== 'pending_mrtd_verify') {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid session state' });
         }
 
-        const now = Math.floor(Date.now() / 1000);
-        if (session.expires_at < now) {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        if (isSessionExpired(session.expires_at)) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Session expired' });
         }
 
@@ -123,12 +165,16 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         if (session.mrtd_pop_nonce_consumed_at) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Nonce already consumed' });
+          return reply.code(403).send({ error: 'access_denied', error_description: 'Nonce already consumed' });
         }
 
         let verifiedJwt;
         try {
-          verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey);
+          verifiedJwt = await jwtVerify(body.mrtd_validation_jwt, walletPublicKey, {
+            audience: baseURL,
+            clockTolerance: 300,
+            typ: 'mrtd-ias+jwt'
+          });
         } catch (err) {
           request.log.error({ err }, 'mrtd_validation_jwt verification failed');
           return reply
@@ -142,45 +188,55 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         const payload = verifiedJwt.payload as Record<string, unknown>;
-        const { baseURL } = makeOauthCallbacks(app, request);
 
-        if (!payload.iss || !payload.aud || !payload.iat || !payload.exp) {
+        if (!payload.iss || !payload.iat || !payload.exp) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'Missing base payload claims' });
         }
 
-        const isValidAudience =
-          (typeof payload.aud === 'string' && payload.aud === baseURL) ||
-          (Array.isArray(payload.aud) && payload.aud.includes(baseURL));
-
-        if (!isValidAudience) {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid audience' });
-        }
-
-        if ((payload.exp as number) < now) {
+        if ((payload.exp as number) < nowSeconds) {
           return reply.code(400).send({ error: 'invalid_request', error_description: 'JWT expired' });
         }
 
         if (payload.document_type !== 'cie') {
-          return reply.code(400).send({ error: 'invalid_request', error_description: 'Invalid document_type' });
+          return reply.code(422).send({ error: 'invalid_document', error_description: 'Invalid document_type' });
         }
 
         const mrtd = payload.mrtd as Record<string, unknown> | undefined;
-        if (!mrtd || !isBase64(mrtd.dg1) || !isBase64(mrtd.dg11) || !isBase64(mrtd.sod_mrtd)) {
+        if (!mrtd || !isBase64Like(mrtd.dg1) || !isBase64Like(mrtd.dg11) || !isBase64Like(mrtd.sod_mrtd)) {
           return reply
-            .code(400)
-            .send({ error: 'invalid_request', error_description: 'Invalid mrtd object or missing Base64 strings' });
+            .code(422)
+            .send({ error: 'invalid_document', error_description: 'Invalid mrtd object or missing Base64 strings' });
         }
 
         const ias = payload.ias as Record<string, unknown> | undefined;
-        if (!ias || !isBase64(ias.ias_pk) || !isBase64(ias.sod_ias) || !isBase64(ias.challenge_signed)) {
+        if (!ias || !isBase64Like(ias.ias_pk) || !isBase64Like(ias.sod_ias) || !isBase64Like(ias.challenge_signed)) {
           return reply
-            .code(400)
-            .send({ error: 'invalid_request', error_description: 'Invalid ias object or missing Base64 strings' });
+            .code(422)
+            .send({ error: 'invalid_document', error_description: 'Invalid ias object or missing Base64 strings' });
+        }
+
+        const claimedIdentity = payload.identity as Record<string, unknown> | undefined;
+        if (claimedIdentity) {
+          const hasMismatch =
+            (typeof claimedIdentity.given_name === 'string' &&
+              claimedIdentity.given_name !== session.identity.given_name) ||
+            (typeof claimedIdentity.family_name === 'string' &&
+              claimedIdentity.family_name !== session.identity.family_name) ||
+            (typeof claimedIdentity.birthdate === 'string' &&
+              claimedIdentity.birthdate !== session.identity.birthdate) ||
+            (typeof claimedIdentity.personal_administrative_number === 'string' &&
+              claimedIdentity.personal_administrative_number !== session.identity.personal_administrative_number);
+
+          if (hasMismatch) {
+            return reply
+              .code(422)
+              .send({ error: 'id_matching_failed', error_description: 'Identity mismatch with validated document' });
+          }
         }
 
         session.status = 'verified';
-        session.mrtd_pop_nonce_consumed_at = now;
-        const newNonce = randomBytes(16).toString('hex');
+        session.mrtd_pop_nonce_consumed_at = nowSeconds;
+        const newNonce = randomBytes(16).toString('base64url');
         session.mrtd_val_pop_nonce = newNonce;
 
         await app.parRepository.update(parEntry.requestUri, { requestObject: JSON.stringify(parRequest) });

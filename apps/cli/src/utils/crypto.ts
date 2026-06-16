@@ -57,3 +57,15 @@ export function getAuthResponseKey(): string {
 
   return JSON.stringify(jwk.keys[0], null, 2);
 }
+
+/** Generates and returns an EC P-256 private key JWK for federation entity-statement signing. */
+export function getFederationKey(): string {
+  const jwk = generateEcPrivateJwk({
+    kid: 'federation-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+
+  return JSON.stringify(jwk.keys[0], null, 2);
+}

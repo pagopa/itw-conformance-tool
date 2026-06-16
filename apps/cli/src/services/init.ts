@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
 import { getIACAChain, getTlsCertAndKey, getX5cCert } from '@itw-conformance-tool/crypto';
 
-import { getAuthRequestKey, getAuthResponseKey, getSigningKeys } from '../utils/crypto.js';
+import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
 
@@ -83,36 +83,27 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
     console.log(`⚠ Issuer keys already exist → skipped (use --force to regenerate)`);
   }
 
-  const rpKeysExist = [false, false, false];
+  const rpArtifacts = [
+    ['auth-request-key.jwk.json', getAuthRequestKey],
+    ['auth-response-key.jwk.json', getAuthResponseKey],
+    ['federation-key.jwk.json', getFederationKey],
+    ['x5c-cert.pem', getX5cCert]
+  ] as const;
 
-  const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
-  if (!existsFileSync(authRequestKeyPath) || flags.force) {
-    const authRequestKey = getAuthRequestKey();
-    writeFileSync(authRequestKeyPath, authRequestKey, { encoding: 'utf8', flag: 'w' });
-  } else {
-    rpKeysExist[0] = true;
+  const generatedRpPaths: string[] = [];
+
+  for (const [fileName, factory] of rpArtifacts) {
+    const filePath = join(rpDirPath, fileName);
+    if (!existsFileSync(filePath) || flags.force) {
+      writeFileSync(filePath, factory(), { encoding: 'utf8', flag: 'w' });
+      generatedRpPaths.push(filePath);
+    }
   }
 
-  const authResponseKeyPath = join(rpDirPath, 'auth-response-key.jwk.json');
-  if (!existsFileSync(authResponseKeyPath) || flags.force) {
-    const authResponseKey = getAuthResponseKey();
-    writeFileSync(authResponseKeyPath, authResponseKey, { encoding: 'utf8', flag: 'w' });
-  } else {
-    rpKeysExist[1] = true;
-  }
-
-  const x5cCertPath = join(rpDirPath, 'x5c-cert.pem');
-  if (!existsFileSync(x5cCertPath) || flags.force) {
-    const x5cCert = getX5cCert();
-    writeFileSync(x5cCertPath, x5cCert, { encoding: 'utf8', flag: 'w' });
-  } else {
-    rpKeysExist[2] = true;
-  }
-
-  if (rpKeysExist.every(Boolean)) {
+  if (generatedRpPaths.length === 0) {
     console.log(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)`);
   } else {
-    console.log(`✓ Generated relying-party keys → ${authRequestKeyPath}, ${authResponseKeyPath}, ${x5cCertPath}`);
+    console.log(`✓ Generated relying-party keys → ${generatedRpPaths.join(', ')}`);
   }
 }
 

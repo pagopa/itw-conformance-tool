@@ -107,6 +107,25 @@ describe('SqlitePARRepository', () => {
   });
 
   describe('getByMrtdAuthSession', () => {
+    it('retrieves a PAR entry by jti', async () => {
+      const requestUri = 'urn:uuid:jti-123';
+      const requestObject = JSON.stringify({
+        client_id: 'client-1',
+        jti: 'jti-123'
+      });
+
+      await repository.insert({
+        requestUri,
+        clientId: 'client-1',
+        requestObject,
+        expiresAt: Date.now() + 10000
+      });
+
+      const entry = await repository.getByJti('jti-123');
+      expect(entry).toBeDefined();
+      expect(entry?.requestUri).toBe(requestUri);
+    });
+
     it('retrieves a PAR entry by the nested mrtd_auth_session value', async () => {
       const requestUri = 'urn:uuid:123';
       const sessionId = 'session-123';

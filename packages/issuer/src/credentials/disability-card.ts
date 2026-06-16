@@ -5,6 +5,7 @@ import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
 import { createSRIHash, createSignerVerifier } from '../sd-jwt.js';
 import { createBase64Portrait } from '../utils/portrait.js';
 import { STATUS_LIST_URI } from '../utils/status-list.js';
+import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '../utils/x509.js';
 import { DISABILITY_CARD_SCOPE, DISABILITY_CARD_VCT } from '../z-credential.js';
 
 import type { FakeUser } from '../faker.js';
@@ -75,6 +76,8 @@ export async function createDisabilityCardCredential(
     throw new Error('Unable to issue disability card credential: missing subject identifier');
   }
 
+  const signingCertificatePem = await createSelfSignedCertificateFromJwk(jwks.private);
+
   const credential = await sdjwt.issue(
     {
       cnf: { jwk: holderPublicKey },
@@ -100,7 +103,7 @@ export async function createDisabilityCardCredential(
       header: {
         kid: jwks.private.kid,
         typ: 'dc+sd-jwt',
-        x5c: [jwksRepository.iacaX509()]
+        x5c: [convertPemToBase64Der(signingCertificatePem)]
       }
     }
   );

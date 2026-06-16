@@ -22,6 +22,7 @@ import type {
   CreateCredentialResponseResult,
   CredentialRequestV1_0,
   CredentialRequestV1_3,
+  ParsedCredentialRequest,
   VerifyCredentialRequestJwtProofResult
 } from '@pagopa/io-wallet-oid4vci';
 import type { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
@@ -54,6 +55,17 @@ export interface CreateCredentialOptions {
   url: string;
 }
 
+type ParseCredentialRequestCompatOptions = {
+  callbacks?: Pick<CallbackContext, 'hash'>;
+  config: IoWalletSdkConfig;
+  credentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
+  headers: Headers;
+};
+
+const parseCredentialRequestCompat = parseCredentialRequest as unknown as (
+  options: ParseCredentialRequestCompatOptions
+) => Promise<ParsedCredentialRequest>;
+
 export class CredentialService {
   #jwksRepository: JwksRepository;
   #nonceRepository: INonceRepository;
@@ -74,19 +86,16 @@ export class CredentialService {
     let accessToken: string;
     let credentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
     let dpopProof: string;
-    let proofs: { jwt: string }[];
+    let proofs: ParsedCredentialRequest['proofs'];
     try {
-      ({ accessToken, credentialRequest, dpopProof, proofs } = (await parseCredentialRequest({
-        callbacks: options.callbacks,
+      ({ accessToken, credentialRequest, dpopProof, proofs } = await parseCredentialRequestCompat({
+        callbacks: {
+          hash: options.callbacks.hash
+        },
         config: options.config,
         credentialRequest: parsedCredentialRequest,
         headers: options.headers
-      })) as {
-        accessToken: string;
-        credentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
-        dpopProof: string;
-        proofs: { jwt: string }[];
-      });
+      }));
     } catch (error) {
       if (error instanceof CreateCredentialError) {
         throw error;

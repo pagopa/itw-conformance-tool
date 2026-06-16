@@ -6,6 +6,13 @@ import { buildRouteApp } from '../helpers/route-app.js';
 
 import type { FastifyInstance } from 'fastify';
 
+type AppWithParRepository = FastifyInstance & {
+  parRepository: {
+    getByMrtdAuthSession: (...args: unknown[]) => unknown;
+    update: (...args: unknown[]) => unknown;
+  };
+};
+
 vi.mock('../../plugins/index.js', async () => {
   const actual = await vi.importActual<typeof import('../../plugins/index.js')>('../../plugins/index.js');
   return {
@@ -45,12 +52,16 @@ describe('POST /edoc-proof/verify', () => {
       .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation+jwt' })
       .sign(privateKey);
 
-    const pop = await new SignJWT({})
-      .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation-pop+jwt' })
+    const pop = await new SignJWT({ iss: 'client-1', jti: 'pop-jti-1' })
+      .setProtectedHeader({ alg: 'ES256', typ: 'oauth-client-attestation-pop+jwt' })
+      .setAudience('http://localhost:3000')
+      .setIssuedAt()
+      .setExpirationTime('10m')
       .sign(privateKey);
 
-    (app as any).parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue(undefined);
-    (app as any).parRepository.update = vi.fn().mockResolvedValue(undefined);
+    const appWithParRepository = app as AppWithParRepository;
+    appWithParRepository.parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue(undefined);
+    appWithParRepository.parRepository.update = vi.fn().mockResolvedValue(undefined);
 
     const response = await app.inject({
       method: 'POST',
@@ -81,15 +92,20 @@ describe('POST /edoc-proof/verify', () => {
       .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation+jwt' })
       .sign(privateKey);
 
-    const pop = await new SignJWT({})
-      .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation-pop+jwt' })
+    const pop = await new SignJWT({ iss: 'client-1', jti: 'pop-jti-2' })
+      .setProtectedHeader({ alg: 'ES256', typ: 'oauth-client-attestation-pop+jwt' })
+      .setAudience('http://localhost:3000')
+      .setIssuedAt()
+      .setExpirationTime('10m')
       .sign(privateKey);
 
-    (app as any).parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
+    const appWithParRepository = app as AppWithParRepository;
+    appWithParRepository.parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
       requestUri: 'urn:test:uri',
       clientId: 'client-1',
       expiresAt: Date.now() + 60000,
       requestObject: JSON.stringify({
+        client_id: 'client-1',
         mrtd_auth_session: {
           mrtd_auth_session: 'valid_session',
           status: 'pending_mrtd_verify',
@@ -99,7 +115,7 @@ describe('POST /edoc-proof/verify', () => {
         }
       })
     });
-    (app as any).parRepository.update = vi.fn().mockResolvedValue(undefined);
+    appWithParRepository.parRepository.update = vi.fn().mockResolvedValue(undefined);
 
     const response = await app.inject({
       method: 'POST',
@@ -115,7 +131,7 @@ describe('POST /edoc-proof/verify', () => {
       }
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(403);
     const body = JSON.parse(response.body);
     expect(body.error_description).toBe('Nonce already consumed');
   });
@@ -130,8 +146,11 @@ describe('POST /edoc-proof/verify', () => {
       .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation+jwt' })
       .sign(privateKey);
 
-    const pop = await new SignJWT({})
-      .setProtectedHeader({ alg: 'ES256', typ: 'wallet-attestation-pop+jwt' })
+    const pop = await new SignJWT({ iss: 'client-1', jti: 'pop-jti-3' })
+      .setProtectedHeader({ alg: 'ES256', typ: 'oauth-client-attestation-pop+jwt' })
+      .setAudience('http://localhost:3000')
+      .setIssuedAt()
+      .setExpirationTime('10m')
       .sign(privateKey);
 
     const validationJwt = await new SignJWT({
@@ -146,11 +165,13 @@ describe('POST /edoc-proof/verify', () => {
       .setExpirationTime('10m')
       .sign(privateKey);
 
-    (app as any).parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
+    const appWithParRepository = app as AppWithParRepository;
+    appWithParRepository.parRepository.getByMrtdAuthSession = vi.fn().mockResolvedValue({
       requestUri: 'urn:test:uri',
       clientId: 'client-1',
       expiresAt: Date.now() + 60000,
       requestObject: JSON.stringify({
+        client_id: 'client-1',
         mrtd_auth_session: {
           mrtd_auth_session: 'valid_session',
           status: 'pending_mrtd_verify',
@@ -159,7 +180,7 @@ describe('POST /edoc-proof/verify', () => {
         }
       })
     });
-    (app as any).parRepository.update = vi.fn().mockResolvedValue(undefined);
+    appWithParRepository.parRepository.update = vi.fn().mockResolvedValue(undefined);
 
     const response = await app.inject({
       method: 'POST',
