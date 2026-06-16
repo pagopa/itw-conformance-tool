@@ -219,9 +219,7 @@ export function renderPdfReport(jsonReporter: JsonReporterResult, options: HtmlP
     lines.push(`[${suite.name}] status=${suite.status}`);
     for (const assertion of suite.assertionResults) {
       const detail = assertion.failureMessages.length > 0 ? ` (${assertion.failureMessages.join(' | ')})` : '';
-      lines.push(
-        `- ${assertion.meta.requirementId} ${assertionLabel(assertion.status)} ${assertion.title}${detail}`
-      );
+      lines.push(`- ${assertion.meta.requirementId} ${assertionLabel(assertion.status)} ${assertion.title}${detail}`);
     }
     lines.push('');
   }
