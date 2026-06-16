@@ -170,7 +170,7 @@ export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
  *
  * @param options - Key generation options with one or more key specs.
  * @returns The generated JWKS as JSON string.
- */
+ * @returns The generated JWKS.
 export async function generateConfigurableJwks(options: GenerateJwksOptions): Promise<JwkSet> {
   return generateJWKS(options);
 }
