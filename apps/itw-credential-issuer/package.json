@@ -21,6 +21,7 @@
     "@fastify/swagger": "catalog:fastify",
     "@fastify/swagger-ui": "catalog:fastify",
     "@itw-conformance-tool/conformance": "workspace:*",
+    "@itw-conformance-tool/crypto": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
     "@itw-conformance-tool/issuer": "workspace:*",
     "@itw-conformance-tool/logger": "workspace:",

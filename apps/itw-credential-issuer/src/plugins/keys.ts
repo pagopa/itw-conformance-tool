@@ -1,10 +1,8 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { generateJWKS, getIACAChain, validateIACAKeyPair, validateJWKS } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
-
-import { generateIaca, generateJwks } from '../crypto/auto-keygen.js';
-import { validateIACAKeyPair, validateJWKS } from '../utils/validate.js';
 
 export type IssuerKeys = {
   signingKeysJwks: {
@@ -104,20 +102,27 @@ async function ensureKeyMaterialExists(dir: string): Promise<{
   if (certPem === null || keyPem === null) {
     // If either file is missing, regenerate both — cert and key are a matched cryptographic pair.
     // Write to temp files first, then rename atomically to avoid a partial pair on crash.
-    const generatedIaca = await generateIaca();
+    const generatedIaca = await getIACAChain();
     const certTmp = `${certPath}.tmp`;
     const keyTmp = `${keyPath}.tmp`;
     await Promise.all([
-      writeFile(certTmp, generatedIaca.certPem, 'utf8'),
-      writeFile(keyTmp, generatedIaca.keyPem, 'utf8')
+      writeFile(certTmp, generatedIaca.certificate, 'utf8'),
+      writeFile(keyTmp, generatedIaca.privateKey, 'utf8')
     ]);
     await Promise.all([rename(certTmp, certPath), rename(keyTmp, keyPath)]);
-    certPem = generatedIaca.certPem;
-    keyPem = generatedIaca.keyPem;
+    certPem = generatedIaca.certificate;
+    keyPem = generatedIaca.privateKey;
   }
 
   if (jwks === null) {
-    const generated = await generateJwks();
+    const generated = JSON.stringify(
+      await generateJWKS({
+        keys: [
+          { alg: 'ES256', use: 'sig', count: 1, keyOps: ['sign'] },
+          { alg: 'ECDH-ES', use: 'enc', count: 1, keyOps: ['deriveKey'] }
+        ]
+      })
+    );
     const jwksTmp = `${jwksPath}.tmp`;
     await writeFile(jwksTmp, generated, 'utf8');
     await rename(jwksTmp, jwksPath);
@@ -140,7 +145,14 @@ export default fp(
     if (!hasCompatibleIssuerJwks(parsedJwks)) {
       app.log.warn('Issuer JWKS is incompatible with ES256/ECDH-ES runtime requirements; regenerating key material');
 
-      const regeneratedJwks = await generateJwks();
+      const regeneratedJwks = JSON.stringify(
+        await generateJWKS({
+          keys: [
+            { alg: 'ES256', use: 'sig', count: 1, keyOps: ['sign'] },
+            { alg: 'ECDH-ES', use: 'enc', count: 1, keyOps: ['deriveKey'] }
+          ]
+        })
+      );
       const jwksTmp = `${jwksPath}.tmp`;
       await writeFile(jwksTmp, regeneratedJwks, 'utf8');
       await rename(jwksTmp, jwksPath);

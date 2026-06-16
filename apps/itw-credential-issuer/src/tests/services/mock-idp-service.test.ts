@@ -1,7 +1,7 @@
+import { generateJWKS } from '@itw-conformance-tool/crypto';
 import { importJWK, jwtVerify } from 'jose';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { generateJwks } from '../../crypto/auto-keygen.js';
 import { MockIdpRequestError, MockIdpService } from '../../services/mock-idp-service.js';
 
 import type { IPARRepository, PAREntry } from '@itw-conformance-tool/database';
@@ -13,7 +13,12 @@ const BASE_URL = 'http://issuer.example.org';
 let signingJwks: { keys: Array<Record<string, unknown>> };
 
 beforeAll(async () => {
-  signingJwks = JSON.parse(await generateJwks()) as { keys: Array<Record<string, unknown>> };
+  signingJwks = await generateJWKS({
+    keys: [
+      { alg: 'ES256', use: 'sig', count: 1, keyOps: ['sign'] },
+      { alg: 'ECDH-ES', use: 'enc', count: 1, keyOps: ['deriveKey'] }
+    ]
+  });
 });
 
 function createJwksRepository(): JwksRepository {
@@ -24,9 +29,9 @@ function createJwksRepository(): JwksRepository {
     throw new Error('Expected generated JWKS to include EC sign and enc keys');
   }
 
-  const { d: _signD, ...signPublicRaw } = sign as Record<string, unknown>;
+  const { d: _signD, ...signPublicRaw } = sign;
   void _signD;
-  const { d: _encD, ...encPublicRaw } = enc as Record<string, unknown>;
+  const { d: _encD, ...encPublicRaw } = enc;
   void _encD;
 
   return {
@@ -51,7 +56,8 @@ function createParRepository(entry: PAREntry | undefined) {
     get,
     getByMrtdAuthSession: vi.fn(async () => undefined),
     insert: async () => undefined,
-    update
+    update,
+    getByJti: vi.fn(async () => undefined)
   };
 
   return {

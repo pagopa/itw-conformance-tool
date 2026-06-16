@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, statSync, writeFileSync, type Stats } from 'node:fs';
 
 import { parseINI } from '@itw-conformance-tool/config';
+import { getTlsCertAndKey } from '@itw-conformance-tool/crypto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { init } from '../../services/init.js';
-import { getTlsCertAndKey } from '../../utils/crypto.js';
 import { expandPath } from '../../utils/path.js';
 import { existsFileSync } from '../../utils/search.js';
 
@@ -25,10 +25,13 @@ vi.mock('../../utils/path.js', () => ({
 }));
 
 vi.mock('../../utils/crypto.js', () => ({
-  getSigningKeys: vi.fn(() => '{"keys":[]}'),
   getAuthRequestKey: vi.fn(() => '{"kty":"EC"}'),
   getAuthResponseKey: vi.fn(() => '{"kty":"EC"}'),
   getFederationKey: vi.fn(() => '{"kty":"EC"}'),
+  getSigningKeys: vi.fn(() => '{"keys":[]}')
+}));
+
+vi.mock('@itw-conformance-tool/crypto', () => ({
   getX5cCert: vi.fn(() => '---X5C-CERT---'),
   getIACAChain: vi.fn(() => ({ certificate: '---CERT---', privateKey: '---KEY---' })),
   getTlsCertAndKey: vi.fn(() => ({ cert: '---TLS-CERT---', key: '---TLS-KEY---' }))
@@ -72,16 +75,16 @@ describe('init', () => {
     vi.mocked(existsSync).mockReturnValue(false);
   });
 
-  it('creates the data, issuer, and rp directories', () => {
-    init(baseFlags);
+  it('creates the data, issuer, and rp directories', async () => {
+    await init(baseFlags);
 
     expect(mkdirSync).toHaveBeenCalledWith('/root/.itw-conformance-tool', { recursive: true });
     expect(mkdirSync).toHaveBeenCalledWith('/root/.itw-conformance-tool/issuer', { recursive: true });
     expect(mkdirSync).toHaveBeenCalledWith('/root/.itw-conformance-tool/rp', { recursive: true });
   });
 
-  it('skips TLS files when https is false', () => {
-    init(baseFlags);
+  it('skips TLS files when https is false', async () => {
+    await init(baseFlags);
 
     expect(getTlsCertAndKey).not.toHaveBeenCalled();
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
@@ -89,13 +92,13 @@ describe('init', () => {
     expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/tls-key.pem');
   });
 
-  it('writes TLS files when https is true and they do not exist', () => {
+  it('writes TLS files when https is true and they do not exist', async () => {
     vi.mocked(parseINI).mockReturnValue({
       ok: true,
       data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
     });
 
-    init(baseFlags);
+    await init(baseFlags);
 
     expect(getTlsCertAndKey).toHaveBeenCalledOnce();
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
@@ -103,7 +106,7 @@ describe('init', () => {
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/tls-key.pem');
   });
 
-  it('skips TLS files when they already exist and --force is not set', () => {
+  it('skips TLS files when they already exist and --force is not set', async () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
@@ -112,12 +115,12 @@ describe('init', () => {
       data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
     });
 
-    init(baseFlags);
+    await init(baseFlags);
 
     expect(getTlsCertAndKey).not.toHaveBeenCalled();
   });
 
-  it('overwrites TLS files when --force is set', () => {
+  it('overwrites TLS files when --force is set', async () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
@@ -126,44 +129,44 @@ describe('init', () => {
       data: { ...makeConfigs(), global: { ...makeConfigs().global, https: true } }
     });
 
-    init({ ...baseFlags, force: true });
+    await init({ ...baseFlags, force: true });
 
     expect(getTlsCertAndKey).toHaveBeenCalledOnce();
   });
 
-  it('skips config.ini when it already exists and --force is not set', () => {
-    init(baseFlags);
+  it('skips config.ini when it already exists and --force is not set', async () => {
+    await init(baseFlags);
 
     const configWrites = vi.mocked(writeFileSync).mock.calls.filter((c) => String(c[0]).endsWith('config.ini'));
     expect(configWrites).toHaveLength(0);
   });
 
-  it('creates config.ini when it does not exist', () => {
+  it('creates config.ini when it does not exist', async () => {
     vi.mocked(existsFileSync).mockReturnValue(false);
 
-    init(baseFlags);
+    await init(baseFlags);
 
     const configWrites = vi.mocked(writeFileSync).mock.calls.filter((c) => String(c[0]).endsWith('config.ini'));
     expect(configWrites).toHaveLength(1);
   });
 
-  it('generates IACA cert and key when they do not exist', () => {
-    init(baseFlags);
+  it('generates IACA cert and key when they do not exist', async () => {
+    await init(baseFlags);
 
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/issuer/iaca-cert.pem');
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/issuer/iaca-key.pem');
   });
 
-  it('generates signing keys when they do not exist', () => {
-    init(baseFlags);
+  it('generates signing keys when they do not exist', async () => {
+    await init(baseFlags);
 
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/issuer/signing-keys.jwks.json');
   });
 
-  it('generates auth request, auth response, and federation keys when they do not exist', () => {
-    init(baseFlags);
+  it('generates auth request, auth response, and federation keys when they do not exist', async () => {
+    await init(baseFlags);
 
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/auth-request-key.jwk.json');
@@ -171,12 +174,12 @@ describe('init', () => {
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/federation-key.jwk.json');
   });
 
-  it('skips relying-party keys when they already exist and --force is not set', () => {
+  it('skips relying-party keys when they already exist and --force is not set', async () => {
     vi.mocked(existsFileSync).mockReturnValue(true);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
 
-    init(baseFlags);
+    await init(baseFlags);
 
     const writtenPaths = vi.mocked(writeFileSync).mock.calls.map((c) => c[0]);
     expect(writtenPaths).not.toContain('/root/.itw-conformance-tool/rp/auth-request-key.jwk.json');

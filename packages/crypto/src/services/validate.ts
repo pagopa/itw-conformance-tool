@@ -2,37 +2,13 @@ import { createPrivateKey, createPublicKey } from 'node:crypto';
 
 import { X509Certificate } from '@peculiar/x509';
 import { importJWK, type JWK } from 'jose';
-import { z } from 'zod';
 
-const jwkSchema = z.looseObject({
-  kty: z.string(),
-  kid: z.string().min(1),
-  use: z.enum(['sig', 'enc']).optional(),
-  alg: z.string().optional(),
-  key_ops: z.array(z.string()).optional(),
-
-  // RSA fields
-  n: z.string().optional(),
-  e: z.string().optional(),
-
-  // EC / OKP private key scalar
-  d: z.string().optional(),
-
-  // EC / OKP public key coordinates
-  x: z.string().optional(),
-  y: z.string().optional(),
-  crv: z.string().optional()
-});
-
-const jwksSchema = z.object({
-  keys: z.array(jwkSchema).min(1)
-});
+import { jwksSchema } from '../schemas/jwk.js';
 
 /** Validates a JWK Set (JWKS) for structural correctness and
- * cryptographic integrity
+ * cryptographic integrity.
  *
- * @param jwks - The value to validate (typically the result of `JSON.parse` on the stored JWKS file)
- * @returns A promise that resolves if the JWKS is valid, or rejects with an error describing the validation failure
+ * @param jwks - The value to validate (typically the result of `JSON.parse` on a stored JWKS file).
  */
 export async function validateJWKS(jwks: unknown): Promise<void> {
   const parsed = jwksSchema.parse(jwks);
@@ -42,10 +18,13 @@ export async function validateJWKS(jwks: unknown): Promise<void> {
     if (seenKids.has(key.kid)) {
       throw new Error(`Duplicate kid found in JWKS: ${key.kid}`);
     }
+
     seenKids.add(key.kid);
+
     if (key.use === 'enc' && key.alg === undefined) {
       throw new Error(`Key with kid '${key.kid}' has use=enc but no alg specified`);
     }
+
     await importJWK(key as JWK, key.alg);
   }
 }
@@ -79,18 +58,21 @@ function publicJwkIdentity(jwk: ExportedPublicJwk): string {
       if (!jwk.crv || !jwk.x || !jwk.y) {
         throw new Error('Invalid EC JWK: missing crv/x/y');
       }
+
       return `EC:${jwk.crv}:${jwk.x}:${jwk.y}`;
     }
     case 'RSA': {
       if (!jwk.n || !jwk.e) {
         throw new Error('Invalid RSA JWK: missing n/e');
       }
+
       return `RSA:${jwk.n}:${jwk.e}`;
     }
     case 'OKP': {
       if (!jwk.crv || !jwk.x) {
         throw new Error('Invalid OKP JWK: missing crv/x');
       }
+
       return `OKP:${jwk.crv}:${jwk.x}`;
     }
     default:

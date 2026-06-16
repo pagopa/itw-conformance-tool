@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-
+import { sha256 } from '@itw-conformance-tool/crypto';
 import { DataItem, cborEncode } from '@owf/mdoc';
 import { X509Certificate } from '@peculiar/x509';
 import { calculateJwkThumbprint } from 'jose';
@@ -21,8 +20,6 @@ interface CreateOid4VpSessionTranscriptOptions {
   nonce: string;
   verifierEncryptionPublicJwk?: JwkPublicKey;
 }
-
-const sha256 = (value: Uint8Array): Uint8Array => new Uint8Array(createHash('sha256').update(value).digest());
 
 const getJwkThumbprint = async (jwk?: JwkPublicKey): Promise<Uint8Array | null> => {
   if (!jwk) {

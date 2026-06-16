@@ -4,12 +4,12 @@ import * as x509 from '@peculiar/x509';
 import { X509Certificate } from '@peculiar/x509';
 import { exportJWK, importX509, type JWK } from 'jose';
 
-/** Parses an X.509 certificate and returns basic metadata
- * (issuer/subject, validity, serial number, PEM, and thumbprint)
+/** Extracts relevant data from an X.509 certificate provided
+ * as an ArrayBuffer and returns it in a structured format.
  *
- * @param input - An object containing the certificate data as an ArrayBuffer
- * @returns An object with parsed certificate information such as issuer/subject names,
- * validity period, serial number, PEM, and thumbprint
+ * @param input - An object containing the certificate as an ArrayBuffer.
+ * @returns An object containing the issuer name, validity period, PEM-encode
+ * certificate, serial number, subject name, and thumbprint of the certificate.
  */
 export const getCertificateData = async (input: { certificate: ArrayBuffer }) => {
   const certificate = new X509Certificate(input.certificate);
@@ -26,11 +26,13 @@ export const getCertificateData = async (input: { certificate: ArrayBuffer }) =>
   };
 };
 
-/** Extracts the public key from the leaf certificate in a certificate chain
- * and converts it to JWK format
+/** Extracts the public key from the leaf certificate in
+ * a certificate chain and returns it as a JWK.
  *
- * @param input - An object containing the algorithm and the certificate chain
- * @returns A JWK representation of the public key
+ * @param input - An object containing the certificate chain
+ * (in x5c format) and the expected algorithm of the public key.
+ * @returns A JWK representing the public key extracted from the
+ * leaf certificate, with `kid`, `use`, and `alg` parameters set.
  */
 export const getCertificateChainPublicKey = async (input: { alg: string; certificateChain: readonly unknown[] }) => {
   const [leafCertificate] = input.certificateChain;
@@ -38,7 +40,7 @@ export const getCertificateChainPublicKey = async (input: { alg: string; certifi
     throw new Error('x5c certificate not found');
   }
   if (typeof leafCertificate !== 'string') {
-    throw new Error('Invalid x5c certificate format');
+    throw new TypeError('Invalid x5c certificate format');
   }
 
   const key = await importX509(convertBase64DerToPem(leafCertificate), input.alg, {
@@ -48,14 +50,12 @@ export const getCertificateChainPublicKey = async (input: { alg: string; certifi
   return await exportJWK(key);
 };
 
-/** Validates a certificate chain against a set of trusted root certificates,
- * ensuring the chain is properly ordered, and each certificate is valid and
- * signed by its issuer
+/** Validates a certificate chain against a set of trusted root certificates
+ * and returns an error if the chain is invalid.
  *
- * @param input - An object containing the current date, trusted certificates,
- * and the certificate chain to validate
- * @returns A promise that resolves if the certificate chain is valid, or
- * rejects with an error if invalid
+ * @param input - An object containing the certificate chain to validate,
+ * the trusted root certificates, and an optional validation date.
+ * @returns void if the certificate chain is valid.
  */
 export const validateCertificateChain = async (input: {
   now?: Date;
@@ -95,19 +95,20 @@ export const validateCertificateChain = async (input: {
   parsedChain = parsedChain.slice(trustedCertificateIndex);
 
   for (let i = 1; i < parsedChain.length; i++) {
-    const cert = parsedChain[i] as X509Certificate;
-    const issuerCertificate = parsedChain[i - 1] as X509Certificate;
+    const cert = parsedChain[i];
+    const issuerCertificate = parsedChain[i - 1];
     await cert.verify({ date: validationDate, publicKey: issuerCertificate.publicKey });
   }
 };
 
-// Utility function to convert a base64 DER-encoded certificate to PEM format
-export const convertBase64DerToPem = (certificate: string): string =>
-  `-----BEGIN CERTIFICATE-----\n${certificate}\n-----END CERTIFICATE-----`;
-
-export const convertPemToBase64Der = (certificatePem: string): string =>
-  Buffer.from(new X509Certificate(certificatePem).rawData).toString('base64');
-
+/** Creates a self-signed X.509 certificate from a JWK containing a
+ * public/private key pair.
+ *
+ * @param jwk - A JWK containing the public and private key material
+ * to be included in the certificate.
+ * @returns A PEM-encoded string representation of the generated
+ * X.509 certificate.
+ */
 export const createSelfSignedCertificateFromJwk = async (jwk: JWK): Promise<string> => {
   const publicJwk = stripPrivateKeyMaterial(jwk);
 
@@ -139,9 +140,20 @@ export const createSelfSignedCertificateFromJwk = async (jwk: JWK): Promise<stri
   return certificate.toString();
 };
 
+// Convert a base64 DER-encoded certificate string to PEM format by adding the appropriate header and footer lines.
+export const convertBase64DerToPem = (certificate: string): string =>
+  `-----BEGIN CERTIFICATE-----\n${certificate}\n-----END CERTIFICATE-----`;
+
+// Convert a PEM-encoded certificate to base64 DER format by parsing it and re-encoding the raw data.
+export const convertPemToBase64Der = (certificatePem: string): string =>
+  Buffer.from(new X509Certificate(certificatePem).rawData).toString('base64');
+
+/** Removes private key material and key_ops from a JWK to produce a public JWK.
+ *
+ * @param jwk - The input JWK, which may contain private key parameters and/or key_ops.
+ * @returns A new JWK object containing only the public key parameters and no key_ops.
+ */
 function stripPrivateKeyMaterial(jwk: JWK): JWK {
-  const { d, key_ops, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
-  void d;
-  void key_ops;
+  const { d: _d, key_ops: _key_ops, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
   return publicJwk;
 }

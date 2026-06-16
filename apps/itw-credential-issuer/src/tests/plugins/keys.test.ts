@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { generateJWKS, getIACAChain, type JwkSet } from '@itw-conformance-tool/crypto';
 import Fastify from 'fastify';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { generateIaca, generateJwks } from '../../crypto/auto-keygen.js';
 import configPlugin from '../../plugins/config.js';
 import keysPlugin from '../../plugins/keys.js';
 
@@ -19,10 +19,21 @@ function cleanupEnv(): void {
 
 /** Real key material generated once for all tests that need pre-existing files. */
 let realIaca: { certPem: string; keyPem: string };
+let jwksKeyType: JwkSet;
 let realJwksJson: string;
 
 beforeAll(async () => {
-  [realIaca, realJwksJson] = await Promise.all([generateIaca(), generateJwks()]);
+  const iacaData = await getIACAChain();
+  realIaca = { certPem: iacaData.certificate, keyPem: iacaData.privateKey };
+  [jwksKeyType] = await Promise.all([
+    generateJWKS({
+      keys: [
+        { alg: 'ES256', use: 'sig', count: 1, keyOps: ['sign'] },
+        { alg: 'ECDH-ES', use: 'enc', count: 1, keyOps: ['deriveKey'] }
+      ]
+    })
+  ]);
+  realJwksJson = JSON.stringify(jwksKeyType);
 });
 
 /** Creates a temp root dir and an `issuer` subdir inside it.

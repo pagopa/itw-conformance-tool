@@ -14,7 +14,14 @@ export * from './crypto.js';
 
 // Utils
 export * from './utils/status-list.js';
-export * from './utils/x509.js';
+export {
+  convertBase64DerToPem,
+  convertPemToBase64Der,
+  createSelfSignedCertificateFromJwk,
+  getCertificateChainPublicKey,
+  getCertificateData,
+  validateCertificateChain
+} from '@itw-conformance-tool/crypto';
 export * from './utils/form-post-jwt.js';
 export * from './utils/portrait.js';
 

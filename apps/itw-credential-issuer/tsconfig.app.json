@@ -8,6 +8,7 @@
     "paths": {
       "#/*": ["./src/*"],
       "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"],
+      "@itw-conformance-tool/crypto": ["../../packages/crypto/dist/index.d.ts"],
       "@itw-conformance-tool/database": ["../../packages/database/dist/index.d.ts"],
       "@itw-conformance-tool/issuer": ["../../packages/issuer/dist/index.d.ts"],
       "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"]
@@ -35,6 +36,9 @@
     },
     {
       "path": "../../packages/logger/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/crypto/tsconfig.lib.json"
     },
     {
       "path": "../../packages/issuer/tsconfig.lib.json"

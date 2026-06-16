@@ -1,9 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 
+import { createDecryptJweCallback, createVerifyJwtCallback } from '@itw-conformance-tool/crypto';
 import { parseAuthorizationResponse } from '@pagopa/io-wallet-oid4vp';
 import { calculateJwkThumbprint, compactDecrypt, importPKCS8, importJWK, jwtVerify, type JWK } from 'jose';
-
-import { createDecryptJweCallback, createVerifyJwtCallback } from '../crypto/callbacks.js';
 
 import type { INonceRepository } from '@itw-conformance-tool/database';
 import type { PresentationValues, SessionService } from '@itw-conformance-tool/rp';

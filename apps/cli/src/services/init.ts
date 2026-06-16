@@ -2,16 +2,9 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
+import { getIACAChain, getTlsCertAndKey, getX5cCert } from '@itw-conformance-tool/crypto';
 
-import {
-  getAuthRequestKey,
-  getAuthResponseKey,
-  getFederationKey,
-  getIACAChain,
-  getSigningKeys,
-  getTlsCertAndKey,
-  getX5cCert
-} from '../utils/crypto.js';
+import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
 
@@ -51,7 +44,7 @@ function checkConfig(flags: CLIFlags): ConfigType {
  * @param flags - The command-line flags.
  * @returns It performs file system operations to create directories and files as needed based on the configuration and flags.
  */
-function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
+async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise<void> {
   const issuerDirPath = join(configs.global.data_dir, 'issuer');
   mkdirSync(issuerDirPath, { recursive: true });
 
@@ -61,7 +54,7 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
   const tlsCertPath = join(configs.global.data_dir, 'tls-cert.pem');
   const tlsKeyPath = join(configs.global.data_dir, 'tls-key.pem');
   if (configs.global.https && (!(existsFileSync(tlsCertPath) && existsFileSync(tlsKeyPath)) || flags.force)) {
-    const generatedTls = getTlsCertAndKey();
+    const generatedTls = await getTlsCertAndKey();
     writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
     writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
 
@@ -71,7 +64,7 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
   const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
   const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
   if (!(existsFileSync(iacaCertPath) && existsFileSync(iacaKeyPath)) || flags.force) {
-    const generatedIacaChain = getIACAChain();
+    const generatedIacaChain = await getIACAChain();
     const generatedIacaCert = generatedIacaChain.certificate;
     const generatedIacaKey = generatedIacaChain.privateKey;
 
@@ -102,7 +95,8 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
   for (const [fileName, factory] of rpArtifacts) {
     const filePath = join(rpDirPath, fileName);
     if (!existsFileSync(filePath) || flags.force) {
-      writeFileSync(filePath, factory(), { encoding: 'utf8', flag: 'w' });
+      const content = await factory();
+      writeFileSync(filePath, content, { encoding: 'utf8', flag: 'w' });
       generatedRpPaths.push(filePath);
     }
   }
@@ -119,7 +113,7 @@ function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): void {
  * @param flags - The command-line flags.
  * @returns It performs file system operations and exits the process upon completion.
  */
-export function init(flags: CLIFlags): void {
+export async function init(flags: CLIFlags): Promise<void> {
   const configs = checkConfig(flags);
-  createFilesAndDirs(configs, flags);
+  await createFilesAndDirs(configs, flags);
 }

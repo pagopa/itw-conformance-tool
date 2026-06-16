@@ -1,300 +1,71 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateEcPrivateJwk } from '@itw-conformance-tool/crypto';
 
-import forge from 'node-forge';
-
-// Types
-type ForgeAttribute = { name: string; value: string } | { shortName: string; value: string };
-
-type KeyUse = 'sig' | 'enc';
-
-type JwkRecord = Record<string, unknown>;
-
-// Interfaces
-interface KeyDescriptor {
-  kid: string;
-  use: KeyUse;
-}
-
-interface JwkDescriptor {
-  kid: string;
-  use: KeyUse;
-  alg: 'ES256' | 'ECDH-ES';
-  keyOps: string[];
-}
-
-interface JwkSet {
-  keys: JwkRecord[];
-}
-
-interface IacaChain {
-  certificate: string;
-  privateKey: string;
-}
-
-interface TlsCertAndKey {
-  cert: string;
-  key: string;
-}
-
-interface CertificateParams {
-  subject: ForgeAttribute[];
-  issuer: ForgeAttribute[];
-  publicKey: forge.pki.rsa.PublicKey;
-  issuerPrivateKey: forge.pki.rsa.PrivateKey;
-  serialNumber: string;
-  isCA?: boolean;
-}
-
-/** Serializes a value to a formatted JSON string. */
-function toJSONString(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
-
-/** Generates a 2048-bit RSA key pair, returning the private key in both PEM and JWK formats. */
-function generateRsaKeyPair(): { privateKeyPem: string; privateJwk: JwkRecord } {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicExponent: 0x10001
-  });
-
-  const privateJwk = privateKey.export({ format: 'jwk' }) as JwkRecord;
-  const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
-
-  return { privateKeyPem, privateJwk };
-}
-
-/** Generates a JWK Set containing a single RSA signing key.
+/** Generates and returns a JWKS containing issuer runtime-compatible EC keys.
  *
- * @param descriptor - Key identifier and intended use.
- * @returns A JSON string representing the JWK Set.
- */
-function generateSigningJwks(descriptor: KeyDescriptor): string {
-  const { privateJwk } = generateRsaKeyPair();
-  const jwks: JwkSet = {
-    keys: [
-      {
-        ...privateJwk,
-        kid: descriptor.kid,
-        alg: 'RS256',
-        use: descriptor.use,
-        key_ops: descriptor.use === 'sig' ? ['sign'] : ['encrypt']
-      }
-    ]
-  };
-
-  return toJSONString(jwks);
-}
-
-/** Generates an EC P-256 private key in JWK format.
+ * The issuer runtime requires:
+ * - one ES256 signing key (use=sig)
+ * - one ECDH-ES encryption key (use=enc)
  *
- * @param descriptor - Key metadata including kid, alg, use, and key_ops.
- * @returns A JSON string representing the private JWK.
+ * @returns A JSON string representing the issuer JWKS.
  */
-function generateEcPrivateJwk(descriptor: JwkDescriptor): string {
-  const { privateKey } = generateKeyPairSync('ec', {
-    namedCurve: 'P-256'
-  });
-
-  const privateJwk = privateKey.export({ format: 'jwk' }) as JwkRecord;
-
-  return toJSONString({
-    ...privateJwk,
-    kid: descriptor.kid,
-    alg: descriptor.alg,
-    use: descriptor.use,
-    key_ops: descriptor.keyOps
-  });
-}
-
-/** Generates and returns a JWK Set containing the issuer RSA signing key. */
 export function getSigningKeys(): string {
-  return generateSigningJwks({ kid: 'issuer-signing-key', use: 'sig' });
+  const signing = generateEcPrivateJwk({
+    kid: 'issuer-signing-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+
+  const encryption = generateEcPrivateJwk({
+    kid: 'issuer-encryption-key',
+    use: 'enc',
+    alg: 'ECDH-ES',
+    keyOps: ['deriveKey']
+  });
+
+  return JSON.stringify({ keys: [...signing.keys, ...encryption.keys] }, null, 2);
 }
 
-/** Generates and returns an EC P-256 private key JWK for authentication request signing. */
+/** Generates and returns an EC P-256 private key JWK for
+ * authentication request signing.
+ *
+ * @returns A JSON string representing the EC P-256 private key JWK.
+ */
 export function getAuthRequestKey(): string {
-  return generateEcPrivateJwk({
+  const jwk = generateEcPrivateJwk({
     kid: 'auth-request-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
+
+  return JSON.stringify(jwk.keys[0], null, 2);
 }
 
-/** Generates and returns an EC P-256 private key JWK for authentication response decryption. */
+/** Generates and returns an EC P-256 private key JWK for
+ * authentication response decryption.
+ *
+ * @returns A JSON string representing the EC P-256 private key JWK.
+ */
 export function getAuthResponseKey(): string {
-  return generateEcPrivateJwk({
+  const jwk = generateEcPrivateJwk({
     kid: 'auth-response-key',
     use: 'enc',
     alg: 'ECDH-ES',
-    keyOps: ['decrypt']
+    keyOps: ['deriveKey']
   });
+
+  return JSON.stringify(jwk.keys[0], null, 2);
 }
+
 /** Generates and returns an EC P-256 private key JWK for federation entity-statement signing. */
 export function getFederationKey(): string {
-  return generateEcPrivateJwk({
+  const jwk = generateEcPrivateJwk({
     kid: 'federation-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
-}
 
-/** Generates a 2048-bit RSA key pair using node-forge. */
-function generateKeyPair(): forge.pki.rsa.KeyPair {
-  return forge.pki.rsa.generateKeyPair(2048);
-}
-
-/** Creates and signs an X.509 certificate.
- *
- * @param params - Certificate parameters including subject, issuer, keys, serial number, and CA flag.
- * @returns The signed forge certificate object.
- */
-function createCertificate({
-  subject,
-  issuer,
-  publicKey,
-  issuerPrivateKey,
-  serialNumber,
-  isCA = false
-}: CertificateParams) {
-  const cert = forge.pki.createCertificate();
-
-  cert.publicKey = publicKey;
-  cert.serialNumber = serialNumber;
-
-  cert.validity.notBefore = new Date();
-  cert.validity.notAfter = new Date();
-  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10);
-
-  cert.setSubject(subject);
-  cert.setIssuer(issuer);
-
-  const extensions = [
-    {
-      name: 'basicConstraints',
-      cA: isCA,
-      pathLenConstraint: isCA ? 0 : undefined
-    },
-    {
-      name: 'keyUsage',
-      keyCertSign: isCA,
-      digitalSignature: true,
-      cRLSign: isCA
-    },
-    {
-      name: 'subjectKeyIdentifier'
-    }
-  ];
-
-  cert.setExtensions(extensions);
-
-  cert.sign(issuerPrivateKey, forge.md.sha256.create());
-
-  return cert;
-}
-
-/** Builds a self-signed IACA root certificate and returns it with its private key in PEM format. */
-function buildIacaChain(): IacaChain {
-  const iacaKeys = generateKeyPair();
-  const iacaSubject: ForgeAttribute[] = [
-    { name: 'commonName', value: 'IACA CA' },
-    { name: 'countryName', value: 'IT' },
-    { name: 'organizationName', value: 'Example Issuer' }
-  ];
-
-  const iacaCert = createCertificate({
-    subject: iacaSubject,
-    issuer: iacaSubject,
-    publicKey: iacaKeys.publicKey,
-    issuerPrivateKey: iacaKeys.privateKey,
-    serialNumber: '01',
-    isCA: true
-  });
-
-  return {
-    certificate: forge.pki.certificateToPem(iacaCert),
-    privateKey: forge.pki.privateKeyToPem(iacaKeys.privateKey)
-  };
-}
-
-/** Generates and returns a self-signed IACA certificate chain. */
-export function getIACAChain(): IacaChain {
-  return buildIacaChain();
-}
-
-/** Generates a self-signed TLS certificate and private key for localhost.
- * The certificate is valid for 825 days (the maximum accepted by macOS).
- *
- * @returns An object containing the certificate and private key in PEM format as separate strings.
- */
-export function getTlsCertAndKey(): TlsCertAndKey {
-  const keys = generateKeyPair();
-
-  const attrs: ForgeAttribute[] = [
-    { name: 'commonName', value: 'localhost' },
-    { name: 'organizationName', value: 'ITW Conformance Tool' }
-  ];
-
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
-
-  const now = new Date();
-  cert.validity.notBefore = now;
-  cert.validity.notAfter = new Date(now.getTime() + 825 * 24 * 60 * 60 * 1000);
-
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-
-  cert.setExtensions([
-    { name: 'basicConstraints', cA: false },
-    { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
-    { name: 'extKeyUsage', serverAuth: true },
-    { name: 'subjectKeyIdentifier' },
-    { name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }] }
-  ]);
-
-  cert.sign(keys.privateKey, forge.md.sha256.create());
-
-  return {
-    cert: forge.pki.certificateToPem(cert),
-    key: forge.pki.privateKeyToPem(keys.privateKey)
-  };
-}
-
-/** Generates a self-signed X.509 certificate for use in JWT x5c header (Relying Party).
- * The certificate is valid for 1 year.
- *
- * @returns The certificate in PEM format as a string.
- */
-export function getX5cCert(): string {
-  const keys = generateKeyPair();
-
-  const attrs: ForgeAttribute[] = [
-    { name: 'commonName', value: 'Relying Party' },
-    { name: 'organizationName', value: 'ITW Conformance Tool' }
-  ];
-
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = forge.util.bytesToHex(forge.random.getBytesSync(16));
-
-  const now = new Date();
-  cert.validity.notBefore = now;
-  cert.validity.notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-
-  cert.setExtensions([
-    { name: 'basicConstraints', cA: false },
-    { name: 'keyUsage', digitalSignature: true },
-    { name: 'extKeyUsage', clientAuth: true },
-    { name: 'subjectKeyIdentifier' }
-  ]);
-
-  cert.sign(keys.privateKey, forge.md.sha256.create());
-
-  return forge.pki.certificateToPem(cert);
+  return JSON.stringify(jwk.keys[0], null, 2);
 }
