@@ -1,57 +1,16 @@
-import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
-import { exportJWK, generateKeyPair } from 'jose';
+import { exportJWK, generateKeyPair as joseGenerateKeyPair } from 'jose';
+
+import { generateKeyPair } from './keys.js';
 
 import type { GenerateJwksOptions, JwkDescriptor, JwkRecord, JwkSet, KeyDescriptor } from '../types/types.js';
 
-const curveMap = {
-  ES256: 'P-256',
-  ES384: 'P-384',
-  ES512: 'P-521'
-} as const;
+const allOps = new Set(['sign', 'verify', 'encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey']);
 
-const signingOps = new Set([
-  'sign',
-  'verify'
-]);
+const encryptionOps = new Set(['encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey']);
 
-const encryptionOps = new Set([
-  'encrypt',
-  'decrypt',
-  'deriveKey',
-  'deriveBits',
-  'wrapKey',
-  'unwrapKey'
-]);
-
-const allOps = new Set([
-  'sign',
-  'verify',
-  'encrypt',
-  'decrypt',
-  'deriveKey',
-  'deriveBits',
-  'wrapKey',
-  'unwrapKey'
-]);
-
-/** Generates an RSA key pair and returns the private key 
- * in both PEM and JWK formats.
- *
- * @returns An object containing the private key in PEM 
- * format and as a JWK record.
- */
-function generateRsaKeyPair(): { privateKeyPem: string; privateJwk: JwkRecord } {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicExponent: 0x10001
-  });
-
-  const privateJwk = privateKey.export({ format: 'jwk' });
-  const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
-
-  return { privateKeyPem, privateJwk };
-}
+const signingOps = new Set(['sign', 'verify']);
 
 /** Resolves the default 'key_ops' for a generated key based on its
  * intended use and algorithm.
@@ -68,6 +27,15 @@ function resolveDefaultKeyOps(use: 'sig' | 'enc', alg: string): string[] {
   return alg === 'ECDH-ES' ? ['deriveKey'] : ['decrypt'];
 }
 
+/** Validates the provided 'key_ops' against the intended use and algorithm,
+ * ensuring that they are consistent and do not contain incompatible operations.
+ *
+ * @param use - The intended use of the key ('sig' for signing, 'enc' for encryption).
+ * @param alg - The algorithm for which the key is intended.
+ * @param keyOps - An optional array of key operations to validate. If not provided, no
+ * validation is performed.
+ * @returns void
+ */
 function validateKeyOps(use: 'sig' | 'enc', alg: string, keyOps?: string[]): void {
   if (!keyOps || keyOps.length === 0) {
     return;
@@ -75,9 +43,7 @@ function validateKeyOps(use: 'sig' | 'enc', alg: string, keyOps?: string[]): voi
 
   for (const op of keyOps) {
     if (!allOps.has(op)) {
-      throw new Error(
-        `Unknown key operation: ${op}`
-      );
+      throw new Error(`Unknown key operation: ${op}`);
     }
   }
 
@@ -97,6 +63,12 @@ function validateKeyOps(use: 'sig' | 'enc', alg: string, keyOps?: string[]): voi
   }
 }
 
+/** Ensures that all keys in the generated JWKS have unique 'kid' values, throwing
+ * an error if duplicates are found.
+ *
+ * @param keys - An array of JWK records to check for unique 'kid' values.
+ * @returns void
+ */
 function ensureUniqueKids(keys: JwkRecord[]): void {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
@@ -117,29 +89,6 @@ function ensureUniqueKids(keys: JwkRecord[]): void {
   if (duplicates.size > 0) {
     throw new Error(`Duplicate kid values in JWKS: ${Array.from(duplicates).join(', ')}`);
   }
-}
-
-/** Resolves the 'kid' for a generated key based on the provided spec,
- * count, and index.
- *
- * @param spec - The key specification containing optional 'kid' and 'kidPrefix'.
- * @param count - The total number of keys to be generated for the given spec.
- * @param index - The index of the current key being generated.
- * @returns The resolved 'kid' for the generated key.
- */
-function resolveKid(spec: GenerateJwksOptions['keys'][number], count: number, index: number): string {
-  if (spec.kid) {
-    if (count > 1) {
-      throw new Error('Cannot use a fixed kid when count > 1; use kidPrefix or count=1');
-    }
-
-    return spec.kid;
-  }
-
-  const prefix = spec.kidPrefix ?? `${spec.use}-${spec.alg}`;
-  const suffix = count === 1 ? randomUUID() : `${index + 1}-${randomUUID()}`;
-
-  return `${prefix}-${suffix}`;
 }
 
 /** Generates a configurable JWKS by producing one or more private
@@ -164,15 +113,15 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
 
       validateKeyOps(spec.use, spec.alg, spec.keyOps);
 
-      return Array.from({ length: count }, async (_, index) => {
-        const { privateKey } = await generateKeyPair(spec.alg, {
+      return Array.from({ length: count }, async () => {
+        const { privateKey } = await joseGenerateKeyPair(spec.alg, {
           extractable: spec.extractable ?? true
         });
         const privateJwk = await exportJWK(privateKey);
 
         return {
           ...privateJwk,
-          kid: resolveKid(spec, count, index),
+          kid: randomUUID(),
           use: spec.use,
           alg: spec.alg,
           key_ops: spec.keyOps ?? resolveDefaultKeyOps(spec.use, spec.alg)
@@ -186,31 +135,38 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
   return { keys: generated };
 }
 
-/** Generates a JWK Set containing a single RSA signing key.
+/** Backward-compatible helper that returns a JSON JWKS string for one RSA
+ * signing key descriptor.
  *
  * @param descriptor - Key identifier and intended use.
- * @returns A JwkSet representing the JWK Set.
+ * @returns The generated JWKS as pretty-printed JSON.
  */
 export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
-  if (descriptor.use !== 'sig') {
-    throw new Error(
-      'generateSigningJwks only supports use="sig"'
-    );
-  }
+  const { privateKey } = generateKeyPair({ use: 'sig', keyType: 'rsa' });
 
-  const { privateJwk } = generateRsaKeyPair();
+  const privateJwk = privateKey.export({ format: 'jwk' });
 
   return {
     keys: [
       {
-        ...privateJwk,
+        ...(privateJwk as JwkRecord),
         kid: descriptor.kid,
         alg: 'RS256',
-        use: 'sig',
-        key_ops: ['sign']
+        use: descriptor.use,
+        key_ops: descriptor.use === 'sig' ? ['sign'] : ['decrypt']
       }
     ]
   };
+}
+
+/** Backward-compatible helper that returns JSON JWKS string for configurable
+ * key generation options.
+ *
+ * @param options - Key generation options with one or more key specs.
+ * @returns The generated JWKS as JSON string.
+ */
+export async function generateConfigurableJwks(options: GenerateJwksOptions): Promise<JwkSet> {
+  return generateJWKS(options);
 }
 
 /** Generates an EC private key in JWK format
@@ -220,16 +176,12 @@ export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
  * @returns A JwkSet representing the private JWK.
  */
 export function generateEcPrivateJwk(descriptor: JwkDescriptor): JwkSet {
-  const curve = curveMap[descriptor.alg as keyof typeof curveMap];
-
-  if (!curve) {
-    throw new Error(`Unsupported EC algorithm: ${descriptor.alg}`);
-  }
-
   validateKeyOps(descriptor.use, descriptor.alg, descriptor.keyOps);
 
-  const { privateKey } = generateKeyPairSync('ec', {
-    namedCurve: curve
+  const { privateKey } = generateKeyPair({
+    use: descriptor.use,
+    keyType: 'ec',
+    alg: descriptor.alg
   });
 
   const privateJwk = privateKey.export({ format: 'jwk' });

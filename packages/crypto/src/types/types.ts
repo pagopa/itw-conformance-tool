@@ -1,4 +1,5 @@
 import type forge from 'node-forge';
+import type { JsonWebKey } from 'node:crypto';
 
 // Types
 export {
@@ -13,9 +14,27 @@ export {
 
 export type ForgeAttribute = { name: string; value: string } | { shortName: string; value: string };
 
-export type KeyUse = 'sig' | 'enc';
+export type GenerateKeyMaterialOptions =
+  | {
+      use: 'sig';
+      keyType: KeyType;
+      alg?: string;
+      modulusLength?: number;
+      namedCurve?: 'P-256' | 'P-384' | 'P-521';
+    }
+  | {
+      use: 'enc';
+      keyType: 'rsa' | 'ec';
+      alg?: string;
+      modulusLength?: number;
+      namedCurve?: 'P-256' | 'P-384' | 'P-521';
+    };
 
 export type JwkRecord = Record<string, unknown>;
+
+export type KeyType = 'rsa' | 'ec' | 'ed25519';
+
+export type KeyUse = 'sig' | 'enc';
 
 // Interfaces
 export interface CertificateParams {
@@ -27,9 +46,25 @@ export interface CertificateParams {
   isCA?: boolean;
 }
 
+export interface GenerateKeyPairResult {
+  privateKey: forge.pki.rsa.PrivateKey;
+  publicKey: forge.pki.rsa.PublicKey;
+  privateKeyPem: string;
+  publicKeyPem: string;
+  privateJwk: JsonWebKey;
+  publicJwk: JsonWebKey;
+}
+
 export interface IacaChain {
   certificate: string;
   privateKey: string;
+}
+
+export interface IacaChainParams {
+  commonName?: string;
+  countryName?: string;
+  organizationName?: string;
+  serialNumber?: string;
 }
 
 export interface JwkDescriptor {
@@ -51,7 +86,17 @@ export interface JwkGenerationSpec {
 
 export interface GenerateJwksOptions {
   keys: JwkGenerationSpec[];
-  prettyPrint?: boolean;
+}
+
+export interface GenerateKeyMaterialResult {
+  alg: string;
+  use: KeyUse;
+  kid: string;
+  keyOps: string[];
+  privateJwk: JwkRecord;
+  publicJwk: JwkRecord;
+  privateKeyPem?: string;
+  publicKeyPem?: string;
 }
 
 export interface JwkSet {
@@ -66,4 +111,15 @@ export interface KeyDescriptor {
 export interface TlsCertAndKey {
   cert: string;
   key: string;
+}
+
+export interface TlsCertParams {
+  commonName?: string;
+  organizationName?: string;
+  altNames?: string[];
+}
+
+export interface X5cCertParams {
+  commonName?: string;
+  organizationName?: string;
 }

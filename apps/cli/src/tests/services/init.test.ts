@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 
 import { parseINI } from '@itw-conformance-tool/config';
+import { getTlsCertAndKey } from '@itw-conformance-tool/crypto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { init } from '../../services/init.js';
-import { getTlsCertAndKey } from '../../utils/crypto.js';
 import { expandPath } from '../../utils/path.js';
 import { existsFileSync } from '../../utils/search.js';
 
@@ -25,9 +25,12 @@ vi.mock('../../utils/path.js', () => ({
 }));
 
 vi.mock('../../utils/crypto.js', () => ({
-  getSigningKeys: vi.fn(() => '{"keys":[]}'),
   getAuthRequestKey: vi.fn(() => '{"kty":"EC"}'),
   getAuthResponseKey: vi.fn(() => '{"kty":"EC"}'),
+  getSigningKeys: vi.fn(() => '{"keys":[]}')
+}));
+
+vi.mock('@itw-conformance-tool/crypto', () => ({
   getX5cCert: vi.fn(() => '---X5C-CERT---'),
   getIACAChain: vi.fn(() => ({ certificate: '---CERT---', privateKey: '---KEY---' })),
   getTlsCertAndKey: vi.fn(() => ({ cert: '---TLS-CERT---', key: '---TLS-KEY---' }))

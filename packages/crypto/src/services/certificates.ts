@@ -1,16 +1,40 @@
+import { createPrivateKey, createPublicKey } from 'node:crypto';
+
 import forge from 'node-forge';
 
-import type { CertificateParams, ForgeAttribute, IacaChain, TlsCertAndKey } from '../types/types.js';
+import type {
+  CertificateParams,
+  ForgeAttribute,
+  GenerateKeyPairResult,
+  IacaChain,
+  IacaChainParams,
+  TlsCertAndKey,
+  TlsCertParams,
+  X5cCertParams
+} from '../types/types.js';
 
-/**
- * Generates a 2048-bit RSA key pair using node-forge.
+/** Generates an RSA key pair and returns the private key
+ * in both PEM and JWK formats.
+ *
+ * @returns An object containing the private key in PEM
+ * format and as a JWK record.
  */
-function generateKeyPair(): forge.pki.rsa.KeyPair {
-  return forge.pki.rsa.generateKeyPair(2048);
+function generateRsaKeyPair(): GenerateKeyPairResult {
+  const { privateKey, publicKey } = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+  const privateKeyPem = forge.pki.privateKeyToPem(privateKey);
+  const publicKeyPem = forge.pki.publicKeyToPem(publicKey);
+
+  return {
+    privateKey,
+    publicKey,
+    privateKeyPem,
+    publicKeyPem,
+    privateJwk: createPrivateKey(privateKeyPem).export({ format: 'jwk' }),
+    publicJwk: createPublicKey(publicKeyPem).export({ format: 'jwk' })
+  };
 }
 
-/**
- * Creates and signs an X.509 certificate.
+/** Creates and signs an X.509 certificate.
  *
  * @param params - Certificate parameters including subject, issuer, keys, serial number, and CA flag.
  * @returns The signed forge certificate object.
@@ -59,15 +83,24 @@ function createCertificate({
   return cert;
 }
 
-/**
- * Builds a self-signed IACA root certificate and returns it with its private key in PEM format.
+/** Generates and returns a self-signed IACA certificate chain.
+ *
+ * @param params - Optional parameters to customize the certificate
+ * subject and serial number.
+ * @returns An object containing the certificate and private key
+ * in PEM format as separate strings.
  */
-function buildIacaChain(): IacaChain {
-  const iacaKeys = generateKeyPair();
+export function getIACAChain({
+  commonName = 'IACA CA',
+  countryName = 'IT',
+  organizationName = 'Example Issuer',
+  serialNumber = '01'
+}: IacaChainParams = {}): IacaChain {
+  const iacaKeys = generateRsaKeyPair();
   const iacaSubject: ForgeAttribute[] = [
-    { name: 'commonName', value: 'IACA CA' },
-    { name: 'countryName', value: 'IT' },
-    { name: 'organizationName', value: 'Example Issuer' }
+    { name: 'commonName', value: commonName },
+    { name: 'countryName', value: countryName },
+    { name: 'organizationName', value: organizationName }
   ];
 
   const iacaCert = createCertificate({
@@ -75,7 +108,7 @@ function buildIacaChain(): IacaChain {
     issuer: iacaSubject,
     publicKey: iacaKeys.publicKey,
     issuerPrivateKey: iacaKeys.privateKey,
-    serialNumber: '01',
+    serialNumber,
     isCA: true
   });
 
@@ -85,25 +118,22 @@ function buildIacaChain(): IacaChain {
   };
 }
 
-/**
- * Generates and returns a self-signed IACA certificate chain.
- */
-export function getIACAChain(): IacaChain {
-  return buildIacaChain();
-}
-
-/**
- * Generates a self-signed TLS certificate and private key for localhost.
+/** Generates a self-signed TLS certificate and private key for localhost.
  * The certificate is valid for 825 days (the maximum accepted by macOS).
  *
+ * @param params - Optional parameters to customize the certificate subject and alternative names.
  * @returns An object containing the certificate and private key in PEM format as separate strings.
  */
-export function getTlsCertAndKey(): TlsCertAndKey {
-  const keys = generateKeyPair();
+export function getTlsCertAndKey({
+  commonName = 'localhost',
+  organizationName = 'ITW Conformance Tool',
+  altNames = ['localhost']
+}: TlsCertParams = {}): TlsCertAndKey {
+  const keys = generateRsaKeyPair();
 
   const attrs: ForgeAttribute[] = [
-    { name: 'commonName', value: 'localhost' },
-    { name: 'organizationName', value: 'ITW Conformance Tool' }
+    { name: 'commonName', value: commonName },
+    { name: 'organizationName', value: organizationName }
   ];
 
   const cert = forge.pki.createCertificate();
@@ -122,7 +152,7 @@ export function getTlsCertAndKey(): TlsCertAndKey {
     { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
     { name: 'extKeyUsage', serverAuth: true },
     { name: 'subjectKeyIdentifier' },
-    { name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }] }
+    { name: 'subjectAltName', altNames: altNames.map((value) => ({ type: 2, value })) }
   ]);
 
   cert.sign(keys.privateKey, forge.md.sha256.create());
@@ -133,18 +163,21 @@ export function getTlsCertAndKey(): TlsCertAndKey {
   };
 }
 
-/**
- * Generates a self-signed X.509 certificate for use in JWT x5c header (Relying Party).
+/** Generates a self-signed X.509 certificate for use in JWT x5c header (Relying Party).
  * The certificate is valid for 1 year.
  *
+ * @param params - Optional parameters to customize the certificate subject.
  * @returns The certificate in PEM format as a string.
  */
-export function getX5cCert(): string {
-  const keys = generateKeyPair();
+export function getX5cCert({
+  commonName = 'Relying Party',
+  organizationName = 'ITW Conformance Tool'
+}: X5cCertParams = {}): string {
+  const keys = generateRsaKeyPair();
 
   const attrs: ForgeAttribute[] = [
-    { name: 'commonName', value: 'Relying Party' },
-    { name: 'organizationName', value: 'ITW Conformance Tool' }
+    { name: 'commonName', value: commonName },
+    { name: 'organizationName', value: organizationName }
   ];
 
   const cert = forge.pki.createCertificate();

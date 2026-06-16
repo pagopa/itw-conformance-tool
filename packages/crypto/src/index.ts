@@ -1,9 +1,9 @@
-// Export types
+// Types
 export * from './types/types.js';
 
-// Export services
-export { hashCallback, generateRandomCallback, sha256, generateRandomBytes } from './services/hashing.js';
-export { generateRandomBytes as generateRandom } from './services/generate.js';
+// Services
+export { hashCallback, sha256 } from './services/hashing.js';
+export { generateRandomBytes } from './services/random.js';
 export { getIACAChain, getTlsCertAndKey, getX5cCert } from './services/certificates.js';
 export {
   createSignJwtCallback,
@@ -11,4 +11,4 @@ export {
   createDecryptJweCallback,
   createEncryptJweCallback
 } from './services/callbacks.js';
-export { generateSigningJwks, generateEcPrivateJwk, generateJWKS } from './services/jwk.js';
+export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
