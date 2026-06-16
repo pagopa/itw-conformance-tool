@@ -141,7 +141,7 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
   return { keys: generated };
 }
 
-/** Backward-compatible helper that returns a JSON JWKS string for one RSA
+/** Backward-compatible helper that returns a JWKS containing one RSA
  * signing key descriptor.
  *
  * @param descriptor - Key identifier and intended use.
