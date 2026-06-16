@@ -165,7 +165,7 @@ export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
   };
 }
 
-/** Backward-compatible helper that returns JSON JWKS string for configurable
+/** Backward-compatible helper that returns a JWKS for configurable
  * key generation options.
  *
  * @param options - Key generation options with one or more key specs.
