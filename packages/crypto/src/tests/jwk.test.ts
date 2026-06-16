@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { generateEcPrivateJwk, generateJWKS } from '../services/jwk.js';
+import { generateConfigurableJwks, generateEcPrivateJwk, generateJWKS, generateSigningJwks } from '../services/jwk.js';
 
 describe('jwk service', () => {
   it('generateEcPrivateJwk returns an ES256 key with descriptor metadata', () => {
@@ -83,5 +83,23 @@ describe('jwk service', () => {
         keys: [{ alg: 'ES256', keyOps: ['not-an-op'], use: 'sig' }]
       })
     ).rejects.toThrow('Unknown key operation: not-an-op');
+  });
+
+  it('generateSigningJwks returns a JwkSet with one RSA signing key', () => {
+    const jwks = generateSigningJwks({ kid: 'issuer-signing-key', use: 'sig' });
+
+    expect(jwks.keys).toHaveLength(1);
+    expect(jwks.keys[0]['alg']).toBe('RS256');
+    expect(jwks.keys[0]['kid']).toBe('issuer-signing-key');
+    expect(jwks.keys[0]['key_ops']).toEqual(['sign']);
+  });
+
+  it('generateConfigurableJwks returns a JwkSet', async () => {
+    const jwks = await generateConfigurableJwks({
+      keys: [{ alg: 'ES256', use: 'sig' }]
+    });
+
+    expect(jwks.keys).toHaveLength(1);
+    expect(jwks.keys[0]['alg']).toBe('ES256');
   });
 });

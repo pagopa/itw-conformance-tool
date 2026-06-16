@@ -4,7 +4,7 @@ import { exportJWK, generateKeyPair as joseGenerateKeyPair } from 'jose';
 
 import { generateKeyPair } from './keys.js';
 
-import type { GenerateJwksOptions, JwkDescriptor, JwkRecord, JwkSet } from '../types/types.js';
+import type { GenerateJwksOptions, JwkDescriptor, JwkRecord, JwkSet, KeyDescriptor } from '../types/types.js';
 
 const allOps = new Set(['sign', 'verify', 'encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey']);
 
@@ -145,8 +145,8 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
  * signing key descriptor.
  *
  * @param descriptor - Key identifier and intended use.
- * @returns The generated JWKS as pretty-printed JSON.
  * @returns The generated JWKS.
+ */
 export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
   const { privateKey } = generateKeyPair({ use: 'sig', keyType: 'rsa' });
 
@@ -169,8 +169,8 @@ export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
  * key generation options.
  *
  * @param options - Key generation options with one or more key specs.
- * @returns The generated JWKS as JSON string.
  * @returns The generated JWKS.
+ */
 export async function generateConfigurableJwks(options: GenerateJwksOptions): Promise<JwkSet> {
   return generateJWKS(options);
 }
