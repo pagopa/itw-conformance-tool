@@ -43,7 +43,7 @@ export function getAuthRequestKey(): string {
 }
 
 /** Generates and returns an EC P-256 private key JWK for
- * authentication response encryption.
+ * authentication response decryption.
  *
  * @returns A JSON string representing the EC P-256 private key JWK.
  */

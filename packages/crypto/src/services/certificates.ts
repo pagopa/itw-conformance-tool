@@ -1,6 +1,10 @@
+import { isIP } from 'node:net';
+
 import {
   BasicConstraintsExtension,
+  Extension,
   KeyUsagesExtension,
+  SubjectAlternativeNameExtension,
   SubjectKeyIdentifierExtension,
   X509CertificateGenerator
 } from '@peculiar/x509';
@@ -14,6 +18,7 @@ interface CertificateOptions {
   notAfterDays: number;
   isCA?: boolean;
   keyUsageBits: number;
+  altNames?: string[];
 }
 
 /** Generates a self-signed X.509 certificate using ECDSA P-256.
@@ -27,7 +32,8 @@ async function generateCertificate({
   countryName = 'IT',
   notAfterDays,
   isCA = false,
-  keyUsageBits
+  keyUsageBits,
+  altNames = []
 }: CertificateOptions): Promise<{ certPem: string; keyPem: string }> {
   const keyPair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
 
@@ -37,11 +43,23 @@ async function generateCertificate({
 
   const name = `C=${countryName}, O=${organizationName}, CN=${commonName}`;
 
-  const extensions = [
+  const extensions: Extension[] = [
     new BasicConstraintsExtension(isCA, isCA ? 0 : undefined, true),
     new KeyUsagesExtension(keyUsageBits, true),
     await SubjectKeyIdentifierExtension.create(keyPair.publicKey)
   ];
+
+  if (!isCA) {
+    const uniqueAltNames = [...new Set([commonName, ...altNames])];
+    extensions.push(
+      new SubjectAlternativeNameExtension(
+        uniqueAltNames.map((name) => ({
+          type: isIP(name) ? 'ip' : 'dns',
+          value: name
+        }))
+      )
+    );
+  }
 
   const cert = await X509CertificateGenerator.createSelfSigned({
     keys: keyPair,
@@ -93,14 +111,16 @@ export async function getIACAChain({
  */
 export async function getTlsCertAndKey({
   commonName = 'localhost',
-  organizationName = 'ITW Conformance Tool'
+  organizationName = 'ITW Conformance Tool',
+  altNames = []
 }: TlsCertParams = {}): Promise<TlsCertAndKey> {
   const { certPem, keyPem } = await generateCertificate({
     commonName,
     organizationName,
     notAfterDays: 825,
     isCA: false,
-    keyUsageBits: 0x04 | 0x10 // digitalSignature | keyEncipherment
+    keyUsageBits: 0x04 | 0x10, // digitalSignature | keyEncipherment
+    altNames
   });
 
   return {

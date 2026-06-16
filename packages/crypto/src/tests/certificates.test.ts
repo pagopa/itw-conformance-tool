@@ -1,3 +1,4 @@
+import { SubjectAlternativeNameExtension, X509Certificate } from '@peculiar/x509';
 import { describe, expect, it } from 'vitest';
 
 import { getIACAChain, getTlsCertAndKey, getX5cCert } from '../services/certificates.js';
@@ -30,7 +31,7 @@ describe('certificates service', () => {
 
   it('getTlsCertAndKey returns certificate and key with SAN entries', async () => {
     const tls = await getTlsCertAndKey({
-      altNames: ['localhost', 'wallet.local'],
+      altNames: ['localhost', 'wallet.local', '127.0.0.1'],
       commonName: 'localhost',
       organizationName: 'ITW'
     });
@@ -38,6 +39,18 @@ describe('certificates service', () => {
     expect(tls.cert).toContain('BEGIN CERTIFICATE');
     expect(tls.key).toContain('BEGIN PRIVATE KEY');
     expect(tls.cert).toContain('END CERTIFICATE');
+
+    const parsedCert = new X509Certificate(tls.cert);
+    const san = parsedCert.getExtension(SubjectAlternativeNameExtension);
+
+    expect(san).toBeTruthy();
+    expect(san?.names.toJSON()).toEqual(
+      expect.arrayContaining([
+        { type: 'dns', value: 'localhost' },
+        { type: 'dns', value: 'wallet.local' },
+        { type: 'ip', value: '127.0.0.1' }
+      ])
+    );
   });
 
   it('getX5cCert returns a client-auth certificate valid for about one year', async () => {

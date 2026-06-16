@@ -57,9 +57,7 @@ function createParRepository(entry: PAREntry | undefined) {
     getByMrtdAuthSession: vi.fn(async () => undefined),
     insert: async () => undefined,
     update,
-    getByJti: function (jti: string): Promise<PAREntry | undefined> {
-      throw new Error('Function not implemented.');
-    }
+    getByJti: vi.fn(async () => undefined)
   };
 
   return {

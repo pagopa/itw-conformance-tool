@@ -4,11 +4,11 @@ import * as x509 from '@peculiar/x509';
 import { X509Certificate } from '@peculiar/x509';
 import { exportJWK, importX509, type JWK } from 'jose';
 
-/** Extracts relevant data from an X.509 certificate provided 
+/** Extracts relevant data from an X.509 certificate provided
  * as an ArrayBuffer and returns it in a structured format.
- *  
+ *
  * @param input - An object containing the certificate as an ArrayBuffer.
- * @returns An object containing the issuer name, validity period, PEM-encode 
+ * @returns An object containing the issuer name, validity period, PEM-encode
  * certificate, serial number, subject name, and thumbprint of the certificate.
  */
 export const getCertificateData = async (input: { certificate: ArrayBuffer }) => {
@@ -26,12 +26,12 @@ export const getCertificateData = async (input: { certificate: ArrayBuffer }) =>
   };
 };
 
-/** Extracts the public key from the leaf certificate in 
+/** Extracts the public key from the leaf certificate in
  * a certificate chain and returns it as a JWK.
- * 
- * @param input - An object containing the certificate chain 
+ *
+ * @param input - An object containing the certificate chain
  * (in x5c format) and the expected algorithm of the public key.
- * @returns A JWK representing the public key extracted from the 
+ * @returns A JWK representing the public key extracted from the
  * leaf certificate, with `kid`, `use`, and `alg` parameters set.
  */
 export const getCertificateChainPublicKey = async (input: { alg: string; certificateChain: readonly unknown[] }) => {
@@ -50,10 +50,10 @@ export const getCertificateChainPublicKey = async (input: { alg: string; certifi
   return await exportJWK(key);
 };
 
-/** Validates a certificate chain against a set of trusted root certificates 
+/** Validates a certificate chain against a set of trusted root certificates
  * and returns an error if the chain is invalid.
- * 
- * @param input - An object containing the certificate chain to validate, 
+ *
+ * @param input - An object containing the certificate chain to validate,
  * the trusted root certificates, and an optional validation date.
  * @returns void if the certificate chain is valid.
  */
@@ -101,12 +101,12 @@ export const validateCertificateChain = async (input: {
   }
 };
 
-/** Creates a self-signed X.509 certificate from a JWK containing a 
+/** Creates a self-signed X.509 certificate from a JWK containing a
  * public/private key pair.
  *
- * @param jwk - A JWK containing the public and private key material 
+ * @param jwk - A JWK containing the public and private key material
  * to be included in the certificate.
- * @returns A PEM-encoded string representation of the generated 
+ * @returns A PEM-encoded string representation of the generated
  * X.509 certificate.
  */
 export const createSelfSignedCertificateFromJwk = async (jwk: JWK): Promise<string> => {
@@ -149,11 +149,11 @@ export const convertPemToBase64Der = (certificatePem: string): string =>
   Buffer.from(new X509Certificate(certificatePem).rawData).toString('base64');
 
 /** Removes private key material and key_ops from a JWK to produce a public JWK.
- * 
+ *
  * @param jwk - The input JWK, which may contain private key parameters and/or key_ops.
  * @returns A new JWK object containing only the public key parameters and no key_ops.
  */
 function stripPrivateKeyMaterial(jwk: JWK): JWK {
-  const { d, key_ops, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
+  const { d: _d, key_ops: _key_ops, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
   return publicJwk;
 }

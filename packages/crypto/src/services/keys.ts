@@ -28,7 +28,7 @@ const DEFAULT_ALGORITHMS = {
   },
   enc: {
     rsa: 'RSA-OAEP-256',
-    ec: 'ECDH-ES+A256KW'
+    ec: 'ECDH-ES'
   }
 } as const;
 
@@ -57,7 +57,7 @@ function resolveDefaultAlg(options: GenerateKeyMaterialOptions): string {
  * @param options - The key generation options containing use and key type
  * @param alg - The resolved algorithm to validate
  */
-function validatekeysTypeCombination(options: GenerateKeyMaterialOptions, alg: string): void {
+function validateKeysTypeCombination(options: GenerateKeyMaterialOptions, alg: string): void {
   const useMatrix = ALGORITHM_MATRIX[options.use];
   const supported = useMatrix[options.keyType as keyof typeof useMatrix] as readonly string[];
 
@@ -74,7 +74,7 @@ function validatekeysTypeCombination(options: GenerateKeyMaterialOptions, alg: s
  */
 export function generateKeyPair(options: GenerateKeyMaterialOptions) {
   const alg = resolveDefaultAlg(options);
-  validatekeysTypeCombination(options, alg);
+  validateKeysTypeCombination(options, alg);
 
   // RSA algorithms
   if (['RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512', 'RSA-OAEP', 'RSA-OAEP-256'].includes(alg)) {

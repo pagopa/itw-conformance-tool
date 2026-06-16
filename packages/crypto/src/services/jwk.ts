@@ -24,7 +24,7 @@ function resolveDefaultKeyOps(use: 'sig' | 'enc', alg: string): string[] {
     return ['sign'];
   }
 
-  return alg === 'ECDH-ES' ? ['deriveKey'] : ['decrypt'];
+  return alg.startsWith('ECDH-ES') ? ['deriveKey'] : ['decrypt'];
 }
 
 /** Validates the provided 'key_ops' against the intended use and algorithm,
@@ -55,10 +55,10 @@ function validateKeyOps(use: 'sig' | 'enc', alg: string, keyOps?: string[]): voi
     throw new Error(`Invalid key_ops for use=enc and alg=${alg}: ${keyOps.join(', ')}`);
   }
 
-  if (alg === 'ECDH-ES') {
+  if (alg.startsWith('ECDH-ES')) {
     const allowed = new Set(['deriveKey', 'deriveBits']);
     if (keyOps.some((op) => !allowed.has(op))) {
-      throw new Error(`Invalid key_ops for alg=ECDH-ES: ${keyOps.join(', ')}`);
+      throw new Error(`Invalid key_ops for alg=${alg}: ${keyOps.join(', ')}`);
     }
   }
 }
@@ -113,7 +113,13 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
 
       validateKeyOps(spec.use, spec.alg, spec.keyOps);
 
-      return Array.from({ length: count }, async () => {
+      if (spec.kid && count !== 1) {
+        throw new Error(`kid cannot be used with count > 1 for alg ${spec.alg}`);
+      }
+
+      return Array.from({ length: count }, async (_unused, index) => {
+        const kid = spec.kid ?? (spec.kidPrefix ? `${spec.kidPrefix}-${index + 1}` : randomUUID());
+
         const { privateKey } = await joseGenerateKeyPair(spec.alg, {
           extractable: spec.extractable ?? true
         });
@@ -121,7 +127,7 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
 
         return {
           ...privateJwk,
-          kid: randomUUID(),
+          kid,
           use: spec.use,
           alg: spec.alg,
           key_ops: spec.keyOps ?? resolveDefaultKeyOps(spec.use, spec.alg)
