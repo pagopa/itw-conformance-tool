@@ -146,7 +146,7 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
  *
  * @param descriptor - Key identifier and intended use.
  * @returns The generated JWKS as pretty-printed JSON.
- */
+ * @returns The generated JWKS.
 export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
   const { privateKey } = generateKeyPair({ use: 'sig', keyType: 'rsa' });
 
