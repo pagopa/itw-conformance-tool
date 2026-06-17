@@ -91,6 +91,7 @@ export async function createAuthorizationRequestUseCase(
   input: CreateAuthorizationRequestInput
 ): Promise<CreateAuthorizationRequestResult> {
   const clientId = extractClientId(input.baseUrl);
+  const requestObjectClientId = `x509_hash:${clientId}`;
   const responseUri = `${clientId}/auth/response`;
   const state = randomUUID();
   const nonce = randomBytes(32).toString('hex');
@@ -110,7 +111,7 @@ export async function createAuthorizationRequestUseCase(
 
   const result = await createAuthorizationRequest({
     authorizationRequestPayload: {
-      client_id: clientId,
+      client_id: requestObjectClientId,
       client_metadata: {
         encrypted_response_enc_values_supported: ['A256GCM'],
         jwks: {

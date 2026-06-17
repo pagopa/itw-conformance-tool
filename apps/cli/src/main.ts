@@ -1,8 +1,10 @@
 import { createLogger } from '@itw-conformance-tool/logger';
 
+import { reportCreate } from './commands/reportCreate.js';
+import { reportList } from './commands/reportList.js';
 import { buildEnv } from './services/buildEnv.js';
 import { getNxCommands } from './services/getNxCommands.js';
-import { init } from './services/init.js';
+import { init } from './commands/init.js';
 import { loadConfigs } from './services/loadConfigs.js';
 import { parseCLIArgs } from './services/parseCLIArgs.js';
 import { runCommands } from './services/runCommands.js';
@@ -27,13 +29,28 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // __ Start section
     const configs = loadConfigs(flags);
 
     // Change logger because log level might have been updated in the config file
     const paramLogger = createLogger({ level: configs.global.log_level });
     emitLog = createEmitter(paramLogger);
 
+    // __ Report list section
+    if (command === 'report:list') {
+      reportList(configs.global.data_dir, emitLog);
+      process.exit(0);
+    }
+
+    // __ Report create section
+    if (command === 'report:create') {
+      if (!flags.runId) {
+        throw new Error('Missing required flag: --run-id <uuid>');
+      }
+      await reportCreate(flags.runId, flags.format, configs.global.data_dir, emitLog);
+      process.exit(0);
+    }
+
+    // __ Start section
     const missingFiles = filesToSearch(configs.global.data_dir, configs.global.https).filter((f) => !existsFileSync(f));
     if (missingFiles.length > 0) {
       throw new Error(

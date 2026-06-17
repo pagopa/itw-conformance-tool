@@ -146,6 +146,46 @@ describe('parseCLIArgs', () => {
     });
   });
 
+  describe('report commands', () => {
+    it('parses report:list with --config <path>', () => {
+      const result = parseCLIArgs(['report:list', '--config', 'custom.ini'], rootPath);
+      expect(result.command).toBe('report:list');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+
+    it('parses report:list with -c=<path>', () => {
+      const result = parseCLIArgs(['report:list', '-c=custom.ini'], rootPath);
+      expect(result.command).toBe('report:list');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+
+    it('parses report:create with positional args and --config', () => {
+      const result = parseCLIArgs(
+        ['report:create', '00000000-0000-0000-0000-000000000000', 'pdf', '--config', 'custom.ini'],
+        rootPath
+      );
+      expect(result.command).toBe('report:create');
+      expect(result.flags.runId).toBe('00000000-0000-0000-0000-000000000000');
+      expect(result.flags.format).toBe('pdf');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+
+    it('parses report:create with --config before positional args', () => {
+      const result = parseCLIArgs(
+        ['report:create', '--config=custom.ini', '00000000-0000-0000-0000-000000000000', 'html'],
+        rootPath
+      );
+      expect(result.command).toBe('report:create');
+      expect(result.flags.runId).toBe('00000000-0000-0000-0000-000000000000');
+      expect(result.flags.format).toBe('html');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+  });
+
   describe('tokenization of single-argument input', () => {
     it('tokenizes a single "start --all" string', () => {
       const result = parseCLIArgs(['start --all'], rootPath);

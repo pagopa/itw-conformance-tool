@@ -1,3 +1,4 @@
+import type { SearchParamResult } from '#/types/types.js';
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -84,4 +85,34 @@ export function existsFileSync(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Utility function to search for a parameter value in an array
+ * of command-line arguments, handling both inline and separate values.
+ *
+ * @param param - The parameter name to search for (e.g., '--config' or '-c').
+ * @param args - The array of command-line arguments to search through.
+ * @returns An object containing the found value and the remaining arguments,
+ * or null if not found.
+ */
+export function searchParamValue(param: string, args: string[]): SearchParamResult | null {
+  const inlineIndex = args.findIndex((arg) => arg.startsWith(`${param}=`));
+
+  if (inlineIndex !== -1) {
+    return {
+      value: args[inlineIndex].slice(param.length + 1),
+      remainingArgs: args.filter((_, i) => i !== inlineIndex)
+    };
+  }
+
+  const index = args.indexOf(param);
+
+  if (index !== -1 && index < args.length - 1) {
+    return {
+      value: args[index + 1],
+      remainingArgs: args.filter((_, i) => i !== index && i !== index + 1)
+    };
+  }
+
+  return null;
 }
