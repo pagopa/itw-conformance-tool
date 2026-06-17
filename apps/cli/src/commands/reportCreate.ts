@@ -8,7 +8,8 @@ import {
   generateRenderedReport,
   type ReportFormat
 } from '@itw-conformance-tool/conformance';
-import type { EmitLog } from '#/types/types.js';
+
+import type { EmitLog } from '../types/types.js';
 
 /** Generates a conformance report file for the given run ID.
  *

@@ -181,6 +181,7 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
       }
       printHelp();
       process.exit(0);
+      break;
     case 'version':
     case '--version':
     case '-v':
@@ -189,10 +190,12 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
       }
       printVersion(rootPath);
       process.exit(0);
+      break;
     default:
       process.stdout.write(`Unknown command: ${command}\n`);
       printHelp();
       process.exit(1);
+      break;
   }
 
   return { command, flags };

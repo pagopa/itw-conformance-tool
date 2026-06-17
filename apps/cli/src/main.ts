@@ -1,10 +1,10 @@
 import { createLogger } from '@itw-conformance-tool/logger';
 
+import { init } from './commands/init.js';
 import { reportCreate } from './commands/reportCreate.js';
 import { reportList } from './commands/reportList.js';
 import { buildEnv } from './services/buildEnv.js';
 import { getNxCommands } from './services/getNxCommands.js';
-import { init } from './commands/init.js';
 import { loadConfigs } from './services/loadConfigs.js';
 import { parseCLIArgs } from './services/parseCLIArgs.js';
 import { runCommands } from './services/runCommands.js';
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
     // __ Init section
     if (command === 'init') {
       await init(flags);
-      console.log('\nStart services with:\n  itw-conformance-tool start --all\n');
+      process.stdout.write('\nStart services with:\n  itw-conformance-tool start --all\n');
       process.exit(0);
     }
 
