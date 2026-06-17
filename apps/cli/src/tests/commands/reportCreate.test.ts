@@ -14,7 +14,9 @@ const dbState = {
 vi.mock('node:sqlite', () => {
   return {
     DatabaseSync: vi.fn(function (this: Record<string, unknown>) {
-      this.close = () => { dbState.closed = true; };
+      this.close = () => {
+        dbState.closed = true;
+      };
     })
   };
 });
