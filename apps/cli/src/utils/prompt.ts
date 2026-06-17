@@ -24,26 +24,35 @@ export function printHelp(): void {
   process.stdout.write('Usage:\n');
   process.stdout.write(`  itw-conformance-tool <command> [options]\n\n`);
   process.stdout.write('Commands:\n');
-  process.stdout.write('  init           Initialize local workspace assets (data directory + config.ini template)\n');
-  process.stdout.write('  start          Start local services via Nx\n');
-  process.stdout.write('  report-list    List all conformance runs stored in the database\n');
-  process.stdout.write('  report-create  Generate a conformance report file for a given run\n');
-  process.stdout.write('  -v, --version                      Show version\n');
-  process.stdout.write('  -h, --help                         Show help\n\n');
+  process.stdout.write('  init             Initialize local workspace assets (data directory + config.ini template)\n');
+  process.stdout.write('  start            Start local services via Nx\n');
+  process.stdout.write('  report:list      List all conformance runs stored in the database\n');
+  process.stdout.write('  report:create    Generate a conformance report file for a given run\n');
+  process.stdout.write('  -v, --version    Show version\n');
+  process.stdout.write('  -h, --help       Show help\n\n');
   process.stdout.write('Options:\n');
-  process.stdout.write('  -c, --config <path>                Config path (for init output and runtime overrides)\n');
-  process.stdout.write('  -a, --all                          Start issuer and relying party (default for start)\n');
-  process.stdout.write('  --issuer                           Start only itw-credential-issuer\n');
-  process.stdout.write('  --rp                               Start only itw-relying-party\n');
-  process.stdout.write('  -f, --force                        Force overwrite for init-generated files\n');
-  process.stdout.write('  --run-id <uuid>                    Conformance run UUID (required for report-create)\n');
-  process.stdout.write('  --format <html|pdf>                Report format (default: html, for report-create)\n');
+  process.stdout.write(
+    '  -c, --config <path>    Path to the config file (for start and report commands, default: ~/config.ini)\n'
+  );
+  process.stdout.write('  -a, --all              Start issuer and relying party (default for start)\n');
+  process.stdout.write('  --issuer               Start only itw-credential-issuer\n');
+  process.stdout.write('  --rp                   Start only itw-relying-party\n');
+  process.stdout.write('  -f, --force            Force overwrite for init-generated files\n');
   process.stdout.write('Examples:\n');
   process.stdout.write(`  itw-conformance-tool init  --force\n`);
   process.stdout.write(`  itw-conformance-tool start --all\n`);
   process.stdout.write(`  itw-conformance-tool start --issuer\n`);
-  process.stdout.write(`  itw-conformance-tool report-list\n`);
-  process.stdout.write(`  itw-conformance-tool report-create --run-id <uuid> --format html\n\n`);
+  process.stdout.write(`  itw-conformance-tool start --issuer --config '~/config.ini'\n`);
+  process.stdout.write(`  itw-conformance-tool start --rp\n`);
+  process.stdout.write(`  itw-conformance-tool start --rp --config '~/config.ini'\n`);
+  process.stdout.write(`  itw-conformance-tool report:list\n`);
+  process.stdout.write(`  itw-conformance-tool report:list --config '~/config.ini'\n`);
+  process.stdout.write(
+    `  itw-conformance-tool report:create <uuid> <format>                            (use html or pdf, default: html)\n\n`
+  );
+  process.stdout.write(
+    `  itw-conformance-tool report:create <uuid> <format> --config '~/config.ini'    (use html or pdf, default: html)\n\n`
+  );
 }
 
 /** Utility function to read the version of the itw-conformance-tool

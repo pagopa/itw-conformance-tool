@@ -44,7 +44,7 @@ async function main(): Promise<void> {
     // __ Report create section
     if (command === 'report:create') {
       if (!flags.runId) {
-        throw new Error('Missing required flag: --run-id <uuid>');
+        throw new Error('Missing required param: <uuid>');
       }
       await reportCreate(flags.runId, flags.format, configs.global.data_dir, emitLog);
       process.exit(0);

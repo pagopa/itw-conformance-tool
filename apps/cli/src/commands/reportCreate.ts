@@ -37,8 +37,7 @@ export async function reportCreate(
     const session = await repository.get(runId);
 
     if (!session) {
-      emitter(`Error: conformance run '${runId}' not found in the database.\n`, 'error');
-      process.exit(1);
+      throw new Error(`Conformance run '${runId}' not found in the database.`);
     }
 
     const jsonReporter = buildJsonReporterFromSession(session);

@@ -88,23 +88,23 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 
 ### Root-level `pnpm` scripts
 
-| Command                                  | Description                                                           |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| `pnpm build`                             | Build all projects with a `build` target                              |
-| `pnpm start`                             | Serve all runnable apps with a `serve` target                         |
-| `pnpm itw-conformance-tool`              | Run the local conformance CLI (`init`/`start`)                        |
-| `pnpm itw-conformance-tool:init`         | Initialize local data directory and config template                   |
-| `pnpm itw-conformance-tool:start`        | Start both services via CLI (`start --all`)                           |
-| `pnpm itw-conformance-tool:start:issuer` | Start only the issuer service via CLI                                 |
-| `pnpm itw-conformance-tool:start:rp`     | Start only the relying-party service via CLI                          |
-| `pnpm issuer`                            | Serve `itw-credential-issuer`                                         |
-| `pnpm rp`                                | Serve `itw-relying-party`                                             |
-| `pnpm test`                              | Run Vitest for projects with a `test` target                          |
-| `pnpm typecheck`                         | Type-check projects with a `typecheck` target                         |
-| `pnpm lint`                              | Lint projects with a `lint` target                                    |
-| `pnpm format`                            | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier |
-| `pnpm clean`                             | Run project clean targets, then remove root `node_modules` and `.nx`  |
-| `pnpm pre-commit`                        | Run lint and type-check on affected projects                          |
+| Command                                  | Description                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `pnpm build`                             | Build all projects with a `build` target                                        |
+| `pnpm start`                             | Serve all runnable apps with a `serve` target                                   |
+| `pnpm itw-conformance-tool`              | Run the local conformance CLI (`init`, `start`, `report:list`, `report:create`) |
+| `pnpm itw-conformance-tool:init`         | Initialize local data directory and config template                             |
+| `pnpm itw-conformance-tool:start`        | Start both services via CLI (`start --all`)                                     |
+| `pnpm itw-conformance-tool:start:issuer` | Start only the issuer service via CLI                                           |
+| `pnpm itw-conformance-tool:start:rp`     | Start only the relying-party service via CLI                                    |
+| `pnpm issuer`                            | Serve `itw-credential-issuer`                                                   |
+| `pnpm rp`                                | Serve `itw-relying-party`                                                       |
+| `pnpm test`                              | Run Vitest for projects with a `test` target                                    |
+| `pnpm typecheck`                         | Type-check projects with a `typecheck` target                                   |
+| `pnpm lint`                              | Lint projects with a `lint` target                                              |
+| `pnpm format`                            | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier           |
+| `pnpm clean`                             | Run project clean targets, then remove root `node_modules` and `.nx`            |
+| `pnpm pre-commit`                        | Run lint and type-check on affected projects                                    |
 
 ### Targeting a single project with Nx
 
