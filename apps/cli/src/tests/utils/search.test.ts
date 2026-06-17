@@ -2,7 +2,16 @@ import { existsSync, statSync } from 'node:fs';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { findNxRoot, searchNx, filesToSearch, existsFileSync } from '../../utils/search.js';
+import { findNxRoot, searchNx, filesToSearch, existsFileSync, searchParamValue } from '../../utils/search.js';
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return {
+    ...actual,
+    existsSync: vi.fn(),
+    statSync: vi.fn()
+  };
+});
 
 describe('findNxRoot', () => {
   beforeEach(() => {
@@ -123,5 +132,39 @@ describe('existsFileSync', () => {
     });
 
     expect(existsFileSync('/restricted/file.json')).toBe(false);
+  });
+});
+
+describe('searchParamValue', () => {
+  it('returns the inline value and removes the matched argument', () => {
+    expect(searchParamValue('--config', ['start', '--config=custom.ini', '--all'])).toEqual({
+      value: 'custom.ini',
+      remainingArgs: ['start', '--all']
+    });
+  });
+
+  it('strips surrounding quotes from inline values', () => {
+    expect(searchParamValue('--config', ['start', '--config="custom path/config.ini"', '--all'])).toEqual({
+      value: 'custom path/config.ini',
+      remainingArgs: ['start', '--all']
+    });
+  });
+
+  it('returns the next token value and removes both arguments', () => {
+    expect(searchParamValue('-c', ['report:list', '-c', 'custom.ini'])).toEqual({
+      value: 'custom.ini',
+      remainingArgs: ['report:list']
+    });
+  });
+
+  it('strips surrounding quotes from split values', () => {
+    expect(searchParamValue('-c', ['report:list', '-c', '"custom path/config.ini"'])).toEqual({
+      value: 'custom path/config.ini',
+      remainingArgs: ['report:list']
+    });
+  });
+
+  it('returns null when the param is not present', () => {
+    expect(searchParamValue('--config', ['start', '--all'])).toBeNull();
   });
 });

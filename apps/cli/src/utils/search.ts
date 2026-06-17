@@ -73,19 +73,29 @@ export function filesToSearch(filePath: string, httpsEnabled = false): string[] 
 
 /** Utility function to check if a given path exists and is a file.
  *
- * @param path - The path to check for existence and file type.
+ * @param filePath - The path to check for existence and file type.
  * @returns A boolean indicating whether the path exists and is a file.
  */
-export function existsFileSync(path: string): boolean {
+export function existsFileSync(filePath: string): boolean {
   try {
-    if (!existsSync(path)) {
+    if (!existsSync(filePath)) {
       return false;
     }
 
-    return statSync(path).isFile();
+    return statSync(filePath).isFile();
   } catch {
     return false;
   }
+}
+
+/** Utility function to remove surrounding quotes from a
+ * string value.
+ *
+ * @param value - The string value to unquote.
+ * @returns The unquoted string value.
+ */
+function unquote(value: string): string {
+  return value.replace(/^['"]+|['"]+$/g, '');
 }
 
 /** Utility function to search for a parameter value in an array
@@ -101,7 +111,7 @@ export function searchParamValue(param: string, args: string[]): SearchParamResu
 
   if (inlineIndex !== -1) {
     return {
-      value: args[inlineIndex].slice(param.length + 1),
+      value: unquote(args[inlineIndex].slice(param.length + 1)),
       remainingArgs: args.filter((_, i) => i !== inlineIndex)
     };
   }
@@ -110,7 +120,7 @@ export function searchParamValue(param: string, args: string[]): SearchParamResu
 
   if (index !== -1 && index < args.length - 1) {
     return {
-      value: args[index + 1],
+      value: unquote(args[index + 1]),
       remainingArgs: args.filter((_, i) => i !== index && i !== index + 1)
     };
   }
