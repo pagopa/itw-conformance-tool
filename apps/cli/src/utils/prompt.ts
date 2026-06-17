@@ -48,10 +48,10 @@ export function printHelp(): void {
   process.stdout.write(`  itw-conformance-tool report:list\n`);
   process.stdout.write(`  itw-conformance-tool report:list --config '~/config.ini'\n`);
   process.stdout.write(
-    `  itw-conformance-tool report:create <uuid> <format>                            (use html or pdf, default: html)\n\n`
+    `  itw-conformance-tool report:create <uuid> [format]                            (use html or pdf, default: html)\n\n`
   );
   process.stdout.write(
-    `  itw-conformance-tool report:create <uuid> <format> --config '~/config.ini'    (use html or pdf, default: html)\n\n`
+    `  itw-conformance-tool report:create <uuid> [format] --config '~/config.ini'    (use html or pdf, default: html)\n\n`
   );
 }
 

@@ -2,20 +2,14 @@ import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import {
-  SqliteConformanceSessionRepository,
-  buildJsonReporterFromSession,
-  generateRenderedReport,
-  type ReportFormat
-} from '@itw-conformance-tool/conformance';
-
 import type { EmitLog } from '../types/types.js';
+import type { ReportFormat } from '@itw-conformance-tool/conformance';
 
 /** Generates a conformance report file for the given run ID.
  *
  * Saves the report as `conformance-report-<runId>.<format>` in the current
- * working directory. Exits with code 1 (printing to stderr) if the session is
- * not found; exits with code 0 on success.
+ * working directory. Throws if the session is not found, and lets the caller
+ * decide the process exit code.
  *
  * @param runId - The UUID of the conformance session to report on.
  * @param format - Output format: 'html' or 'pdf'.
@@ -33,6 +27,12 @@ export async function reportCreate(
   const db = new DatabaseSync(dbPath, { open: true });
 
   try {
+    const {
+      SqliteConformanceSessionRepository,
+      buildJsonReporterFromSession,
+      generateRenderedReport
+    } = await import('@itw-conformance-tool/conformance');
+
     const repository = new SqliteConformanceSessionRepository(db);
     const session = await repository.get(runId);
 
