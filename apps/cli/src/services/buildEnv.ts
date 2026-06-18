@@ -15,6 +15,7 @@ export function buildEnv(configs: ConfigType, emitLog: (event: string, type?: Lo
     ITW_CT_ISSUER_PORT: String(configs['itw-credential-issuer'].port),
     ITW_CT_ISSUER_CREDENTIAL_TYPES: String(configs['itw-credential-issuer'].credential_types),
     ITW_CT_RP_PORT: String(configs.rp.port),
+    ITW_CT_RP_BASE_URL: String(configs.rp.entity_id),
     ITW_CT_ISSUER_AUTH_FLOW: String(configs['itw-credential-issuer'].auth_flow),
     ITW_CT_RP_TRUST_ANCHOR_URL: String(configs.rp.trust_anchor_url)
   };
