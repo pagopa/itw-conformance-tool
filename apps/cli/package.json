@@ -14,6 +14,7 @@
     "@itw-conformance-tool/config": "workspace:",
     "@itw-conformance-tool/crypto": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
+    "@peculiar/x509": "^1.12.4",
     "node-forge": "^1.4.0"
   },
   "devDependencies": {

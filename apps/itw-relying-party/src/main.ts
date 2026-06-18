@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 import { logger } from '@itw-conformance-tool/logger';
 import { loadRpConfig } from '@itw-conformance-tool/rp';
@@ -9,6 +9,22 @@ import fp from 'fastify-plugin';
 
 import bootstrap from './app.js';
 
+function readTlsFileWithFallback(primaryPath: string, legacyFileName: string): Buffer {
+  if (existsSync(primaryPath)) {
+    return readFileSync(primaryPath);
+  }
+
+  const legacyPath = join(dirname(primaryPath), legacyFileName);
+  if (existsSync(legacyPath)) {
+    logger.warn({ legacyPath, primaryPath }, 'Using legacy TLS file path; regenerate with CLI init to migrate names');
+    return readFileSync(legacyPath);
+  }
+
+  throw new Error(
+    `TLS file not found: ${primaryPath} (also checked legacy path: ${legacyPath}). Run "pnpm nx run itw-conformance-cli:build:production && node apps/cli/dist/main.js init --force" to regenerate local TLS assets.`
+  );
+}
+
 function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
   const configFilePath = resolve(process.cwd(), process.env['ITW_CT_CONFIG_FILE'] ?? 'config.ini');
   const { config } = loadRpConfig({ configFilePath });
@@ -17,7 +33,10 @@ function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
     return undefined;
   }
 
-  return { cert: readFileSync(config.tlsCertPath), key: readFileSync(config.tlsKeyPath) };
+  return {
+    cert: readTlsFileWithFallback(config.tlsCertPath, 'tls_cert.pem'),
+    key: readTlsFileWithFallback(config.tlsKeyPath, 'tls_key.pem')
+  };
 }
 
 async function startServer() {

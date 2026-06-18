@@ -142,11 +142,13 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
     // Extract nonce from the request JWT payload
     const [, payloadB64] = step2.body.split('.');
     const requestObjectPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as Record<string, unknown>;
+    const clientId = requestObjectPayload.client_id as string;
     const nonce = requestObjectPayload.nonce as string;
     expect(typeof nonce).toBe('string');
+    expect(typeof clientId).toBe('string');
 
     // ── Step 3: POST /auth/response ───────────────────────────────────────
-    const jwe = await createAuthResponseJwe({ nonce, state });
+    const jwe = await createAuthResponseJwe({ clientId, nonce, state });
 
     const step3 = await ctx.app.inject({
       method: 'POST',
@@ -193,10 +195,15 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
     // Fetch the request object to get the nonce
     const reqObjRes = await ctx.app.inject({ method: 'GET', url: `/auth/request/${state}` });
     const [, payloadB64] = reqObjRes.body.split('.');
-    const nonce = (JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as { nonce: string }).nonce;
+    const firstRequestObjectPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
+      client_id: string;
+      nonce: string;
+    };
+    const nonce = firstRequestObjectPayload.nonce;
+    const clientId = firstRequestObjectPayload.client_id;
 
     // Submit once (success) — nonce gets consumed
-    const jwe1 = await createAuthResponseJwe({ nonce, state });
+    const jwe1 = await createAuthResponseJwe({ clientId, nonce, state });
     const firstSubmit = await ctx.app.inject({
       method: 'POST',
       url: '/auth/response',
@@ -211,9 +218,13 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
       payload: { dcqlQuery: { credentials: [{ id: 'pid', format: 'dc+sd-jwt' }] }, flow_type: 'cross-device' }
     });
     const state2 = requireSearchParam(new URL(secondReq.json<{ url: string }>().url), 'state');
-    await ctx.app.inject({ method: 'GET', url: `/auth/request/${state2}` });
+    const secondReqObjRes = await ctx.app.inject({ method: 'GET', url: `/auth/request/${state2}` });
+    const [, payloadB64Second] = secondReqObjRes.body.split('.');
+    const secondRequestObjectPayload = JSON.parse(Buffer.from(payloadB64Second, 'base64url').toString()) as {
+      client_id: string;
+    };
 
-    const jwe2 = await createAuthResponseJwe({ nonce, state: state2 });
+    const jwe2 = await createAuthResponseJwe({ clientId: secondRequestObjectPayload.client_id, nonce, state: state2 });
     const replayRes = await ctx.app.inject({
       method: 'POST',
       url: '/auth/response',

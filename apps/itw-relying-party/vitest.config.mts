@@ -1,8 +1,15 @@
+import { resolve } from 'node:path';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/itw-relying-party',
+  resolve: {
+    alias: {
+      '@itw-conformance-tool/crypto': resolve(import.meta.dirname, '../../packages/crypto/src/index.ts')
+    }
+  },
   test: {
     name: 'itw-relying-party',
     watch: false,

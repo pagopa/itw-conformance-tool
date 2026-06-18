@@ -1,4 +1,26 @@
-import { generateEcPrivateJwk } from '@itw-conformance-tool/crypto';
+import { generateKeyPairSync } from 'node:crypto';
+
+function generateEcPrivateJwk(descriptor: {
+  alg: 'ES256' | 'ECDH-ES';
+  keyOps: string[];
+  kid: string;
+  use: 'sig' | 'enc';
+}): { keys: Record<string, unknown>[] } {
+  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const privateJwk = privateKey.export({ format: 'jwk' }) as Record<string, unknown>;
+
+  return {
+    keys: [
+      {
+        ...privateJwk,
+        kid: descriptor.kid,
+        alg: descriptor.alg,
+        use: descriptor.use,
+        key_ops: descriptor.keyOps
+      }
+    ]
+  };
+}
 
 /** Generates and returns a JWKS containing issuer runtime-compatible EC keys.
  *

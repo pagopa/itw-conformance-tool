@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, statSync, writeFileSync, type Stats } from 'node:fs';
 
 import { parseINI } from '@itw-conformance-tool/config';
-import { getTlsCertAndKey } from '@itw-conformance-tool/crypto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { init } from '../../services/init.js';
+import { createSelfSignedCertificateFromJwk, getTlsCertAndKey } from '../../utils/certificates.js';
 import { expandPath } from '../../utils/path.js';
 import { existsFileSync } from '../../utils/search.js';
 
@@ -25,14 +25,14 @@ vi.mock('../../utils/path.js', () => ({
 }));
 
 vi.mock('../../utils/crypto.js', () => ({
-  getAuthRequestKey: vi.fn(() => '{"kty":"EC"}'),
+  getAuthRequestKey: vi.fn(() => '{"kty":"EC","crv":"P-256","x":"x","y":"y","d":"d"}'),
   getAuthResponseKey: vi.fn(() => '{"kty":"EC"}'),
   getFederationKey: vi.fn(() => '{"kty":"EC"}'),
   getSigningKeys: vi.fn(() => '{"keys":[]}')
 }));
 
-vi.mock('@itw-conformance-tool/crypto', () => ({
-  getX5cCert: vi.fn(() => '---X5C-CERT---'),
+vi.mock('../../utils/certificates.js', () => ({
+  createSelfSignedCertificateFromJwk: vi.fn(() => '---X5C-CERT---'),
   getIACAChain: vi.fn(() => ({ certificate: '---CERT---', privateKey: '---KEY---' })),
   getTlsCertAndKey: vi.fn(() => ({ cert: '---TLS-CERT---', key: '---TLS-KEY---' }))
 }));
@@ -172,6 +172,14 @@ describe('init', () => {
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/auth-request-key.jwk.json');
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/auth-response-key.jwk.json');
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/federation-key.jwk.json');
+    expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/x5c-cert.pem');
+    expect(createSelfSignedCertificateFromJwk).toHaveBeenCalledWith({
+      kty: 'EC',
+      crv: 'P-256',
+      x: 'x',
+      y: 'y',
+      d: 'd'
+    });
   });
 
   it('skips relying-party keys when they already exist and --force is not set', async () => {
