@@ -17,6 +17,7 @@ import { join } from 'node:path';
 
 import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
 import { SessionService } from '@itw-conformance-tool/rp';
+import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -69,9 +70,17 @@ async function buildFullRpApp() {
     tlsKeyPath: join(dataDir, 'tls-key.pem')
   });
 
+  app.decorate(
+    'sdkConfig',
+    new IoWalletSdkConfig({
+      itWalletSpecsVersion: ItWalletSpecsVersion.V1_4
+    })
+  );
+
   app.decorate('rpKeys', {
     authRequestPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
     authResponsePrivateKeyPem: TEST_AUTH_RESPONSE_PEM,
+    federationPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
     signingPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
     x5cCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
   });
@@ -144,7 +153,6 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
     const requestObjectPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as Record<string, unknown>;
     const clientId = requestObjectPayload.client_id as string;
     const nonce = requestObjectPayload.nonce as string;
-    const requestClientId = requestObjectPayload.client_id as string;
     expect(typeof nonce).toBe('string');
     expect(typeof clientId).toBe('string');
 

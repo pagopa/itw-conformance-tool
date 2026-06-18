@@ -2,22 +2,18 @@ import { createPrivateKey, createPublicKey, randomBytes, randomUUID } from 'node
 
 import { createSignJwtCallback } from '@itw-conformance-tool/crypto';
 import { createAuthorizationRequest } from '@pagopa/io-wallet-oid4vp';
-import { ItWalletSpecsVersion, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import { calculateJwkThumbprint, type JWK } from 'jose';
 
 import { extractClientId } from '../crypto/client-id.js';
 
 import type { INonceRepository } from '@itw-conformance-tool/database';
 import type { PresentationFlowType, SessionService } from '@itw-conformance-tool/rp';
+import type { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 
 const TTL_MS = 5 * 60 * 1000;
 const JAR_SIGNING_ALG = 'ES256';
-const INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER = 'insecure-http-local-dev';
-const SDK_CONFIG_V1_0 = new IoWalletSdkConfig({ itWalletSpecsVersion: ItWalletSpecsVersion.V1_0 });
-const SDK_CONFIG_X5C = new IoWalletSdkConfig({ itWalletSpecsVersion: ItWalletSpecsVersion.V1_3 });
 
 const CERT_PEM_PATTERN = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g;
-const LOCAL_DEV_TRUST_CHAIN_JWT_PATTERN = /^eyJ/; // Looks like a JWT (starts with 'eyJ' in base64)
 
 export interface CreateAuthorizationRequestInput {
   baseUrl: string;
@@ -31,8 +27,8 @@ export interface CreateAuthorizationRequestInput {
     signingPrivateKeyPem: string;
     x5cCertPem: string;
   };
+  sdkConfig: IoWalletSdkConfig<ItWalletSpecsVersion.V1_4>;
   sessionService: SessionService;
-  trustChain?: [string, ...string[]];
   walletAuthBaseUri: string;
 }
 
@@ -91,7 +87,8 @@ async function resolveSigningKid(signingPrivateKeyPem: string): Promise<string> 
 export async function createAuthorizationRequestUseCase(
   input: CreateAuthorizationRequestInput
 ): Promise<CreateAuthorizationRequestResult> {
-  const clientId = extractClientId(input.entityId);
+  const clientId = extractClientId(input.baseUrl);
+  const requestObjectClientId = `x509_hash:${clientId}`;
   const responseUri = `${input.baseUrl}/auth/response`;
   const state = randomUUID();
   const nonce = randomBytes(32).toString('hex');
@@ -108,15 +105,6 @@ export async function createAuthorizationRequestUseCase(
   const signingKid = await resolveSigningKid(input.rpKeys.signingPrivateKeyPem);
   const signJwt = createSignJwtCallback(input.rpKeys.authRequestPrivateKeyPem, input.rpKeys.signingPrivateKeyPem);
 
-  const hasRealTrustChain =
-    input.trustChain !== undefined &&
-    input.trustChain.length > 0 &&
-    input.trustChain[0] !== INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER &&
-    // Accept any JWT-looking token (starts with 'eyJ')
-    // This includes both real federation chain and signed local-dev JWTs
-    LOCAL_DEV_TRUST_CHAIN_JWT_PATTERN.test(input.trustChain[0]);
-
-  const requestObjectClientId = hasRealTrustChain ? clientId : `x509_hash:${clientId}`;
   const authorizationRequestPayload = {
     client_id: requestObjectClientId,
     client_metadata: {
@@ -141,43 +129,24 @@ export async function createAuthorizationRequestUseCase(
     state
   };
 
-  const result = hasRealTrustChain
-    ? await createAuthorizationRequest({
-        authorizationRequestPayload,
-        callbacks: {
-          signJwt
-        },
-        config: SDK_CONFIG_V1_0,
-        jar: {
-          expiresInSeconds: TTL_MS / 1000,
-          jwtSigner: {
-            alg: JAR_SIGNING_ALG,
-            kid: signingKid,
-            method: 'federation',
-            trustChain: input.trustChain as [string, ...string[]]
-          },
-          requestUri
-        },
-        scheme: input.walletAuthBaseUri
-      })
-    : await createAuthorizationRequest({
-        authorizationRequestPayload,
-        callbacks: {
-          signJwt
-        },
-        config: SDK_CONFIG_X5C,
-        jar: {
-          expiresInSeconds: TTL_MS / 1000,
-          jwtSigner: {
-            alg: JAR_SIGNING_ALG,
-            kid: signingKid,
-            method: 'x5c',
-            x5c
-          },
-          requestUri
-        },
-        scheme: input.walletAuthBaseUri
-      });
+  const result = await createAuthorizationRequest({
+    authorizationRequestPayload,
+    callbacks: {
+      signJwt
+    },
+    config: input.sdkConfig,
+    jar: {
+      expiresInSeconds: TTL_MS / 1000,
+      jwtSigner: {
+        alg: JAR_SIGNING_ALG,
+        kid: signingKid,
+        method: 'x5c',
+        x5c
+      },
+      requestUri
+    },
+    scheme: input.walletAuthBaseUri
+  });
 
   const walletUrl = new URL(result.authorizationRequest);
   walletUrl.searchParams.set('state', state);

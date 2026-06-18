@@ -101,7 +101,7 @@ export default fp(
 
     // Initialize with a signed placeholder
     const initialLocalDevJwt = await generateLocalDevTrustChainJwt({
-      entityId,
+      entityId: app.config.baseUrl,
       trustAnchorUrl,
       authRequestPrivateKeyPem: app.rpKeys.authRequestPrivateKeyPem,
       authResponsePrivateKeyPem: app.rpKeys.authResponsePrivateKeyPem,

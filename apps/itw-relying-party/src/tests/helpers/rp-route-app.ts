@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
 import { SessionService } from '@itw-conformance-tool/rp';
+import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import Fastify from 'fastify';
 import { CompactEncrypt, SignJWT, importJWK, importPKCS8 } from 'jose';
 
@@ -151,6 +152,7 @@ export interface RpRouteAppOptions {
   authRequestPrivateKeyPem?: string;
   authResponsePrivateKeyPem?: string;
   baseUrl?: string;
+  entityId?: string;
   conformanceSessionRepository?: IConformanceSessionRepository;
   /** Called after route registration but before app.ready(), allowing tests to add sibling routes. */
   setup?: (app: FastifyInstance) => void | Promise<void>;
@@ -159,7 +161,7 @@ export interface RpRouteAppOptions {
 /**
  * Builds a lightweight Fastify instance suitable for route-level tests.
  * Decorates with the same names used by production plugins:
- *   app.config, app.rpKeys, app.nonceRepository, app.sessionService
+ *   app.config, app.sdkConfig, app.rpKeys, app.nonceRepository, app.sessionService
  */
 export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRouteAppOptions = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'rp-route-test-'));
@@ -175,7 +177,7 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     host: '0.0.0.0',
     port: 8080,
     baseUrl: options.baseUrl ?? TEST_CLIENT_ID,
-    entityId: options.baseUrl ?? TEST_CLIENT_ID,
+    entityId: options.entityId ?? options.baseUrl ?? TEST_CLIENT_ID,
     dataDir,
     configFilePath: join(dataDir, 'config.ini'),
     trustAnchorUrl: 'https://trust-anchor.example.com',
@@ -184,6 +186,13 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     tlsCertPath: join(dataDir, 'tls-cert.pem'),
     tlsKeyPath: join(dataDir, 'tls-key.pem')
   });
+
+  app.decorate(
+    'sdkConfig',
+    new IoWalletSdkConfig({
+      itWalletSpecsVersion: ItWalletSpecsVersion.V1_4
+    })
+  );
 
   app.decorate('rpKeys', {
     authRequestPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,

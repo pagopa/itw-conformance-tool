@@ -13,10 +13,12 @@ import sensiblePlugin from './plugins/external/sensible.js';
 import staticPlugin from './plugins/external/static.js';
 import swaggerPlugin from './plugins/external/swagger.js';
 import keysPlugin from './plugins/keys.js';
+import sdkConfigPlugin from './plugins/sdk-config.js';
 import trustChainPlugin from './plugins/trust-chain.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
+  await app.register(sdkConfigPlugin);
   await app.register(keysPlugin);
   await app.register(trustChainPlugin);
   await app.register(dbPlugin);

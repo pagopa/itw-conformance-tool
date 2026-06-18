@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync, writeFileSync, type Stats } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, type Stats } from 'node:fs';
 
 import { parseINI } from '@itw-conformance-tool/config';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -15,6 +15,7 @@ vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
   statSync: vi.fn(),
   mkdirSync: vi.fn(),
+  readFileSync: vi.fn(() => '{"kty":"EC","crv":"P-256","x":"x","y":"y","d":"d"}'),
   writeFileSync: vi.fn()
 }));
 
@@ -51,7 +52,9 @@ const baseFlags: CLIFlags = {
   rp: false,
   all: false,
   force: false,
-  config: { value: false, path: '' }
+  config: { value: false, path: '' },
+  runId: undefined,
+  format: 'html'
 };
 
 const makeConfigs = (): ConfigType => ({
@@ -173,6 +176,29 @@ describe('init', () => {
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/auth-response-key.jwk.json');
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/federation-key.jwk.json');
     expect(writtenPaths).toContain('/root/.itw-conformance-tool/rp/x5c-cert.pem');
+    expect(createSelfSignedCertificateFromJwk).toHaveBeenCalledWith({
+      kty: 'EC',
+      crv: 'P-256',
+      x: 'x',
+      y: 'y',
+      d: 'd'
+    });
+    expect(readFileSync).not.toHaveBeenCalled();
+  });
+
+  it('reuses existing auth request key file when generating only x5c certificate', async () => {
+    vi.mocked(existsFileSync).mockImplementation((p) => {
+      const path = String(p);
+      if (path.endsWith('config.ini')) return true;
+      if (path.endsWith('/rp/x5c-cert.pem')) return false;
+      return true;
+    });
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as unknown as Stats);
+
+    await init(baseFlags);
+
+    expect(readFileSync).toHaveBeenCalledWith('/root/.itw-conformance-tool/rp/auth-request-key.jwk.json', 'utf8');
     expect(createSelfSignedCertificateFromJwk).toHaveBeenCalledWith({
       kty: 'EC',
       crv: 'P-256',

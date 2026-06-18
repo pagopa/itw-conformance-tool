@@ -60,9 +60,6 @@ function buildEntityConfigurationMetadata(input: {
     },
     openid_credential_verifier: {
       application_type: 'web',
-      authorization_encrypted_response_alg: 'ECDH-ES',
-      authorization_encrypted_response_enc: 'A256GCM',
-      authorization_signed_response_alg: 'ES256',
       client_id: input.entityId,
       client_name: 'PagoPa S.p.A.',
       encrypted_response_enc_values_supported: ['A256GCM'],
@@ -70,12 +67,6 @@ function buildEntityConfigurationMetadata(input: {
       logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
       request_uris: [input.requestUri],
       response_uris: [input.responseUri],
-      vp_formats: {
-        'dc+sd-jwt': {
-          'kb-jwt_alg_values': ['ES256'],
-          'sd-jwt_alg_values': ['ES256']
-        }
-      },
       vp_formats_supported: {
         'dc+sd-jwt': {
           'kb-jwt_alg_values': ['ES256'],

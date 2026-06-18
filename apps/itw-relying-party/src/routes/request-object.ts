@@ -63,8 +63,8 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
         flowType: parsed.data.flowType,
         nonceRepository: app.nonceRepository,
         rpKeys: app.rpKeys,
+        sdkConfig: app.sdkConfig,
         sessionService: app.sessionService,
-        trustChain: app.trustChain as [string, ...string[]] | undefined, // trustChain may be undefined when trust_anchor_url is not configured
         walletAuthBaseUri: parsed.data.walletAuthBaseUri
       });
 

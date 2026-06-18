@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
@@ -90,19 +90,30 @@ async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise
   ] as const;
 
   const generatedRpPaths: string[] = [];
+  let authRequestKeyContent: string | undefined;
 
   for (const [fileName, factory] of rpArtifacts) {
     const filePath = join(rpDirPath, fileName);
     if (!existsFileSync(filePath) || flags.force) {
       const content = await factory();
       writeFileSync(filePath, content, { encoding: 'utf8', flag: 'w' });
+      if (fileName === 'auth-request-key.jwk.json') {
+        authRequestKeyContent = content;
+      }
       generatedRpPaths.push(filePath);
     }
   }
 
   const x5cCertPath = join(rpDirPath, 'x5c-cert.pem');
   if (!existsFileSync(x5cCertPath) || flags.force) {
-    const authRequestKey = JSON.parse(getAuthRequestKey()) as Parameters<typeof createSelfSignedCertificateFromJwk>[0];
+    if (!authRequestKeyContent) {
+      const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
+      authRequestKeyContent = readFileSync(authRequestKeyPath, 'utf8');
+    }
+
+    const authRequestKey = JSON.parse(authRequestKeyContent) as Parameters<
+      typeof createSelfSignedCertificateFromJwk
+    >[0];
     const x5cCertificate = await createSelfSignedCertificateFromJwk(authRequestKey);
     writeFileSync(x5cCertPath, x5cCertificate, { encoding: 'utf8', flag: 'w' });
     generatedRpPaths.push(x5cCertPath);
