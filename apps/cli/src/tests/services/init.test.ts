@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, statSync, writeFileSync, type Stats } from 'node
 import { parseINI } from '@itw-conformance-tool/config';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { init } from '../../services/init.js';
+import { init } from '../../commands/init.js';
 import { createSelfSignedCertificateFromJwk, getTlsCertAndKey } from '../../utils/certificates.js';
 import { expandPath } from '../../utils/path.js';
 import { existsFileSync } from '../../utils/search.js';

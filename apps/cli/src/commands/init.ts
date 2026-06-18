@@ -20,9 +20,9 @@ function checkConfig(flags: CLIFlags): ConfigType {
   if (!existsFileSync(configFilePath) || flags.force) {
     writeFileSync(configFilePath, ConfigINITemplate, { encoding: 'utf8', flag: 'w' });
 
-    console.log(`✓ ${flags.force ? 'Overwritten' : 'Created'} config.ini → ./config.ini`);
+    process.stdout.write(`✓ ${flags.force ? 'Overwritten' : 'Created'} config.ini → ./config.ini\n`);
   } else {
-    console.log(`✓ config.ini already exists → skipped (use --force to overwrite)`);
+    process.stdout.write(`✓ config.ini already exists → skipped (use --force to overwrite)\n`);
   }
 
   const configs = parseINI(configFilePath).data;
@@ -32,7 +32,7 @@ function checkConfig(flags: CLIFlags): ConfigType {
   const dataDirExists = existsSync(configs.global.data_dir) && statSync(configs.global.data_dir).isDirectory();
   mkdirSync(configs.global.data_dir, { recursive: true });
   if (!dataDirExists || flags.force) {
-    console.log(`✓ ${flags.force ? 'Overwritten' : 'Created'} data_dir → ${previousDataDir}`);
+    process.stdout.write(`✓ ${flags.force ? 'Overwritten' : 'Created'} data_dir → ${previousDataDir}\n`);
   }
 
   return configs;
@@ -58,7 +58,7 @@ async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise
     writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
     writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
 
-    console.log(`✓ Generated local TLS certificate → ${tlsCertPath}`);
+    process.stdout.write(`✓ Generated local TLS certificate → ${tlsCertPath}\n`);
   }
 
   const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
@@ -71,16 +71,16 @@ async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise
     writeFileSync(iacaCertPath, generatedIacaCert, { encoding: 'utf8', flag: 'w' });
     writeFileSync(iacaKeyPath, generatedIacaKey, { encoding: 'utf8', flag: 'w' });
 
-    console.log(`✓ Generated mock IACA certificates → ${iacaCertPath}`);
+    process.stdout.write(`✓ Generated mock IACA certificates → ${iacaCertPath}\n`);
   }
 
   const signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
   if (!existsFileSync(signingKeysPath) || flags.force) {
     const signingKeys = getSigningKeys();
     writeFileSync(signingKeysPath, signingKeys, { encoding: 'utf8', flag: 'w' });
-    console.log(`✓ Generated issuer signing keys → ${signingKeysPath}`);
+    process.stdout.write(`✓ Generated issuer signing keys → ${signingKeysPath}\n`);
   } else {
-    console.log(`⚠ Issuer keys already exist → skipped (use --force to regenerate)`);
+    process.stdout.write(`⚠ Issuer keys already exist → skipped (use --force to regenerate)\n`);
   }
 
   const rpArtifacts = [
@@ -109,9 +109,9 @@ async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise
   }
 
   if (generatedRpPaths.length === 0) {
-    console.log(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)`);
+    process.stdout.write(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)\n`);
   } else {
-    console.log(`✓ Generated relying-party keys → ${generatedRpPaths.join(', ')}`);
+    process.stdout.write(`✓ Generated relying-party keys → ${generatedRpPaths.join(', ')}\n`);
   }
 }
 

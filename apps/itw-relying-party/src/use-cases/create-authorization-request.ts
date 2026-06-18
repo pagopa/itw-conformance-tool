@@ -125,7 +125,7 @@ export async function createAuthorizationRequestUseCase(
         }
       },
       dcql_query: input.dcqlQuery,
-      iss: clientId,
+      iss: requestObjectClientId,
       nonce,
       request_uri_method: 'get',
       response_mode: 'direct_post.jwt',

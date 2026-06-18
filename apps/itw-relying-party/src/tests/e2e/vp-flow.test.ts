@@ -144,6 +144,7 @@ describe('VP flow — complete issuer ↔ relying party presentation', () => {
     const requestObjectPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as Record<string, unknown>;
     const clientId = requestObjectPayload.client_id as string;
     const nonce = requestObjectPayload.nonce as string;
+    const requestClientId = requestObjectPayload.client_id as string;
     expect(typeof nonce).toBe('string');
     expect(typeof clientId).toBe('string');
 

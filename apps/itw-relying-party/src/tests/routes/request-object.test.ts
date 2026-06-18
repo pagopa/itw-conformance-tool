@@ -52,6 +52,7 @@ describe('POST /request-object', () => {
     };
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
       client_id: string;
+      iss: string;
       client_metadata?: {
         jwks?: { keys?: Array<{ kid?: string }> };
       };

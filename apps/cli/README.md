@@ -1,9 +1,11 @@
 # ITW Conformance CLI
 
-Local CLI for the `itw-conformance-tool` monorepo. It supports two flows:
+Local CLI for the `itw-conformance-tool` monorepo. It supports the following workflows:
 
 - `init`, to generate the local configuration and key material
 - `start`, to launch the issuer and relying party services through Nx
+- `report:list`, to list all available conformance run reports
+- `report:create`, to generate an HTML or PDF report for a given run
 
 ## Installation (global binary)
 
@@ -31,16 +33,23 @@ Direct CLI usage:
 
 - `itw-conformance-tool init`
 - `itw-conformance-tool start`
+- `itw-conformance-tool report:list`
+- `itw-conformance-tool report:create <uuid> [format]`
 - `itwct init`
 - `itwct start`
+- `itwct report:list`
+- `itwct report:create <uuid> [format]`
 
 From the workspace root through Nx-backed scripts:
 
 - `pnpm itw-conformance-tool --args="init"`
+- `pnpm itw-conformance-tool --args="init --force"`
 - `pnpm itw-conformance-tool --args="start --all"`
 - `pnpm itw-conformance-tool --args="start --issuer"`
 - `pnpm itw-conformance-tool --args="start --rp"`
-- `pnpm itw-conformance-tool --args="init --config ./config.ini --force"`
+- `pnpm itw-conformance-tool --args="report:list"`
+- `pnpm itw-conformance-tool --args="report:create <uuid>"`
+- `pnpm itw-conformance-tool --args="report:create <uuid> pdf"`
 
 Root shortcuts:
 
@@ -53,12 +62,14 @@ Root shortcuts:
 
 - `init`
 - `start`
+- `report:list`
+- `report:create`
 - `help`
 - `version`
 
 ## Supported Options
 
-- `-c, --config <path>`: path to the configuration file used by `start`, or the output path used by `init`
+- `-c, --config <path>`: path to the configuration file. Supported by `start`, `report:list`, and `report:create`
 - `--all`: start both services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
@@ -123,6 +134,48 @@ Before launching Nx, the CLI checks that the required files exist in the resolve
 
 When `https = true` in the `[global]` config section, the CLI additionally verifies that `<data_dir>/tls-cert.pem` and `<data_dir>/tls-key.pem` exist. If either is missing, startup fails with an explicit error message.
 
+### `report:list`
+
+`report:list` prints a formatted table of all conformance sessions stored in the configured data directory, sorted by start date (most recent first).
+
+Columns printed: `RUN ID`, `STARTED AT`, `CLOSED AT`, `STATUS`, `CHECKS`.
+
+Optional flag:
+
+- `-c, --config <path>`: load configuration from the given file to resolve the data directory
+
+Example:
+
+```sh
+itwct report:list
+itwct report:list --config ./ci/config.ini
+```
+
+### `report:create`
+
+`report:create` generates a formatted report for a specific conformance run.
+
+```sh
+itwct report:create <uuid> [format]
+```
+
+- `<uuid>`: the run identifier, as returned by `report:list`
+- `[format]`: output format — `html` (default) or `pdf`
+
+The report is saved as `conformance-report-<uuid>.<format>` in the **current working directory**.
+
+Optional flag:
+
+- `-c, --config <path>`: load configuration from the given file to resolve the data directory
+
+Examples:
+
+```sh
+itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c
+itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c pdf
+itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c html --config ./ci/config.ini
+```
+
 ## Configuration Resolution
 
 The CLI resolves configuration in this order:
@@ -165,8 +218,10 @@ The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for
 
 Examples:
 
-- `pnpm itw-conformance-tool --args="init --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="init"`
 - `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
 - `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
+- `pnpm itw-conformance-tool --args="report:list --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="report:create <uuid> html --config ./ci/config.ini"`
 
 This format is required because Nx forwards the CLI payload through its own `--args` option.
