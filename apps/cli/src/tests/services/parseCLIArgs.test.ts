@@ -28,9 +28,7 @@ describe('parseCLIArgs', () => {
 
   describe('no arguments', () => {
     it('throws when no arguments are provided', () => {
-      expect(() => parseCLIArgs([], rootPath)).toThrow(
-        'No command provided. Please specify a command (init or start) followed by any relevant flags.'
-      );
+      expect(() => parseCLIArgs([], rootPath)).toThrow(ProcessExitSignal);
     });
   });
 
@@ -54,9 +52,7 @@ describe('parseCLIArgs', () => {
 
   describe('invalid command', () => {
     it('throws for an unrecognized command', () => {
-      expect(() => parseCLIArgs(['unknown'], rootPath)).toThrow(
-        'Invalid command: unknown. Please specify a valid command (init or start).'
-      );
+      expect(() => parseCLIArgs(['unknown'], rootPath)).toThrow(ProcessExitSignal);
     });
   });
 
@@ -69,7 +65,9 @@ describe('parseCLIArgs', () => {
         rp: false,
         all: false,
         force: false,
-        config: { value: false, path: '' }
+        config: { value: false, path: '' },
+        runId: undefined,
+        format: 'html'
       });
     });
 
@@ -81,30 +79,6 @@ describe('parseCLIArgs', () => {
     it('sets force flag with -f', () => {
       const result = parseCLIArgs(['init', '-f'], rootPath);
       expect(result.flags.force).toBe(true);
-    });
-
-    it('sets config flag with --config <path>', () => {
-      const result = parseCLIArgs(['init', '--config', 'custom.ini'], rootPath);
-      expect(result.flags.config.value).toBe(true);
-      expect(result.flags.config.path).toBe('/root/custom.ini');
-    });
-
-    it('sets config flag with --config=<path>', () => {
-      const result = parseCLIArgs(['init', '--config=custom.ini'], rootPath);
-      expect(result.flags.config.value).toBe(true);
-      expect(result.flags.config.path).toBe('/root/custom.ini');
-    });
-
-    it('sets config flag with -c <path>', () => {
-      const result = parseCLIArgs(['init', '-c', 'custom.ini'], rootPath);
-      expect(result.flags.config.value).toBe(true);
-      expect(result.flags.config.path).toBe('/root/custom.ini');
-    });
-
-    it('sets config flag with -c=<path>', () => {
-      const result = parseCLIArgs(['init', '-c=custom.ini'], rootPath);
-      expect(result.flags.config.value).toBe(true);
-      expect(result.flags.config.path).toBe('/root/custom.ini');
     });
   });
 
@@ -146,6 +120,46 @@ describe('parseCLIArgs', () => {
     });
   });
 
+  describe('report commands', () => {
+    it('parses report:list with --config <path>', () => {
+      const result = parseCLIArgs(['report:list', '--config', 'custom.ini'], rootPath);
+      expect(result.command).toBe('report:list');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+
+    it('parses report:list with -c=<path>', () => {
+      const result = parseCLIArgs(['report:list', '-c=custom.ini'], rootPath);
+      expect(result.command).toBe('report:list');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+
+    it('parses report:create with positional args and --config', () => {
+      const result = parseCLIArgs(
+        ['report:create', '00000000-0000-0000-0000-000000000000', 'pdf', '--config', 'custom.ini'],
+        rootPath
+      );
+      expect(result.command).toBe('report:create');
+      expect(result.flags.runId).toBe('00000000-0000-0000-0000-000000000000');
+      expect(result.flags.format).toBe('pdf');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+
+    it('parses report:create with --config before positional args', () => {
+      const result = parseCLIArgs(
+        ['report:create', '--config=custom.ini', '00000000-0000-0000-0000-000000000000', 'html'],
+        rootPath
+      );
+      expect(result.command).toBe('report:create');
+      expect(result.flags.runId).toBe('00000000-0000-0000-0000-000000000000');
+      expect(result.flags.format).toBe('html');
+      expect(result.flags.config.value).toBe(true);
+      expect(result.flags.config.path).toBe('/root/custom.ini');
+    });
+  });
+
   describe('tokenization of single-argument input', () => {
     it('tokenizes a single "start --all" string', () => {
       const result = parseCLIArgs(['start --all'], rootPath);
@@ -164,12 +178,6 @@ describe('parseCLIArgs', () => {
       expect(result.command).toBe('start');
       expect(result.flags.config.value).toBe(true);
       expect(result.flags.config.path).toBe('/root/custom.ini');
-    });
-
-    it('tokenizes a single string with --config in quotes', () => {
-      const result = parseCLIArgs(['start --config "custom path/config.ini"'], rootPath);
-      expect(result.command).toBe('start');
-      expect(result.flags.config.value).toBe(true);
     });
   });
 });

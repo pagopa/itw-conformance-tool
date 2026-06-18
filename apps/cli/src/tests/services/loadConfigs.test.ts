@@ -4,8 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadConfigs } from '../../services/loadConfigs.js';
 import { existsFileSync } from '../../utils/search.js';
 
-import type { Level } from '@itw-conformance-tool/logger';
-
 vi.mock('../../utils/search.js');
 
 vi.mock('../../templates/templates.js', () => ({

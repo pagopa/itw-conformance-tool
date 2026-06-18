@@ -1,62 +1,110 @@
 import { expandPath } from '../utils/path.js';
 import { printHelp, printVersion } from '../utils/prompt.js';
+import { searchParamValue } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
 
-/** Tokenizes the command-line arguments, handling the case where Nx
- * forwards --args as a single array of strings.
- *
- * @param argv - The array of command-line arguments.
- * @returns An array of tokenized arguments.
- */
-function tokenizeArgs(input: string): string[] {
-  const args: string[] = [];
-
-  const configRegex = /(?:--config|-c)(?:=|\s+)(?:"([^"]*)"|'([^']*)'|([^\s]+))/;
-
-  const match = configRegex.exec(input);
-
-  let configValue: string | undefined;
-
-  if (match) {
-    configValue = match.slice(1).find(Boolean);
-
-    input = input.replace(match[0], '').trim();
-  }
-
-  args.push(...input.split(/\s+/).filter(Boolean));
-
-  if (configValue) {
-    args.push('--config', configValue);
-  }
-
-  return args;
-}
-
-/** Extracts the value of the --config flag from the command-line arguments.
+/** Parses start command flags.
  *
  * @param args - The array of command-line arguments.
- * @param i - The current index in the arguments array.
- * @returns An object containing the value of the --config flag and the number of arguments to skip, or null if not found.
+ * @param flags - The flags object to populate.
+ * @returns void
  */
-function extractConfig(args: string[], i: number): { value: string; skip: number } | null {
-  const current = args[i];
-
-  const eqIndex = current.indexOf('=');
-
-  // --config=value or -c=value
-  if (eqIndex !== -1) {
-    return { value: current.slice(eqIndex + 1), skip: 0 };
+function parseStartFlags(args: string[], flags: CLIFlags): void {
+  const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
+  if (configResult) {
+    flags.config.value = true;
+    flags.config.path = expandPath(configResult.value.trim());
+    args = configResult.remainingArgs;
   }
 
-  // --config value or -c value
-  const next = args[i + 1];
+  for (const raw of args) {
+    const arg = raw.toLowerCase();
+    switch (arg) {
+      case '--issuer':
+        flags.issuer = true;
+        break;
+      case '--rp':
+        flags.rp = true;
+        break;
+      case '--all':
+      case '-a':
+        flags.all = true;
+        break;
+      default:
+        throw new Error(
+          `Invalid flag for start command: ${raw}. ` + `Allowed flags are: --all/-a, --rp, --issuer, --config/-c`
+        );
+    }
+  }
+}
 
-  if (next && !next.startsWith('-')) {
-    return { value: next, skip: 1 };
+/** Parses init command flags.
+ *
+ * @param args - The array of command-line arguments.
+ * @param flags - The flags object to populate.
+ * @returns void
+ */
+function parseInitFlags(args: string[], flags: CLIFlags): void {
+  for (const arg of args) {
+    const lowerArg = arg.toLowerCase();
+    if (lowerArg === '--force' || lowerArg === '-f') {
+      flags.force = true;
+    } else {
+      throw new Error(`Invalid flag for init command: ${arg}. Only --force is allowed.`);
+    }
+  }
+}
+
+/** Parses report:list command flags.
+ *
+ * @param args - The array of command-line arguments.
+ * @param flags - The flags object to populate.
+ * @returns void
+ */
+function parseReportListFlags(args: string[], flags: CLIFlags): void {
+  const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
+  if (configResult) {
+    flags.config.value = true;
+    flags.config.path = expandPath(configResult.value.trim());
+    args = configResult.remainingArgs;
   }
 
-  return null;
+  if (args.length > 0) {
+    throw new Error(`Invalid argument for report:list: ${args[0]}. Allowed flag is: --config/-c`);
+  }
+}
+
+/** Parses report:create command flags.
+ *
+ * @param args - The array of command-line arguments.
+ * @param flags - The flags object to populate.
+ * @returns void
+ */
+function parseReportCreateFlags(args: string[], flags: CLIFlags): void {
+  const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
+  if (configResult) {
+    flags.config.value = true;
+    flags.config.path = expandPath(configResult.value.trim());
+    args = configResult.remainingArgs;
+  }
+
+  const positionalArgs = args;
+  if (positionalArgs.length === 0) {
+    throw new Error('report:create requires at least one argument: <uuid> [format_to_print]');
+  }
+
+  flags.runId = positionalArgs[0];
+  const format = positionalArgs[1]?.toLowerCase();
+  if (format === 'html' || format === 'pdf') {
+    flags.format = format;
+  } else if (format !== undefined) {
+    throw new Error(`Invalid format: ${format}. Must be 'html' or 'pdf'.`);
+  }
+
+  if (positionalArgs.length > 2) {
+    throw new Error('report:create accepts only two arguments: uuid and format_to_print');
+  }
 }
 
 /** Parses command-line arguments to extract the command and
@@ -67,30 +115,38 @@ function extractConfig(args: string[], i: number): { value: string; skip: number
  */
 export function parseCLIArgs(argv: string[], rootPath: string): { command?: string; flags: CLIFlags } {
   if (argv.length === 0) {
+    process.stdout.write(`No command provided. These are the available commands:\n`);
     printHelp();
-    throw new Error('No command provided. Please specify a command (init or start) followed by any relevant flags.');
+    process.exit(1);
   }
 
   if (argv.length === 1) {
-    argv = tokenizeArgs(argv[0]);
+    argv = argv[0]
+      .split(/\s+/)
+      .map((arg) => arg.trim())
+      .filter(Boolean);
   }
 
   const command = argv[0].trim().toLowerCase();
-  if (['help', '--help', '-h'].includes(command)) {
+  const validCommands = [
+    'init',
+    'start',
+    'report:list',
+    'report:create',
+    'help',
+    '--help',
+    '-h',
+    'version',
+    '--version',
+    '-v'
+  ];
+  if (!validCommands.includes(command)) {
+    process.stdout.write(`Invalid command: ${command}\n`);
     printHelp();
-    process.exit(0);
+    process.exit(1);
   }
 
-  if (['version', '--version', '-v'].includes(command)) {
-    printVersion(rootPath);
-    process.exit(0);
-  }
-
-  if (!(command === 'init' || command === 'start')) {
-    throw new Error(`Invalid command: ${command}. Please specify a valid command (init or start).`);
-  }
-
-  const flags = {
+  const flags: CLIFlags = {
     issuer: false,
     rp: false,
     all: false,
@@ -98,45 +154,48 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
     config: {
       value: false,
       path: ''
-    }
+    },
+    runId: undefined,
+    format: 'html'
   };
 
   const args = argv.slice(1);
-  for (let i = 0; i < args.length; i++) {
-    const raw = args[i];
-    const arg = raw.toLowerCase();
-
-    if (arg === '--config' || arg === '-c' || arg.startsWith('--config=') || arg.startsWith('-c=')) {
-      const result = extractConfig(args, i);
-
-      if (result?.value) {
-        flags.config.value = true;
-        flags.config.path = expandPath(result.value.trim());
-        i += result.skip;
+  switch (command) {
+    case 'init':
+      parseInitFlags(args, flags);
+      break;
+    case 'start':
+      parseStartFlags(args, flags);
+      break;
+    case 'report:list':
+      parseReportListFlags(args, flags);
+      break;
+    case 'report:create':
+      parseReportCreateFlags(args, flags);
+      break;
+    case 'help':
+    case '--help':
+    case '-h':
+      if (args.length > 0) {
+        process.stdout.write('Help command does not accept any flags or arguments\n');
       }
-
-      continue;
-    }
-
-    switch (arg) {
-      case '--issuer':
-        flags.issuer = true;
-        break;
-
-      case '--rp':
-        flags.rp = true;
-        break;
-
-      case '--all':
-      case '-a':
-        flags.all = true;
-        break;
-
-      case '--force':
-      case '-f':
-        flags.force = true;
-        break;
-    }
+      printHelp();
+      process.exit(0);
+      break;
+    case 'version':
+    case '--version':
+    case '-v':
+      if (args.length > 0) {
+        process.stdout.write('Version command does not accept any flags or arguments\n');
+      }
+      printVersion(rootPath);
+      process.exit(0);
+      break;
+    default:
+      process.stdout.write(`Unknown command: ${command}\n`);
+      printHelp();
+      process.exit(1);
+      break;
   }
 
   return { command, flags };

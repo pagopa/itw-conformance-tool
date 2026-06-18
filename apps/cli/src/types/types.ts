@@ -5,6 +5,11 @@ export type EmitLog = (event: string, level?: Level) => void;
 
 export type LogLevel = Level;
 
+export type SearchParamResult = {
+  value: string;
+  remainingArgs: string[];
+};
+
 export type Service = 'issuer' | 'rp';
 
 export type ServiceCommand = 'init' | 'start';
@@ -19,6 +24,8 @@ export interface CLIFlags {
     value: boolean;
     path: string;
   };
+  runId: string | undefined;
+  format: 'html' | 'pdf';
 }
 
 export interface ServiceProcess {

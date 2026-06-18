@@ -52,6 +52,7 @@ describe('POST /request-object', () => {
     };
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
       client_id: string;
+      iss: string;
       client_metadata?: {
         jwks?: { keys?: Array<{ kid?: string }> };
       };
@@ -62,7 +63,8 @@ describe('POST /request-object', () => {
 
     expect(header.typ).toBe('oauth-authz-req+jwt');
     expect(header.x5c).toEqual(['CERT']);
-    expect(payload.client_id).toBe('http://localhost:8080');
+    expect(payload.client_id).toBe('x509_hash:http://localhost:8080');
+    expect(payload.iss).toBe(payload.client_id);
     expect(payload.client_metadata?.jwks?.keys?.[0]?.kid).toBeTruthy();
     expect(payload.nonce).toMatch(/^[0-9a-f]{64}$/);
     expect(payload.response_uri).toBe('http://localhost:8080/auth/response');

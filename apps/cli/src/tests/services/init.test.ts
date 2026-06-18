@@ -4,7 +4,7 @@ import { parseINI } from '@itw-conformance-tool/config';
 import { getTlsCertAndKey } from '@itw-conformance-tool/crypto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { init } from '../../services/init.js';
+import { init } from '../../commands/init.js';
 import { expandPath } from '../../utils/path.js';
 import { existsFileSync } from '../../utils/search.js';
 

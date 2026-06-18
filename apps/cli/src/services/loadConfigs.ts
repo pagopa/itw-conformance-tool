@@ -33,9 +33,9 @@ export function loadConfigs(flags: CLIFlags): ConfigType {
   }
 
   if (!configFileExists) {
-    console.log(
+    process.stdout.write(
       `WARN: config.ini not found. Starting with default values.` +
-        `\n      Run \`itw-conformance-tool init\` to create the configuration file.`
+        `\n      Run \`itw-conformance-tool init\` to create the configuration file.\n`
     );
   }
 
