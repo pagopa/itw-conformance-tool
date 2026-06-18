@@ -40,7 +40,7 @@ describe('buildEnv', () => {
     expect(env.ITW_CT_ISSUER_PORT).toBe('3000');
     expect(env.ITW_CT_ISSUER_CREDENTIAL_TYPES).toBe('pid,mdl,badge,eaa');
     expect(env.ITW_CT_RP_PORT).toBe('8080');
-    expect(env.ITW_CT_RP_BASE_URL).toBe('https://rp.example.com');
+    expect(env.ITW_CT_RP_BASE_URL).toBe('https://127.0.0.1:8080');
     expect(env.ITW_CT_ISSUER_AUTH_FLOW).toBe('l3');
     expect(env.ITW_CT_RP_TRUST_ANCHOR_URL).toBe('https://trust-anchor.example.com');
   });
@@ -79,6 +79,7 @@ describe('buildEnv', () => {
 
     expect(env.ITW_CT_ISSUER_PORT).toBe('4000');
     expect(env.ITW_CT_RP_PORT).toBe('9090');
+    expect(env.ITW_CT_RP_BASE_URL).toBe('https://127.0.0.1:9090');
   });
 
   it('sets ITW_CT_HTTPS to "false" when https is disabled in config', () => {
