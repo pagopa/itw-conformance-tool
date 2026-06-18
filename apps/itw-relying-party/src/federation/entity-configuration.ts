@@ -24,14 +24,14 @@ function parseCertificateChain(pemChain: string): string[] {
   });
 }
 
-async function toPublicJwk(privateKeyPem: string, x5c: string[]): Promise<JsonWebKey> {
+async function toPublicJwk(privateKeyPem: string, x5c?: string[]): Promise<JsonWebKey> {
   const publicJwk = createPublicKey(createPrivateKey(privateKeyPem)).export({ format: 'jwk' }) as JWK;
   const kid = await calculateJwkThumbprint(publicJwk);
 
   return {
     ...publicJwk,
     kid,
-    x5c
+    ...(x5c && x5c.length > 0 ? { x5c } : {})
   };
 }
 
@@ -50,7 +50,7 @@ function buildEntityConfigurationMetadata(input: {
   responseUri: string;
   verifierJwks: { keys: JsonWebKey[] };
 }): ItWalletEntityConfigurationClaimsOptions['metadata'] {
-  const metadata = {
+  const metadata: ItWalletMetadataV1_3 = {
     federation_entity: {
       contacts: ['info@pagopa.it'],
       homepage_uri: 'https://io.italia.it',
@@ -60,6 +60,9 @@ function buildEntityConfigurationMetadata(input: {
     },
     openid_credential_verifier: {
       application_type: 'web',
+      authorization_encrypted_response_alg: 'ECDH-ES',
+      authorization_encrypted_response_enc: 'A256GCM',
+      authorization_signed_response_alg: 'ES256',
       client_id: input.entityId,
       client_name: 'PagoPa S.p.A.',
       encrypted_response_enc_values_supported: ['A256GCM'],
@@ -67,6 +70,12 @@ function buildEntityConfigurationMetadata(input: {
       logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
       request_uris: [input.requestUri],
       response_uris: [input.responseUri],
+      vp_formats: {
+        'dc+sd-jwt': {
+          'kb-jwt_alg_values': ['ES256'],
+          'sd-jwt_alg_values': ['ES256']
+        }
+      },
       vp_formats_supported: {
         'dc+sd-jwt': {
           'kb-jwt_alg_values': ['ES256'],
@@ -74,7 +83,7 @@ function buildEntityConfigurationMetadata(input: {
         }
       }
     }
-  } satisfies ItWalletMetadataV1_3;
+  };
 
   const parsed = itWalletMetadataV1_3.safeParse(metadata);
   if (!parsed.success) {
@@ -100,7 +109,7 @@ export async function createEntityConfigurationJwt(input: {
   const x5c = parseCertificateChain(input.x5cCertPem);
   const verifierSigningJwk = await toPublicJwk(input.authRequestPrivateKeyPem, x5c);
   const encryptionJwk = await toPublicJwk(input.authResponsePrivateKeyPem, x5c);
-  const federationSigningJwk = await toPublicJwk(input.federationPrivateKeyPem, x5c);
+  const federationSigningJwk = await toPublicJwk(input.federationPrivateKeyPem);
   const signingPrivateJwk = await toPrivateJwk(input.federationPrivateKeyPem, federationSigningJwk.kid);
   const metadata = buildEntityConfigurationMetadata({
     entityId,

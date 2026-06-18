@@ -1,10 +1,12 @@
 import fp from 'fastify-plugin';
 
+import { createEntityConfigurationJwt } from '../federation/entity-configuration.js';
 import { fetchTrustChain } from '../trust-chain/fetch-trust-chain.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     trustChain: string[];
+    trustChainSource: 'real' | 'local-dev';
   }
 }
 
@@ -53,12 +55,29 @@ function waitMs(delayMs: number): Promise<void> {
   });
 }
 
+async function generateLocalDevTrustChainJwt(input: {
+  entityId: string;
+  trustAnchorUrl?: string;
+  authRequestPrivateKeyPem: string;
+  authResponsePrivateKeyPem: string;
+  federationPrivateKeyPem: string;
+  x5cCertPem: string;
+}): Promise<string> {
+  // For local development, use the actual entity statement as trust chain JWT
+  // This contains the RP's JWKS and can be verified by WCT
+  return createEntityConfigurationJwt(input);
+}
+
 export default fp(
   async function trustChainPlugin(app) {
     const { entityId, trustAnchorUrl } = app.config;
     if (trustAnchorUrl === undefined || trustAnchorUrl.trim().length === 0) {
-      app.log.error('Missing Trust Anchor URL: configure [rp].trust_anchor or ITW_CT_RP_TRUST_ANCHOR_URL');
-      throw new Error('Trust chain bootstrap failed: Trust Anchor URL is not configured');
+      app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
+      app.decorate('trustChainSource', 'local-dev');
+      app.log.warn(
+        'Trust Anchor URL is not configured; starting in degraded mode without strict federation validation'
+      );
+      return;
     }
 
     const timeoutMs = resolveFetchTimeoutMs(process.env.ITW_CT_TRUST_CHAIN_FETCH_TIMEOUT_MS);
@@ -73,6 +92,7 @@ export default fp(
 
     if (isHttpUrl(entityId) || isHttpUrl(trustAnchorUrl)) {
       app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
+      app.decorate('trustChainSource', 'local-dev');
       app.log.warn(
         {
           entityId,
@@ -83,63 +103,99 @@ export default fp(
       return;
     }
 
-    let lastError: unknown;
+    // During bootstrap, the RP is not yet listening, so we can't fetch the trust chain yet.
+    // We'll attempt the fetch after the server is ready (in the onReady hook).
+    // For now, use a signed local-dev JWT as a placeholder.
+    let trustChainFetched = false;
+    // let trustChainValue: string[] = []; // Removed unused variable
 
-    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
-      try {
-        const trustChain = await fetchTrustChain({
-          entityId,
-          logger: app.log,
-          timeoutMs,
-          trustAnchorUrl
-        });
+    // Initialize with a signed placeholder
+    const initialLocalDevJwt = await generateLocalDevTrustChainJwt({
+      entityId,
+      trustAnchorUrl,
+      authRequestPrivateKeyPem: app.rpKeys.authRequestPrivateKeyPem,
+      authResponsePrivateKeyPem: app.rpKeys.authResponsePrivateKeyPem,
+      federationPrivateKeyPem: app.rpKeys.federationPrivateKeyPem,
+      x5cCertPem: app.rpKeys.x5cCertPem
+    });
+    app.decorate('trustChain', [initialLocalDevJwt]);
+    app.decorate('trustChainSource', 'local-dev');
 
-        if (trustChain.length === 0) {
-          app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
-          return;
-        }
+    // After the server is listening, try to fetch the real trust chain.
+    // onReady runs before listen(), which is too early for self-fetch.
+    app.addHook('onListen', async () => {
+      app.log.info('Trust chain onListen hook executed');
+      if (trustChainFetched) {
+        app.log.info('Trust chain already fetched, skipping');
+        return; // Already fetched
+      }
 
-        app.decorate('trustChain', trustChain);
-        app.log.info(
-          {
-            attempt,
+      let lastError: unknown;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+        try {
+          app.log.info({ attempt }, 'Attempting to fetch trust chain on onListen');
+          const trustChain = await fetchTrustChain({
             entityId,
-            trustAnchorUrl,
-            trustChainLength: trustChain.length
-          },
-          'Trust chain loaded in memory'
-        );
-        return;
-      } catch (err) {
-        lastError = err;
+            logger: app.log,
+            timeoutMs,
+            trustAnchorUrl
+          });
 
-        if (attempt < maxRetries) {
+          if (trustChain.length === 0) {
+            app.log.warn(
+              { entityId, trustAnchorUrl },
+              'Trust chain is empty after fetch; keeping signed local-dev trust chain for V1_0 compatibility'
+            );
+            trustChainFetched = true;
+            return;
+          }
+
+          app.trustChain = trustChain;
+          app.trustChainSource = 'real';
+          // trustChainValue = trustChain; // Removed unused variable assignment
+          trustChainFetched = true;
           app.log.warn(
             {
               attempt,
-              maxRetries,
-              retryDelayMs,
               entityId,
               trustAnchorUrl,
-              err
+              trustChainLength: trustChain.length
             },
-            'Trust chain bootstrap failed, retrying'
+            'Trust chain successfully fetched after server ready (REAL CHAIN)'
           );
-          await waitMs(retryDelayMs);
+          return;
+        } catch (err) {
+          lastError = err;
+
+          if (attempt < maxRetries) {
+            app.log.warn(
+              {
+                attempt,
+                maxRetries,
+                retryDelayMs,
+                entityId,
+                trustAnchorUrl,
+                err
+              },
+              'Trust chain fetch failed after server ready, retrying'
+            );
+            await waitMs(retryDelayMs);
+          }
         }
       }
-    }
 
-    app.log.warn(
-      {
-        attempts: maxRetries,
-        entityId,
-        err: lastError,
-        trustAnchorUrl
-      },
-      'Trust chain bootstrap failed after retries; starting in degraded mode without strict federation validation'
-    );
-    app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
+      trustChainFetched = true;
+      app.log.warn(
+        {
+          attempts: maxRetries,
+          entityId,
+          err: lastError,
+          trustAnchorUrl
+        },
+        'Trust chain fetch failed after server ready; keeping signed local-dev trust chain'
+      );
+    });
   },
-  { name: 'trust-chain', dependencies: ['config'] }
+  { name: 'trust-chain', dependencies: ['config', 'keys'] }
 );

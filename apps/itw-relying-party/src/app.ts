@@ -17,9 +17,9 @@ import trustChainPlugin from './plugins/trust-chain.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
+  await app.register(keysPlugin);
   await app.register(trustChainPlugin);
   await app.register(dbPlugin);
-  await app.register(keysPlugin);
   await app.register(ephemeralKeysPlugin);
 
   await app.register(corsPlugin, corsConfig);

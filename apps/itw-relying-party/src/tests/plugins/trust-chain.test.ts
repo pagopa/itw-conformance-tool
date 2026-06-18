@@ -50,7 +50,7 @@ describe('trust-chain plugin', () => {
     await app.close();
   });
 
-  it('fails fast when trust anchor URL is missing', async () => {
+  it('starts in degraded mode when trust anchor URL is missing', async () => {
     const app = Fastify({ logger: false });
 
     await app.register(
@@ -74,9 +74,11 @@ describe('trust-chain plugin', () => {
       )
     );
 
-    await expect(app.register(trustChainPlugin)).rejects.toThrow(
-      'Trust chain bootstrap failed: Trust Anchor URL is not configured'
-    );
+    await app.register(trustChainPlugin);
+    await app.ready();
+
+    expect(mocked.fetchTrustChain).not.toHaveBeenCalled();
+    expect(app.trustChain).toEqual(['insecure-http-local-dev']);
 
     await app.close();
   });
