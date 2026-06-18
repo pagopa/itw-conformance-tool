@@ -74,9 +74,6 @@ export default fp(
     if (trustAnchorUrl === undefined || trustAnchorUrl.trim().length === 0) {
       app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
       app.decorate('trustChainSource', 'local-dev');
-      app.log.warn(
-        'Trust Anchor URL is not configured; starting in degraded mode without strict federation validation'
-      );
       return;
     }
 
@@ -93,13 +90,6 @@ export default fp(
     if (isHttpUrl(entityId) || isHttpUrl(trustAnchorUrl)) {
       app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);
       app.decorate('trustChainSource', 'local-dev');
-      app.log.warn(
-        {
-          entityId,
-          trustAnchorUrl
-        },
-        'Trust chain bootstrap running in insecure HTTP local-dev mode; strict federation validation is skipped'
-      );
       return;
     }
 
@@ -124,9 +114,7 @@ export default fp(
     // After the server is listening, try to fetch the real trust chain.
     // onReady runs before listen(), which is too early for self-fetch.
     app.addHook('onListen', async () => {
-      app.log.info('Trust chain onListen hook executed');
       if (trustChainFetched) {
-        app.log.info('Trust chain already fetched, skipping');
         return; // Already fetched
       }
 
@@ -134,7 +122,6 @@ export default fp(
 
       for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
         try {
-          app.log.info({ attempt }, 'Attempting to fetch trust chain on onListen');
           const trustChain = await fetchTrustChain({
             entityId,
             logger: app.log,
@@ -143,10 +130,6 @@ export default fp(
           });
 
           if (trustChain.length === 0) {
-            app.log.warn(
-              { entityId, trustAnchorUrl },
-              'Trust chain is empty after fetch; keeping signed local-dev trust chain for V1_0 compatibility'
-            );
             trustChainFetched = true;
             return;
           }
@@ -155,46 +138,18 @@ export default fp(
           app.trustChainSource = 'real';
           // trustChainValue = trustChain; // Removed unused variable assignment
           trustChainFetched = true;
-          app.log.warn(
-            {
-              attempt,
-              entityId,
-              trustAnchorUrl,
-              trustChainLength: trustChain.length
-            },
-            'Trust chain successfully fetched after server ready (REAL CHAIN)'
-          );
           return;
         } catch (err) {
           lastError = err;
 
           if (attempt < maxRetries) {
-            app.log.warn(
-              {
-                attempt,
-                maxRetries,
-                retryDelayMs,
-                entityId,
-                trustAnchorUrl,
-                err
-              },
-              'Trust chain fetch failed after server ready, retrying'
-            );
             await waitMs(retryDelayMs);
           }
         }
       }
 
       trustChainFetched = true;
-      app.log.warn(
-        {
-          attempts: maxRetries,
-          entityId,
-          err: lastError,
-          trustAnchorUrl
-        },
-        'Trust chain fetch failed after server ready; keeping signed local-dev trust chain'
-      );
+      void lastError;
     });
   },
   { name: 'trust-chain', dependencies: ['config', 'keys'] }

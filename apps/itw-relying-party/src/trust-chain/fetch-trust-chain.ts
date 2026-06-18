@@ -35,41 +35,16 @@ function buildFetchWithTimeout(options: Pick<FetchTrustChainOptions, 'logger' | 
   const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
 
   return async (input, init) => {
-    const startedAt = Date.now();
-    const method = init?.method ?? 'GET';
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init?.signal == null ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal]);
 
     try {
-      const response = await fetch(input, {
+      return await fetch(input, {
         ...init,
         signal
       });
-
-      options.logger.info(
-        {
-          durationMs: Date.now() - startedAt,
-          method,
-          statusCode: response.status,
-          url
-        },
-        'Fetched trust-chain resource'
-      );
-
-      return response;
-    } catch (error) {
-      options.logger.warn(
-        {
-          durationMs: Date.now() - startedAt,
-          method,
-          url,
-          error: error instanceof Error ? error.message : String(error),
-          nodeEnv: process.env.NODE_TLS_REJECT_UNAUTHORIZED
-        },
-        'Failed to fetch trust-chain resource'
-      );
-      throw error;
+    } catch {
+      throw new Error('Trust chain fetch failed');
     }
   };
 }
@@ -109,15 +84,6 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
     entityId
   });
 
-  options.logger.info(
-    {
-      entityId,
-      trustAnchorEntityId,
-      trustAnchorUrl: options.trustAnchorUrl
-    },
-    'Attempting to fetch and validate trust chain'
-  );
-
   let trustChain: string[] = [];
   try {
     trustChain = await fetchAndValidateTrustChain(entityId, {
@@ -128,27 +94,9 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
       },
       trustAnchorUrls: [trustAnchorEntityId]
     });
-  } catch (error) {
-    options.logger.warn(
-      {
-        error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-        entityId,
-        trustAnchorEntityId
-      },
-      'Unable to fetch and validate trust chain'
-    );
+  } catch {
     return trustChain;
   }
-
-  options.logger.info(
-    {
-      entityId,
-      trustAnchorEntityId,
-      trustAnchorUrl: options.trustAnchorUrl,
-      trustChainLength: trustChain.length
-    },
-    'Trust chain fetched and validated'
-  );
 
   return trustChain;
 }
