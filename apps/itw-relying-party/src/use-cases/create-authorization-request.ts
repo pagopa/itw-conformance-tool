@@ -21,6 +21,7 @@ const LOCAL_DEV_TRUST_CHAIN_JWT_PATTERN = /^eyJ/; // Looks like a JWT (starts wi
 
 export interface CreateAuthorizationRequestInput {
   baseUrl: string;
+  entityId: string;
   dcqlQuery: Record<string, unknown>;
   flowType: PresentationFlowType;
   nonceRepository: INonceRepository;
@@ -90,11 +91,11 @@ async function resolveSigningKid(signingPrivateKeyPem: string): Promise<string> 
 export async function createAuthorizationRequestUseCase(
   input: CreateAuthorizationRequestInput
 ): Promise<CreateAuthorizationRequestResult> {
-  const clientId = extractClientId(input.baseUrl);
-  const responseUri = `${clientId}/auth/response`;
+  const clientId = extractClientId(input.entityId);
+  const responseUri = `${input.baseUrl}/auth/response`;
   const state = randomUUID();
   const nonce = randomBytes(32).toString('hex');
-  const requestUri = `${clientId}/auth/request/${state}`;
+  const requestUri = `${input.baseUrl}/auth/request/${state}`;
 
   await input.nonceRepository.insert(nonce, Date.now() + TTL_MS);
 

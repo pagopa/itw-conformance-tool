@@ -58,6 +58,7 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
 
       const result = await createAuthorizationRequestUseCase({
         baseUrl: app.config.baseUrl,
+        entityId: app.config.entityId,
         dcqlQuery: parsed.data.dcqlQuery,
         flowType: parsed.data.flowType,
         nonceRepository: app.nonceRepository,
