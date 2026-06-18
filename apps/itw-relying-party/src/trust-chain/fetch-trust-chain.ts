@@ -95,6 +95,7 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
       trustAnchorUrls: [trustAnchorEntityId]
     });
   } catch {
+    options.logger.warn({}, 'Unable to fetch and validate trust chain');
     return trustChain;
   }
 

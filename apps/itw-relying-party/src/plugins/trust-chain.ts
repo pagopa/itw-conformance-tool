@@ -130,6 +130,9 @@ export default fp(
           });
 
           if (trustChain.length === 0) {
+            // Empty chain, fall back to local-dev
+            app.trustChain = [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER];
+            app.trustChainSource = 'local-dev';
             trustChainFetched = true;
             return;
           }
@@ -148,6 +151,9 @@ export default fp(
         }
       }
 
+      // All retries failed, fall back to local-dev
+      app.trustChain = [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER];
+      app.trustChainSource = 'local-dev';
       trustChainFetched = true;
       void lastError;
     });

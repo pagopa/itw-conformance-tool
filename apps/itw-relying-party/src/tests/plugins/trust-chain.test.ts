@@ -3,11 +3,16 @@ import fp from 'fastify-plugin';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocked = vi.hoisted(() => ({
-  fetchTrustChain: vi.fn()
+  fetchTrustChain: vi.fn(),
+  createEntityConfigurationJwt: vi.fn().mockResolvedValue('mock-entity-config-jwt')
 }));
 
 vi.mock('../../trust-chain/fetch-trust-chain.js', () => ({
   fetchTrustChain: mocked.fetchTrustChain
+}));
+
+vi.mock('../../federation/entity-configuration.js', () => ({
+  createEntityConfigurationJwt: mocked.createEntityConfigurationJwt
 }));
 
 import trustChainPlugin from '../../plugins/trust-chain.js';
@@ -31,6 +36,24 @@ const configDependencyPlugin = fp(
   { name: 'config' }
 );
 
+const keysDependencyPlugin = fp(
+  async (app) => {
+    app.decorate('rpKeys', {
+      authRequestPrivateKeyPem:
+        '-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgVcB/UNPxalR9zDYA\nEKjcwWj4YwJLcZUSHHvLr9UdMYahRANCAARq8SXNwJKFk/5YL3+LfKnJ1x6iVXjS\nHFp0TpB7BW8S8Y9YxMJCCqVLCqKDVKZLeZ2VxfK3b6YDNZ4rmvl0T/jV\n-----END PRIVATE KEY-----',
+      authResponsePrivateKeyPem:
+        '-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgVcB/UNPxalR9zDYA\nEKjcwWj4YwJLcZUSHHvLr9UdMYahRANCAARq8SXNwJKFk/5YL3+LfKnJ1x6iVXjS\nHFp0TpB7BW8S8Y9YxMJCCqVLCqKDVKZLeZ2VxfK3b6YDNZ4rmvl0T/jV\n-----END PRIVATE KEY-----',
+      federationPrivateKeyPem:
+        '-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgVcB/UNPxalR9zDYA\nEKjcwWj4YwJLcZUSHHvLr9UdMYahRANCAARq8SXNwJKFk/5YL3+LfKnJ1x6iVXjS\nHFp0TpB7BW8S8Y9YxMJCCqVLCqKDVKZLeZ2VxfK3b6YDNZ4rmvl0T/jV\n-----END PRIVATE KEY-----',
+      signingPrivateKeyPem:
+        '-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgVcB/UNPxalR9zDYA\nEKjcwWj4YwJLcZUSHHvLr9UdMYahRANCAARq8SXNwJKFk/5YL3+LfKnJ1x6iVXjS\nHFp0TpB7BW8S8Y9YxMJCCqVLCqKDVKZLeZ2VxfK3b6YDNZ4rmvl0T/jV\n-----END PRIVATE KEY-----',
+      x5cCertPem:
+        '-----BEGIN CERTIFICATE-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEavElzcCShZP+WC9/i3ypydceolV4\n0hxadE6QewVvEvGPWMTCQgqlSwqig1SmS3mdlcXyt2+mAzWeK5r5dE/41Q==\n-----END CERTIFICATE-----'
+    });
+  },
+  { name: 'keys' }
+);
+
 describe('trust-chain plugin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,9 +65,14 @@ describe('trust-chain plugin', () => {
 
     const app = Fastify({ logger: false });
     await app.register(configDependencyPlugin);
+    await app.register(keysDependencyPlugin);
 
     await app.register(trustChainPlugin);
-    await app.ready();
+    // Use listen instead of ready to trigger onListen hook
+    await app.listen({ port: 0 });
+
+    // Wait a tick for onListen hook to complete
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(app.trustChain).toEqual(['leaf.jwt', 'anchor.jwt']);
     await app.close();
@@ -74,6 +102,7 @@ describe('trust-chain plugin', () => {
       )
     );
 
+    await app.register(keysDependencyPlugin);
     await app.register(trustChainPlugin);
     await app.ready();
 
@@ -109,6 +138,7 @@ describe('trust-chain plugin', () => {
       )
     );
 
+    await app.register(keysDependencyPlugin);
     await app.register(trustChainPlugin);
     await app.ready();
 
@@ -128,9 +158,14 @@ describe('trust-chain plugin', () => {
 
     const app = Fastify({ logger: false });
     await app.register(configDependencyPlugin);
+    await app.register(keysDependencyPlugin);
 
     await app.register(trustChainPlugin);
-    await app.ready();
+    // Use listen instead of ready to trigger onListen hook
+    await app.listen({ port: 0 });
+
+    // Wait for retries to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(3);
     expect(app.trustChain).toEqual(['leaf.jwt', 'anchor.jwt']);
@@ -144,9 +179,14 @@ describe('trust-chain plugin', () => {
 
     const app = Fastify({ logger: false });
     await app.register(configDependencyPlugin);
+    await app.register(keysDependencyPlugin);
 
     await app.register(trustChainPlugin);
-    await app.ready();
+    // Use listen instead of ready to trigger onListen hook
+    await app.listen({ port: 0 });
+
+    // Wait for retries to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(2);
     expect(app.trustChain).toEqual(['insecure-http-local-dev']);
@@ -158,9 +198,14 @@ describe('trust-chain plugin', () => {
 
     const app = Fastify({ logger: false });
     await app.register(configDependencyPlugin);
+    await app.register(keysDependencyPlugin);
 
     await app.register(trustChainPlugin);
-    await app.ready();
+    // Use listen instead of ready to trigger onListen hook
+    await app.listen({ port: 0 });
+
+    // Wait a tick for onListen hook to complete
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(mocked.fetchTrustChain).toHaveBeenCalledTimes(1);
     expect(app.trustChain).toEqual(['insecure-http-local-dev']);
