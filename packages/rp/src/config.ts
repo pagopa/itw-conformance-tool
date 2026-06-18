@@ -17,7 +17,7 @@ export const rpConfigSchema = z
     entityId: z.string().url(),
     dataDir: z.string().min(1),
     configFilePath: z.string().min(1),
-    trustAnchorUrl: z.string().min(1),
+    trustAnchorUrl: z.string().min(1).optional(),
     x5cCertPath: z.string().min(1),
     httpsEnabled: z.boolean().default(true),
     tlsCertPath: z.string().default(''),
@@ -154,8 +154,10 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
   }
   const trustAnchorUrlOverride = env.ITW_CT_RP_TRUST_ANCHOR_URL?.trim();
   const trustAnchorUrlCandidate =
-    trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0 ? trustAnchorUrlOverride : data.rp.trust_anchor_url;
-  const trustAnchorUrl = trustAnchorUrlCandidate.trim();
+    trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0
+      ? trustAnchorUrlOverride
+      : data.rp.trust_anchor_url?.trim();
+  const trustAnchorUrl = trustAnchorUrlCandidate && trustAnchorUrlCandidate.length > 0 ? trustAnchorUrlCandidate : undefined;
 
   const config = rpConfigSchema.parse({
     host,

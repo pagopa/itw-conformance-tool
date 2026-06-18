@@ -109,6 +109,17 @@ export async function createAuthorizationRequestUseCase(
   const signingKid = await resolveSigningKid(input.rpKeys.signingPrivateKeyPem);
   const signJwt = createSignJwtCallback(input.rpKeys.authRequestPrivateKeyPem, input.rpKeys.signingPrivateKeyPem);
 
+  const jwtSignerBase = {
+    alg: JAR_SIGNING_ALG,
+    kid: signingKid,
+    method: 'x5c' as const,
+    x5c
+  };
+
+  const jwtSigner = trustChain
+    ? { ...jwtSignerBase, trustChain }
+    : jwtSignerBase;
+
   const result = await createAuthorizationRequest({
     authorizationRequestPayload: {
       client_id: requestObjectClientId,
@@ -139,13 +150,7 @@ export async function createAuthorizationRequestUseCase(
     config: SDK_CONFIG,
     jar: {
       expiresInSeconds: TTL_MS / 1000,
-      jwtSigner: {
-        alg: JAR_SIGNING_ALG,
-        kid: signingKid,
-        method: 'x5c',
-        trustChain,
-        x5c
-      },
+      jwtSigner,
       requestUri
     },
     scheme: input.walletAuthBaseUri
