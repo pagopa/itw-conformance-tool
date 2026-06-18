@@ -94,8 +94,8 @@ export async function createEntityConfigurationJwt(input: {
 }): Promise<string> {
   const issuedAt = Math.floor(Date.now() / 1000);
   const entityId = input.entityId;
-  const authorityHint = input.trustAnchorUrl 
-    ? new URL(input.trustAnchorUrl.trim(), entityId).origin 
+  const authorityHint = input.trustAnchorUrl
+    ? new URL(input.trustAnchorUrl.trim(), entityId).origin
     : new URL(entityId).origin;
   const x5c = parseCertificateChain(input.x5cCertPem);
   const verifierSigningJwk = await toPublicJwk(input.authRequestPrivateKeyPem, x5c);

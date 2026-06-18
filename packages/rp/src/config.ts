@@ -157,7 +157,8 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0
       ? trustAnchorUrlOverride
       : data.rp.trust_anchor_url?.trim();
-  const trustAnchorUrl = trustAnchorUrlCandidate && trustAnchorUrlCandidate.length > 0 ? trustAnchorUrlCandidate : undefined;
+  const trustAnchorUrl =
+    trustAnchorUrlCandidate && trustAnchorUrlCandidate.length > 0 ? trustAnchorUrlCandidate : undefined;
 
   const config = rpConfigSchema.parse({
     host,

@@ -116,9 +116,7 @@ export async function createAuthorizationRequestUseCase(
     x5c
   };
 
-  const jwtSigner = trustChain
-    ? { ...jwtSignerBase, trustChain }
-    : jwtSignerBase;
+  const jwtSigner = trustChain ? { ...jwtSignerBase, trustChain } : jwtSignerBase;
 
   const result = await createAuthorizationRequest({
     authorizationRequestPayload: {
