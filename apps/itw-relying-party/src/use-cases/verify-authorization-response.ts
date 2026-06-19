@@ -370,6 +370,48 @@ function decodeAuthorizationRequestPayload(jwt: string): Openid4vpAuthorizationR
   }
 }
 
+function extractStringCredentials(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractStringCredentials(item));
+  }
+
+  return [];
+}
+
+function normalizeVpTokenToCredentialMap(vpToken: unknown): Record<string, string> {
+  const normalized: Record<string, string> = {};
+
+  if (typeof vpToken === 'string' || Array.isArray(vpToken)) {
+    const credentials = extractStringCredentials(vpToken);
+    for (const [index, credential] of credentials.entries()) {
+      normalized[`credential_${index + 1}`] = credential;
+    }
+    return normalized;
+  }
+
+  if (!vpToken || typeof vpToken !== 'object') {
+    return normalized;
+  }
+
+  for (const [credentialSetName, value] of Object.entries(vpToken as Record<string, unknown>)) {
+    const credentials = extractStringCredentials(value);
+    if (credentials.length === 1) {
+      normalized[credentialSetName] = credentials[0];
+      continue;
+    }
+
+    for (const [index, credential] of credentials.entries()) {
+      normalized[`${credentialSetName}_${index + 1}`] = credential;
+    }
+  }
+
+  return normalized;
+}
+
 function extractVpTokenAndState(payload: unknown): { state: string; vpToken: Record<string, string> } {
   if (!payload || typeof payload !== 'object') {
     throw new VerifyAuthorizationResponseError('JARM response payload is not an object');
@@ -382,16 +424,16 @@ function extractVpTokenAndState(payload: unknown): { state: string; vpToken: Rec
   if (typeof state !== 'string') {
     throw new VerifyAuthorizationResponseError('JARM response payload is missing state');
   }
-  if (!vpToken || typeof vpToken !== 'object') {
+  if (vpToken === undefined || vpToken === null) {
     throw new VerifyAuthorizationResponseError('JARM response payload is missing vp_token');
   }
 
-  const tokenEntries = Object.entries(vpToken as Record<string, unknown>);
-  if (tokenEntries.length === 0 || tokenEntries.some(([, value]) => typeof value !== 'string')) {
+  const normalizedVpToken = normalizeVpTokenToCredentialMap(vpToken);
+  if (Object.keys(normalizedVpToken).length === 0) {
     throw new VerifyAuthorizationResponseError('JARM vp_token must contain at least one string credential');
   }
 
-  return { state, vpToken: vpToken as Record<string, string> };
+  return { state, vpToken: normalizedVpToken };
 }
 
 export async function verifyAuthorizationResponseUseCase(

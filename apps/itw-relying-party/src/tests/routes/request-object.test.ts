@@ -134,4 +134,45 @@ describe('POST /request-object', () => {
     expect(payload.client_id).toBe('x509_hash:https://127.0.0.1:8080');
     expect(payload.iss).toBe('x509_hash:https://127.0.0.1:8080');
   });
+
+  it('normalizes legacy DCQL VCT values for WCT wallet compatibility', async () => {
+    ctx = await buildRpRouteApp(requestObjectRoute);
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/request-object',
+      payload: {
+        dcqlQuery: {
+          credentials: [
+            {
+              id: 'pid',
+              format: 'dc+sd-jwt',
+              meta: {
+                vct_values: ['https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata']
+              }
+            }
+          ]
+        },
+        flow_type: 'cross-device'
+      }
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const { url } = res.json<{ url: string }>();
+    const state = requireValue(new URL(url).searchParams.get('state'), 'Missing state in wallet URL');
+    const session = requireValue(await ctx.sessionService.get(state), 'Missing saved session');
+    const [, payloadB64] = session.jwt.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
+      dcql_query: {
+        credentials: Array<{
+          meta?: {
+            vct_values?: string[];
+          };
+        }>;
+      };
+    };
+
+    expect(payload.dcql_query.credentials[0]?.meta?.vct_values).toEqual(['urn:eudi:pid:it:1']);
+  });
 });

@@ -57,13 +57,17 @@ export async function createAuthResponseJwe({
   clientId = TEST_CLIENT_ID,
   kbJwtAlg = 'ES256',
   nonce,
-  state
+  state,
+  vpToken,
+  vpTokenShape = 'object'
 }: {
   authResponsePrivateKeyPem?: string;
   clientId?: string;
   kbJwtAlg?: 'ES256' | 'ES384' | 'ES512';
   nonce: string;
   state: string;
+  vpToken?: unknown;
+  vpTokenShape?: 'object' | 'string' | 'array' | 'dcql-array';
 }): Promise<string> {
   // Derive the RP public key for encryption
   const rpPubJwk = publicJwkFromPem(authResponsePrivateKeyPem);
@@ -101,11 +105,21 @@ export async function createAuthResponseJwe({
 
   const sdJwt = `${issuerJwt}~${kbJwt}`;
 
+  const resolvedVpToken =
+    vpToken ??
+    (vpTokenShape === 'string'
+      ? sdJwt
+      : vpTokenShape === 'array'
+        ? [sdJwt]
+        : vpTokenShape === 'dcql-array'
+          ? { pid: [sdJwt] }
+          : { pid: sdJwt });
+
   // Encrypt { state, vp_token, presentation_submission } as ECDH-ES JWE
   const payload = new TextEncoder().encode(
     JSON.stringify({
       state,
-      vp_token: { pid: sdJwt },
+      vp_token: resolvedVpToken,
       presentation_submission: { id: 'test-submission' }
     })
   );

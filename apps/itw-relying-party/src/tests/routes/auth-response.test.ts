@@ -183,6 +183,31 @@ describe('POST /auth/response', () => {
     const session = await ctx.sessionService.get(state);
     expect(session?.state).toBe('rejected');
   });
+
+  it('accepts vp_token when a DCQL entry contains an array of string credentials', async () => {
+    const state = 'vp-token-dcql-array-test';
+    const nonce = randomBytes(32).toString('hex');
+    await ctx.sessionService.create({
+      id: state,
+      jwt: makeStoredRequestJwt(state, nonce),
+      flowType: 'cross-device',
+      ttlMs: 300_000
+    });
+    await ctx.sessionService.update(state, 'checking');
+    await ctx.nonceRepo.insert(nonce, Date.now() + 300_000);
+
+    const jwe = await createAuthResponseJwe({ nonce, state, vpTokenShape: 'dcql-array' });
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: { response: jwe }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const session = await ctx.sessionService.get(state);
+    expect(session?.state).toBe('verified');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -207,6 +232,10 @@ function makeTrackingConformanceRepo(): IConformanceSessionRepository & {
     },
     async close(sessionId, status) {
       closed.push({ sessionId, status });
+    },
+    async markOpenSessionsIncompleteOlderThan(_cutoffIso) {
+      void _cutoffIso;
+      return 0;
     }
   };
 }
