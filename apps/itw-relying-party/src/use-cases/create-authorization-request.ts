@@ -12,37 +12,8 @@ import type { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-
 
 const TTL_MS = 5 * 60 * 1000;
 const JAR_SIGNING_ALG = 'ES256';
-const LEGACY_WCT_VCT = 'https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata';
-const WCT_WALLET_PID_VCT = 'urn:eudi:pid:it:1';
 
 const CERT_PEM_PATTERN = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g;
-
-function normalizeDcqlQueryForWct(dcqlQuery: Record<string, unknown>): Record<string, unknown> {
-  const cloned = structuredClone(dcqlQuery) as {
-    credentials?: Array<{
-      meta?: {
-        vct_values?: string[];
-      };
-    }>;
-  };
-
-  if (!Array.isArray(cloned.credentials)) {
-    return cloned as Record<string, unknown>;
-  }
-
-  for (const credential of cloned.credentials) {
-    const values = credential.meta?.vct_values;
-    if (!Array.isArray(values)) {
-      continue;
-    }
-
-    if (credential.meta) {
-      credential.meta.vct_values = values.map((value) => (value === LEGACY_WCT_VCT ? WCT_WALLET_PID_VCT : value));
-    }
-  }
-
-  return cloned as Record<string, unknown>;
-}
 
 export interface CreateAuthorizationRequestInput {
   baseUrl: string;
@@ -133,7 +104,6 @@ export async function createAuthorizationRequestUseCase(
   const encryptionJwk = await resolveResponseEncryptionJwk(input.rpKeys.authResponsePrivateKeyPem);
   const signingKid = await resolveSigningKid(input.rpKeys.signingPrivateKeyPem);
   const signJwt = createSignJwtCallback(input.rpKeys.authRequestPrivateKeyPem, input.rpKeys.signingPrivateKeyPem);
-  const normalizedDcqlQuery = normalizeDcqlQueryForWct(input.dcqlQuery);
 
   const authorizationRequestPayload = {
     client_id: requestObjectClientId,
@@ -149,7 +119,7 @@ export async function createAuthorizationRequestUseCase(
         }
       }
     },
-    dcql_query: normalizedDcqlQuery,
+    dcql_query: input.dcqlQuery,
     iss: requestObjectClientId,
     nonce,
     request_uri_method: 'get' as const,

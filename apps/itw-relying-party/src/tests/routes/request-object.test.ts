@@ -135,7 +135,7 @@ describe('POST /request-object', () => {
     expect(payload.iss).toBe('x509_hash:https://127.0.0.1:8080');
   });
 
-  it('normalizes legacy DCQL VCT values for WCT wallet compatibility', async () => {
+  it('preserves DCQL VCT values as provided in input', async () => {
     ctx = await buildRpRouteApp(requestObjectRoute);
 
     const res = await ctx.app.inject({
@@ -148,7 +148,7 @@ describe('POST /request-object', () => {
               id: 'pid',
               format: 'dc+sd-jwt',
               meta: {
-                vct_values: ['https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata']
+                vct_values: ['urn:eudi:pid:it:1']
               }
             }
           ]
