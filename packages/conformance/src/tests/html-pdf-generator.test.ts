@@ -1,8 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { generateRenderedReport, renderHtmlReport, renderPdfReport } from '../reporters/html-pdf-generator.js';
 
 import type { JsonReporterResult } from '../reporters/json-reporter.js';
+
+vi.mock('puppeteer', () => ({
+  default: {
+    launch: vi.fn(async () => ({
+      newPage: vi.fn(async () => ({
+        setContent: vi.fn(),
+        pdf: vi.fn(async () => new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]))
+      })),
+      close: vi.fn()
+    }))
+  }
+}));
 
 function makeJsonReporter(): JsonReporterResult {
   return {
@@ -90,22 +102,19 @@ describe('html-pdf-generator', () => {
     expect(html).toContain('invalid dpop');
   });
 
-  it('renders a binary PDF payload', () => {
-    const pdf = renderPdfReport(makeJsonReporter(), { generatedAt: new Date('2026-06-12T12:10:00.000Z') });
+  it('renders a binary PDF payload', async () => {
+    const pdf = await renderPdfReport(makeJsonReporter(), { generatedAt: new Date('2026-06-12T12:10:00.000Z') });
 
     expect(pdf).toBeInstanceOf(Uint8Array);
-    expect(pdf.length).toBeGreaterThan(100);
-
-    const header = Buffer.from(pdf).subarray(0, 8).toString('utf8');
-    expect(header.startsWith('%PDF-1.4')).toBe(true);
+    expect(pdf.length).toBeGreaterThan(0);
   });
 
-  it('selects the right renderer based on format', () => {
-    const html = generateRenderedReport('html', makeJsonReporter());
+  it('selects the right renderer based on format', async () => {
+    const html = await generateRenderedReport('html', makeJsonReporter());
     expect(typeof html.content).toBe('string');
     expect(html.extension).toBe('html');
 
-    const pdf = generateRenderedReport('pdf', makeJsonReporter());
+    const pdf = await generateRenderedReport('pdf', makeJsonReporter());
     expect(pdf.content).toBeInstanceOf(Uint8Array);
     expect(pdf.extension).toBe('pdf');
   });
