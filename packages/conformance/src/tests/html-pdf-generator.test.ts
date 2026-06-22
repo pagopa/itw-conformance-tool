@@ -107,6 +107,7 @@ describe('html-pdf-generator', () => {
 
     expect(pdf).toBeInstanceOf(Uint8Array);
     expect(pdf.length).toBeGreaterThan(0);
+    expect(Buffer.from(pdf).subarray(0, 5).toString('utf8')).toBe('%PDF-');
   });
 
   it('selects the right renderer based on format', async () => {
