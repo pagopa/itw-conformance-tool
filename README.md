@@ -80,6 +80,17 @@ pnpm issuer
 pnpm rp
 ```
 
+Once a conformance flow has completed, generate a report:
+
+```bash
+# List all recorded runs
+itwct report:list
+
+# Generate a report (html or pdf)
+itwct report:create <run_id> html
+itwct report:create <run_id> pdf
+```
+
 > See [apps/cli/README.md](apps/cli/README.md) for full CLI usage.
 
 ## Commands
