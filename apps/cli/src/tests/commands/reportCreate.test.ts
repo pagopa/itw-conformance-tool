@@ -76,7 +76,7 @@ describe('reportCreate', () => {
     const { writeFileSync } = await import('node:fs');
     const { generateRenderedReport } = await import('@itw-conformance-tool/conformance');
     mockGet.mockResolvedValue({ id: RUN_ID });
-    vi.mocked(generateRenderedReport).mockReturnValue({ extension: 'html', content: '<html/>' } as never);
+    vi.mocked(generateRenderedReport).mockResolvedValue({ extension: 'html', content: '<html/>' } as never);
 
     await reportCreate(RUN_ID, 'html', DATA_DIR, emitLog);
 
@@ -93,7 +93,7 @@ describe('reportCreate', () => {
     const { generateRenderedReport } = await import('@itw-conformance-tool/conformance');
     const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
     mockGet.mockResolvedValue({ id: RUN_ID });
-    vi.mocked(generateRenderedReport).mockReturnValue({ extension: 'pdf', content: pdfBytes } as never);
+    vi.mocked(generateRenderedReport).mockResolvedValue({ extension: 'pdf', content: pdfBytes } as never);
 
     await reportCreate(RUN_ID, 'pdf', DATA_DIR, emitLog);
 
@@ -116,7 +116,7 @@ describe('reportCreate', () => {
   it('passes the correct format to generateRenderedReport', async () => {
     const { generateRenderedReport } = await import('@itw-conformance-tool/conformance');
     mockGet.mockResolvedValue({ id: RUN_ID });
-    vi.mocked(generateRenderedReport).mockReturnValue({ extension: 'pdf', content: new Uint8Array() } as never);
+    vi.mocked(generateRenderedReport).mockResolvedValue({ extension: 'pdf', content: new Uint8Array() } as never);
 
     await reportCreate(RUN_ID, 'pdf', DATA_DIR, emitLog);
 
@@ -126,7 +126,7 @@ describe('reportCreate', () => {
   it('closes the database on success', async () => {
     const { generateRenderedReport } = await import('@itw-conformance-tool/conformance');
     mockGet.mockResolvedValue({ id: RUN_ID });
-    vi.mocked(generateRenderedReport).mockReturnValue({ extension: 'html', content: '<html/>' } as never);
+    vi.mocked(generateRenderedReport).mockResolvedValue({ extension: 'html', content: '<html/>' } as never);
 
     await reportCreate(RUN_ID, 'html', DATA_DIR, emitLog);
 
