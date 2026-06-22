@@ -12,7 +12,7 @@ const federationRoute: FastifyPluginAsync = async (app) => {
     handler: async (request, reply) => {
       try {
         const entityStatement = await createEntityConfigurationJwt({
-          entityId: app.config.entityId,
+          entityId: app.config.baseUrl,
           trustAnchorUrl: app.config.trustAnchorUrl,
           authRequestPrivateKeyPem: app.rpKeys.authRequestPrivateKeyPem,
           authResponsePrivateKeyPem: app.rpKeys.authResponsePrivateKeyPem,

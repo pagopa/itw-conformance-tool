@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
-import { getIACAChain, getTlsCertAndKey, getX5cCert } from '@itw-conformance-tool/crypto';
 
+import { createSelfSignedCertificateFromJwk, getIACAChain, getTlsCertAndKey } from '../utils/certificates.js';
 import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
@@ -86,19 +86,37 @@ async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise
   const rpArtifacts = [
     ['auth-request-key.jwk.json', getAuthRequestKey],
     ['auth-response-key.jwk.json', getAuthResponseKey],
-    ['federation-key.jwk.json', getFederationKey],
-    ['x5c-cert.pem', getX5cCert]
+    ['federation-key.jwk.json', getFederationKey]
   ] as const;
 
   const generatedRpPaths: string[] = [];
+  let authRequestKeyContent: string | undefined;
 
   for (const [fileName, factory] of rpArtifacts) {
     const filePath = join(rpDirPath, fileName);
     if (!existsFileSync(filePath) || flags.force) {
       const content = await factory();
       writeFileSync(filePath, content, { encoding: 'utf8', flag: 'w' });
+      if (fileName === 'auth-request-key.jwk.json') {
+        authRequestKeyContent = content;
+      }
       generatedRpPaths.push(filePath);
     }
+  }
+
+  const x5cCertPath = join(rpDirPath, 'x5c-cert.pem');
+  if (!existsFileSync(x5cCertPath) || flags.force) {
+    if (!authRequestKeyContent) {
+      const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
+      authRequestKeyContent = readFileSync(authRequestKeyPath, 'utf8');
+    }
+
+    const authRequestKey = JSON.parse(authRequestKeyContent) as Parameters<
+      typeof createSelfSignedCertificateFromJwk
+    >[0];
+    const x5cCertificate = await createSelfSignedCertificateFromJwk(authRequestKey);
+    writeFileSync(x5cCertPath, x5cCertificate, { encoding: 'utf8', flag: 'w' });
+    generatedRpPaths.push(x5cCertPath);
   }
 
   if (generatedRpPaths.length === 0) {

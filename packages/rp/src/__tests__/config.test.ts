@@ -103,7 +103,7 @@ describe('rpConfigSchema', () => {
     host: '0.0.0.0',
     port: 8080,
     baseUrl: 'https://localhost:8080',
-    entityId: 'https://localhost:3000',
+    entityId: 'https://127.0.0.1:3000',
     dataDir: '/tmp/itw',
     configFilePath: '/tmp/config.ini',
     trustAnchorUrl: '/.well-known/openid-federation',
@@ -200,7 +200,7 @@ describe('loadRpConfig', () => {
     expect(result.config.port).toBe(DEFAULT_PORT);
     expect(result.config.dataDir).toBe(DEFAULT_DATA_DIR);
     expect(result.config.baseUrl).toBe(`https://localhost:${DEFAULT_PORT}`);
-    expect(result.config.entityId).toBe(`https://localhost:3000`);
+    expect(result.config.entityId).toBe(`https://127.0.0.1:3000`);
   });
 
   it('reads [rp].port and [global].data_dir from the ini file', () => {

@@ -35,28 +35,17 @@ function buildFetchWithTimeout(options: Pick<FetchTrustChainOptions, 'logger' | 
   const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
 
   return async (input, init) => {
-    const startedAt = Date.now();
-    const method = init?.method ?? 'GET';
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init?.signal == null ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal]);
 
-    const response = await fetch(input, {
-      ...init,
-      signal
-    });
-
-    options.logger.info(
-      {
-        durationMs: Date.now() - startedAt,
-        method,
-        statusCode: response.status,
-        url
-      },
-      'Fetched trust-chain resource'
-    );
-
-    return response;
+    try {
+      return await fetch(input, {
+        ...init,
+        signal
+      });
+    } catch {
+      throw new Error('Trust chain fetch failed');
+    }
   };
 }
 
@@ -109,16 +98,6 @@ export async function fetchTrustChain(options: FetchTrustChainOptions): Promise<
     options.logger.warn({}, 'Unable to fetch and validate trust chain');
     return trustChain;
   }
-
-  options.logger.info(
-    {
-      entityId,
-      trustAnchorEntityId,
-      trustAnchorUrl: options.trustAnchorUrl,
-      trustChainLength: trustChain.length
-    },
-    'Trust chain fetched and validated'
-  );
 
   return trustChain;
 }

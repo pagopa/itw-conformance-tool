@@ -49,5 +49,6 @@
     "vite": "^8.0.0",
     "vitest": "~4.1.0"
   },
-  "packageManager": "pnpm@9.5.0"
+  "packageManager": "pnpm@9.5.0",
+  "//": "When upgrading to pnpm v10+, add back: \"pnpm\": { \"onlyBuiltDependencies\": [\"puppeteer\"] }. pnpm 10 blocks lifecycle scripts by default, so puppeteer needs this whitelist entry to download Chromium during install."
 }

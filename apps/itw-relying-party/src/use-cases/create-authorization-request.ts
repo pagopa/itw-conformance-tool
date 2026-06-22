@@ -2,35 +2,33 @@ import { createPrivateKey, createPublicKey, randomBytes, randomUUID } from 'node
 
 import { createSignJwtCallback } from '@itw-conformance-tool/crypto';
 import { createAuthorizationRequest } from '@pagopa/io-wallet-oid4vp';
-import { ItWalletSpecsVersion, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import { calculateJwkThumbprint, type JWK } from 'jose';
 
 import { extractClientId } from '../crypto/client-id.js';
 
-import type { EphemeralKeyPair } from '../crypto/ephemeral-keys.js';
 import type { INonceRepository } from '@itw-conformance-tool/database';
 import type { PresentationFlowType, SessionService } from '@itw-conformance-tool/rp';
+import type { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 
 const TTL_MS = 5 * 60 * 1000;
 const JAR_SIGNING_ALG = 'ES256';
-const INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER = 'insecure-http-local-dev';
-const SDK_CONFIG = new IoWalletSdkConfig({ itWalletSpecsVersion: ItWalletSpecsVersion.V1_4 });
 
 const CERT_PEM_PATTERN = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g;
 
 export interface CreateAuthorizationRequestInput {
   baseUrl: string;
+  entityId: string;
   dcqlQuery: Record<string, unknown>;
-  ephemeralKeys: EphemeralKeyPair;
   flowType: PresentationFlowType;
   nonceRepository: INonceRepository;
   rpKeys: {
     authRequestPrivateKeyPem: string;
+    authResponsePrivateKeyPem: string;
     signingPrivateKeyPem: string;
     x5cCertPem: string;
   };
+  sdkConfig: IoWalletSdkConfig<ItWalletSpecsVersion.V1_4>;
   sessionService: SessionService;
-  trustChain?: [string, ...string[]];
   walletAuthBaseUri: string;
 }
 
@@ -44,24 +42,23 @@ function parseX5cChain(pemChain: string): string[] {
   return Array.from(pemChain.matchAll(CERT_PEM_PATTERN), ([, certificate]) => certificate.replace(/\s+/g, ''));
 }
 
-function toSdkJwk(ephemeralKeys: EphemeralKeyPair) {
-  if (!ephemeralKeys.publicJwk.kid || !ephemeralKeys.publicJwk.kty) {
-    throw new Error('Ephemeral public JWK is missing required kid or kty');
+async function resolveResponseEncryptionJwk(
+  authResponsePrivateKeyPem: string
+): Promise<{ [key: string]: unknown; kid: string; kty: string; alg: string; use: string }> {
+  const publicJwk = createPublicKey(createPrivateKey(authResponsePrivateKeyPem)).export({ format: 'jwk' }) as JWK;
+  const kid = await calculateJwkThumbprint(publicJwk);
+
+  if (typeof publicJwk.kty !== 'string' || publicJwk.kty.length === 0) {
+    throw new Error('Auth response public JWK is missing required kty');
   }
 
   return {
-    ...ephemeralKeys.publicJwk,
-    kid: ephemeralKeys.publicJwk.kid,
-    kty: ephemeralKeys.publicJwk.kty
+    ...publicJwk,
+    alg: 'ECDH-ES',
+    kid,
+    kty: publicJwk.kty,
+    use: 'enc'
   };
-}
-
-function resolveTrustChain(trustChain: [string, ...string[]] | undefined): [string, ...string[]] | undefined {
-  if (trustChain === undefined || trustChain[0] === INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER) {
-    return undefined;
-  }
-
-  return trustChain;
 }
 
 const SIGNING_KID_CACHE = new Map<string, Promise<string>>();
@@ -92,10 +89,10 @@ export async function createAuthorizationRequestUseCase(
 ): Promise<CreateAuthorizationRequestResult> {
   const clientId = extractClientId(input.baseUrl);
   const requestObjectClientId = `x509_hash:${clientId}`;
-  const responseUri = `${clientId}/auth/response`;
+  const responseUri = `${input.baseUrl}/auth/response`;
   const state = randomUUID();
   const nonce = randomBytes(32).toString('hex');
-  const requestUri = `${clientId}/auth/request/${state}`;
+  const requestUri = `${input.baseUrl}/auth/request/${state}`;
 
   await input.nonceRepository.insert(nonce, Date.now() + TTL_MS);
 
@@ -104,46 +101,46 @@ export async function createAuthorizationRequestUseCase(
     throw new Error('x5c certificate chain is empty or not a valid PEM-encoded certificate');
   }
 
-  const encryptionJwk = toSdkJwk(input.ephemeralKeys);
-  const trustChain = resolveTrustChain(input.trustChain);
+  const encryptionJwk = await resolveResponseEncryptionJwk(input.rpKeys.authResponsePrivateKeyPem);
   const signingKid = await resolveSigningKid(input.rpKeys.signingPrivateKeyPem);
   const signJwt = createSignJwtCallback(input.rpKeys.authRequestPrivateKeyPem, input.rpKeys.signingPrivateKeyPem);
 
-  const result = await createAuthorizationRequest({
-    authorizationRequestPayload: {
-      client_id: requestObjectClientId,
-      client_metadata: {
-        encrypted_response_enc_values_supported: ['A256GCM'],
-        jwks: {
-          keys: [encryptionJwk]
-        },
-        vp_formats_supported: {
-          'dc+sd-jwt': {
-            'kb-jwt_alg_values': ['ES256'],
-            'sd-jwt_alg_values': ['ES256']
-          }
-        }
+  const authorizationRequestPayload = {
+    client_id: requestObjectClientId,
+    client_metadata: {
+      encrypted_response_enc_values_supported: ['A256GCM'],
+      jwks: {
+        keys: [encryptionJwk]
       },
-      dcql_query: input.dcqlQuery,
-      iss: requestObjectClientId,
-      nonce,
-      request_uri_method: 'get',
-      response_mode: 'direct_post.jwt',
-      response_type: 'vp_token',
-      response_uri: responseUri,
-      state
+      vp_formats_supported: {
+        'dc+sd-jwt': {
+          'kb-jwt_alg_values': ['ES256'],
+          'sd-jwt_alg_values': ['ES256']
+        }
+      }
     },
+    dcql_query: input.dcqlQuery,
+    iss: requestObjectClientId,
+    nonce,
+    request_uri_method: 'get' as const,
+    response_mode: 'direct_post.jwt' as const,
+    response_type: 'vp_token' as const,
+    response_uri: responseUri,
+    state
+  };
+
+  const result = await createAuthorizationRequest({
+    authorizationRequestPayload,
     callbacks: {
       signJwt
     },
-    config: SDK_CONFIG,
+    config: input.sdkConfig,
     jar: {
       expiresInSeconds: TTL_MS / 1000,
       jwtSigner: {
         alg: JAR_SIGNING_ALG,
         kid: signingKid,
         method: 'x5c',
-        trustChain,
         x5c
       },
       requestUri

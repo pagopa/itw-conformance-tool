@@ -64,7 +64,6 @@ describe('POST /request-object', () => {
     expect(header.typ).toBe('oauth-authz-req+jwt');
     expect(header.x5c).toEqual(['CERT']);
     expect(payload.client_id).toBe('x509_hash:http://localhost:8080');
-    expect(payload.iss).toBe(payload.client_id);
     expect(payload.client_metadata?.jwks?.keys?.[0]?.kid).toBeTruthy();
     expect(payload.nonce).toMatch(/^[0-9a-f]{64}$/);
     expect(payload.response_uri).toBe('http://localhost:8080/auth/response');
@@ -107,5 +106,73 @@ describe('POST /request-object', () => {
     expect(res.statusCode).toBe(200);
     const { url } = res.json<{ url: string }>();
     expect(url).toMatch(/^https:\/\/wallet\.example\.com\/auth/);
+  });
+
+  it('uses the RP baseUrl in x509_hash client_id when entityId differs', async () => {
+    ctx = await buildRpRouteApp(requestObjectRoute, {
+      baseUrl: 'https://127.0.0.1:8080',
+      entityId: 'https://127.0.0.1:3000'
+    });
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/request-object',
+      payload: VALID_DCQL_BODY
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const { url } = res.json<{ url: string }>();
+    const state = requireValue(new URL(url).searchParams.get('state'), 'Missing state in wallet URL');
+    const session = requireValue(await ctx.sessionService.get(state), 'Missing saved session');
+    const [, payloadB64] = session.jwt.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
+      client_id: string;
+      iss: string;
+    };
+
+    expect(payload.client_id).toBe('x509_hash:https://127.0.0.1:8080');
+    expect(payload.iss).toBe('x509_hash:https://127.0.0.1:8080');
+  });
+
+  it('preserves DCQL VCT values as provided in input', async () => {
+    ctx = await buildRpRouteApp(requestObjectRoute);
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/request-object',
+      payload: {
+        dcqlQuery: {
+          credentials: [
+            {
+              id: 'pid',
+              format: 'dc+sd-jwt',
+              meta: {
+                vct_values: ['urn:eudi:pid:it:1']
+              }
+            }
+          ]
+        },
+        flow_type: 'cross-device'
+      }
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const { url } = res.json<{ url: string }>();
+    const state = requireValue(new URL(url).searchParams.get('state'), 'Missing state in wallet URL');
+    const session = requireValue(await ctx.sessionService.get(state), 'Missing saved session');
+    const [, payloadB64] = session.jwt.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
+      dcql_query: {
+        credentials: Array<{
+          meta?: {
+            vct_values?: string[];
+          };
+        }>;
+      };
+    };
+
+    expect(payload.dcql_query.credentials[0]?.meta?.vct_values).toEqual(['urn:eudi:pid:it:1']);
   });
 });

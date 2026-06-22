@@ -24,14 +24,14 @@ function parseCertificateChain(pemChain: string): string[] {
   });
 }
 
-async function toPublicJwk(privateKeyPem: string, x5c: string[]): Promise<JsonWebKey> {
+async function toPublicJwk(privateKeyPem: string, x5c?: string[]): Promise<JsonWebKey> {
   const publicJwk = createPublicKey(createPrivateKey(privateKeyPem)).export({ format: 'jwk' }) as JWK;
   const kid = await calculateJwkThumbprint(publicJwk);
 
   return {
     ...publicJwk,
     kid,
-    x5c
+    ...(x5c && x5c.length > 0 ? { x5c } : {})
   };
 }
 
@@ -50,7 +50,7 @@ function buildEntityConfigurationMetadata(input: {
   responseUri: string;
   verifierJwks: { keys: JsonWebKey[] };
 }): ItWalletEntityConfigurationClaimsOptions['metadata'] {
-  const metadata = {
+  const metadata: ItWalletMetadataV1_3 = {
     federation_entity: {
       contacts: ['info@pagopa.it'],
       homepage_uri: 'https://io.italia.it',
@@ -74,7 +74,7 @@ function buildEntityConfigurationMetadata(input: {
         }
       }
     }
-  } satisfies ItWalletMetadataV1_3;
+  };
 
   const parsed = itWalletMetadataV1_3.safeParse(metadata);
   if (!parsed.success) {
@@ -86,7 +86,7 @@ function buildEntityConfigurationMetadata(input: {
 
 export async function createEntityConfigurationJwt(input: {
   entityId: string;
-  trustAnchorUrl: string;
+  trustAnchorUrl?: string;
   authRequestPrivateKeyPem: string;
   authResponsePrivateKeyPem: string;
   federationPrivateKeyPem: string;
@@ -94,11 +94,13 @@ export async function createEntityConfigurationJwt(input: {
 }): Promise<string> {
   const issuedAt = Math.floor(Date.now() / 1000);
   const entityId = input.entityId;
-  const authorityHint = new URL(input.trustAnchorUrl.trim(), entityId).origin;
+  const authorityHint = input.trustAnchorUrl
+    ? new URL(input.trustAnchorUrl.trim(), entityId).origin
+    : new URL(entityId).origin;
   const x5c = parseCertificateChain(input.x5cCertPem);
   const verifierSigningJwk = await toPublicJwk(input.authRequestPrivateKeyPem, x5c);
   const encryptionJwk = await toPublicJwk(input.authResponsePrivateKeyPem, x5c);
-  const federationSigningJwk = await toPublicJwk(input.federationPrivateKeyPem, x5c);
+  const federationSigningJwk = await toPublicJwk(input.federationPrivateKeyPem);
   const signingPrivateJwk = await toPrivateJwk(input.federationPrivateKeyPem, federationSigningJwk.kid);
   const metadata = buildEntityConfigurationMetadata({
     entityId,

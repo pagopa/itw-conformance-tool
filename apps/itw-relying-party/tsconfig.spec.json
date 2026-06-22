@@ -10,6 +10,7 @@
     "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
     "paths": {
       "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"],
+      "@itw-conformance-tool/crypto": ["../../packages/crypto/src/index.ts"],
       "@itw-conformance-tool/database": ["../../packages/database/dist/index.d.ts"],
       "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"],
       "@itw-conformance-tool/rp": ["../../packages/rp/dist/index.d.ts"]
@@ -41,6 +42,9 @@
     },
     {
       "path": "../../packages/database/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/crypto/tsconfig.lib.json"
     }
   ]
 }

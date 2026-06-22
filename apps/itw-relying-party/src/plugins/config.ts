@@ -12,7 +12,7 @@ declare module 'fastify' {
       entityId: string;
       dataDir: string;
       configFilePath: string;
-      trustAnchorUrl: string;
+      trustAnchorUrl?: string;
       x5cCertPath: string;
       httpsEnabled: boolean;
       tlsCertPath: string;

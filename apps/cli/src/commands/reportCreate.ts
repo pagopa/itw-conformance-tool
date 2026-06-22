@@ -38,7 +38,7 @@ export async function reportCreate(
     }
 
     const jsonReporter = buildJsonReporterFromSession(session);
-    const rendered = generateRenderedReport(format, jsonReporter, { generatedAt: new Date() });
+    const rendered = await generateRenderedReport(format, jsonReporter, { generatedAt: new Date() });
 
     const fileName = `conformance-report-${runId}.${rendered.extension}`;
     const outputPath = resolve(process.cwd(), fileName);
