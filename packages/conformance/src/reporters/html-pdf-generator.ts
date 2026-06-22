@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 
 import type { JsonReporterAssertionResult, JsonReporterResult } from './json-reporter.js';
+import type { Browser } from 'puppeteer';
 
 export type ReportFormat = 'html' | 'pdf';
 
@@ -151,7 +152,7 @@ export async function renderPdfReport(
   options: HtmlPdfGeneratorOptions = {}
 ): Promise<Uint8Array> {
   const html = renderHtmlReport(jsonReporter, options);
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
+  let browser: Browser | undefined;
 
   try {
     browser = await puppeteer.launch({ headless: true });
