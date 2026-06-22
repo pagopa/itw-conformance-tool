@@ -28,7 +28,7 @@ credential_types = pid,mdl,badge,eaa
 port = 8080
 ; RP OpenID Federation Entity ID (leaf entity)
 ; Example: https://rp.example.org
-entity_id = https://localhost:3000
+entity_id = https://127.0.0.1:3000
 ; Trust Anchor URL for Federation validation
 ; Override with env: ITW_CT_RP_TRUST_ANCHOR_URL
 trust_anchor_url = /.well-known/openid-federation
@@ -70,12 +70,12 @@ export const ConfigSchema = z.object({
   rp: z
     .object({
       port: z.coerce.number().int().min(1).max(65535).catch(8080),
-      entity_id: z.string().url().catch('https://localhost:3000'),
+      entity_id: z.string().url().catch('https://127.0.0.1:3000'),
       trust_anchor_url: z.string().min(1).catch('/.well-known/openid-federation')
     })
     .default({
       port: 8080,
-      entity_id: 'https://localhost:3000',
+      entity_id: 'https://127.0.0.1:3000',
       trust_anchor_url: '/.well-known/openid-federation'
     })
 });

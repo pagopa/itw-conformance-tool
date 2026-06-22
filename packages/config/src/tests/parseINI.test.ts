@@ -160,7 +160,7 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
-        entity_id: 'https://localhost:3000',
+        entity_id: 'https://127.0.0.1:3000',
         trust_anchor_url: '/.well-known/openid-federation'
       }
     });
@@ -185,7 +185,7 @@ describe('parseINI', () => {
       },
       rp: {
         port: 8080,
-        entity_id: 'https://localhost:3000',
+        entity_id: 'https://127.0.0.1:3000',
         trust_anchor_url: '/.well-known/openid-federation'
       }
     });

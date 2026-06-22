@@ -58,13 +58,13 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
 
       const result = await createAuthorizationRequestUseCase({
         baseUrl: app.config.baseUrl,
+        entityId: app.config.entityId,
         dcqlQuery: parsed.data.dcqlQuery,
-        ephemeralKeys: app.ephemeralKeys,
         flowType: parsed.data.flowType,
         nonceRepository: app.nonceRepository,
         rpKeys: app.rpKeys,
+        sdkConfig: app.sdkConfig,
         sessionService: app.sessionService,
-        trustChain: app.trustChain as [string, ...string[]], // The trustChain plugin guarantees this type
         walletAuthBaseUri: parsed.data.walletAuthBaseUri
       });
 

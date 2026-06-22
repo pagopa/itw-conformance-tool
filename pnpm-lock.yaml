@@ -104,6 +104,9 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      '@peculiar/x509':
+        specifier: ^1.12.4
+        version: 1.14.3
       node-forge:
         specifier: ^1.4.0
         version: 1.4.0
