@@ -66,30 +66,22 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
     // WP_002a: alg must be allowed and not 'none'
     const allowedAlgorithms = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'];
-    const isValidAlg = 
-      typeof header.alg === 'string' && 
-      allowedAlgorithms.includes(header.alg) && 
-      header.alg !== 'none';
+    const isValidAlg =
+      typeof header.alg === 'string' && allowedAlgorithms.includes(header.alg) && header.alg !== 'none';
 
     // WP_002b: kid must equal public key thumbprint
     const hasKid = typeof header.kid === 'string' && header.kid.length > 0;
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks.keys.length > 0;
-    const kidMatchesThumbprint = 
-      hasKid && hasJwks &&
-      payload.jwks.keys.some((key: any) => key.kid === header.kid);
+    const kidMatchesThumbprint = hasKid && hasJwks && payload.jwks.keys.some((key: any) => key.kid === header.kid);
 
     // WP_002c: typ must be entity-statement+jwt
     const isValidTyp = header.typ === 'entity-statement+jwt';
 
     // WP_002d: iss and sub must be equal and valid HTTPS URLs
-    const isValidIssuer = 
-      typeof payload.iss === 'string' && 
-      payload.iss.length > 0 && 
-      payload.iss.startsWith('https://');
-    const isValidSubject = 
-      typeof payload.sub === 'string' && 
-      payload.sub.length > 0 && 
-      payload.sub.startsWith('https://');
+    const isValidIssuer =
+      typeof payload.iss === 'string' && payload.iss.length > 0 && payload.iss.startsWith('https://');
+    const isValidSubject =
+      typeof payload.sub === 'string' && payload.sub.length > 0 && payload.sub.startsWith('https://');
     const issEqualsSubject = payload.iss === payload.sub;
 
     // WP_002e: iat and exp must be valid Unix timestamps and not expired
@@ -99,39 +91,33 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
     // WP_002f: authority_hints must be array of valid HTTPS URLs
     const hasAuthorityHints = Array.isArray(payload.authority_hints);
-    const allValidAuthorityHints = 
-      hasAuthorityHints && 
+    const allValidAuthorityHints =
+      hasAuthorityHints &&
       payload.authority_hints.length > 0 &&
-      payload.authority_hints.every((url: any) => 
-        typeof url === 'string' && url.startsWith('https://')
-      );
+      payload.authority_hints.every((url: any) => typeof url === 'string' && url.startsWith('https://'));
 
     // WP_002g: jwks must contain valid JWK signing keys
-    const allKeysValid = 
+    const allKeysValid =
       hasJwks &&
-      payload.jwks.keys.every((key: any) => 
-        typeof key.kty === 'string' && 
-        typeof key.kid === 'string' && 
-        typeof key.use === 'string' &&
-        key.use === 'sig'
+      payload.jwks.keys.every(
+        (key: any) =>
+          typeof key.kty === 'string' && typeof key.kid === 'string' && typeof key.use === 'string' && key.use === 'sig'
       );
 
     // WP_002h: metadata must contain wallet_solution and optionally federation_entity
     const hasMetadata = typeof payload.metadata === 'object' && payload.metadata !== null;
-    const walletSolutionValid = 
+    const walletSolutionValid =
       !payload.metadata?.wallet_solution ||
-      (typeof payload.metadata.wallet_solution === 'object' &&
-       payload.metadata.wallet_solution !== null);
-    const federationEntityValid = 
+      (typeof payload.metadata.wallet_solution === 'object' && payload.metadata.wallet_solution !== null);
+    const federationEntityValid =
       !payload.metadata?.federation_entity ||
-      (typeof payload.metadata.federation_entity === 'object' && 
-       payload.metadata.federation_entity !== null);
+      (typeof payload.metadata.federation_entity === 'object' && payload.metadata.federation_entity !== null);
 
     // Overall JWT structure validation
     const isValidJwtStructure = parts.length === 3;
 
     // Combine all validations
-    const allValid = 
+    const allValid =
       isValidJwtStructure &&
       isValidAlg &&
       kidMatchesThumbprint &&
@@ -194,12 +180,14 @@ describe.sequential(`Wallet Provider Backend`, () => {
       : Array.isArray(topLevelKeys)
         ? topLevelKeys
         : [];
-    const allKeysForSigningOrEncryption = 
-      candidateKeys.every((key: any) => 
+    const allKeysForSigningOrEncryption = candidateKeys.every(
+      (key: any) =>
         (typeof key.use !== 'string' || key.use === 'sig' || key.use === 'enc') &&
         (!Array.isArray(key.key_ops) ||
-          key.key_ops.every((op: string) => ['sign', 'verify', 'encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op)))
-      );
+          key.key_ops.every((op: string) =>
+            ['sign', 'verify', 'encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op)
+          ))
+    );
 
     const result = allKeysForSigningOrEncryption ? 'PASS' : 'FAIL';
 
@@ -230,24 +218,19 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const exactlyOne = count === 1;
 
     // WP_004a: If jwks is present, contains valid JWK
-    const jwksValid = 
+    const jwksValid =
       !hasJwks ||
       (typeof payload.jwks === 'object' &&
-       Array.isArray(payload.jwks.keys) &&
-       payload.jwks.keys.length > 0 &&
-       payload.jwks.keys.every((key: any) => 
-         typeof key.kty === 'string' && 
-         typeof key.kid === 'string'
-       ));
+        Array.isArray(payload.jwks.keys) &&
+        payload.jwks.keys.length > 0 &&
+        payload.jwks.keys.every((key: any) => typeof key.kty === 'string' && typeof key.kid === 'string'));
 
     // WP_004b: If jwks_uri is present, is valid HTTPS URL and resolvable
     let jwksUriValid = true;
     let jwksUriResolvable = false;
     if (hasJwksUri) {
-      jwksUriValid = 
-        typeof payload.jwks_uri === 'string' &&
-        payload.jwks_uri.startsWith('https://');
-      
+      jwksUriValid = typeof payload.jwks_uri === 'string' && payload.jwks_uri.startsWith('https://');
+
       if (jwksUriValid) {
         try {
           const response = await fetch(payload.jwks_uri);
@@ -262,10 +245,9 @@ describe.sequential(`Wallet Provider Backend`, () => {
     let signedJwksUriValid = true;
     let signedJwksUriResolvable = false;
     if (hasSignedJwksUri) {
-      signedJwksUriValid = 
-        typeof payload.signed_jwks_uri === 'string' &&
-        payload.signed_jwks_uri.startsWith('https://');
-      
+      signedJwksUriValid =
+        typeof payload.signed_jwks_uri === 'string' && payload.signed_jwks_uri.startsWith('https://');
+
       if (signedJwksUriValid) {
         try {
           const response = await fetch(payload.signed_jwks_uri);
@@ -273,7 +255,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
             response.ok &&
             response.status === 200 &&
             (response.headers.get('content-type')?.includes('application/jwk-set+jwt') ?? false);
-          
+
           if (signedJwksUriResolvable) {
             const jwtContent = await response.text();
             const jwtParts = jwtContent.split('.');
@@ -286,7 +268,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     }
 
     // Combine all validations
-    const allValid = 
+    const allValid =
       exactlyOne &&
       jwksValid &&
       (!hasJwksUri || (jwksUriValid && jwksUriResolvable)) &&
