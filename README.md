@@ -70,6 +70,16 @@ itw-conformance-tool init
 itw-conformance-tool start --all
 ```
 
+### Configuration
+
+The generated `config.ini` also supports the Wallet Provider backend URL used by conformance tests:
+
+```ini
+; Wallet provider backend URL (used for conformance tests)
+; Default: https://127.0.0.1:3000
+wallet_provider_backend_url = https://127.0.0.1:3000
+```
+
 Alternatively, start the individual services directly:
 
 ```bash

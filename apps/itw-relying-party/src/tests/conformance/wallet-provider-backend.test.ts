@@ -1,11 +1,46 @@
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 
+import { parseINI } from '@itw-conformance-tool/config';
 import { SqliteConformanceSessionRepository } from '@itw-conformance-tool/conformance';
-import { getX5cCert } from '@itw-conformance-tool/crypto';
+import { getX5cCert, isValidJwk } from '@itw-conformance-tool/crypto';
+import { calculateJwkThumbprint, createLocalJWKSet, jwtVerify } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import federationRoute from '../../routes/federation.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
+
+function isHttpsUrl(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isKeySemanticallyConsistent(key: any): boolean {
+  if (!Array.isArray(key.key_ops)) {
+    return key.use === undefined || key.use === 'sig' || key.use === 'enc';
+  }
+
+  if (key.use === 'sig') {
+    return key.key_ops.every((op: string) => op === 'sign' || op === 'verify');
+  }
+
+  if (key.use === 'enc') {
+    return key.key_ops.every((op: string) => ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op));
+  }
+
+  if (key.use === undefined) {
+    return key.key_ops.every((op: string) =>
+      ['sign', 'verify', 'encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op)
+    );
+  }
+
+  return false;
+}
 
 describe.sequential(`Wallet Provider Backend`, () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
@@ -14,8 +49,13 @@ describe.sequential(`Wallet Provider Backend`, () => {
   let entityConfigResponse: Awaited<ReturnType<typeof ctx.app.inject>>;
 
   beforeAll(async () => {
+    // Read wallet provider backend URL from config.ini
+    const configPath = resolve(process.cwd(), 'config.ini');
+    const { data: config } = parseINI(configPath);
+    const walletProviderUrl = config.global.wallet_provider_backend_url || 'https://localhost:3000';
+
     ctx = await buildRpRouteApp(federationRoute, {
-      baseUrl: 'https://localhost:8080',
+      baseUrl: walletProviderUrl,
       setup: async (app) => {
         app.rpKeys.x5cCertPem = await getX5cCert();
       }
@@ -61,64 +101,69 @@ describe.sequential(`Wallet Provider Backend`, () => {
   // ___ WP_002 ____
   it('WP_002 - Entity configuration is an OpenID Federation-compliant signed JWT with all required components', async () => {
     const parts = entityConfigResponse.body.split('.');
+    expect(parts).toHaveLength(3);
+
     const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
     // WP_002a: alg must be allowed and not 'none'
     const allowedAlgorithms = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'];
-    const isValidAlg =
-      typeof header.alg === 'string' && allowedAlgorithms.includes(header.alg) && header.alg !== 'none';
+    const isValidAlg = typeof header.alg === 'string' && allowedAlgorithms.includes(header.alg);
 
     // WP_002b: kid must equal public key thumbprint
-    const hasKid = typeof header.kid === 'string' && header.kid.length > 0;
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks.keys.length > 0;
-    const kidMatchesThumbprint = hasKid && hasJwks && payload.jwks.keys.some((key: any) => key.kid === header.kid);
+    const foundJwk = payload.jwks?.keys?.find((key: any) => key.kid === header.kid);
+    const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === header.kid;
 
     // WP_002c: typ must be entity-statement+jwt
     const isValidTyp = header.typ === 'entity-statement+jwt';
 
     // WP_002d: iss and sub must be equal and valid HTTPS URLs
-    const isValidIssuer =
-      typeof payload.iss === 'string' && payload.iss.length > 0 && payload.iss.startsWith('https://');
-    const isValidSubject =
-      typeof payload.sub === 'string' && payload.sub.length > 0 && payload.sub.startsWith('https://');
+    const isValidIssuer = typeof payload.iss === 'string' && isHttpsUrl(payload.iss);
+    const isValidSubject = typeof payload.sub === 'string' && isHttpsUrl(payload.sub);
     const issEqualsSubject = payload.iss === payload.sub;
 
     // WP_002e: iat and exp must be valid Unix timestamps and not expired
     const isValidIat = typeof payload.iat === 'number' && payload.iat > 0;
     const isValidExp = typeof payload.exp === 'number' && payload.exp > payload.iat;
-    const isNotExpired = payload.exp > Math.floor(Date.now() / 1000);
+    const isNotExpired = typeof payload.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000);
 
     // WP_002f: authority_hints must be array of valid HTTPS URLs
     const hasAuthorityHints = Array.isArray(payload.authority_hints);
     const allValidAuthorityHints =
-      hasAuthorityHints &&
-      payload.authority_hints.length > 0 &&
-      payload.authority_hints.every((url: any) => typeof url === 'string' && url.startsWith('https://'));
+      hasAuthorityHints && payload.authority_hints.length > 0 && payload.authority_hints.every(isHttpsUrl);
 
     // WP_002g: jwks must contain valid JWK signing keys
     const allKeysValid =
-      hasJwks &&
-      payload.jwks.keys.every(
-        (key: any) =>
-          typeof key.kty === 'string' && typeof key.kid === 'string' && typeof key.use === 'string' && key.use === 'sig'
-      );
+      hasJwks && payload.jwks.keys.length > 0 && (await Promise.all(payload.jwks.keys.map(isValidJwk))).every(Boolean);
 
     // WP_002h: metadata must contain wallet_solution and optionally federation_entity
-    const hasMetadata = typeof payload.metadata === 'object' && payload.metadata !== null;
+    const metadataValid = typeof payload.metadata === 'object' && payload.metadata !== null;
+
     const walletSolutionValid =
-      !payload.metadata?.wallet_solution ||
-      (typeof payload.metadata.wallet_solution === 'object' && payload.metadata.wallet_solution !== null);
+      metadataValid &&
+      (payload.metadata.wallet_solution === undefined ||
+        (typeof payload.metadata.wallet_solution === 'object' && payload.metadata.wallet_solution !== null));
     const federationEntityValid =
-      !payload.metadata?.federation_entity ||
+      payload.metadata?.federation_entity === undefined ||
       (typeof payload.metadata.federation_entity === 'object' && payload.metadata.federation_entity !== null);
 
-    // Overall JWT structure validation
-    const isValidJwtStructure = parts.length === 3;
+    let signatureVerified = false;
+    if (hasJwks && isValidIssuer && isValidSubject) {
+      try {
+        await jwtVerify(entityConfigResponse.body, createLocalJWKSet(payload.jwks), {
+          algorithms: allowedAlgorithms,
+          issuer: payload.iss,
+          subject: payload.sub,
+          typ: 'entity-statement+jwt'
+        });
+        signatureVerified = true;
+      } catch {
+        signatureVerified = false;
+      }
+    }
 
-    // Combine all validations
     const allValid =
-      isValidJwtStructure &&
       isValidAlg &&
       kidMatchesThumbprint &&
       isValidTyp &&
@@ -130,8 +175,10 @@ describe.sequential(`Wallet Provider Backend`, () => {
       isNotExpired &&
       allValidAuthorityHints &&
       allKeysValid &&
+      metadataValid &&
       walletSolutionValid &&
-      federationEntityValid;
+      federationEntityValid &&
+      signatureVerified;
 
     await repo.appendCheck(sessionId, {
       requirementId: 'WP_002',
@@ -144,14 +191,30 @@ describe.sequential(`Wallet Provider Backend`, () => {
     });
 
     // Assertions
-    expect(parts).toHaveLength(3);
+    expect(isValidAlg).toBe(true);
+    expect(kidMatchesThumbprint).toBe(true);
+    expect(isValidTyp).toBe(true);
+    expect(isValidIssuer).toBe(true);
+    expect(isValidSubject).toBe(true);
+    expect(issEqualsSubject).toBe(true);
+    expect(isValidIat).toBe(true);
+    expect(isValidExp).toBe(true);
+    expect(isNotExpired).toBe(true);
+    expect(allValidAuthorityHints).toBe(true);
+    expect(allKeysValid).toBe(true);
+    expect(walletSolutionValid).toBe(true);
+    expect(federationEntityValid).toBe(true);
+
+    expect(allValid).toBe(true);
+
     expect(header.alg).toBeDefined();
     expect(allowedAlgorithms).toContain(header.alg);
-    expect(header.alg).not.toBe('none');
     expect(header.kid).toBeDefined();
+    expect(kidMatchesThumbprint).toBe(true);
     expect(header.typ).toBe('entity-statement+jwt');
+    expect(isHttpsUrl(payload.iss)).toBe(true);
+    expect(isHttpsUrl(payload.sub)).toBe(true);
     expect(payload.iss).toBe(payload.sub);
-    expect(payload.iss).toMatch(/^https:\/\//);
     expect(typeof payload.iat).toBe('number');
     expect(typeof payload.exp).toBe('number');
     expect(payload.exp).toBeGreaterThan(payload.iat);
@@ -161,10 +224,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     expect(payload.jwks).toBeDefined();
     expect(Array.isArray(payload.jwks.keys)).toBe(true);
     expect(payload.metadata).toBeDefined();
-    // wallet_solution is optional; if present, it must be an object
-    if (payload.metadata?.wallet_solution) {
-      expect(typeof payload.metadata.wallet_solution).toBe('object');
-    }
+    expect(typeof payload.metadata.wallet_solution).toBe('object');
   });
 
   // ___ WP_003 ____
@@ -180,14 +240,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
       : Array.isArray(topLevelKeys)
         ? topLevelKeys
         : [];
-    const allKeysForSigningOrEncryption = candidateKeys.every(
-      (key: any) =>
-        (typeof key.use !== 'string' || key.use === 'sig' || key.use === 'enc') &&
-        (!Array.isArray(key.key_ops) ||
-          key.key_ops.every((op: string) =>
-            ['sign', 'verify', 'encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op)
-          ))
-    );
+
+    const allKeysForSigningOrEncryption = candidateKeys.every((key: any) => isKeySemanticallyConsistent(key));
 
     const result = allKeysForSigningOrEncryption ? 'PASS' : 'FAIL';
 
@@ -244,6 +298,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
     // WP_004c: If signed_jwks_uri is present, is valid HTTPS URL pointing to signed JWT with JWKS payload
     let signedJwksUriValid = true;
     let signedJwksUriResolvable = false;
+    let signedJwksPayloadHasJwks = false;
+    let signedJwksSignatureValid = false;
     if (hasSignedJwksUri) {
       signedJwksUriValid =
         typeof payload.signed_jwks_uri === 'string' && payload.signed_jwks_uri.startsWith('https://');
@@ -260,6 +316,22 @@ describe.sequential(`Wallet Provider Backend`, () => {
             const jwtContent = await response.text();
             const jwtParts = jwtContent.split('.');
             signedJwksUriResolvable = jwtParts.length === 3;
+
+            if (signedJwksUriResolvable) {
+              const signedPayload = JSON.parse(Buffer.from(jwtParts[1], 'base64url').toString());
+              signedJwksPayloadHasJwks = Array.isArray(signedPayload?.jwks?.keys) && signedPayload.jwks.keys.length > 0;
+
+              if (signedJwksPayloadHasJwks) {
+                try {
+                  await jwtVerify(jwtContent, createLocalJWKSet(signedPayload.jwks), {
+                    algorithms: ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512']
+                  });
+                  signedJwksSignatureValid = true;
+                } catch {
+                  signedJwksSignatureValid = false;
+                }
+              }
+            }
           }
         } catch {
           signedJwksUriResolvable = false;
@@ -272,7 +344,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
       exactlyOne &&
       jwksValid &&
       (!hasJwksUri || (jwksUriValid && jwksUriResolvable)) &&
-      (!hasSignedJwksUri || (signedJwksUriValid && signedJwksUriResolvable));
+      (!hasSignedJwksUri ||
+        (signedJwksUriValid && signedJwksUriResolvable && signedJwksPayloadHasJwks && signedJwksSignatureValid));
 
     await repo.appendCheck(sessionId, {
       requirementId: 'WP_004',
@@ -298,6 +371,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
     if (hasSignedJwksUri) {
       expect(payload.signed_jwks_uri).toMatch(/^https:\/\//);
       expect(signedJwksUriResolvable).toBe(true);
+      expect(signedJwksPayloadHasJwks).toBe(true);
+      expect(signedJwksSignatureValid).toBe(true);
     }
   });
 

@@ -5,6 +5,21 @@ import { importJWK, type JWK } from 'jose';
 
 import { jwksSchema } from '../schemas/jwk.js';
 
+/** Validates that a JWK object conforms to the required structure
+ * for signing keys.
+ *
+ * @param key - The JWK to validate
+ * @returns true if the key is a valid signing JWK, false otherwise
+ */
+export async function isValidJwk(key: any): Promise<boolean> {
+  try {
+    await importJWK(key);
+    return key.use === 'sig';
+  } catch {
+    return false;
+  }
+}
+
 /** Validates a JWK Set (JWKS) for structural correctness and
  * cryptographic integrity.
  *
@@ -29,9 +44,12 @@ export async function validateJWKS(jwks: unknown): Promise<void> {
   }
 }
 
-/**
- * Parses a PEM private key into a Node.js KeyObject.
+/** Parses a PEM private key into a Node.js KeyObject.
  * Supports both "BEGIN PRIVATE KEY" (PKCS#8) and "BEGIN EC PRIVATE KEY" (SEC1).
+ *
+ * @param keyPem - The PEM-encoded private key string
+ * @returns A Node.js KeyObject representing the private key
+ * @throws {Error} If the key format is invalid or cannot be parsed
  */
 function parseIacaPrivateKey(keyPem: string): ReturnType<typeof createPrivateKey> {
   try {
@@ -51,7 +69,13 @@ type ExportedPublicJwk = {
   e?: string;
 };
 
-/** Returns a stable identifier for public JWK coordinates/modulus for key-pair matching. */
+/** Returns a stable identifier for public JWK coordinates/modulus for key-pair matching.
+ * Generates a unique string representation based on the key type and its public parameters.
+ *
+ * @param jwk - The exported public JWK object
+ * @returns A stable identifier string for the JWK coordinates
+ * @throws {Error} If the JWK is missing required parameters or has an unsupported key type
+ */
 function publicJwkIdentity(jwk: ExportedPublicJwk): string {
   switch (jwk.kty) {
     case 'EC': {
@@ -80,7 +104,14 @@ function publicJwkIdentity(jwk: ExportedPublicJwk): string {
   }
 }
 
-/** Validates that an IACA X.509 certificate and private key form a valid cryptographic pair. */
+/** Validates that an IACA X.509 certificate and private key form a valid cryptographic pair.
+ * Ensures that the public key extracted from the certificate matches the public key
+ * derived from the private key.
+ *
+ * @param certPem - The PEM-encoded X.509 certificate
+ * @param keyPem - The PEM-encoded private key (PKCS#8 or SEC1 format)
+ * @throws {Error} If the certificate and private key do not form a valid pair, or if either is invalid
+ */
 export async function validateIACAKeyPair(certPem: string, keyPem: string): Promise<void> {
   const cert = new X509Certificate(certPem);
 

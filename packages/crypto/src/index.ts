@@ -21,4 +21,4 @@ export {
 } from './services/callbacks.js';
 export { generateKeyPair } from './services/keys.js';
 export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
-export { validateIACAKeyPair, validateJWKS } from './services/validate.js';
+export { validateIACAKeyPair, validateJWKS, isValidJwk } from './services/validate.js';

@@ -10,6 +10,9 @@ log_level = info
 ; Enable HTTPS mode (CLI generates/checks local TLS cert/key and forwards ITW_CT_HTTPS) (true | false)
 ; Default: true
 https = true
+; Wallet provider backend URL (used for conformance tests)
+; Default: https://127.0.0.1:3000
+wallet_provider_backend_url = https://127.0.0.1:3000
 
 [itw-credential-issuer]
 ; Authentication flow: direct | l2plus | l3
@@ -39,12 +42,14 @@ export const ConfigSchema = z.object({
     .object({
       data_dir: z.string().min(1).catch('~/.itw-conformance-tool'),
       log_level: z.enum(['debug', 'info', 'warn', 'error']).catch('info'),
-      https: z.boolean().default(true)
+      https: z.boolean().default(true),
+      wallet_provider_backend_url: z.string().url().catch('https://127.0.0.1:3000')
     })
     .default({
       data_dir: '~/.itw-conformance-tool',
       log_level: 'info',
-      https: true
+      https: true,
+      wallet_provider_backend_url: 'https://127.0.0.1:3000'
     }),
   'itw-credential-issuer': z
     .object({
