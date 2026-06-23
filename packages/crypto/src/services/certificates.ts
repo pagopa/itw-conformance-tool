@@ -103,23 +103,23 @@ export async function getIACAChain({
   };
 }
 
-/** Generates a self-signed TLS certificate and private key for localhost.
+/** Generates a self-signed TLS certificate and private key for 127.0.0.1.
  * The certificate is valid for 825 days (the maximum accepted by macOS).
  *
  * @param params - Optional parameters to customize the certificate subject and alternative names.
  * @returns An object containing the certificate and private key in PEM format.
  */
 export async function getTlsCertAndKey({
-  commonName = 'localhost',
+  commonName = '127.0.0.1',
   organizationName = 'ITW Conformance Tool',
-  altNames = []
+  altNames = ['localhost']
 }: TlsCertParams = {}): Promise<TlsCertAndKey> {
   const { certPem, keyPem } = await generateCertificate({
     commonName,
     organizationName,
     notAfterDays: 825,
     isCA: false,
-    keyUsageBits: 0x04 | 0x10, // digitalSignature | keyEncipherment
+    keyUsageBits: 0x01, // digitalSignature (ECDSA TLS)
     altNames
   });
 
