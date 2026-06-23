@@ -606,7 +606,7 @@
       let selections = [];
 
       // Get selected PID VCT value
-      const selectedPidVct = document.querySelector('input[name="pidVctType"]:checked')?.value || "https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata";
+      const selectedPidVct = document.querySelector('input[name="pidVctType"]:checked')?.value || "urn:eudi:pid:it:1";
 
       // Map of parent IDs to VCT values
       const vctMap = {
@@ -804,8 +804,8 @@
             <div style="padding: var(--space-4) var(--space-6); background: var(--gray-50); border-bottom: 1px solid var(--gray-200); margin-bottom: var(--space-2);">
               <label style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--gray-700); display: block; margin-bottom: var(--space-2);">Formato VCT:</label>
               <label style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); cursor: pointer;">
-                <input type="radio" name="pidVctType" value="https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata" checked style="cursor: pointer;" />
-                <span style="font-size: var(--text-sm); color: var(--gray-700);">IPZS Format (default)</span>
+                <input type="radio" name="pidVctType" value="urn:eudi:pid:it:1" checked style="cursor: pointer;" />
+                <span style="font-size: var(--text-sm); color: var(--gray-700);">EUDI URN Italian domestic extension (default)</span>
               </label>
               <label style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer;">
                 <input type="radio" name="pidVctType" value="urn:eudi:pid:1" style="cursor: pointer;" />
@@ -825,12 +825,12 @@
               <span class="claim-label">Cognome (Family Name)</span>
             </label>
             <label class="claim-item">
-              <input type="checkbox" class="option" data-parent="PersonIdentificationData" onclick="updateButtonState()" value="birth_date" />
+              <input type="checkbox" class="option" data-parent="PersonIdentificationData" onclick="updateButtonState()" value="birthdate" />
               <span class="claim-label">Data di Nascita (Birth Date)</span>
             </label>
             <label class="claim-item">
-              <input type="checkbox" class="option" data-parent="PersonIdentificationData" onclick="updateButtonState()" value="birth_place" />
-              <span class="claim-label">Luogo di Nascita (Birth Place)</span>
+              <input type="checkbox" class="option" data-parent="PersonIdentificationData" onclick="updateButtonState()" value="place_of_birth" />
+              <span class="claim-label">Luogo di Nascita (Place of Birth)</span>
             </label>
             <label class="claim-item">
               <input type="checkbox" class="option" data-parent="PersonIdentificationData" onclick="updateButtonState()" value="tax_id_code" />
