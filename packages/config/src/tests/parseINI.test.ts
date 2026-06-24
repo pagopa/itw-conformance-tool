@@ -13,7 +13,7 @@ vi.mock('node:fs', () => ({
 const validConfigContent = `[global]
 data_dir=~/.itw-conformance-tool
 log_level=warn
-wallet_provider_backend_url=https://127.0.0.1:3000
+wallet_provider_backend_url=https://127.0.0.1:8080
 
 [itw-credential-issuer]
 auth_flow=l2plus
@@ -95,7 +95,7 @@ describe('parseINI', () => {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
         https: true,
-        wallet_provider_backend_url: 'https://127.0.0.1:3000'
+        wallet_provider_backend_url: 'https://127.0.0.1:8080'
       },
       'itw-credential-issuer': {
         auth_flow: 'l2plus',
@@ -154,7 +154,7 @@ describe('parseINI', () => {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
         https: true,
-        wallet_provider_backend_url: 'https://127.0.0.1:3000'
+        wallet_provider_backend_url: 'https://127.0.0.1:8080'
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',
@@ -180,7 +180,7 @@ describe('parseINI', () => {
         data_dir: '~/.itw-conformance-tool',
         log_level: 'warn',
         https: true,
-        wallet_provider_backend_url: 'https://127.0.0.1:3000'
+        wallet_provider_backend_url: 'https://127.0.0.1:8080'
       },
       'itw-credential-issuer': {
         auth_flow: 'direct',

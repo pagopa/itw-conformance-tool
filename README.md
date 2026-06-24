@@ -76,8 +76,25 @@ The generated `config.ini` also supports the Wallet Provider backend URL used by
 
 ```ini
 ; Wallet provider backend URL (used for conformance tests)
-; Default: https://127.0.0.1:3000
-wallet_provider_backend_url = https://127.0.0.1:3000
+; Default: https://127.0.0.1:8080
+wallet_provider_backend_url = https://127.0.0.1:8080
+```
+
+### External Wallet Provider Conformance Tests
+
+The Wallet Provider conformance suite for the relying party is opt-in.
+
+- Default run (`pnpm test`): external conformance tests are skipped.
+- Explicit run (against a configured external/local Wallet Provider backend):
+
+```bash
+RUN_EXTERNAL_CONFORMANCE=true pnpm vitest run apps/itw-relying-party/src/tests/conformance/wallet-provider-backend.test.ts
+```
+
+You can also enable them during the full workspace test run:
+
+```bash
+RUN_EXTERNAL_CONFORMANCE=true pnpm test
 ```
 
 Alternatively, start the individual services directly:

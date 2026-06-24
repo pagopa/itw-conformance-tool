@@ -11,8 +11,8 @@ log_level = info
 ; Default: true
 https = true
 ; Wallet provider backend URL (used for conformance tests)
-; Default: https://127.0.0.1:3000
-wallet_provider_backend_url = https://127.0.0.1:3000
+; Default: https://127.0.0.1:8080
+wallet_provider_backend_url = https://127.0.0.1:8080
 
 [itw-credential-issuer]
 ; Authentication flow: direct | l2plus | l3
@@ -47,13 +47,13 @@ export const ConfigSchema = z.object({
         .string()
         .url()
         .refine((value) => new URL(value).protocol === 'https:')
-        .catch('https://127.0.0.1:3000')
+        .catch('https://127.0.0.1:8080')
     })
     .default({
       data_dir: '~/.itw-conformance-tool',
       log_level: 'info',
       https: true,
-      wallet_provider_backend_url: 'https://127.0.0.1:3000'
+      wallet_provider_backend_url: 'https://127.0.0.1:8080'
     }),
   'itw-credential-issuer': z
     .object({

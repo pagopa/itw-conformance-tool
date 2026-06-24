@@ -58,8 +58,19 @@ const REQUIREMENTS = {
 } satisfies Record<string, RequirementDefinition>;
 
 const CONFORMANCE_REQUIREMENT_ORDER = ['WP_001', 'WP_002', 'WP_003', 'WP_004'] as const;
+const runExternalConformance = process.env.RUN_EXTERNAL_CONFORMANCE === 'true';
+const describeWalletProviderBackend = runExternalConformance ? describe.sequential : describe.sequential.skip;
 
 type RequirementId = keyof typeof REQUIREMENTS;
+
+function normalizeUrl(url: string): string {
+  let normalized = url;
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+
+  return normalized;
+}
 
 function isHttpsUrl(value: unknown): boolean {
   if (typeof value !== 'string') return false;
@@ -81,19 +92,21 @@ function isKeySemanticallyConsistent(key: any): boolean {
   }
 
   if (key.use === 'enc') {
-    return key.key_ops.every((op: string) => ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op));
+    return key.key_ops.every((op: string) =>
+      ['encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey'].includes(op)
+    );
   }
 
   if (key.use === undefined) {
     return key.key_ops.every((op: string) =>
-      ['sign', 'verify', 'encrypt', 'decrypt', 'wrapKey', 'unwrapKey'].includes(op)
+      ['sign', 'verify', 'encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey'].includes(op)
     );
   }
 
   return false;
 }
 
-describe.sequential(`Wallet Provider Backend`, () => {
+describeWalletProviderBackend(`Wallet Provider Backend`, () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
   let repo: SqliteConformanceSessionRepository;
   let sessionId: string;
@@ -166,10 +179,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     // Read wallet provider backend URL from config.ini
     const configPath = resolve(process.cwd(), 'config.ini');
     const { data: config } = parseINI(configPath);
-    let walletProviderUrl = config.global.wallet_provider_backend_url;
-    while (walletProviderUrl.endsWith('/')) {
-      walletProviderUrl = walletProviderUrl.slice(0, -1);
-    }
+    const walletProviderUrl = normalizeUrl(config.global.wallet_provider_backend_url);
 
     ctx = await buildRpRouteApp(federationRoute, {
       baseUrl: walletProviderUrl,
@@ -228,6 +238,15 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
     const parts = entityConfigResponse.body.split('.');
     expect(parts).toHaveLength(3);
+
+    if (parts.length !== 3) {
+      await recordRequirement('WP_002', async () => ({
+        result: 'FAIL',
+        httpStatus: entityConfigResponse.statusCode,
+        errorMessage: 'Entity configuration is not a JWT with 3 segments'
+      }));
+      return;
+    }
 
     const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
@@ -319,7 +338,6 @@ describe.sequential(`Wallet Provider Backend`, () => {
       return;
     }
 
-    // Assertions
     expect(isValidAlg).toBe(true);
     expect(kidMatchesThumbprint).toBe(true);
     expect(isValidTyp).toBe(true);
@@ -508,7 +526,6 @@ describe.sequential(`Wallet Provider Backend`, () => {
       return;
     }
 
-    // Assertions
     expect(count).toBe(1);
     if (hasJwks) {
       expect(Array.isArray(payload.jwks.keys)).toBe(true);
