@@ -6,21 +6,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerAuthRequestConformanceHooks, registerAuthResponseConformanceHooks } from '../../hooks/conformance.js';
 import { TEST_AUTH_RESPONSE_PEM, createAuthResponseJwe } from '../helpers/rp-route-app.js';
 
-import type { ConformanceSession, IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
+import type {
+  ConformanceCheck,
+  ConformanceSession,
+  IConformanceSessionRepository
+} from '@itw-conformance-tool/conformance';
 import type { FastifyInstance } from 'fastify';
+import type { Mock } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-type TrackingRepo = IConformanceSessionRepository & {
+type AppendCheckFn = IConformanceSessionRepository['appendCheck'];
+
+type TrackingRepo = Omit<IConformanceSessionRepository, 'appendCheck'> & {
   created: ConformanceSession[];
   closed: { sessionId: string; status: string }[];
+  appendCheck: AppendCheckFn & Mock<Parameters<AppendCheckFn>, ReturnType<AppendCheckFn>>;
 };
 
 function makeConformanceRepo(): TrackingRepo {
   const created: ConformanceSession[] = [];
   const closed: { sessionId: string; status: string }[] = [];
+  const appendCheck = vi.fn(async (_sessionId: string, _check: ConformanceCheck): Promise<void> => {});
+
   return {
     created,
     closed,
@@ -30,7 +40,7 @@ function makeConformanceRepo(): TrackingRepo {
     async get(sessionId) {
       return created.find((s) => s.sessionId === sessionId) ?? null;
     },
-    appendCheck: vi.fn(async () => Promise.resolve()),
+    appendCheck,
     async close(sessionId, status) {
       closed.push({ sessionId, status });
     },
