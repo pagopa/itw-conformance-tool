@@ -160,9 +160,7 @@ export async function issueWalletAttestationJwt(
     .sign(signingKey);
 }
 
-export function createWalletProviderSimulatorPlugin(
-  getState: () => WalletProviderSimulatorState
-): FastifyPluginAsync {
+export function createWalletProviderSimulatorPlugin(getState: () => WalletProviderSimulatorState): FastifyPluginAsync {
   return async (app) => {
     app.get('/nonce', async (_request, reply) => {
       const state = getState();
@@ -336,14 +334,8 @@ export async function buildWalletProviderSimulatorState(
     seenEphemeralKeyThumbprints: new Set<string>(),
     nonces: new Map<string, number>(),
     instances: new Map([
-      [
-        'wallet-instance-a',
-        { ownerToken: 'user-a', status: 'ACTIVE', issuedAt: new Date().toISOString() }
-      ],
-      [
-        'wallet-instance-b',
-        { ownerToken: 'user-b', status: 'ACTIVE', issuedAt: new Date().toISOString() }
-      ]
+      ['wallet-instance-a', { ownerToken: 'user-a', status: 'ACTIVE', issuedAt: new Date().toISOString() }],
+      ['wallet-instance-b', { ownerToken: 'user-b', status: 'ACTIVE', issuedAt: new Date().toISOString() }]
     ])
   };
 }

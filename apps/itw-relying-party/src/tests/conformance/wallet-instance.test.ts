@@ -54,13 +54,16 @@ describe.sequential('Wallet Instance', () => {
       ])
     };
 
-    ctx = await buildRpRouteApp(createWalletProviderSimulatorPlugin(() => simulatorState), {
-      baseUrl: BASE_URL,
-      setup: async (app) => {
-        simulatorState = await buildWalletProviderSimulatorState(app, BASE_URL);
-        simulatorState.baseUrl = BASE_URL;
+    ctx = await buildRpRouteApp(
+      createWalletProviderSimulatorPlugin(() => simulatorState),
+      {
+        baseUrl: BASE_URL,
+        setup: async (app) => {
+          simulatorState = await buildWalletProviderSimulatorState(app, BASE_URL);
+          simulatorState.baseUrl = BASE_URL;
+        }
       }
-    });
+    );
 
     repo = new SqliteConformanceSessionRepository(ctx.dbClient.db);
     sessionId = randomUUID();
