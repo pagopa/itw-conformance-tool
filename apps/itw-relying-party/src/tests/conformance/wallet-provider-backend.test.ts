@@ -237,19 +237,22 @@ describeWalletProviderBackend(`Wallet Provider Backend`, () => {
     }
 
     const parts = entityConfigResponse.body.split('.');
-    expect(parts).toHaveLength(3);
 
-    if (parts.length !== 3) {
+    let header: any;
+    let payload: any;
+
+    try {
+      expect(parts).toHaveLength(3);
+      header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+      payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    } catch (err) {
       await recordRequirement('WP_002', async () => ({
         result: 'FAIL',
         httpStatus: entityConfigResponse.statusCode,
-        errorMessage: 'Entity configuration is not a JWT with 3 segments'
+        errorMessage: 'Entity configuration is not a well-formed compact JWT'
       }));
-      return;
+      throw err;
     }
-
-    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
     // WP_002a: alg must be allowed and not 'none'
     const allowedAlgorithms = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'];
