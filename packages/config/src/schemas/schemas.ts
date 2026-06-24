@@ -43,7 +43,11 @@ export const ConfigSchema = z.object({
       data_dir: z.string().min(1).catch('~/.itw-conformance-tool'),
       log_level: z.enum(['debug', 'info', 'warn', 'error']).catch('info'),
       https: z.boolean().default(true),
-      wallet_provider_backend_url: z.string().url().catch('https://127.0.0.1:3000')
+      wallet_provider_backend_url: z
+        .string()
+        .url()
+        .refine((value) => new URL(value).protocol === 'https:')
+        .catch('https://127.0.0.1:3000')
     })
     .default({
       data_dir: '~/.itw-conformance-tool',

@@ -15,6 +15,7 @@ import { jwkSchema, jwksSchema } from '../schemas/jwk.js';
 export async function isValidJwk(key: unknown): Promise<boolean> {
   const parsed = jwkSchema.safeParse(key);
   if (!parsed.success) return false;
+  if (parsed.data.use === 'enc' && parsed.data.alg === undefined) return false;
 
   try {
     await importJWK(parsed.data as JWK, parsed.data.alg);

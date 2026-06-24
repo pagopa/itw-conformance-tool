@@ -97,7 +97,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
   let repo: SqliteConformanceSessionRepository;
   let sessionId: string;
-  let entityConfigResponse: Awaited<ReturnType<typeof ctx.app.inject>>;
+  let entityConfigResponse: { statusCode: number; body: string };
 
   async function appendRequirementCheck(
     requirementId: RequirementId,
@@ -186,10 +186,14 @@ describe.sequential(`Wallet Provider Backend`, () => {
       checks: []
     });
 
-    entityConfigResponse = await ctx.app.inject({
-      method: 'GET',
-      url: '/.well-known/openid-federation'
-    });
+    try {
+      const rawResponse = await fetch(`${walletProviderUrl}/.well-known/openid-federation`, {
+        signal: AbortSignal.timeout(5_000)
+      });
+      entityConfigResponse = { statusCode: rawResponse.status, body: await rawResponse.text() };
+    } catch {
+      entityConfigResponse = { statusCode: 0, body: '' };
+    }
   });
 
   afterAll(async () => {
