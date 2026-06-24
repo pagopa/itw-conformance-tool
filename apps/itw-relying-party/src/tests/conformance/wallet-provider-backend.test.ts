@@ -166,7 +166,10 @@ describe.sequential(`Wallet Provider Backend`, () => {
     // Read wallet provider backend URL from config.ini
     const configPath = resolve(process.cwd(), 'config.ini');
     const { data: config } = parseINI(configPath);
-    const walletProviderUrl = config.global.wallet_provider_backend_url;
+    let walletProviderUrl = config.global.wallet_provider_backend_url;
+    while (walletProviderUrl.endsWith('/')) {
+      walletProviderUrl = walletProviderUrl.slice(0, -1);
+    }
 
     ctx = await buildRpRouteApp(federationRoute, {
       baseUrl: walletProviderUrl,
@@ -256,17 +259,19 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const allKeysValid =
       hasJwks && payload.jwks.keys.length > 0 && (await Promise.all(payload.jwks.keys.map(isValidJwk))).every(Boolean);
 
-    // WP_002h: metadata must contain wallet_solution and optionally federation_entity
+    // WP_002h: metadata must contain at least one recognised verifier/wallet metadata key
+    // (wallet_solution for wallet providers; openid_credential_verifier for relying parties);
+    // federation_entity is optional.
     const metadataValid = typeof payload.metadata === 'object' && payload.metadata !== null;
 
-    const walletSolutionValid =
-      metadataValid &&
-      typeof payload.metadata.wallet_solution === 'object' &&
-      payload.metadata.wallet_solution !== null;
+    const metadata = metadataValid ? (payload.metadata as Record<string, unknown>) : undefined;
+
+    const walletSolution = metadata?.wallet_solution ?? metadata?.openid_credential_verifier;
+    const walletSolutionValid = typeof walletSolution === 'object' && walletSolution !== null;
+
+    const federationEntity = metadata?.federation_entity;
     const federationEntityValid =
-      metadataValid &&
-      typeof payload.metadata.federation_entity === 'object' &&
-      payload.metadata.federation_entity !== null;
+      federationEntity === undefined || (typeof federationEntity === 'object' && federationEntity !== null);
 
     let signatureVerified = false;
     if (hasJwks && isValidIssuer && isValidSubject) {
@@ -322,6 +327,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     expect(isNotExpired).toBe(true);
     expect(allValidAuthorityHints).toBe(true);
     expect(allKeysValid).toBe(true);
+    expect(metadataValid).toBe(true);
     expect(walletSolutionValid).toBe(true);
     expect(federationEntityValid).toBe(true);
 
@@ -341,10 +347,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
     expect(Array.isArray(payload.authority_hints)).toBe(true);
     expect(payload.authority_hints.length).toBeGreaterThan(0);
-    expect(payload.jwks).toBeDefined();
-    expect(Array.isArray(payload.jwks.keys)).toBe(true);
-    expect(payload.metadata).toBeDefined();
-    expect(typeof payload.metadata.wallet_solution).toBe('object');
+    expect(typeof (payload.metadata.wallet_solution ?? payload.metadata.openid_credential_verifier)).toBe('object');
   });
 
   // ___ WP_003 ____
@@ -410,15 +413,23 @@ describe.sequential(`Wallet Provider Backend`, () => {
         payload.jwks.keys.length > 0 &&
         payload.jwks.keys.every((key: any) => typeof key.kty === 'string' && typeof key.kid === 'string'));
 
-    // WP_004b: If jwks_uri is present, is valid HTTPS URL and resolvable
+    const issuerOrigin = isHttpsUrl(payload.iss) ? new URL(payload.iss).origin : undefined;
+    const fetchTimeoutMs = 5_000;
+
+    // WP_004b: If jwks_uri is present, is valid HTTPS URL, same-origin with iss, and resolvable
     let jwksUriValid = true;
     let jwksUriResolvable = false;
     if (hasJwksUri) {
-      jwksUriValid = typeof payload.jwks_uri === 'string' && payload.jwks_uri.startsWith('https://');
+      jwksUriValid = isHttpsUrl(payload.jwks_uri);
 
       if (jwksUriValid) {
         try {
-          const response = await fetch(payload.jwks_uri);
+          const jwksUri = new URL(payload.jwks_uri);
+          if (issuerOrigin && jwksUri.origin !== issuerOrigin) {
+            throw new Error('jwks_uri is not same-origin as iss');
+          }
+
+          const response = await fetch(jwksUri, { signal: AbortSignal.timeout(fetchTimeoutMs) });
           jwksUriResolvable = response.ok && response.status === 200;
         } catch {
           jwksUriResolvable = false;
@@ -426,18 +437,23 @@ describe.sequential(`Wallet Provider Backend`, () => {
       }
     }
 
-    // WP_004c: If signed_jwks_uri is present, is valid HTTPS URL pointing to signed JWT with JWKS payload
+    // WP_004c: If signed_jwks_uri is present, is valid HTTPS URL, same-origin with iss,
+    // and points to signed JWT with JWKS payload
     let signedJwksUriValid = true;
     let signedJwksUriResolvable = false;
     let signedJwksPayloadHasJwks = false;
     let signedJwksSignatureValid = false;
     if (hasSignedJwksUri) {
-      signedJwksUriValid =
-        typeof payload.signed_jwks_uri === 'string' && payload.signed_jwks_uri.startsWith('https://');
+      signedJwksUriValid = isHttpsUrl(payload.signed_jwks_uri);
 
       if (signedJwksUriValid) {
         try {
-          const response = await fetch(payload.signed_jwks_uri);
+          const signedJwksUri = new URL(payload.signed_jwks_uri);
+          if (issuerOrigin && signedJwksUri.origin !== issuerOrigin) {
+            throw new Error('signed_jwks_uri is not same-origin as iss');
+          }
+
+          const response = await fetch(signedJwksUri, { signal: AbortSignal.timeout(fetchTimeoutMs) });
           signedJwksUriResolvable =
             response.ok &&
             response.status === 200 &&

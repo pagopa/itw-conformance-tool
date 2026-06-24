@@ -5,16 +5,16 @@ import { importJWK, type JWK } from 'jose';
 
 import { jwkSchema, jwksSchema } from '../schemas/jwk.js';
 
-/** Validates that a JWK object conforms to the required structure
- * for signing keys.
+/** Validates that a JWK object conforms to the required structure and can be
+ * cryptographically imported. Accepts keys with `use: 'sig'`, `use: 'enc'`, or
+ * no `use` claim (e.g. federation-level signing keys).
  *
  * @param key - The JWK to validate
- * @returns true if the key is a valid signing JWK, false otherwise
+ * @returns true if the key is a structurally valid and importable JWK, false otherwise
  */
 export async function isValidJwk(key: unknown): Promise<boolean> {
   const parsed = jwkSchema.safeParse(key);
   if (!parsed.success) return false;
-  if (parsed.data.use !== 'sig') return false;
 
   try {
     await importJWK(parsed.data as JWK, parsed.data.alg);

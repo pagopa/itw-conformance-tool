@@ -27,12 +27,18 @@ describe('isValidJwk', () => {
     await expect(isValidJwk(sigKey)).resolves.toBe(true);
   });
 
-  it('returns false for an invalid payload shape', async () => {
-    await expect(isValidJwk('not-a-jwk')).resolves.toBe(false);
+  it('returns true for a valid encryption JWK', async () => {
+    await expect(isValidJwk(encKey)).resolves.toBe(true);
   });
 
-  it('returns false for a non-signing JWK', async () => {
-    await expect(isValidJwk(encKey)).resolves.toBe(false);
+  it('returns true for a JWK with no use claim', async () => {
+    const noUseKey = { ...sigKey, use: undefined };
+    delete noUseKey.use;
+    await expect(isValidJwk(noUseKey)).resolves.toBe(true);
+  });
+
+  it('returns false for an invalid payload shape', async () => {
+    await expect(isValidJwk('not-a-jwk')).resolves.toBe(false);
   });
 
   it('returns false when the JWK is structurally accepted but cryptographically incomplete', async () => {
