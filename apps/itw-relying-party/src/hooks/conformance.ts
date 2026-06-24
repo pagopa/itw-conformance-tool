@@ -1,4 +1,4 @@
-import { extractRpSessionId } from '@itw-conformance-tool/conformance';
+import { extractRpSessionId, getRequirements } from '@itw-conformance-tool/conformance';
 import { compactDecrypt, importPKCS8 } from 'jose';
 
 import type { FastifyInstance } from 'fastify';
@@ -35,15 +35,35 @@ export function registerAuthRequestConformanceHooks(app: FastifyInstance): void 
     const sessionId = params.state ? extractRpSessionId(params.state) : null;
     if (!sessionId) return payload;
 
+    const timestamp = new Date().toISOString();
+    const repo = app.conformanceSessionRepository;
+
     try {
-      await app.conformanceSessionRepository.create({
+      await repo.create({
         sessionId,
-        startedAt: new Date().toISOString(),
+        startedAt: timestamp,
         status: 'OPEN',
         checks: []
       });
     } catch (err) {
       app.log.warn({ err, sessionId }, 'conformance: failed to open session');
+    }
+
+    const requirements = getRequirements('AUTHORIZE', 'PRESENTATION');
+    for (const req of requirements) {
+      try {
+        await repo.appendCheck(sessionId, {
+          description: req.description,
+          httpStatus: reply.statusCode,
+          phase: 'PRESENTATION',
+          requirementId: req.requirementId,
+          result: 'PASS',
+          step: 'AUTHORIZE',
+          timestamp
+        });
+      } catch (err) {
+        app.log.warn({ err, sessionId }, 'conformance: failed to append check');
+      }
     }
 
     return payload;
@@ -60,7 +80,6 @@ export function registerAuthRequestConformanceHooks(app: FastifyInstance): void 
 export function registerAuthResponseConformanceHooks(app: FastifyInstance): void {
   app.addHook('onSend', async (request, reply, payload) => {
     if (!app.hasDecorator('conformanceSessionRepository')) return payload;
-    if (reply.statusCode < 200 || reply.statusCode >= 300) return payload;
 
     const body = request.body as Record<string, unknown>;
     if (!body || typeof body.response !== 'string') return payload;
@@ -71,8 +90,32 @@ export function registerAuthResponseConformanceHooks(app: FastifyInstance): void
     const sessionId = extractRpSessionId(state);
     if (!sessionId) return payload;
 
+    const isSuccess = reply.statusCode >= 200 && reply.statusCode < 300;
+    const timestamp = new Date().toISOString();
+    const repo = app.conformanceSessionRepository;
+
+    const requirements = getRequirements('PRESENTATION_RESPONSE', 'PRESENTATION');
+    const checkResult = isSuccess ? 'PASS' : 'FAIL';
+
+    for (const req of requirements) {
+      try {
+        await repo.appendCheck(sessionId, {
+          description: req.description,
+          errorMessage: isSuccess ? undefined : `HTTP ${reply.statusCode}`,
+          httpStatus: reply.statusCode,
+          phase: 'PRESENTATION',
+          requirementId: req.requirementId,
+          result: checkResult,
+          step: 'PRESENTATION_RESPONSE',
+          timestamp
+        });
+      } catch (err) {
+        app.log.warn({ err, sessionId }, 'conformance: failed to append check');
+      }
+    }
+
     try {
-      await app.conformanceSessionRepository.close(sessionId, 'PASSED');
+      await repo.close(sessionId, isSuccess ? 'PASSED' : 'FAILED');
     } catch (err) {
       app.log.warn({ err, sessionId }, 'conformance: failed to close session');
     }

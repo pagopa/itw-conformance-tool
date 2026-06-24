@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import Fastify from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerAuthRequestConformanceHooks, registerAuthResponseConformanceHooks } from '../../hooks/conformance.js';
 import { TEST_AUTH_RESPONSE_PEM, createAuthResponseJwe } from '../helpers/rp-route-app.js';
@@ -30,12 +30,12 @@ function makeConformanceRepo(): TrackingRepo {
     async get(sessionId) {
       return created.find((s) => s.sessionId === sessionId) ?? null;
     },
-    // TODO: to implement appendCheck and verify that it's called with the correct parameters when a session is closed
-    async appendCheck() {
-      /* empty */
-    },
+    appendCheck: vi.fn(async () => Promise.resolve()),
     async close(sessionId, status) {
       closed.push({ sessionId, status });
+    },
+    async markOpenSessionsIncompleteOlderThan() {
+      return 0;
     }
   };
 }
@@ -73,6 +73,7 @@ async function buildResponseHookApp(withRepo = true): Promise<{ app: FastifyInst
   app.decorate('rpKeys', {
     authRequestPrivateKeyPem: '',
     authResponsePrivateKeyPem: TEST_AUTH_RESPONSE_PEM,
+    federationPrivateKeyPem: '',
     signingPrivateKeyPem: '',
     x5cCertPem: ''
   });
@@ -113,6 +114,22 @@ describe('registerAuthRequestConformanceHooks', () => {
     expect(ctx.repo.created).toHaveLength(1);
     expect(ctx.repo.created[0].sessionId).toBe(state);
     expect(ctx.repo.created[0].status).toBe('OPEN');
+  });
+
+  it('appends AUTHORIZE:PRESENTATION PASS check on 2xx', async () => {
+    const state = randomUUID();
+    await ctx.app.inject({ method: 'GET', url: `/auth/request/${state}` });
+
+    expect(ctx.repo.appendCheck).toHaveBeenCalledOnce();
+    expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({
+        phase: 'PRESENTATION',
+        requirementId: 'IT-WALLET-1.4-§5.2.1',
+        result: 'PASS',
+        step: 'AUTHORIZE'
+      })
+    );
   });
 
   it('does not open a session on non-2xx response', async () => {
@@ -168,7 +185,30 @@ describe('registerAuthResponseConformanceHooks', () => {
     expect(ctx.repo.closed[0].status).toBe('PASSED');
   });
 
-  it('does not close session on non-2xx response', async () => {
+  it('appends PRESENTATION_RESPONSE:PRESENTATION PASS check on 2xx', async () => {
+    const state = randomUUID();
+    const nonce = randomBytes(32).toString('hex');
+    const jwe = await createAuthResponseJwe({ nonce, state });
+
+    await ctx.app.inject({
+      method: 'POST',
+      url: '/auth/response',
+      payload: { response: jwe }
+    });
+
+    expect(ctx.repo.appendCheck).toHaveBeenCalledOnce();
+    expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({
+        phase: 'PRESENTATION',
+        requirementId: 'IT-WALLET-1.4-§5.2.2',
+        result: 'PASS',
+        step: 'PRESENTATION_RESPONSE'
+      })
+    );
+  });
+
+  it('closes session as FAILED and appends FAIL check on non-2xx response', async () => {
     const state = randomUUID();
     const nonce = randomBytes(32).toString('hex');
     const jwe = await createAuthResponseJwe({ nonce, state });
@@ -179,7 +219,19 @@ describe('registerAuthResponseConformanceHooks', () => {
       payload: { response: jwe }
     });
 
-    expect(ctx.repo.closed).toHaveLength(0);
+    expect(ctx.repo.closed).toHaveLength(1);
+    expect(ctx.repo.closed[0].sessionId).toBe(state);
+    expect(ctx.repo.closed[0].status).toBe('FAILED');
+    expect(ctx.repo.appendCheck).toHaveBeenCalledOnce();
+    expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({
+        phase: 'PRESENTATION',
+        requirementId: 'IT-WALLET-1.4-§5.2.2',
+        result: 'FAIL',
+        step: 'PRESENTATION_RESPONSE'
+      })
+    );
   });
 
   it('does not close session when body has no response field', async () => {
