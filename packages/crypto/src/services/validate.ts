@@ -3,7 +3,7 @@ import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { X509Certificate } from '@peculiar/x509';
 import { importJWK, type JWK } from 'jose';
 
-import { jwksSchema } from '../schemas/jwk.js';
+import { jwkSchema, jwksSchema } from '../schemas/jwk.js';
 
 /** Validates that a JWK object conforms to the required structure
  * for signing keys.
@@ -11,10 +11,14 @@ import { jwksSchema } from '../schemas/jwk.js';
  * @param key - The JWK to validate
  * @returns true if the key is a valid signing JWK, false otherwise
  */
-export async function isValidJwk(key: any): Promise<boolean> {
+export async function isValidJwk(key: unknown): Promise<boolean> {
+  const parsed = jwkSchema.safeParse(key);
+  if (!parsed.success) return false;
+  if (parsed.data.use !== 'sig') return false;
+
   try {
-    await importJWK(key);
-    return key.use === 'sig';
+    await importJWK(parsed.data as JWK, parsed.data.alg);
+    return true;
   } catch {
     return false;
   }

@@ -3,9 +3,45 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 
 import { getIACAChain } from '../services/certificates.js';
-import { validateIACAKeyPair, validateJWKS } from '../services/validate.js';
+import { isValidJwk, validateIACAKeyPair, validateJWKS } from '../services/validate.js';
 
 type JwkRecord = Record<string, unknown>;
+
+describe('isValidJwk', () => {
+  let sigKey: JwkRecord;
+  let encKey: JwkRecord;
+
+  beforeAll(async () => {
+    const [sigPair, encPair] = await Promise.all([
+      generateKeyPair('ES256', { extractable: true }),
+      generateKeyPair('ECDH-ES', { extractable: true })
+    ]);
+
+    const [sigJwk, encJwk] = await Promise.all([exportJWK(sigPair.privateKey), exportJWK(encPair.privateKey)]);
+
+    sigKey = { ...sigJwk, kid: 'sig-valid', use: 'sig', alg: 'ES256', key_ops: ['sign'] };
+    encKey = { ...encJwk, kid: 'enc-valid', use: 'enc', alg: 'ECDH-ES', key_ops: ['deriveKey'] };
+  });
+
+  it('returns true for a valid signing JWK', async () => {
+    await expect(isValidJwk(sigKey)).resolves.toBe(true);
+  });
+
+  it('returns false for an invalid payload shape', async () => {
+    await expect(isValidJwk('not-a-jwk')).resolves.toBe(false);
+  });
+
+  it('returns false for a non-signing JWK', async () => {
+    await expect(isValidJwk(encKey)).resolves.toBe(false);
+  });
+
+  it('returns false when the JWK is structurally accepted but cryptographically incomplete', async () => {
+    const incompleteEcKey = { ...sigKey };
+    delete incompleteEcKey.x;
+
+    await expect(isValidJwk(incompleteEcKey)).resolves.toBe(false);
+  });
+});
 
 describe('validateJWKS', () => {
   let sigKey: JwkRecord;

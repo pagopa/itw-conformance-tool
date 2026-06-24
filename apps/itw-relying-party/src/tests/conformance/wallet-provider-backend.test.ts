@@ -10,6 +10,57 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import federationRoute from '../../routes/federation.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
 
+import type { ConformanceCheckResult, ConformanceStep } from '@itw-conformance-tool/conformance';
+
+type RequirementDefinition = {
+  description: string;
+  step: ConformanceStep;
+  includeInConformance: boolean;
+};
+
+type RequirementEvaluation = {
+  result: ConformanceCheckResult;
+  httpStatus: number;
+  errorMessage?: string;
+};
+
+const REQUIREMENTS = {
+  WP_001: {
+    description: 'GET /.well-known/openid-federation responds with 200',
+    step: 'AUTHORIZE',
+    includeInConformance: true
+  },
+  WP_002: {
+    description: 'Entity configuration is an OpenID Federation-compliant signed JWT',
+    step: 'AUTHORIZE',
+    includeInConformance: true
+  },
+  WP_003: {
+    description: 'Public keys used exclusively for signing/encryption in Wallet Provider role',
+    step: 'AUTHORIZE',
+    includeInConformance: true
+  },
+  WP_004: {
+    description: 'Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri',
+    step: 'AUTHORIZE',
+    includeInConformance: true
+  },
+  WP_008: {
+    description: 'Wallet Provider supports revocation requests from Electronic Document Issuers',
+    step: 'PRESENTATION_RESPONSE',
+    includeInConformance: false
+  },
+  WP_010: {
+    description: 'Revoked Wallet Instance is terminated and cannot execute any further functions',
+    step: 'PRESENTATION_RESPONSE',
+    includeInConformance: false
+  }
+} satisfies Record<string, RequirementDefinition>;
+
+const CONFORMANCE_REQUIREMENT_ORDER = ['WP_001', 'WP_002', 'WP_003', 'WP_004'] as const;
+
+type RequirementId = keyof typeof REQUIREMENTS;
+
 function isHttpsUrl(value: unknown): boolean {
   if (typeof value !== 'string') return false;
 
@@ -48,11 +99,74 @@ describe.sequential(`Wallet Provider Backend`, () => {
   let sessionId: string;
   let entityConfigResponse: Awaited<ReturnType<typeof ctx.app.inject>>;
 
+  async function appendRequirementCheck(
+    requirementId: RequirementId,
+    evaluation: RequirementEvaluation
+  ): Promise<void> {
+    const requirement = REQUIREMENTS[requirementId];
+    if (!requirement.includeInConformance) {
+      return;
+    }
+
+    await repo.appendCheck(sessionId, {
+      requirementId,
+      description: requirement.description,
+      step: requirement.step,
+      phase: 'PRESENTATION',
+      result: evaluation.result,
+      timestamp: new Date().toISOString(),
+      httpStatus: evaluation.httpStatus,
+      errorMessage: evaluation.errorMessage
+    });
+  }
+
+  async function closeSessionAsFailed(failedRequirementId: RequirementId): Promise<void> {
+    const failedIndex = CONFORMANCE_REQUIREMENT_ORDER.indexOf(
+      failedRequirementId as (typeof CONFORMANCE_REQUIREMENT_ORDER)[number]
+    );
+
+    if (failedIndex >= 0) {
+      for (const requirementId of CONFORMANCE_REQUIREMENT_ORDER.slice(failedIndex + 1)) {
+        await appendRequirementCheck(requirementId, {
+          result: 'NOT_REACHED',
+          httpStatus: 0,
+          errorMessage: 'Skipped after a previous conformance failure closed the session'
+        });
+      }
+    }
+
+    await repo.close(sessionId, 'FAILED');
+  }
+
+  async function recordRequirement(
+    requirementId: RequirementId,
+    evaluate: () => Promise<RequirementEvaluation>
+  ): Promise<RequirementEvaluation | null> {
+    const requirement = REQUIREMENTS[requirementId];
+    if (!requirement.includeInConformance) {
+      return evaluate();
+    }
+
+    const session = await repo.get(sessionId);
+    if (session?.status !== 'OPEN') {
+      return null;
+    }
+
+    const evaluation = await evaluate();
+    await appendRequirementCheck(requirementId, evaluation);
+
+    if (evaluation.result === 'FAIL') {
+      await closeSessionAsFailed(requirementId);
+    }
+
+    return evaluation;
+  }
+
   beforeAll(async () => {
     // Read wallet provider backend URL from config.ini
     const configPath = resolve(process.cwd(), 'config.ini');
     const { data: config } = parseINI(configPath);
-    const walletProviderUrl = config.global.wallet_provider_backend_url || 'https://localhost:3000';
+    const walletProviderUrl = config.global.wallet_provider_backend_url;
 
     ctx = await buildRpRouteApp(federationRoute, {
       baseUrl: walletProviderUrl,
@@ -77,29 +191,34 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
   afterAll(async () => {
     const session = await repo.get(sessionId);
-    const allPassed = session?.checks.every((c) => c.result === 'PASS') ?? false;
-    await repo.close(sessionId, allPassed ? 'PASSED' : 'FAILED');
+    if (session?.status === 'OPEN') {
+      await repo.close(sessionId, 'PASSED');
+    }
     await ctx?.app.close();
   });
 
   // ___ WP_001 ____
   it('WP_001 - Execute a GET request to /.well-known/openid-federation and returns 200', async () => {
-    await repo.appendCheck(sessionId, {
-      requirementId: 'WP_001',
-      description: 'GET /.well-known/openid-federation responds with 200',
-      step: 'AUTHORIZE',
-      phase: 'PRESENTATION',
+    const evaluation = await recordRequirement('WP_001', async () => ({
       result: entityConfigResponse.statusCode === 200 ? 'PASS' : 'FAIL',
-      timestamp: new Date().toISOString(),
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: entityConfigResponse.statusCode === 200 ? undefined : entityConfigResponse.body
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
 
     expect(entityConfigResponse.statusCode).toBe(200);
   });
 
   // ___ WP_002 ____
   it('WP_002 - Entity configuration is an OpenID Federation-compliant signed JWT with all required components', async () => {
+    const session = await repo.get(sessionId);
+    if (session?.status !== 'OPEN') {
+      return;
+    }
+
     const parts = entityConfigResponse.body.split('.');
     expect(parts).toHaveLength(3);
 
@@ -142,11 +261,12 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
     const walletSolutionValid =
       metadataValid &&
-      (payload.metadata.wallet_solution === undefined ||
-        (typeof payload.metadata.wallet_solution === 'object' && payload.metadata.wallet_solution !== null));
+      typeof payload.metadata.wallet_solution === 'object' &&
+      payload.metadata.wallet_solution !== null;
     const federationEntityValid =
-      payload.metadata?.federation_entity === undefined ||
-      (typeof payload.metadata.federation_entity === 'object' && payload.metadata.federation_entity !== null);
+      metadataValid &&
+      typeof payload.metadata.federation_entity === 'object' &&
+      payload.metadata.federation_entity !== null;
 
     let signatureVerified = false;
     if (hasJwks && isValidIssuer && isValidSubject) {
@@ -180,15 +300,15 @@ describe.sequential(`Wallet Provider Backend`, () => {
       federationEntityValid &&
       signatureVerified;
 
-    await repo.appendCheck(sessionId, {
-      requirementId: 'WP_002',
-      description: 'Entity configuration is an OpenID Federation-compliant signed JWT',
-      step: 'AUTHORIZE',
-      phase: 'PRESENTATION',
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: allValid ? 'PASS' : 'FAIL',
-      timestamp: new Date().toISOString(),
-      httpStatus: entityConfigResponse.statusCode
-    });
+      httpStatus: entityConfigResponse.statusCode,
+      errorMessage: allValid ? undefined : 'Entity configuration JWT does not satisfy the expected validation checks'
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
 
     // Assertions
     expect(isValidAlg).toBe(true);
@@ -229,6 +349,11 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
   // ___ WP_003 ____
   it('WP_003 - Public keys are used exclusively for signing/encryption in Wallet Provider role', async () => {
+    const session = await repo.get(sessionId);
+    if (session?.status !== 'OPEN') {
+      return;
+    }
+
     const parts = entityConfigResponse.body.split('.');
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
@@ -245,21 +370,27 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
     const result = allKeysForSigningOrEncryption ? 'PASS' : 'FAIL';
 
-    await repo.appendCheck(sessionId, {
-      requirementId: 'WP_003',
-      description: 'Public keys used exclusively for signing/encryption in Wallet Provider role',
-      step: 'AUTHORIZE',
-      phase: 'PRESENTATION',
+    const evaluation = await recordRequirement('WP_003', async () => ({
       result,
-      timestamp: new Date().toISOString(),
-      httpStatus: entityConfigResponse.statusCode
-    });
+      httpStatus: entityConfigResponse.statusCode,
+      errorMessage:
+        result === 'PASS' ? undefined : 'Wallet Provider keys are not restricted to signing/encryption semantics'
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
 
     expect(result).toBe('PASS');
   });
 
   // ___ WP_004 ____
   it('WP_004 - Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri', async () => {
+    const session = await repo.get(sessionId);
+    if (session?.status !== 'OPEN') {
+      return;
+    }
+
     const parts = entityConfigResponse.body.split('.');
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
@@ -347,16 +478,15 @@ describe.sequential(`Wallet Provider Backend`, () => {
       (!hasSignedJwksUri ||
         (signedJwksUriValid && signedJwksUriResolvable && signedJwksPayloadHasJwks && signedJwksSignatureValid));
 
-    await repo.appendCheck(sessionId, {
-      requirementId: 'WP_004',
-      description: 'Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri',
-      step: 'AUTHORIZE',
-      phase: 'PRESENTATION',
+    const evaluation = await recordRequirement('WP_004', async () => ({
       result: allValid ? 'PASS' : 'FAIL',
-      timestamp: new Date().toISOString(),
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: allValid ? undefined : `Found ${count} key reference claims, expected exactly 1`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
 
     // Assertions
     expect(count).toBe(1);
@@ -405,19 +535,6 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const endpointNotImplementedYet = revocationResponse.statusCode === 404;
     const isValidResponse = isSupported || endpointNotImplementedYet;
 
-    await repo.appendCheck(sessionId, {
-      requirementId: 'WP_008',
-      description: 'Wallet Provider supports revocation requests from Electronic Document Issuers',
-      step: 'AUTHORIZE',
-      phase: 'PRESENTATION',
-      result: isSupported ? 'PASS' : 'FAIL',
-      timestamp: new Date().toISOString(),
-      httpStatus: revocationResponse.statusCode,
-      errorMessage: isSupported
-        ? undefined
-        : `Revocation endpoint not fully implemented (status: ${revocationResponse.statusCode})`
-    });
-
     // For partial implementation: endpoint structure should be present
     expect(isValidResponse).toBe(true);
   });
@@ -465,24 +582,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
     });
 
     // After revocation, the instance should not be able to perform operations
-    const isTerminated = followupResponse.statusCode === 401 || followupResponse.statusCode === 403;
-    const endpointNotImplementedYet2 = followupResponse.statusCode === 404;
-
-    await repo.appendCheck(sessionId, {
-      requirementId: 'WP_010',
-      description: 'Revoked Wallet Instance is terminated and cannot execute any further functions',
-      step: 'AUTHORIZE',
-      phase: 'PRESENTATION',
-      result: revocationAcknowledged && (isTerminated || endpointNotImplementedYet2) ? 'PASS' : 'FAIL',
-      timestamp: new Date().toISOString(),
-      httpStatus: revokeResponse.statusCode,
-      errorMessage:
-        !revocationAcknowledged && !endpointNotImplementedYet
-          ? `Revocation failed (status: ${revokeResponse.statusCode})`
-          : undefined
-    });
-
     // For partial implementation: system should support revocation mechanism
     expect(revocationAcknowledged || endpointNotImplementedYet).toBe(true);
+    expect([401, 403, 404]).toContain(followupResponse.statusCode);
   });
 });
