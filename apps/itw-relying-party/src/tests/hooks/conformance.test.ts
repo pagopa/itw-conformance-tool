@@ -6,11 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerAuthRequestConformanceHooks, registerAuthResponseConformanceHooks } from '../../hooks/conformance.js';
 import { TEST_AUTH_RESPONSE_PEM, createAuthResponseJwe } from '../helpers/rp-route-app.js';
 
-import type {
-  ConformanceCheck,
-  ConformanceSession,
-  IConformanceSessionRepository
-} from '@itw-conformance-tool/conformance';
+import type { ConformanceSession, IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 import type { FastifyInstance } from 'fastify';
 import type { Mock } from 'vitest';
 
@@ -29,7 +25,7 @@ type TrackingRepo = Omit<IConformanceSessionRepository, 'appendCheck'> & {
 function makeConformanceRepo(): TrackingRepo {
   const created: ConformanceSession[] = [];
   const closed: { sessionId: string; status: string }[] = [];
-  const appendCheck = vi.fn(async (_sessionId: string, _check: ConformanceCheck): Promise<void> => {});
+  const appendCheck = vi.fn<Parameters<AppendCheckFn>, ReturnType<AppendCheckFn>>();
 
   return {
     created,
