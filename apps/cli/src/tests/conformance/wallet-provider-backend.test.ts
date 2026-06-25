@@ -679,7 +679,16 @@ describe.sequential(`Wallet Provider Backend`, () => {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    expect(revocationAcknowledged || endpointNotImplementedYet).toBe(true);
-    expect([401, 403, 404]).toContain(followupResponse.status);
+    const followupOperationBlocked = followupResponse.status === 403 || followupResponse.status === 404;
+
+    const isValidBehavior = (revocationAcknowledged || endpointNotImplementedYet) && followupOperationBlocked;
+
+    await appendCheck('WP_010', {
+      result: isValidBehavior ? 'PASS' : 'FAIL',
+      httpStatus: revokeResponse.status,
+      errorMessage: isValidBehavior
+        ? undefined
+        : `Wallet instance revocation does not terminate all instance operations`
+    });
   });
 });
