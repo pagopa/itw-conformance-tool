@@ -31,6 +31,17 @@ async function appendCheck(
   });
 }
 
+async function appendPartialCheck(
+  repo: SqliteConformanceSessionRepository,
+  sessionId: string,
+  check: Omit<ConformanceCheck, 'step' | 'phase' | 'timestamp'> & { timestamp?: string }
+) {
+  await appendCheck(repo, sessionId, {
+    ...check,
+    description: `[WP backend only] ${check.description}`
+  });
+}
+
 describe.sequential('Wallet Instance', () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
   let repo: SqliteConformanceSessionRepository;
@@ -582,5 +593,225 @@ describe.sequential('Wallet Instance', () => {
     });
 
     expect(valid).toBe(true);
+  });
+
+  describe('Partially testable (WP backend scope)', () => {
+    it('WP_016 - Federation discovery requests are logged for Trust Anchor refresh auditing', async () => {
+      const logSizeBefore = simulatorState.federationAccessLog.length;
+
+      const entityConfigResponse = await ctx.app.inject({
+        method: 'GET',
+        url: '/.well-known/openid-federation'
+      });
+      const fetchResponse = await ctx.app.inject({
+        method: 'POST',
+        url: '/fetch',
+        payload: { entity_id: BASE_URL },
+        headers: { 'content-type': 'application/json' }
+      });
+
+      const newEntries = simulatorState.federationAccessLog.slice(logSizeBefore);
+      const loggingWorks =
+        entityConfigResponse.statusCode === 200 &&
+        fetchResponse.statusCode === 200 &&
+        newEntries.length === 2 &&
+        newEntries.some((entry) => entry.method === 'GET') &&
+        newEntries.some((entry) => entry.method === 'POST');
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_016',
+        description: 'Federation discovery requests are logged (periodic refresh by wallet not verified in this run)',
+        result: loggingWorks ? 'PASS' : 'FAIL',
+        httpStatus: entityConfigResponse.statusCode
+      });
+
+      expect(loggingWorks).toBe(true);
+    });
+
+    it('WP_018 - Wallet Attestation issuance requests are logged over time', async () => {
+      const logSizeBefore = simulatorState.attestationIssuanceLog.length;
+      const nonceResponse = await ctx.app.inject({ method: 'GET', url: '/nonce' });
+      const { nonce } = nonceResponse.json<{ nonce: string }>();
+      const ephemeralKeys = await createEphemeralWalletKeyPair();
+      const assertion = await buildWiaRequestJwt({
+        baseUrl: BASE_URL,
+        nonce,
+        ephemeralPrivateKey: ephemeralKeys.privateKey,
+        ephemeralPublicJwk: ephemeralKeys.publicJwk
+      });
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/wallet-instance-attestation',
+        payload: { assertion },
+        headers: { 'content-type': 'application/json' }
+      });
+
+      const newEntries = simulatorState.attestationIssuanceLog.slice(logSizeBefore);
+      const loggingWorks =
+        response.statusCode === 200 &&
+        newEntries.length === 1 &&
+        typeof newEntries[0]?.timestamp === 'string' &&
+        typeof newEntries[0]?.ephemeralKeyThumbprint === 'string';
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_018',
+        description:
+          'Wallet Attestation issuance requests are logged (periodic reissuance by wallet not verified in this run)',
+        result: loggingWorks ? 'PASS' : 'FAIL',
+        httpStatus: response.statusCode
+      });
+
+      expect(loggingWorks).toBe(true);
+    });
+
+    it('WP_019a - Wallet Provider rejects attestation for a non-verified wallet instance', async () => {
+      const nonceResponse = await ctx.app.inject({ method: 'GET', url: '/nonce' });
+      const { nonce } = nonceResponse.json<{ nonce: string }>();
+      const ephemeralKeys = await createEphemeralWalletKeyPair();
+      const assertion = await buildWiaRequestJwt({
+        baseUrl: BASE_URL,
+        nonce,
+        ephemeralPrivateKey: ephemeralKeys.privateKey,
+        ephemeralPublicJwk: ephemeralKeys.publicJwk,
+        integrityAssertion: 'compromised-device'
+      });
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/wallet-instance-attestation',
+        payload: { assertion },
+        headers: { 'content-type': 'application/json' }
+      });
+      const body = response.json<{ error?: string }>();
+      const rejected = response.statusCode === 403 && body.error === 'integrity_check_error';
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_019a',
+        description:
+          'Wallet Provider rejects attestation when device integrity checks fail (wallet error handling not verified)',
+        result: rejected ? 'PASS' : 'FAIL',
+        httpStatus: response.statusCode
+      });
+
+      expect(rejected).toBe(true);
+    });
+
+    it('WP_027 - Wallet Provider rejects attestation when device has a known security flaw', async () => {
+      const nonceResponse = await ctx.app.inject({ method: 'GET', url: '/nonce' });
+      const { nonce } = nonceResponse.json<{ nonce: string }>();
+      const ephemeralKeys = await createEphemeralWalletKeyPair();
+      const assertion = await buildWiaRequestJwt({
+        baseUrl: BASE_URL,
+        nonce,
+        ephemeralPrivateKey: ephemeralKeys.privateKey,
+        ephemeralPublicJwk: ephemeralKeys.publicJwk,
+        hardwareSignature: 'invalid-security-flaw'
+      });
+
+      const response = await ctx.app.inject({
+        method: 'POST',
+        url: '/wallet-instance-attestation',
+        payload: { assertion },
+        headers: { 'content-type': 'application/json' }
+      });
+      const body = response.json<{ error?: string }>();
+      const rejected = response.statusCode === 403 && body.error === 'invalid_request';
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_027',
+        description: 'Wallet Provider rejects attestation for insecure devices (wallet-side behavior not verified)',
+        result: rejected ? 'PASS' : 'FAIL',
+        httpStatus: response.statusCode
+      });
+
+      expect(rejected).toBe(true);
+    });
+
+    it('WP_032 - User-initiated revocation request is accepted via external user agent', async () => {
+      const response = await ctx.app.inject({
+        method: 'PATCH',
+        url: '/wallet-instances/wallet-instance-b',
+        payload: { status: 'REVOKED' },
+        headers: {
+          authorization: 'Bearer user-b',
+          'content-type': 'application/json',
+          'x-revocation-initiator': 'external-user-agent'
+        }
+      });
+
+      const accepted = response.statusCode === 204;
+      const revokedInstance = simulatorState.instances.get('wallet-instance-b');
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_032',
+        description: 'Revocation request from external user agent is accepted (in-wallet UI flow not verified)',
+        result: accepted && revokedInstance?.status === 'REVOKED' ? 'PASS' : 'FAIL',
+        httpStatus: response.statusCode
+      });
+
+      expect(accepted).toBe(true);
+      expect(revokedInstance?.status).toBe('REVOKED');
+    });
+
+    it('WP_034 - Revocation notification is recorded within 24 hours', async () => {
+      const notification = simulatorState.revocationNotifications.find(
+        (event) => event.instanceId === 'wallet-instance-b'
+      );
+      if (!notification) {
+        throw new Error('Expected revocation notification for wallet-instance-b');
+      }
+
+      const revokedAt = new Date(notification.revokedAt).getTime();
+      const notifiedAt = new Date(notification.notifiedAt).getTime();
+      const within24Hours = notifiedAt >= revokedAt && notifiedAt - revokedAt < 24 * 60 * 60 * 1000;
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_034',
+        description: 'Revocation notification timestamp is within 24h (out-of-band channel delivery not verified)',
+        result: within24Hours ? 'PASS' : 'FAIL',
+        httpStatus: 204
+      });
+
+      expect(within24Hours).toBe(true);
+    });
+
+    it('WP_038 - Simulated internal failure returns HTTP 500 with server_error', async () => {
+      const response = await ctx.app.inject({
+        method: 'GET',
+        url: '/nonce',
+        headers: { 'x-test-server-error': 'true' }
+      });
+      const body = response.json<{ error?: string }>();
+      const valid = response.statusCode === 500 && body.error === 'server_error';
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_038',
+        description: 'Internal server error response format is supported (simulated failure)',
+        result: valid ? 'PASS' : 'FAIL',
+        httpStatus: response.statusCode
+      });
+
+      expect(valid).toBe(true);
+    });
+
+    it('WP_039 - Maintenance mode returns HTTP 503 with temporarily_unavailable', async () => {
+      const response = await ctx.app.inject({
+        method: 'GET',
+        url: '/nonce',
+        headers: { 'x-test-maintenance': 'true' }
+      });
+      const body = response.json<{ error?: string }>();
+      const valid = response.statusCode === 503 && body.error === 'temporarily_unavailable';
+
+      await appendPartialCheck(repo, sessionId, {
+        requirementId: 'WP_039',
+        description: 'Service unavailable response format is supported (simulated downtime)',
+        result: valid ? 'PASS' : 'FAIL',
+        httpStatus: response.statusCode
+      });
+
+      expect(valid).toBe(true);
+    });
   });
 });

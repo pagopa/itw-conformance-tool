@@ -33,6 +33,23 @@ const PII_CLAIMS = new Set([
   'personal_id'
 ]);
 
+export type FederationAccessLogEntry = {
+  method: string;
+  path: string;
+  timestamp: string;
+};
+
+export type AttestationIssuanceLogEntry = {
+  ephemeralKeyThumbprint: string;
+  timestamp: string;
+};
+
+export type RevocationNotificationEvent = {
+  instanceId: string;
+  revokedAt: string;
+  notifiedAt: string;
+};
+
 export type WalletProviderSimulatorState = {
   baseUrl: string;
   federationPrivateKeyPem: string;
@@ -41,6 +58,9 @@ export type WalletProviderSimulatorState = {
   seenEphemeralKeyThumbprints: Set<string>;
   nonces: Map<string, number>;
   instances: Map<string, { ownerToken: string; status: 'ACTIVE' | 'REVOKED'; issuedAt: string }>;
+  federationAccessLog: FederationAccessLogEntry[];
+  attestationIssuanceLog: AttestationIssuanceLogEntry[];
+  revocationNotifications: RevocationNotificationEvent[];
 };
 
 function parseCertificateChain(pemChain: string): string[] {
@@ -71,6 +91,45 @@ function sendError(reply: FastifyReply, statusCode: number, error: string, error
 function extractBearerToken(authorization?: string): string | undefined {
   if (!authorization?.startsWith('Bearer ')) return undefined;
   return authorization.slice('Bearer '.length).trim() || undefined;
+}
+
+function isMaintenanceMode(headers: Record<string, unknown>): boolean {
+  return headers['x-test-maintenance'] === 'true';
+}
+
+function isSimulatedServerError(headers: Record<string, unknown>): boolean {
+  return headers['x-test-server-error'] === 'true';
+}
+
+function recordFederationAccess(state: WalletProviderSimulatorState, method: string, path: string): void {
+  state.federationAccessLog.push({ method, path, timestamp: new Date().toISOString() });
+}
+
+function recordAttestationIssuance(state: WalletProviderSimulatorState, ephemeralKeyThumbprint: string): void {
+  state.attestationIssuanceLog.push({
+    ephemeralKeyThumbprint,
+    timestamp: new Date().toISOString()
+  });
+}
+
+function recordRevocationNotification(state: WalletProviderSimulatorState, instanceId: string): void {
+  const revokedAt = new Date().toISOString();
+  state.revocationNotifications.push({
+    instanceId,
+    revokedAt,
+    notifiedAt: new Date().toISOString()
+  });
+}
+
+function deviceFailsIntegrityChecks(assertionPayload: Record<string, unknown>): boolean {
+  return assertionPayload.integrity_assertion === 'compromised-device';
+}
+
+function deviceHasKnownSecurityFlaw(assertionPayload: Record<string, unknown>): boolean {
+  return (
+    assertionPayload.hardware_signature === 'invalid-security-flaw' ||
+    assertionPayload.platform === 'compromised-platform'
+  );
 }
 
 export async function createWalletProviderEntityConfiguration(state: WalletProviderSimulatorState): Promise<string> {
@@ -162,6 +221,15 @@ export async function issueWalletAttestationJwt(
 
 export function createWalletProviderSimulatorPlugin(getState: () => WalletProviderSimulatorState): FastifyPluginAsync {
   return async (app) => {
+    app.addHook('onRequest', async (request, reply) => {
+      if (isMaintenanceMode(request.headers)) {
+        return sendError(reply, 503, 'temporarily_unavailable', 'Service temporarily unavailable');
+      }
+      if (isSimulatedServerError(request.headers)) {
+        return sendError(reply, 500, 'server_error', 'Internal server error');
+      }
+    });
+
     app.get('/nonce', async (_request, reply) => {
       const state = getState();
       const nonce = randomUUID();
@@ -169,8 +237,9 @@ export function createWalletProviderSimulatorPlugin(getState: () => WalletProvid
       return reply.code(200).header('Content-Type', 'application/json').send({ nonce });
     });
 
-    app.get('/.well-known/openid-federation', async (_request, reply) => {
+    app.get('/.well-known/openid-federation', async (request, reply) => {
       const state = getState();
+      recordFederationAccess(state, request.method, request.url);
       if (!state.entityConfigurationJwt) {
         state.entityConfigurationJwt = await createWalletProviderEntityConfiguration(state);
       }
@@ -187,6 +256,7 @@ export function createWalletProviderSimulatorPlugin(getState: () => WalletProvid
       }
 
       const state = getState();
+      recordFederationAccess(state, request.method, request.url);
       if (!state.entityConfigurationJwt) {
         state.entityConfigurationJwt = await createWalletProviderEntityConfiguration(state);
       }
@@ -222,6 +292,24 @@ export function createWalletProviderSimulatorPlugin(getState: () => WalletProvid
         return sendError(reply, 400, 'bad_request', 'assertion is not a valid JWT');
       }
 
+      if (deviceFailsIntegrityChecks(assertionPayload)) {
+        return sendError(
+          reply,
+          403,
+          'integrity_check_error',
+          'Wallet instance failed authenticity, integrity, or genuineness checks'
+        );
+      }
+
+      if (deviceHasKnownSecurityFlaw(assertionPayload)) {
+        return sendError(
+          reply,
+          403,
+          'invalid_request',
+          'Device does not meet minimum security requirements or has a known security flaw'
+        );
+      }
+
       if (assertionHeader.typ !== 'wia-request+jwt') {
         return sendError(reply, 422, 'validation_error', 'assertion typ must be wia-request+jwt');
       }
@@ -233,6 +321,7 @@ export function createWalletProviderSimulatorPlugin(getState: () => WalletProvid
 
       const thumbprint = await calculateJwkThumbprint(cnf.jwk);
       state.seenEphemeralKeyThumbprints.add(thumbprint);
+      recordAttestationIssuance(state, thumbprint);
 
       const nonce = assertionPayload.nonce;
       if (typeof nonce !== 'string' || !state.nonces.has(nonce)) {
@@ -314,6 +403,7 @@ export function createWalletProviderSimulatorPlugin(getState: () => WalletProvid
 
       if (body.status === 'REVOKED') {
         instance.status = 'REVOKED';
+        recordRevocationNotification(getState(), instanceId);
         return reply.code(204).send();
       }
 
@@ -336,7 +426,10 @@ export async function buildWalletProviderSimulatorState(
     instances: new Map([
       ['wallet-instance-a', { ownerToken: 'user-a', status: 'ACTIVE', issuedAt: new Date().toISOString() }],
       ['wallet-instance-b', { ownerToken: 'user-b', status: 'ACTIVE', issuedAt: new Date().toISOString() }]
-    ])
+    ]),
+    federationAccessLog: [],
+    attestationIssuanceLog: [],
+    revocationNotifications: []
   };
 }
 
@@ -345,15 +438,18 @@ export async function buildWiaRequestJwt(input: {
   nonce: string;
   ephemeralPrivateKey: CryptoKey;
   ephemeralPublicJwk: JWK;
+  integrityAssertion?: string;
+  hardwareSignature?: string;
+  platform?: string;
 }): Promise<string> {
   const iss = `${input.baseUrl}/instance/${input.ephemeralPublicJwk.kid}`;
   return new SignJWT({
     cnf: { jwk: input.ephemeralPublicJwk },
     hardware_key_tag: 'test-hardware-key-tag',
-    hardware_signature: createHash('sha256').update('client-data-hash').digest('base64url'),
-    integrity_assertion: 'test-integrity-assertion',
+    hardware_signature: input.hardwareSignature ?? createHash('sha256').update('client-data-hash').digest('base64url'),
+    integrity_assertion: input.integrityAssertion ?? 'test-integrity-assertion',
     nonce: input.nonce,
-    platform: 'test',
+    platform: input.platform ?? 'test',
     wallet_solution_id: 'itw-conformance-wallet',
     wallet_solution_version: '1.0.0'
   })
