@@ -733,17 +733,16 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const revocationResponse = await fetch(`${walletProviderUrl}/revoke`, {
       method: 'POST',
       body: JSON.stringify(revocationNotification),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(5_000)
     });
 
     const isSupported = revocationResponse.status === 200 || revocationResponse.status === 202;
-    const endpointNotImplementedYet = revocationResponse.status === 404;
-    const isValidResponse = isSupported || endpointNotImplementedYet;
 
     const evaluation = await recordRequirement('WP_008', async () => ({
-      result: isValidResponse ? 'PASS' : 'FAIL',
+      result: isSupported ? 'PASS' : 'FAIL',
       httpStatus: revocationResponse.status,
-      errorMessage: isValidResponse
+      errorMessage: isSupported
         ? undefined
         : `Wallet Provider does not support credential revocation requests from Issuers`
     }));
@@ -768,11 +767,11 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const revokeResponse = await fetch(`${walletProviderUrl}/revoke-instance`, {
       method: 'POST',
       body: JSON.stringify(revokeInstancePayload),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(5_000)
     });
 
     const revocationAcknowledged = revokeResponse.status === 200 || revokeResponse.status === 202;
-    const endpointNotImplementedYet = revokeResponse.status === 404;
 
     const followupPayload = {
       instance_id: revokedInstanceId,
@@ -783,12 +782,13 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const followupResponse = await fetch(`${walletProviderUrl}/verify-credential`, {
       method: 'POST',
       body: JSON.stringify(followupPayload),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(5_000)
     });
 
     const followupOperationBlocked = followupResponse.status === 403 || followupResponse.status === 404;
 
-    const isValidBehavior = (revocationAcknowledged || endpointNotImplementedYet) && followupOperationBlocked;
+    const isValidBehavior = revocationAcknowledged && followupOperationBlocked;
 
     const evaluation = await recordRequirement('WP_010', async () => ({
       result: isValidBehavior ? 'PASS' : 'FAIL',

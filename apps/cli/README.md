@@ -163,7 +163,7 @@ itwct report:list --config ./ci/config.ini
 
 The command:
 
-- spawns a child process running `pnpm vitest run --config apps/cli/vitest.config.mts ...`
+- spawns a child process running `pnpm vitest run --config apps/cli/vitest.conformance.config.mts ...`
 - forwards `--config` to the test process through `CONFIG_FILE_PATH`
 - stores the conformance session in `<data_dir>/itw.db`, so it can later be listed by `report:list` and rendered by `report:create`
 
