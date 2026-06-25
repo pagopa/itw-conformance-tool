@@ -315,11 +315,11 @@ describe.sequential(`Wallet Provider Backend`, () => {
     }
   });
 
-  it("WP_002a - 'alg' must be allowed and not 'none'", () => {
+  it("WP_002a - 'alg' must be allowed and not 'none'", async () => {
     const allowedAlgorithms = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'];
     const isValidAlg = typeof jwt.header.alg === 'string' && allowedAlgorithms.includes(jwt.header.alg);
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: isValidAlg ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: isValidAlg ? undefined : `JWT header alg is missing, unsupported, or set to none`
@@ -331,29 +331,29 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const foundJwk = payload.jwks?.keys?.find((key: JwkLike) => key.kid === jwt.header.kid);
     const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === jwt.header.kid;
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: kidMatchesThumbprint ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: kidMatchesThumbprint ? undefined : `JWT header kid does not match any JWK thumbprint`
     });
   });
 
-  it("WP_002c - 'typ' must be 'entity-statement+jwt'", () => {
+  it("WP_002c - 'typ' must be 'entity-statement+jwt'", async () => {
     const isValidTyp = jwt.header.typ === 'entity-statement+jwt';
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: isValidTyp ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: isValidTyp ? undefined : `JWT header typ is missing or incorrect`
     });
   });
 
-  it("WP_002d - 'iss' and 'sub' must be equal and valid HTTPS URLs", () => {
+  it("WP_002d - 'iss' and 'sub' must be equal and valid HTTPS URLs", async () => {
     const isValidIssuer = typeof payload.iss === 'string' && isHttpsUrl(payload.iss);
     const isValidSubject = typeof payload.sub === 'string' && isHttpsUrl(payload.sub);
     const issEqualsSubject = payload.iss === payload.sub;
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: isValidIssuer && isValidSubject && issEqualsSubject ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
@@ -363,12 +363,12 @@ describe.sequential(`Wallet Provider Backend`, () => {
     });
   });
 
-  it("WP_002e - 'iat' and 'exp' must be valid Unix timestamps and not expired", () => {
+  it("WP_002e - 'iat' and 'exp' must be valid Unix timestamps and not expired", async () => {
     const isValidIat = typeof payload.iat === 'number' && payload.iat > 0;
     const isValidExp = typeof payload.exp === 'number' && payload.exp > payload.iat;
     const isNotExpired = typeof payload.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000);
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: isValidIat && isValidExp && isNotExpired ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
@@ -378,12 +378,12 @@ describe.sequential(`Wallet Provider Backend`, () => {
     });
   });
 
-  it("WP_002f - 'authority_hints' must be array of valid HTTPS URLs", () => {
+  it("WP_002f - 'authority_hints' must be array of valid HTTPS URLs", async () => {
     const hasAuthorityHints = Array.isArray(payload.authority_hints);
     const allValidAuthorityHints =
       hasAuthorityHints && payload.authority_hints.length > 0 && payload.authority_hints.every(isHttpsUrl);
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: allValidAuthorityHints ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: allValidAuthorityHints
@@ -396,14 +396,14 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const allKeysValid =
       hasJwks && payload.jwks.keys.length > 0 && (await Promise.all(payload.jwks.keys.map(isValidJwk))).every(Boolean);
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: allKeysValid ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: allKeysValid ? undefined : `JWT payload jwks must contain valid JWK signing keys`
     });
   });
 
-  it("WP_002h - 'metadata' must contain at least one recognised verifier/wallet metadata key", () => {
+  it("WP_002h - 'metadata' must contain at least one recognised verifier/wallet metadata key", async () => {
     const metadataValid = typeof payload.metadata === 'object' && payload.metadata !== null;
 
     const metadata = metadataValid ? payload.metadata : undefined;
@@ -415,7 +415,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const federationEntityValid =
       federationEntity === undefined || (typeof federationEntity === 'object' && federationEntity !== null);
 
-    appendCheck('WP_002', {
+    await appendCheck('WP_002', {
       result: metadataValid && walletSolutionValid && federationEntityValid ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
@@ -639,7 +639,13 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const endpointNotImplementedYet = revocationResponse.status === 404;
     const isValidResponse = isSupported || endpointNotImplementedYet;
 
-    expect(isValidResponse).toBe(true);
+    await appendCheck('WP_008', {
+      result: isValidResponse ? 'PASS' : 'FAIL',
+      httpStatus: revocationResponse.status,
+      errorMessage: isValidResponse
+        ? undefined
+        : `Wallet Provider does not support credential revocation requests from Issuers`
+    });
   });
 
   // ___ WP_010 ____
