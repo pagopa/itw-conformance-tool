@@ -12,7 +12,7 @@ import { expandPath } from '../../utils/path.js';
 
 type RequirementDefinition = {
   description: string;
-  step: ConformanceStep;
+  step: 'WALLET_PROVIDER_BACKEND';
 };
 
 type RequirementEvaluation = {
@@ -22,15 +22,6 @@ type RequirementEvaluation = {
 };
 
 type ConformanceCheckResult = 'PASS' | 'FAIL' | 'NOT_REACHED';
-type ConformanceStep =
-  | 'AUTHORIZE'
-  | 'PAR'
-  | 'PRESENTATION_RESPONSE'
-  | 'AUTHORIZATION_CODE'
-  | 'TOKEN'
-  | 'NONCE'
-  | 'CREDENTIAL'
-  | 'WALLET_PROVIDER_BACKEND';
 
 type JwkLike = {
   kty?: string;
