@@ -26,6 +26,7 @@ export function printHelp(): void {
   process.stdout.write('Commands:\n');
   process.stdout.write('  init             Initialize local workspace assets (data directory + config.ini template)\n');
   process.stdout.write('  start            Start local services via Nx\n');
+  process.stdout.write('  test             Run conformance tests from CLI (Vitest)\n');
   process.stdout.write('  report:list      List all conformance runs stored in the database\n');
   process.stdout.write('  report:create    Generate a conformance report file for a given run\n');
   process.stdout.write('  -v, --version    Show version\n');
@@ -45,6 +46,7 @@ export function printHelp(): void {
   process.stdout.write(`  itw-conformance-tool start --issuer --config '~/config.ini'\n`);
   process.stdout.write(`  itw-conformance-tool start --rp\n`);
   process.stdout.write(`  itw-conformance-tool start --rp --config '~/config.ini'\n`);
+  process.stdout.write(`  itw-conformance-tool test\n`);
   process.stdout.write(`  itw-conformance-tool report:list\n`);
   process.stdout.write(`  itw-conformance-tool report:list --config '~/config.ini'\n`);
   process.stdout.write(

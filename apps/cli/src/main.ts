@@ -3,6 +3,7 @@ import { createLogger } from '@itw-conformance-tool/logger';
 import { init } from './commands/init.js';
 import { reportCreate } from './commands/reportCreate.js';
 import { reportList } from './commands/reportList.js';
+import { test } from './commands/test.js';
 import { buildEnv } from './services/buildEnv.js';
 import { getNxCommands } from './services/getNxCommands.js';
 import { loadConfigs } from './services/loadConfigs.js';
@@ -50,7 +51,6 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // __ Start section
     const missingFiles = filesToSearch(configs.global.data_dir, configs.global.https).filter((f) => !existsFileSync(f));
     if (missingFiles.length > 0) {
       throw new Error(
@@ -58,7 +58,13 @@ async function main(): Promise<void> {
       );
     }
 
-    // Start the selected services with Nx CLI
+    // __ Test section
+    if (command === 'test') {
+      await test(flags, emitLog);
+      process.exit(0);
+    }
+
+    // __ Start section
     const services = getNxCommands(flags);
     const env = buildEnv(configs, emitLog);
     const exitCode = await runCommands(nxRootPath, services, env, emitLog);

@@ -107,6 +107,25 @@ function parseReportCreateFlags(args: string[], flags: CLIFlags): void {
   }
 }
 
+/** Parses test command flags.
+ *
+ * @param args - The array of command-line arguments.
+ * @param flags - The flags object to populate.
+ * @returns void
+ */
+function parseTestFlags(args: string[], flags: CLIFlags): void {
+  const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
+  if (configResult) {
+    flags.config.value = true;
+    flags.config.path = expandPath(configResult.value.trim());
+    args = configResult.remainingArgs;
+  }
+
+  if (args.length > 0) {
+    throw new Error(`Invalid argument for test command: ${args[0]}. Allowed flags are: --config/-c`);
+  }
+}
+
 /** Parses command-line arguments to extract the command and
  * associated flags for the CLI tool.
  *
@@ -131,6 +150,7 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
   const validCommands = [
     'init',
     'start',
+    'test',
     'report:list',
     'report:create',
     'help',
@@ -166,6 +186,9 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
       break;
     case 'start':
       parseStartFlags(args, flags);
+      break;
+    case 'test':
+      parseTestFlags(args, flags);
       break;
     case 'report:list':
       parseReportListFlags(args, flags);

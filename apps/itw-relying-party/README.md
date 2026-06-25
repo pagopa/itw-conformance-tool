@@ -41,18 +41,6 @@ Run tests:
 pnpm nx run itw-relying-party:test
 ```
 
-External Wallet Provider conformance tests are opt-in:
-
-```bash
-RUN_EXTERNAL_CONFORMANCE=true pnpm vitest run apps/itw-relying-party/src/tests/conformance/wallet-provider-backend.test.ts
-```
-
-To include them during the app test target:
-
-```bash
-RUN_EXTERNAL_CONFORMANCE=true pnpm nx run itw-relying-party:test
-```
-
 Build:
 
 ```bash

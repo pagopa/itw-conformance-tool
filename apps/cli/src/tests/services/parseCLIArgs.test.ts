@@ -67,7 +67,8 @@ describe('parseCLIArgs', () => {
         force: false,
         config: { value: false, path: '' },
         runId: undefined,
-        format: 'html'
+        format: 'html',
+        externalWallet: false
       });
     });
 
