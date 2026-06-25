@@ -98,7 +98,7 @@ const REQUIREMENTS = {
   }
 } satisfies Record<string, RequirementDefinition>;
 
-const CONFORMANCE_REQUIREMENT_ORDER = ['WP_001', 'WP_002', 'WP_003', 'WP_004'] as const;
+const CONFORMANCE_REQUIREMENT_ORDER = ['WP_001', 'WP_002', 'WP_003', 'WP_004', 'WP_008', 'WP_010'] as const;
 
 type RequirementId = keyof typeof REQUIREMENTS;
 
@@ -145,6 +145,14 @@ function isKeySemanticallyConsistent(key: JwkLike): boolean {
   return false;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
 describe.sequential(`Wallet Provider Backend`, () => {
   let dbClient: DatabaseClient;
   let repo: ConformanceRepo;
@@ -164,16 +172,20 @@ describe.sequential(`Wallet Provider Backend`, () => {
   async function appendCheck(requirementId: RequirementId, evaluation: RequirementEvaluation): Promise<void> {
     const requirement = REQUIREMENTS[requirementId];
 
-    await repo.appendCheck(sessionId, {
-      requirementId,
-      description: requirement.description,
-      step: requirement.step,
-      phase: 'WALLET_PROVIDER_BACKEND',
-      result: evaluation.result,
-      timestamp: new Date().toISOString(),
-      httpStatus: evaluation.httpStatus,
-      errorMessage: evaluation.errorMessage
-    });
+    try {
+      await repo.appendCheck(sessionId, {
+        requirementId,
+        description: requirement.description,
+        step: requirement.step,
+        phase: 'WALLET_PROVIDER_BACKEND',
+        result: evaluation.result,
+        timestamp: new Date().toISOString(),
+        httpStatus: evaluation.httpStatus,
+        errorMessage: evaluation.errorMessage
+      });
+    } catch (error) {
+      throw new Error(`Failed to append conformance check for ${requirementId}: ${getErrorMessage(error)}`);
+    }
   }
 
   async function closeSessionAsFailed(failedRequirementId: RequirementId): Promise<void> {
@@ -191,7 +203,11 @@ describe.sequential(`Wallet Provider Backend`, () => {
       }
     }
 
-    await repo.close(sessionId, 'FAILED');
+    try {
+      await repo.close(sessionId, 'FAILED');
+    } catch (error) {
+      throw new Error(`Failed to close conformance session as FAILED: ${getErrorMessage(error)}`);
+    }
   }
 
   async function recordRequirement(
@@ -235,12 +251,16 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const { SqliteConformanceSessionRepository } = await import('@itw-conformance-tool/conformance');
     repo = new SqliteConformanceSessionRepository(dbClient.db) as unknown as ConformanceRepo;
     sessionId = randomUUID();
-    await repo.create({
-      sessionId,
-      startedAt: new Date().toISOString(),
-      status: 'OPEN',
-      checks: []
-    });
+    try {
+      await repo.create({
+        sessionId,
+        startedAt: new Date().toISOString(),
+        status: 'OPEN',
+        checks: []
+      });
+    } catch (error) {
+      throw new Error(`Failed to create conformance session: ${getErrorMessage(error)}`);
+    }
 
     try {
       const rawResponse = await fetch(`${walletProviderUrl}/.well-known/openid-federation`, {
@@ -253,16 +273,26 @@ describe.sequential(`Wallet Provider Backend`, () => {
   });
 
   afterAll(async () => {
-    if (!repo || !sessionId) {
-      await dbClient?.close();
-      return;
-    }
+    try {
+      if (!repo || !sessionId) {
+        return;
+      }
 
-    const session = await repo.get(sessionId);
-    if (session?.status === 'OPEN') {
-      await repo.close(sessionId, 'PASSED');
+      const session = await repo.get(sessionId);
+      if (session?.status === 'OPEN') {
+        try {
+          await repo.close(sessionId, 'PASSED');
+        } catch (error) {
+          throw new Error(`Failed to close conformance session as PASSED: ${getErrorMessage(error)}`);
+        }
+      }
+    } finally {
+      try {
+        await dbClient?.close();
+      } catch {
+        // Ignore close errors in test teardown.
+      }
     }
-    await dbClient?.close();
   });
 
   // ___ WP_001 ____
@@ -310,11 +340,17 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const allowedAlgorithms = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'];
     const isValidAlg = typeof jwt.header.alg === 'string' && allowedAlgorithms.includes(jwt.header.alg);
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: isValidAlg ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: isValidAlg ? undefined : `JWT header alg is missing, unsupported, or set to none`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002b - 'kid' must equal public key thumbprint", async () => {
@@ -322,21 +358,33 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const foundJwk = payload.jwks?.keys?.find((key: JwkLike) => key.kid === jwt.header.kid);
     const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === jwt.header.kid;
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: kidMatchesThumbprint ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: kidMatchesThumbprint ? undefined : `JWT header kid does not match any JWK thumbprint`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002c - 'typ' must be 'entity-statement+jwt'", async () => {
     const isValidTyp = jwt.header.typ === 'entity-statement+jwt';
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: isValidTyp ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: isValidTyp ? undefined : `JWT header typ is missing or incorrect`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002d - 'iss' and 'sub' must be equal and valid HTTPS URLs", async () => {
@@ -344,14 +392,20 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const isValidSubject = typeof payload.sub === 'string' && isHttpsUrl(payload.sub);
     const issEqualsSubject = payload.iss === payload.sub;
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: isValidIssuer && isValidSubject && issEqualsSubject ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
         isValidIssuer && isValidSubject && issEqualsSubject
           ? undefined
           : `JWT payload iss and sub must be equal and valid HTTPS URLs`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002e - 'iat' and 'exp' must be valid Unix timestamps and not expired", async () => {
@@ -359,14 +413,20 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const isValidExp = typeof payload.exp === 'number' && payload.exp > payload.iat;
     const isNotExpired = typeof payload.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000);
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: isValidIat && isValidExp && isNotExpired ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
         isValidIat && isValidExp && isNotExpired
           ? undefined
           : `JWT payload iat and exp must be valid Unix timestamps and not expired`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002f - 'authority_hints' must be array of valid HTTPS URLs", async () => {
@@ -374,24 +434,36 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const allValidAuthorityHints =
       hasAuthorityHints && payload.authority_hints.length > 0 && payload.authority_hints.every(isHttpsUrl);
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: allValidAuthorityHints ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: allValidAuthorityHints
         ? undefined
         : `JWT payload authority_hints must be an array of valid HTTPS URLs`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002g - 'jwks' must contain valid JWK signing keys", async () => {
     const allKeysValid =
       hasJwks && payload.jwks.keys.length > 0 && (await Promise.all(payload.jwks.keys.map(isValidJwk))).every(Boolean);
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: allKeysValid ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: allKeysValid ? undefined : `JWT payload jwks must contain valid JWK signing keys`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it("WP_002h - 'metadata' must contain at least one recognised verifier/wallet metadata key", async () => {
@@ -406,14 +478,20 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const federationEntityValid =
       federationEntity === undefined || (typeof federationEntity === 'object' && federationEntity !== null);
 
-    await appendCheck('WP_002', {
+    const evaluation = await recordRequirement('WP_002', async () => ({
       result: metadataValid && walletSolutionValid && federationEntityValid ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
         metadataValid && walletSolutionValid && federationEntityValid
           ? undefined
           : `JWT payload metadata must contain at least one recognised verifier/wallet metadata key`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   // ___ WP_003 ____
@@ -467,11 +545,11 @@ describe.sequential(`Wallet Provider Backend`, () => {
       expect(parts).toHaveLength(3);
       payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString()) as EntityPayload;
     } catch (err) {
-      await appendCheck('WP_004', {
+      await recordRequirement('WP_004', async () => ({
         result: 'FAIL',
         httpStatus: entityConfigResponse.statusCode,
         errorMessage: 'Entity configuration is not a well-formed compact JWT for WP_004 checks'
-      });
+      }));
       throw err;
     }
   });
@@ -491,23 +569,36 @@ describe.sequential(`Wallet Provider Backend`, () => {
         payload.jwks.keys.length > 0 &&
         payload.jwks.keys.every((key: JwkLike) => typeof key.kty === 'string' && typeof key.kid === 'string'));
 
-    await appendCheck('WP_004', {
+    const evaluation = await recordRequirement('WP_004', async () => ({
       result: exactlyOne && jwksValid ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
         exactlyOne && jwksValid
           ? undefined
           : `Expected exactly one of jwks/jwks_uri/signed_jwks_uri and valid jwks when present`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it('WP_004b - jwks_uri is valid HTTPS, same-origin with iss, and resolvable when present', async () => {
     const hasJwksUriRef = payload.jwks_uri !== undefined;
     if (!hasJwksUriRef) {
-      await appendCheck('WP_004', {
+      const evaluation = await recordRequirement('WP_004', async () => ({
         result: 'PASS',
         httpStatus: entityConfigResponse.statusCode
-      });
+      }));
+
+      if (evaluation === null) {
+        return;
+      }
+
+      expect(evaluation.result).toBe('PASS');
+
       return;
     }
 
@@ -531,23 +622,36 @@ describe.sequential(`Wallet Provider Backend`, () => {
       }
     }
 
-    await appendCheck('WP_004', {
+    const evaluation = await recordRequirement('WP_004', async () => ({
       result: jwksUriValid && jwksUriResolvable ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage:
         jwksUriValid && jwksUriResolvable
           ? undefined
           : `jwks_uri must be HTTPS, same-origin with iss, and return HTTP 200`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   it('WP_004c - signed_jwks_uri points to valid signed JWKS when present', async () => {
     const hasSignedJwksUriRef = payload.signed_jwks_uri !== undefined;
     if (!hasSignedJwksUriRef) {
-      await appendCheck('WP_004', {
+      const evaluation = await recordRequirement('WP_004', async () => ({
         result: 'PASS',
         httpStatus: entityConfigResponse.statusCode
-      });
+      }));
+
+      if (evaluation === null) {
+        return;
+      }
+
+      expect(evaluation.result).toBe('PASS');
+
       return;
     }
 
@@ -601,13 +705,19 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const validSignedJwks =
       signedJwksUriValid && signedJwksUriResolvable && signedJwksPayloadHasJwks && signedJwksSignatureValid;
 
-    await appendCheck('WP_004', {
+    const evaluation = await recordRequirement('WP_004', async () => ({
       result: validSignedJwks ? 'PASS' : 'FAIL',
       httpStatus: entityConfigResponse.statusCode,
       errorMessage: validSignedJwks
         ? undefined
         : `signed_jwks_uri must be HTTPS, same-origin, return signed JWKS JWT, and pass signature verification`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   // ___ WP_008 ____
@@ -630,13 +740,19 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const endpointNotImplementedYet = revocationResponse.status === 404;
     const isValidResponse = isSupported || endpointNotImplementedYet;
 
-    await appendCheck('WP_008', {
+    const evaluation = await recordRequirement('WP_008', async () => ({
       result: isValidResponse ? 'PASS' : 'FAIL',
       httpStatus: revocationResponse.status,
       errorMessage: isValidResponse
         ? undefined
         : `Wallet Provider does not support credential revocation requests from Issuers`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 
   // ___ WP_010 ____
@@ -674,12 +790,18 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
     const isValidBehavior = (revocationAcknowledged || endpointNotImplementedYet) && followupOperationBlocked;
 
-    await appendCheck('WP_010', {
+    const evaluation = await recordRequirement('WP_010', async () => ({
       result: isValidBehavior ? 'PASS' : 'FAIL',
       httpStatus: revokeResponse.status,
       errorMessage: isValidBehavior
         ? undefined
         : `Wallet instance revocation does not terminate all instance operations`
-    });
+    }));
+
+    if (evaluation === null) {
+      return;
+    }
+
+    expect(evaluation.result).toBe('PASS');
   });
 });
