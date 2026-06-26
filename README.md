@@ -105,8 +105,8 @@ The wallet provider backend suite executes the matrix spec in `packages/conforma
 
 For conformance runs, the following environment variables are supported:
 
- - `ITW_CT_DATA_DIR`: SQLite/report data directory used by the Vitest conformance reporter (required when running `pnpm test:*` profiles)
- - `ITW_CT_WALLET_PROVIDER_BACKEND_URL`: overrides `global.wallet_provider_backend_url` for wallet backend matrix tests (required by `pnpm test:wallet` unless you run via the CLI, which exports it from `config.ini`)
+- `ITW_CT_DATA_DIR`: SQLite/report data directory used by the Vitest conformance reporter (required when running `pnpm test:*` profiles)
+- `ITW_CT_WALLET_PROVIDER_BACKEND_URL`: overrides `global.wallet_provider_backend_url` for wallet backend matrix tests (required by `pnpm test:wallet` unless you run via the CLI, which exports it from `config.ini`)
 
 `ITW_CT_CONFIG_FILE` is used by the runnable apps (issuer/RP) to choose the config file, but the wallet backend matrix test does not currently read it.
 
