@@ -97,19 +97,29 @@ function parseIsoTimestamp(value: string | undefined, fallback: number): number 
 }
 
 function inferPhase(session: ConformanceSession): ConformancePhase {
-  if (session.checks.some((check) => check.phase === 'ISSUANCE')) {
-    return 'ISSUANCE';
+  const counts: Record<ConformancePhase, number> = {
+    ISSUANCE: 0,
+    PRESENTATION: 0,
+    WALLET_PROVIDER_BACKEND: 0
+  };
+
+  for (const check of session.checks) {
+    counts[check.phase] += 1;
   }
 
-  if (session.checks.some((check) => check.phase === 'PRESENTATION')) {
-    return 'PRESENTATION';
+  const priority: ConformancePhase[] = ['WALLET_PROVIDER_BACKEND', 'PRESENTATION', 'ISSUANCE'];
+  let inferred: ConformancePhase = 'ISSUANCE';
+  let maxCount = 0;
+
+  for (const phase of priority) {
+    const count = counts[phase];
+    if (count > maxCount) {
+      maxCount = count;
+      inferred = phase;
+    }
   }
 
-  if (session.checks.some((check) => check.phase === 'WALLET_PROVIDER_BACKEND')) {
-    return 'WALLET_PROVIDER_BACKEND';
-  }
-
-  return 'ISSUANCE';
+  return inferred;
 }
 
 function getExpectedSteps(phase: ConformancePhase): ConformanceStep[] {
