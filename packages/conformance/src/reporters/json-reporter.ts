@@ -96,30 +96,9 @@ function parseIsoTimestamp(value: string | undefined, fallback: number): number 
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-function inferPhase(session: ConformanceSession): ConformancePhase {
-  const counts: Record<ConformancePhase, number> = {
-    ISSUANCE: 0,
-    PRESENTATION: 0,
-    WALLET_PROVIDER_BACKEND: 0
-  };
-
-  for (const check of session.checks) {
-    counts[check.phase] += 1;
-  }
-
-  const priority: ConformancePhase[] = ['WALLET_PROVIDER_BACKEND', 'PRESENTATION', 'ISSUANCE'];
-  let inferred: ConformancePhase = 'ISSUANCE';
-  let maxCount = 0;
-
-  for (const phase of priority) {
-    const count = counts[phase];
-    if (count > maxCount) {
-      maxCount = count;
-      inferred = phase;
-    }
-  }
-
-  return inferred;
+function getSessionPhases(session: ConformanceSession): ConformancePhase[] {
+  const allPhases: ConformancePhase[] = ['ISSUANCE', 'PRESENTATION', 'WALLET_PROVIDER_BACKEND'];
+  return allPhases;
 }
 
 function getExpectedSteps(phase: ConformancePhase): ConformanceStep[] {
@@ -217,7 +196,7 @@ function buildSuite(
   const assertions = sortedChecks.map((check, index) => {
     const flowName = getFlowName(phase);
 
-    return {
+    const assertion: JsonReporterAssertionResult & { _time: number } = {
       ancestorTitles: [flowName, step],
       duration: 0,
       failureMessages: toFailureMessages(check),
@@ -234,7 +213,9 @@ function buildSuite(
       status: toAssertionStatus(check.result),
       title: check.description,
       _time: parseIsoTimestamp(check.timestamp, fallbackStart)
-    } as JsonReporterAssertionResult & { _time: number };
+    };
+
+    return assertion;
   });
 
   const normalizedAssertions = assertions.length > 0 ? assertions : [toPlaceholderAssertion(phase, step)];
@@ -336,33 +317,40 @@ export async function loadSessionForReport(
 }
 
 export function buildJsonReporterFromSession(session: ConformanceSession): JsonReporterResult {
-  const phase = inferPhase(session);
-  const expectedSteps = getExpectedSteps(phase);
-
-  const checksByStep = new Map<ConformanceStep, ConformanceCheck[]>();
-  for (const step of expectedSteps) {
-    checksByStep.set(step, []);
-  }
-
-  for (const check of session.checks) {
-    if (!checksByStep.has(check.step)) {
-      checksByStep.set(check.step, []);
-    }
-
-    checksByStep.get(check.step)?.push(check);
-  }
-
   const startTime = parseIsoTimestamp(session.startedAt, Date.now());
   const endTime = parseIsoTimestamp(session.closedAt, Date.now());
+  const phases = getSessionPhases(session);
+  const testResults: JsonReporterTestResult[] = [];
 
-  const orderedSteps = [
-    ...expectedSteps,
-    ...Array.from(checksByStep.keys()).filter((step) => !expectedSteps.includes(step))
-  ];
+  for (const phase of phases) {
+    const expectedSteps = getExpectedSteps(phase);
+    const checksByStep = new Map<ConformanceStep, ConformanceCheck[]>();
 
-  const testResults = orderedSteps.map((step) =>
-    buildSuite(phase, step, checksByStep.get(step) ?? [], startTime, endTime)
-  );
+    for (const step of expectedSteps) {
+      checksByStep.set(step, []);
+    }
+
+    for (const check of session.checks) {
+      if (check.phase !== phase) {
+        continue;
+      }
+
+      if (!checksByStep.has(check.step)) {
+        checksByStep.set(check.step, []);
+      }
+
+      checksByStep.get(check.step)?.push(check);
+    }
+
+    const orderedSteps = [
+      ...expectedSteps,
+      ...Array.from(checksByStep.keys()).filter((step) => !expectedSteps.includes(step))
+    ];
+
+    for (const step of orderedSteps) {
+      testResults.push(buildSuite(phase, step, checksByStep.get(step) ?? [], startTime, endTime));
+    }
+  }
 
   const counts = aggregateCounts(testResults);
 
