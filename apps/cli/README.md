@@ -174,7 +174,6 @@ The command:
 - spawns a child process running `pnpm vitest run --config vitest.<type>.config.mts`
 - maps command type to profile config: `test:wallet -> vitest.wallet-provider-backend.config.mts`, `test:issuance -> vitest.issuance.config.mts`, `test:presentation -> vitest.presentation.config.mts`
 - exports `ITW_CT_DATA_DIR` and related runtime variables to the test process
-- for matrix tests that read runtime config directly, `ITW_CT_CONFIG_FILE` can be set explicitly when needed
 - stores conformance sessions in `<data_dir>/itw.db`, so they can later be listed by `report:list` and rendered by `report:create`
 
 Examples:
@@ -182,7 +181,6 @@ Examples:
 ```sh
 itwct test:wallet
 itwct test:wallet --config ./ci/config.ini
-ITW_CT_CONFIG_FILE=./ci/config.ini itwct test:wallet
 itwct test:issuance --config ./ci/config.ini
 itwct test:presentation --config ./ci/config.ini
 pnpm itw-conformance-tool --args="test:wallet"

@@ -520,13 +520,15 @@ describe.sequential(`Wallet Provider Backend`, () => {
             signedJwksPayloadHasJwks = Array.isArray(signedPayload?.jwks?.keys) && signedPayload.jwks.keys.length > 0;
 
             if (signedJwksPayloadHasJwks) {
-              try {
-                await jwtVerify(jwtContent, createLocalJWKSet(payload.jwks), {
-                  algorithms: ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512']
-                });
-                signedJwksSignatureValid = true;
-              } catch {
-                signedJwksSignatureValid = false;
+              if (payload.jwks && Array.isArray(payload.jwks.keys) && payload.jwks.keys.length > 0) {
+                try {
+                  await jwtVerify(jwtContent, createLocalJWKSet(payload.jwks), {
+                    algorithms: ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512']
+                  });
+                  signedJwksSignatureValid = true;
+                } catch {
+                  signedJwksSignatureValid = false;
+                }
               }
             }
           }

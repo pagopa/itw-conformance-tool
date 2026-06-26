@@ -79,6 +79,7 @@ export class VitestConformanceReporter implements Reporter {
   private readonly phase: ConformancePhase;
   private readonly step: ConformanceStep;
   private readonly results: ConformanceCheckResult[] = [];
+  private hasFailure = false;
 
   private client: DatabaseClient | undefined;
   private repository: SqliteConformanceSessionRepository | undefined;
@@ -99,6 +100,7 @@ export class VitestConformanceReporter implements Reporter {
     this.repository = new SqliteConformanceSessionRepository(this.client.db);
     this.sessionId = randomUUID();
     this.results.length = 0;
+    this.hasFailure = false;
 
     await this.repository.create({
       sessionId: this.sessionId,
@@ -113,7 +115,20 @@ export class VitestConformanceReporter implements Reporter {
       return;
     }
 
-    const result = mapResult(testCase.result().state);
+    const state = testCase.result().state;
+    let result = mapResult(state);
+
+    // Wallet provider matrix tests may short-circuit after the first failure.
+    // In that case Vitest marks later tests as passed due early returns, but
+    // they are semantically NOT_REACHED for conformance reporting.
+    if (this.phase === 'WALLET_PROVIDER_BACKEND' && this.hasFailure && state === 'passed') {
+      result = 'NOT_REACHED';
+    }
+
+    if (result === 'FAIL') {
+      this.hasFailure = true;
+    }
+
     const errorMessage = result === 'FAIL' ? extractFailureMessage(testCase) : undefined;
 
     await this.repository.appendCheck(this.sessionId, {
