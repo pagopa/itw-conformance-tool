@@ -65,7 +65,6 @@ describe('parseCLIArgs', () => {
         rp: false,
         all: false,
         force: false,
-        testType: 'wallet-provider-backend',
         config: { value: false, path: '' },
         runId: undefined,
         format: 'html'
@@ -161,26 +160,11 @@ describe('parseCLIArgs', () => {
     });
   });
 
-  describe('test commands', () => {
-    it('parses test:wallet command', () => {
-      vi.stubGlobal('process', { ...process, argv: ['node', 'cli', 'test:wallet'] });
-      const result = parseCLIArgs(['test:wallet'], rootPath);
-      expect(result.command).toBe('test:wallet');
-      expect(result.flags.testType).toBe('wallet-provider-backend');
-    });
-
-    it('parses test:issuance command', () => {
-      vi.stubGlobal('process', { ...process, argv: ['node', 'cli', 'test:issuance'] });
-      const result = parseCLIArgs(['test:issuance'], rootPath);
-      expect(result.command).toBe('test:issuance');
-      expect(result.flags.testType).toBe('issuance');
-    });
-
-    it('parses test:presentation command', () => {
-      vi.stubGlobal('process', { ...process, argv: ['node', 'cli', 'test:presentation'] });
-      const result = parseCLIArgs(['test:presentation'], rootPath);
-      expect(result.command).toBe('test:presentation');
-      expect(result.flags.testType).toBe('presentation');
+  describe('test command', () => {
+    it('parses test command', () => {
+      vi.stubGlobal('process', { ...process, argv: ['node', 'cli', 'test'] });
+      const result = parseCLIArgs(['test'], rootPath);
+      expect(result.command).toBe('test');
     });
   });
 

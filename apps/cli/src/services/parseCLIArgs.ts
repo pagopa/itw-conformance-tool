@@ -2,7 +2,7 @@ import { expandPath } from '../utils/path.js';
 import { printHelp, printVersion } from '../utils/prompt.js';
 import { searchParamValue } from '../utils/search.js';
 
-import type { CLIFlags, TestType } from '../types/types.js';
+import type { CLIFlags } from '../types/types.js';
 
 /** Parses start command flags.
  *
@@ -151,9 +151,6 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command: strin
     'init',
     'start',
     'test',
-    'test:wallet',
-    'test:issuance',
-    'test:presentation',
     'report:list',
     'report:create',
     'help',
@@ -179,8 +176,7 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command: strin
       path: ''
     },
     runId: undefined,
-    format: 'html',
-    testType: 'wallet-provider-backend'
+    format: 'html'
   };
 
   const args = argv.slice(1);
@@ -191,14 +187,8 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command: strin
     case 'start':
       parseStartFlags(args, flags);
       break;
-    case 'test:wallet':
-    case 'test:issuance':
-    case 'test:presentation': {
+    case 'test': {
       parseTestFlags(args, flags);
-      const type = command.split(':')[1];
-      if (type !== 'wallet') {
-        flags.testType = type as TestType;
-      }
       break;
     }
     case 'report:list':

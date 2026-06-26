@@ -14,8 +14,6 @@ export type Service = 'issuer' | 'rp';
 
 export type ServiceCommand = 'init' | 'start';
 
-export type TestType = 'issuance' | 'presentation' | 'wallet-provider-backend';
-
 // Interfaces
 export interface CLIFlags {
   issuer: boolean;
@@ -28,7 +26,6 @@ export interface CLIFlags {
   };
   runId: string | undefined;
   format: 'html' | 'pdf';
-  testType: TestType;
 }
 
 export interface ServiceProcess {

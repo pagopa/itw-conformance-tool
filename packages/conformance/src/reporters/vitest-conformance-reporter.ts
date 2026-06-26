@@ -11,16 +11,52 @@ import type { Reporter } from 'vitest/reporters';
 type ReporterTestCase = Parameters<NonNullable<Reporter['onTestCaseResult']>>[0];
 
 type SessionStatus = 'FAILED' | 'INCOMPLETE' | 'PASSED';
-type ReporterType = 'issuance' | 'presentation' | 'wallet-provider-backend';
+type ReporterType = 'conformance-test';
+
+type CheckContext = {
+  cleanTitle: string;
+  phase?: ConformancePhase;
+  step?: ConformanceStep;
+};
 
 const REPORTER_CONFIG: Record<ReporterType, { phase: ConformancePhase; step: ConformanceStep }> = {
-  issuance: { phase: 'ISSUANCE', step: 'CREDENTIAL' },
-  presentation: { phase: 'PRESENTATION', step: 'PRESENTATION_RESPONSE' },
-  'wallet-provider-backend': { phase: 'WALLET_PROVIDER_BACKEND', step: 'WALLET_PROVIDER_BACKEND' }
+  'conformance-test': { phase: 'WALLET_PROVIDER_BACKEND', step: 'WALLET_PROVIDER_BACKEND' }
 };
+
+const PHASE_VALUES = new Set<ConformancePhase>(['ISSUANCE', 'PRESENTATION', 'WALLET_PROVIDER_BACKEND']);
+
+const STEP_VALUES = new Set<ConformanceStep>([
+  'PAR',
+  'AUTHORIZE',
+  'PRESENTATION_RESPONSE',
+  'AUTHORIZATION_CODE',
+  'TOKEN',
+  'NONCE',
+  'CREDENTIAL',
+  'WALLET_PROVIDER_BACKEND'
+]);
 
 // Supports wallet-style IDs like CI_002 or RPR-001, followed by ':' or '-'.
 const REQUIREMENT_ID_PATTERN = /^([A-Z]+[-_]\d+\w*)\s*[:-]/;
+const CONTEXT_PREFIX_PATTERN = /^\[([A-Z_]+):([A-Z_]+)]\s*/;
+
+function parseCheckContext(title: string): CheckContext {
+  const match = CONTEXT_PREFIX_PATTERN.exec(title);
+  if (!match) {
+    return { cleanTitle: title };
+  }
+
+  const [, phaseCandidate, stepCandidate] = match;
+  const cleanTitle = title.replace(CONTEXT_PREFIX_PATTERN, '');
+  const phase = PHASE_VALUES.has(phaseCandidate as ConformancePhase) ? (phaseCandidate as ConformancePhase) : undefined;
+  const step = STEP_VALUES.has(stepCandidate as ConformanceStep) ? (stepCandidate as ConformanceStep) : undefined;
+
+  return {
+    cleanTitle,
+    phase,
+    step
+  };
+}
 
 function parseRequirementId(title: string): string {
   return REQUIREMENT_ID_PATTERN.exec(title)?.[1] ?? title;
@@ -76,16 +112,18 @@ function resolveFinalStatus(results: readonly ConformanceCheckResult[]): Session
 }
 
 export class VitestConformanceReporter implements Reporter {
+  private readonly reporterType: ReporterType;
   private readonly phase: ConformancePhase;
   private readonly step: ConformanceStep;
   private readonly results: ConformanceCheckResult[] = [];
-  private hasFailure = false;
+  private readonly failedPhases = new Set<ConformancePhase>();
 
   private client: DatabaseClient | undefined;
   private repository: SqliteConformanceSessionRepository | undefined;
   private sessionId: string | undefined;
 
   constructor(type: ReporterType) {
+    this.reporterType = type;
     const config = REPORTER_CONFIG[type];
     this.phase = config.phase;
     this.step = config.step;
@@ -100,7 +138,7 @@ export class VitestConformanceReporter implements Reporter {
     this.repository = new SqliteConformanceSessionRepository(this.client.db);
     this.sessionId = randomUUID();
     this.results.length = 0;
-    this.hasFailure = false;
+    this.failedPhases.clear();
 
     await this.repository.create({
       sessionId: this.sessionId,
@@ -115,27 +153,30 @@ export class VitestConformanceReporter implements Reporter {
       return;
     }
 
+    const context = parseCheckContext(testCase.name);
+    const phase = context.phase ?? this.phase;
+    const step = context.step ?? this.step;
     const state = testCase.result().state;
     let result = mapResult(state);
 
-    // Wallet provider matrix tests may short-circuit after the first failure.
+    // Conformance matrix tests may short-circuit after the first failure.
     // In that case Vitest marks later tests as passed due early returns, but
     // they are semantically NOT_REACHED for conformance reporting.
-    if (this.phase === 'WALLET_PROVIDER_BACKEND' && this.hasFailure && state === 'passed') {
+    if (this.reporterType === 'conformance-test' && this.failedPhases.has(phase) && state === 'passed') {
       result = 'NOT_REACHED';
     }
 
     if (result === 'FAIL') {
-      this.hasFailure = true;
+      this.failedPhases.add(phase);
     }
 
     const errorMessage = result === 'FAIL' ? extractFailureMessage(testCase) : undefined;
 
     await this.repository.appendCheck(this.sessionId, {
-      requirementId: parseRequirementId(testCase.name),
-      description: parseDescription(testCase.name),
-      step: this.step,
-      phase: this.phase,
+      requirementId: parseRequirementId(context.cleanTitle),
+      description: parseDescription(context.cleanTitle),
+      step,
+      phase,
       result,
       timestamp: new Date().toISOString(),
       errorMessage

@@ -62,8 +62,8 @@ async function main(): Promise<void> {
     const env = buildEnv(configs, emitLog);
 
     // __ Test section
-    if (command.startsWith('test')) {
-      await test(flags, env, emitLog);
+    if (command === 'test') {
+      await test(env, emitLog);
       process.exit(0);
     }
 

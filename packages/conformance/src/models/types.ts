@@ -14,7 +14,8 @@ export type ConformanceStep =
   | 'TOKEN'
   | 'NONCE'
   | 'CREDENTIAL'
-  | 'WALLET_PROVIDER_BACKEND';
+  | 'WALLET_PROVIDER_BACKEND'
+  | 'ISSUANCE';
 
 export interface ConformanceCheck {
   requirementId: string;

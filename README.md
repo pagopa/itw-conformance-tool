@@ -53,6 +53,8 @@ pnpm test
 Start the full conformance stack via CLI (recommended):
 
 ```bash
+### Conformance Test Profile
+
 # First run: initialize data directory, keys, and config template
 pnpm itw-conformance-tool:init
 
@@ -63,7 +65,7 @@ pnpm itw-conformance-tool:start
 pnpm itw-conformance-tool:test
 ```
 
-Or install the CLI globally and run it directly:
+The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
 
 ```bash
 pnpm nx build itw-conformance-cli
@@ -83,51 +85,45 @@ The generated `config.ini` also supports the Wallet Provider backend URL used by
 wallet_provider_backend_url = https://127.0.0.1:8080
 ```
 
-### Conformance Test Profiles
+### Conformance Test Profile
 
-Conformance suites are now split into root-level Vitest profiles with dedicated configs:
+The conformance suite currently uses a single root-level Vitest profile:
 
-- `vitest.issuance.config.mts` -> issuance conformance
-- `vitest.presentation.config.mts` -> presentation conformance
-- `vitest.wallet-provider-backend.config.mts` -> wallet provider backend matrix conformance
+- `vitest.conformance-test.config.mts` -> conformance test matrix (`WP_*`)
 
-Run them from the workspace root:
+Run it from the workspace root:
 
 ```bash
-pnpm test:issuance
-pnpm test:presentation
-pnpm test:wallet
+pnpm vitest run --config vitest.conformance-test.config.mts
 ```
 
-The wallet provider backend suite executes the matrix spec in `packages/conformance/src/tests/matrix/wallet-provider-backend.test.ts`.
+The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
 
 ### Runtime Environment Overrides (Conformance)
 
 For conformance runs, the following environment variables are supported:
 
-- `ITW_CT_DATA_DIR`: SQLite/report data directory used by the Vitest conformance reporter (required when running `pnpm test:*` profiles)
-- `ITW_CT_WALLET_PROVIDER_BACKEND_URL`: overrides `global.wallet_provider_backend_url` for wallet backend matrix tests (required by `pnpm test:wallet` unless you run via the CLI, which exports it from `config.ini`)
+- `ITW_CT_DATA_DIR`: SQLite/report data directory used by the Vitest conformance reporter
+- `ITW_CT_WALLET_PROVIDER_BACKEND_URL`: overrides `global.wallet_provider_backend_url` for conformance matrix tests (required unless you run via the CLI, which exports it from `config.ini`)
 
-`ITW_CT_CONFIG_FILE` is used by the runnable apps (issuer/RP) to choose the config file, but the wallet backend matrix test does not currently read it.
+`ITW_CT_CONFIG_FILE` is used by the runnable apps (issuer/RP) to choose the config file, but the conformance matrix test does not currently read it.
 
-### External Wallet Provider Conformance Tests
+### External Conformance Tests
 
-The Wallet Provider conformance suite is opt-in.
+The conformance suite is opt-in.
 
 - Default run (`pnpm test`): standard project tests via Nx targets.
-- Explicit run (wallet backend profile):
+- Explicit run (conformance profile):
 
 ```bash
-pnpm test:wallet
+pnpm vitest run --config vitest.conformance-test.config.mts
 ```
 
 Or via CLI command mode:
 
 ```bash
-pnpm itw-conformance-tool --args="test:wallet --config ./config.ini"
+pnpm itw-conformance-tool --args="test --config ./config.ini"
 ```
-
-Conformance checks are persisted in SQLite during the Vitest run and are available to `report:list` and `report:create`.
 
 Once a conformance flow has completed, generate a report:
 
@@ -147,26 +143,24 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 
 ### Root-level `pnpm` scripts
 
-| Command                                  | Description                                                                                                                          |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm build`                             | Build all projects with a `build` target                                                                                             |
-| `pnpm start`                             | Serve all runnable apps with a `serve` target                                                                                        |
-| `pnpm itw-conformance-tool`              | Run the local conformance CLI (`init`, `start`, `test:wallet`, `test:issuance`, `test:presentation`, `report:list`, `report:create`) |
-| `pnpm itw-conformance-tool:init`         | Initialize local data directory and config template                                                                                  |
-| `pnpm itw-conformance-tool:start`        | Start both services via CLI (`start --all`)                                                                                          |
-| `pnpm itw-conformance-tool:start:issuer` | Start only the issuer service via CLI                                                                                                |
-| `pnpm itw-conformance-tool:start:rp`     | Start only the relying-party service via CLI                                                                                         |
-| `pnpm issuer`                            | Serve `itw-credential-issuer`                                                                                                        |
-| `pnpm rp`                                | Serve `itw-relying-party`                                                                                                            |
-| `pnpm test`                              | Run Vitest for projects with a `test` target                                                                                         |
-| `pnpm test:issuance`                     | Run issuance conformance profile (`vitest.issuance.config.mts`)                                                                      |
-| `pnpm test:presentation`                 | Run presentation conformance profile (`vitest.presentation.config.mts`)                                                              |
-| `pnpm test:wallet`                       | Run wallet provider backend matrix profile (`vitest.wallet-provider-backend.config.mts`)                                             |
-| `pnpm typecheck`                         | Type-check projects with a `typecheck` target                                                                                        |
-| `pnpm lint`                              | Lint projects with a `lint` target                                                                                                   |
-| `pnpm format`                            | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier                                                                |
-| `pnpm clean`                             | Run project clean targets, then remove root `node_modules` and `.nx`                                                                 |
-| `pnpm pre-commit`                        | Run lint and type-check on affected projects                                                                                         |
+| Command                                                       | Description                                                                             |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `pnpm build`                                                  | Build all projects with a `build` target                                                |
+| `pnpm start`                                                  | Serve all runnable apps with a `serve` target                                           |
+| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test`, `report:list`, `report:create`) |
+| `pnpm itw-conformance-tool:init`                              | Initialize local data directory and config template                                     |
+| `pnpm itw-conformance-tool:start`                             | Start both services via CLI (`start --all`)                                             |
+| `pnpm itw-conformance-tool:start:issuer`                      | Start only the issuer service via CLI                                                   |
+| `pnpm itw-conformance-tool:start:rp`                          | Start only the relying-party service via CLI                                            |
+| `pnpm issuer`                                                 | Serve `itw-credential-issuer`                                                           |
+| `pnpm rp`                                                     | Serve `itw-relying-party`                                                               |
+| `pnpm test`                                                   | Run Vitest for projects with a `test` target                                            |
+| `pnpm vitest run --config vitest.conformance-test.config.mts` | Run conformance test matrix profile (`vitest.conformance-test.config.mts`)              |
+| `pnpm typecheck`                                              | Type-check projects with a `typecheck` target                                           |
+| `pnpm lint`                                                   | Lint projects with a `lint` target                                                      |
+| `pnpm format`                                                 | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier                   |
+| `pnpm clean`                                                  | Run project clean targets, then remove root `node_modules` and `.nx`                    |
+| `pnpm pre-commit`                                             | Run lint and type-check on affected projects                                            |
 
 ### Targeting a single project with Nx
 

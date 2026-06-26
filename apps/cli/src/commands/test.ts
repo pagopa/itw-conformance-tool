@@ -3,17 +3,16 @@ import { join } from 'node:path';
 
 import { findNxRoot } from '../utils/search.js';
 
-import type { CLIFlags, EmitLog } from '../types/types.js';
+import type { EmitLog } from '../types/types.js';
 
 /** Test command to orchestrate and execute conformance tests.
  *
- * @param flags CLI flags
  * @param emitLog Logger function for console output
  * @returns Promise<void>
  */
-export async function test(flags: CLIFlags, env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<void> {
+export async function test(env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<void> {
   const nxRootPath = findNxRoot();
-  const configFile = `vitest.${flags.testType}.config.mts`;
+  const configFile = 'vitest.conformance-test.config.mts';
 
   const vitestArgs = ['vitest', 'run', '--config', join(nxRootPath, configFile)];
 
@@ -32,5 +31,5 @@ export async function test(flags: CLIFlags, env: NodeJS.ProcessEnv, emitLog: Emi
     throw new Error(`Conformance tests failed with exit code ${exitCode}`);
   }
 
-  emitLog(`Conformance tests completed (${flags.testType})`, 'info');
+  emitLog('Conformance tests completed', 'info');
 }
