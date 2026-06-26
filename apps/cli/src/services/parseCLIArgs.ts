@@ -2,7 +2,7 @@ import { expandPath } from '../utils/path.js';
 import { printHelp, printVersion } from '../utils/prompt.js';
 import { searchParamValue } from '../utils/search.js';
 
-import type { CLIFlags } from '../types/types.js';
+import type { CLIFlags, TestType } from '../types/types.js';
 
 /** Parses start command flags.
  *
@@ -132,7 +132,7 @@ function parseTestFlags(args: string[], flags: CLIFlags): void {
  * @param argv - The array of command-line arguments.
  * @returns An object containing the parsed command and flags.
  */
-export function parseCLIArgs(argv: string[], rootPath: string): { command?: string; flags: CLIFlags } {
+export function parseCLIArgs(argv: string[], rootPath: string): { command: string; flags: CLIFlags } {
   if (argv.length === 0) {
     process.stdout.write(`No command provided. These are the available commands:\n`);
     printHelp();
@@ -151,6 +151,9 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
     'init',
     'start',
     'test',
+    'test:wallet',
+    'test:issuance',
+    'test:presentation',
     'report:list',
     'report:create',
     'help',
@@ -176,7 +179,8 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
       path: ''
     },
     runId: undefined,
-    format: 'html'
+    format: 'html',
+    testType: 'wallet-provider-backend'
   };
 
   const args = argv.slice(1);
@@ -187,9 +191,16 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command?: stri
     case 'start':
       parseStartFlags(args, flags);
       break;
-    case 'test':
+    case 'test:wallet':
+    case 'test:issuance':
+    case 'test:presentation': {
       parseTestFlags(args, flags);
+      const type = command.split(':')[1];
+      if (type !== 'wallet') {
+        flags.testType = type as TestType;
+      }
       break;
+    }
     case 'report:list':
       parseReportListFlags(args, flags);
       break;

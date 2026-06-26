@@ -27,7 +27,7 @@ class InMemoryConformanceSessionRepository implements IConformanceSessionReposit
 
   async appendCheck(sessionId: string, check: ConformanceCheck): Promise<void> {
     const current = this.sessions.get(sessionId);
-    if (!current || current.status !== 'OPEN') {
+    if (current?.status !== 'OPEN') {
       return;
     }
 
@@ -36,7 +36,7 @@ class InMemoryConformanceSessionRepository implements IConformanceSessionReposit
 
   async close(sessionId: string, status: ClosedConformanceSessionStatus): Promise<void> {
     const current = this.sessions.get(sessionId);
-    if (!current || current.status !== 'OPEN') {
+    if (current?.status !== 'OPEN') {
       return;
     }
 
@@ -44,7 +44,7 @@ class InMemoryConformanceSessionRepository implements IConformanceSessionReposit
     current.closedAt = new Date().toISOString();
   }
 
-  async markOpenSessionsIncompleteOlderThan(_cutoffIso: string): Promise<number> {
+  async markOpenSessionsIncompleteOlderThan(): Promise<number> {
     return 0;
   }
 }

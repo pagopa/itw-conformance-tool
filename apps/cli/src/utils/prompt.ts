@@ -24,13 +24,18 @@ export function printHelp(): void {
   process.stdout.write('Usage:\n');
   process.stdout.write(`  itw-conformance-tool <command> [options]\n\n`);
   process.stdout.write('Commands:\n');
-  process.stdout.write('  init             Initialize local workspace assets (data directory + config.ini template)\n');
-  process.stdout.write('  start            Start local services via Nx\n');
-  process.stdout.write('  test             Run conformance tests from CLI (Vitest)\n');
-  process.stdout.write('  report:list      List all conformance runs stored in the database\n');
-  process.stdout.write('  report:create    Generate a conformance report file for a given run\n');
-  process.stdout.write('  -v, --version    Show version\n');
-  process.stdout.write('  -h, --help       Show help\n\n');
+  process.stdout.write(
+    '  init                   Initialize local workspace assets (data directory + config.ini template)\n'
+  );
+  process.stdout.write('  start                  Start local services via Nx\n');
+  process.stdout.write('  test                   Run wallet-provider-backend conformance tests from CLI (Vitest)\n');
+  process.stdout.write('  test:wallet            Run wallet-provider-backend conformance tests\n');
+  process.stdout.write('  test:issuance          Run issuance conformance tests\n');
+  process.stdout.write('  test:presentation      Run presentation conformance tests\n');
+  process.stdout.write('  report:list            List all conformance runs stored in the database\n');
+  process.stdout.write('  report:create          Generate a conformance report file for a given run\n');
+  process.stdout.write('  -v, --version          Show version\n');
+  process.stdout.write('  -h, --help             Show help\n\n');
   process.stdout.write('Options:\n');
   process.stdout.write(
     '  -c, --config <path>    Path to the config file (for start and report commands, default: ~/config.ini)\n'
@@ -46,7 +51,9 @@ export function printHelp(): void {
   process.stdout.write(`  itw-conformance-tool start --issuer --config '~/config.ini'\n`);
   process.stdout.write(`  itw-conformance-tool start --rp\n`);
   process.stdout.write(`  itw-conformance-tool start --rp --config '~/config.ini'\n`);
-  process.stdout.write(`  itw-conformance-tool test\n`);
+  process.stdout.write(`  itw-conformance-tool test:wallet\n`);
+  process.stdout.write(`  itw-conformance-tool test:issuance\n`);
+  process.stdout.write(`  itw-conformance-tool test:presentation\n`);
   process.stdout.write(`  itw-conformance-tool report:list\n`);
   process.stdout.write(`  itw-conformance-tool report:list --config '~/config.ini'\n`);
   process.stdout.write(

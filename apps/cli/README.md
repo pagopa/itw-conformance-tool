@@ -4,7 +4,7 @@ Local CLI for the `itw-conformance-tool` monorepo. It supports the following wor
 
 - `init`, to generate the local configuration and key material
 - `start`, to launch the issuer and relying party services through Nx
-- `test`, to run CLI-driven conformance specs through Vitest
+- `test:wallet`, `test:issuance`, `test:presentation`, to run profile-based conformance specs through Vitest
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
 
@@ -34,12 +34,16 @@ Direct CLI usage:
 
 - `itw-conformance-tool init`
 - `itw-conformance-tool start`
-- `itw-conformance-tool test`
+- `itw-conformance-tool test:wallet`
+- `itw-conformance-tool test:issuance`
+- `itw-conformance-tool test:presentation`
 - `itw-conformance-tool report:list`
 - `itw-conformance-tool report:create <uuid> [format]`
 - `itwct init`
 - `itwct start`
-- `itwct test`
+- `itwct test:wallet`
+- `itwct test:issuance`
+- `itwct test:presentation`
 - `itwct report:list`
 - `itwct report:create <uuid> [format]`
 
@@ -50,7 +54,9 @@ From the workspace root through Nx-backed scripts:
 - `pnpm itw-conformance-tool --args="start --all"`
 - `pnpm itw-conformance-tool --args="start --issuer"`
 - `pnpm itw-conformance-tool --args="start --rp"`
-- `pnpm itw-conformance-tool --args="test"`
+- `pnpm itw-conformance-tool --args="test:wallet"`
+- `pnpm itw-conformance-tool --args="test:issuance"`
+- `pnpm itw-conformance-tool --args="test:presentation"`
 - `pnpm itw-conformance-tool --args="report:list"`
 - `pnpm itw-conformance-tool --args="report:create <uuid>"`
 - `pnpm itw-conformance-tool --args="report:create <uuid> pdf"`
@@ -61,13 +67,15 @@ Root shortcuts:
 - `pnpm itw-conformance-tool:start`
 - `pnpm itw-conformance-tool:start:issuer`
 - `pnpm itw-conformance-tool:start:rp`
-- `pnpm itw-conformance-tool:test`
+- `pnpm itw-conformance-tool:test` (legacy shortcut)
 
 ## Supported Commands
 
 - `init`
 - `start`
-- `test`
+- `test:wallet`
+- `test:issuance`
+- `test:presentation`
 - `report:list`
 - `report:create`
 - `help`
@@ -75,7 +83,7 @@ Root shortcuts:
 
 ## Supported Options
 
-- `-c, --config <path>`: path to the configuration file. Supported by `start`, `test`, `report:list`, and `report:create`
+- `-c, --config <path>`: path to the configuration file. Supported by `start`, `test:wallet`, `test:issuance`, `test:presentation`, `report:list`, and `report:create`
 - `--all`: start both services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
@@ -157,22 +165,27 @@ itwct report:list
 itwct report:list --config ./ci/config.ini
 ```
 
-### `test`
+### `test:*`
 
-`test` launches Vitest on the conformance specs located under `apps/cli/src/tests/conformance/**/*.test.ts`.
+`test:*` launches Vitest on the selected conformance profile.
 
 The command:
 
-- spawns a child process running `pnpm vitest run --config apps/cli/vitest.conformance.config.mts ...`
-- forwards `--config` to the test process through `CONFIG_FILE_PATH`
-- stores the conformance session in `<data_dir>/itw.db`, so it can later be listed by `report:list` and rendered by `report:create`
+- spawns a child process running `pnpm vitest run --config vitest.<type>.config.mts`
+- maps command type to profile config: `test:wallet -> vitest.wallet-provider-backend.config.mts`, `test:issuance -> vitest.issuance.config.mts`, `test:presentation -> vitest.presentation.config.mts`
+- exports `ITW_CT_DATA_DIR` and related runtime variables to the test process
+- for matrix tests that read runtime config directly, `ITW_CT_CONFIG_FILE` can be set explicitly when needed
+- stores conformance sessions in `<data_dir>/itw.db`, so they can later be listed by `report:list` and rendered by `report:create`
 
 Examples:
 
 ```sh
-itwct test
-itwct test --config ./ci/config.ini
-pnpm itw-conformance-tool:test
+itwct test:wallet
+itwct test:wallet --config ./ci/config.ini
+ITW_CT_CONFIG_FILE=./ci/config.ini itwct test:wallet
+itwct test:issuance --config ./ci/config.ini
+itwct test:presentation --config ./ci/config.ini
+pnpm itw-conformance-tool --args="test:wallet"
 ```
 
 ### `report:create`
@@ -245,6 +258,9 @@ Examples:
 - `pnpm itw-conformance-tool --args="init"`
 - `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
 - `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
+- `pnpm itw-conformance-tool --args="test:wallet --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="test:issuance --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="test:presentation --config ./ci/config.ini"`
 - `pnpm itw-conformance-tool --args="report:list --config ./ci/config.ini"`
 - `pnpm itw-conformance-tool --args="report:create <uuid> html --config ./ci/config.ini"`
 

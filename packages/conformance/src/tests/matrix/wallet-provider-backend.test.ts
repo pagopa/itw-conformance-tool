@@ -1,27 +1,14 @@
-import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-import { parseINI } from '@itw-conformance-tool/config';
 import { isValidJwk } from '@itw-conformance-tool/crypto';
-import { DatabaseClient } from '@itw-conformance-tool/database';
 import { calculateJwkThumbprint, createLocalJWKSet, jwtVerify } from 'jose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import { expandPath } from '../../utils/path.js';
-
-type RequirementDefinition = {
-  description: string;
-  step: 'WALLET_PROVIDER_BACKEND';
-};
+import type { ConformanceCheckResult } from '../../models/types.js';
 
 type RequirementEvaluation = {
   result: ConformanceCheckResult;
   httpStatus: number;
   errorMessage?: string;
 };
-
-type ConformanceCheckResult = 'PASS' | 'FAIL' | 'NOT_REACHED';
 
 type JwkLike = {
   kty?: string;
@@ -52,55 +39,7 @@ type EntityPayload = {
   signed_jwks_uri?: string;
 };
 
-type ConformanceRepo = {
-  appendCheck: (
-    sessionId: string,
-    payload: {
-      requirementId: RequirementId;
-      description: string;
-      step: RequirementDefinition['step'];
-      phase: 'WALLET_PROVIDER_BACKEND';
-      result: ConformanceCheckResult;
-      timestamp: string;
-      httpStatus: number;
-      errorMessage?: string;
-    }
-  ) => Promise<void>;
-  create: (payload: { sessionId: string; startedAt: string; status: 'OPEN'; checks: unknown[] }) => Promise<void>;
-  get: (sessionId: string) => Promise<{ status: 'OPEN' | 'FAILED' | 'PASSED' } | null>;
-  close: (sessionId: string, status: 'FAILED' | 'PASSED') => Promise<void>;
-};
-
-const REQUIREMENTS = {
-  WP_001: {
-    description: 'GET /.well-known/openid-federation responds with 200',
-    step: 'WALLET_PROVIDER_BACKEND'
-  },
-  WP_002: {
-    description: 'Entity configuration is an OpenID Federation-compliant signed JWT',
-    step: 'WALLET_PROVIDER_BACKEND'
-  },
-  WP_003: {
-    description: 'Public keys used exclusively for signing/encryption in Wallet Provider role',
-    step: 'WALLET_PROVIDER_BACKEND'
-  },
-  WP_004: {
-    description: 'Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri',
-    step: 'WALLET_PROVIDER_BACKEND'
-  },
-  WP_008: {
-    description: 'Wallet Provider supports revocation requests from Electronic Document Issuers',
-    step: 'WALLET_PROVIDER_BACKEND'
-  },
-  WP_010: {
-    description: 'Revoked Wallet Instance is terminated and cannot execute any further functions',
-    step: 'WALLET_PROVIDER_BACKEND'
-  }
-} satisfies Record<string, RequirementDefinition>;
-
-const CONFORMANCE_REQUIREMENT_ORDER = ['WP_001', 'WP_002', 'WP_003', 'WP_004', 'WP_008', 'WP_010'] as const;
-
-type RequirementId = keyof typeof REQUIREMENTS;
+type RequirementId = 'WP_001' | 'WP_002' | 'WP_003' | 'WP_004' | 'WP_008' | 'WP_010';
 
 function normalizeUrl(url: string): string {
   let normalized = url;
@@ -145,22 +84,12 @@ function isKeySemanticallyConsistent(key: JwkLike): boolean {
   return false;
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
 describe.sequential(`Wallet Provider Backend`, () => {
-  let dbClient: DatabaseClient;
-  let repo: ConformanceRepo;
-  let sessionId: string;
   let walletProviderUrl: string;
   let entityConfigResponse: { statusCode: number; body: string };
+  let isSessionOpen = true;
 
-  // __ Values bones
+  // __ Bones values
   let jwt = {
     header: {} as Record<string, unknown>,
     payload: {} as EntityPayload,
@@ -169,98 +98,29 @@ describe.sequential(`Wallet Provider Backend`, () => {
   let payload = {} as EntityPayload;
   let hasJwks = false;
 
-  async function appendCheck(requirementId: RequirementId, evaluation: RequirementEvaluation): Promise<void> {
-    const requirement = REQUIREMENTS[requirementId];
-
-    try {
-      await repo.appendCheck(sessionId, {
-        requirementId,
-        description: requirement.description,
-        step: requirement.step,
-        phase: 'WALLET_PROVIDER_BACKEND',
-        result: evaluation.result,
-        timestamp: new Date().toISOString(),
-        httpStatus: evaluation.httpStatus,
-        errorMessage: evaluation.errorMessage
-      });
-    } catch (error) {
-      throw new Error(`Failed to append conformance check for ${requirementId}: ${getErrorMessage(error)}`);
-    }
-  }
-
-  async function closeSessionAsFailed(failedRequirementId: RequirementId): Promise<void> {
-    const failedIndex = CONFORMANCE_REQUIREMENT_ORDER.indexOf(
-      failedRequirementId as (typeof CONFORMANCE_REQUIREMENT_ORDER)[number]
-    );
-
-    if (failedIndex >= 0) {
-      for (const requirementId of CONFORMANCE_REQUIREMENT_ORDER.slice(failedIndex + 1)) {
-        await appendCheck(requirementId, {
-          result: 'NOT_REACHED',
-          httpStatus: 0,
-          errorMessage: 'Skipped after a previous conformance failure closed the session'
-        });
-      }
-    }
-
-    try {
-      await repo.close(sessionId, 'FAILED');
-    } catch (error) {
-      throw new Error(`Failed to close conformance session as FAILED: ${getErrorMessage(error)}`);
-    }
-  }
-
   async function recordRequirement(
-    requirementId: RequirementId,
+    _requirementId: RequirementId,
     evaluate: () => Promise<RequirementEvaluation>
   ): Promise<RequirementEvaluation | null> {
-    const session = await repo.get(sessionId);
-    if (session?.status !== 'OPEN') {
+    if (!isSessionOpen) {
       return null;
     }
 
     const evaluation = await evaluate();
-    await appendCheck(requirementId, evaluation);
-
     if (evaluation.result === 'FAIL') {
-      await closeSessionAsFailed(requirementId);
+      isSessionOpen = false;
     }
 
     return evaluation;
   }
 
   beforeAll(async () => {
-    const configPath = process.env.CONFIG_FILE_PATH
-      ? resolve(process.env.CONFIG_FILE_PATH)
-      : resolve(process.cwd(), 'config.ini');
-    const { data: config } = parseINI(configPath);
-
-    if (!config.global.wallet_provider_backend_url?.trim()) {
-      throw new Error('Missing required config: global.wallet_provider_backend_url');
+    const walletProviderBackendUrl = process.env.ITW_CT_WALLET_PROVIDER_BACKEND_URL?.trim();
+    if (!walletProviderBackendUrl) {
+      throw new Error('Missing required env: ITW_CT_WALLET_PROVIDER_BACKEND_URL');
     }
 
-    if (!config.global.data_dir?.trim()) {
-      throw new Error('Missing required config: global.data_dir');
-    }
-
-    walletProviderUrl = normalizeUrl(config.global.wallet_provider_backend_url);
-
-    const resolvedDataDir = expandPath(config.global.data_dir);
-    mkdirSync(resolvedDataDir, { recursive: true });
-    dbClient = new DatabaseClient({ dataDir: resolvedDataDir });
-    const { SqliteConformanceSessionRepository } = await import('@itw-conformance-tool/conformance');
-    repo = new SqliteConformanceSessionRepository(dbClient.db) as unknown as ConformanceRepo;
-    sessionId = randomUUID();
-    try {
-      await repo.create({
-        sessionId,
-        startedAt: new Date().toISOString(),
-        status: 'OPEN',
-        checks: []
-      });
-    } catch (error) {
-      throw new Error(`Failed to create conformance session: ${getErrorMessage(error)}`);
-    }
+    walletProviderUrl = normalizeUrl(walletProviderBackendUrl);
 
     try {
       const rawResponse = await fetch(`${walletProviderUrl}/.well-known/openid-federation`, {
@@ -269,29 +129,6 @@ describe.sequential(`Wallet Provider Backend`, () => {
       entityConfigResponse = { statusCode: rawResponse.status, body: await rawResponse.text() };
     } catch {
       entityConfigResponse = { statusCode: 0, body: '' };
-    }
-  });
-
-  afterAll(async () => {
-    try {
-      if (!repo || !sessionId) {
-        return;
-      }
-
-      const session = await repo.get(sessionId);
-      if (session?.status === 'OPEN') {
-        try {
-          await repo.close(sessionId, 'PASSED');
-        } catch (error) {
-          throw new Error(`Failed to close conformance session as PASSED: ${getErrorMessage(error)}`);
-        }
-      }
-    } finally {
-      try {
-        await dbClient?.close();
-      } catch {
-        // Ignore close errors in test teardown.
-      }
     }
   });
 
@@ -312,8 +149,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
   // ___ WP_002 ____
   it('WP_002 - Entity configuration is an OpenID Federation-compliant signed JWT with all required components', async () => {
-    const session = await repo.get(sessionId);
-    if (session?.status !== 'OPEN') {
+    if (!isSessionOpen) {
       return;
     }
 
@@ -496,8 +332,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
   // ___ WP_003 ____
   it('WP_003 - Public keys are used exclusively for signing/encryption in Wallet Provider role', async () => {
-    const session = await repo.get(sessionId);
-    if (session?.status !== 'OPEN') {
+    if (!isSessionOpen) {
       return;
     }
 
@@ -534,8 +369,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
   // ___ WP_004 ____
   it('WP_004 - Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri', async () => {
-    const session = await repo.get(sessionId);
-    if (session?.status !== 'OPEN') {
+    if (!isSessionOpen) {
       return;
     }
 
@@ -687,7 +521,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
             if (signedJwksPayloadHasJwks) {
               try {
-                await jwtVerify(jwtContent, createLocalJWKSet(signedPayload.jwks), {
+                await jwtVerify(jwtContent, createLocalJWKSet(payload.jwks), {
                   algorithms: ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512']
                 });
                 signedJwksSignatureValid = true;

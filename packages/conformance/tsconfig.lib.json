@@ -12,6 +12,9 @@
   "references": [
     {
       "path": "../database/tsconfig.lib.json"
+    },
+    {
+      "path": "../crypto/tsconfig.lib.json"
     }
   ]
 }

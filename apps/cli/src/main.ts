@@ -58,15 +58,16 @@ async function main(): Promise<void> {
       );
     }
 
+    const services = getNxCommands(flags);
+    const env = buildEnv(configs, emitLog);
+
     // __ Test section
-    if (command === 'test') {
-      await test(flags, emitLog);
+    if (command.startsWith('test')) {
+      await test(flags, env, emitLog);
       process.exit(0);
     }
 
     // __ Start section
-    const services = getNxCommands(flags);
-    const env = buildEnv(configs, emitLog);
     const exitCode = await runCommands(nxRootPath, services, env, emitLog);
 
     if (exitCode === 0) process.exit(0);

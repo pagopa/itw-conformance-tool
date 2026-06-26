@@ -11,15 +11,11 @@ import type { CLIFlags, EmitLog } from '../types/types.js';
  * @param emitLog Logger function for console output
  * @returns Promise<void>
  */
-export async function test(flags: CLIFlags, emitLog: EmitLog): Promise<void> {
+export async function test(flags: CLIFlags, env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<void> {
   const nxRootPath = findNxRoot();
+  const configFile = `vitest.${flags.testType}.config.mts`;
 
-  const vitestArgs = ['vitest', 'run', '--config', join(nxRootPath, 'apps/cli/vitest.conformance.config.mts')];
-
-  const env = {
-    ...process.env,
-    ...(flags.config.value ? { CONFIG_FILE_PATH: flags.config.path } : {})
-  };
+  const vitestArgs = ['vitest', 'run', '--config', join(nxRootPath, configFile)];
 
   const exitCode = await new Promise<number>((resolve, reject) => {
     const child = spawn('pnpm', vitestArgs, {
@@ -36,5 +32,5 @@ export async function test(flags: CLIFlags, emitLog: EmitLog): Promise<void> {
     throw new Error(`Conformance tests failed with exit code ${exitCode}`);
   }
 
-  emitLog('Conformance tests completed', 'info');
+  emitLog(`Conformance tests completed (${flags.testType})`, 'info');
 }

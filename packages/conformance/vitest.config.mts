@@ -16,6 +16,7 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts', 'src/__tests__/**/*.ts'],
+    exclude: ['src/tests/matrix/**', '**/node_modules/**', '**/.git/**'],
     reporters: ['default'],
     // node:sqlite requires --experimental-sqlite on Node.js 22
     pool: 'forks',
