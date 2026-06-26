@@ -33,7 +33,7 @@ type EntityPayload = {
   iat: number;
   exp: number;
   authority_hints: string[];
-  jwks: { keys: JwkLike[] };
+  jwks?: { keys: JwkLike[] };
   metadata: EntityMetadata;
   jwks_uri?: string;
   signed_jwks_uri?: string;
@@ -190,7 +190,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
   });
 
   it("WP_002b - 'kid' must equal public key thumbprint", async () => {
-    hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks.keys.length > 0;
+    hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks?.keys.length > 0;
     const foundJwk = payload.jwks?.keys?.find((key: JwkLike) => key.kid === jwt.header.kid);
     const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === jwt.header.kid;
 
@@ -286,8 +286,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
   });
 
   it("WP_002g - 'jwks' must contain valid JWK signing keys", async () => {
-    const allKeysValid =
-      hasJwks && payload.jwks.keys.length > 0 && (await Promise.all(payload.jwks.keys.map(isValidJwk))).every(Boolean);
+    const jwksKeys = payload.jwks?.keys ?? [];
+    const allKeysValid = hasJwks && jwksKeys.length > 0 && (await Promise.all(jwksKeys.map(isValidJwk))).every(Boolean);
 
     const evaluation = await recordRequirement('WP_002', async () => ({
       result: allKeysValid ? 'PASS' : 'FAIL',

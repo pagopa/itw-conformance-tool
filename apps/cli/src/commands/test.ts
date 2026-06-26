@@ -7,7 +7,8 @@ import type { EmitLog } from '../types/types.js';
 
 /** Test command to orchestrate and execute conformance tests.
  *
- * @param emitLog Logger function for console output
+ * @param env - Environment variables forwarded to the Vitest process
+ * @param emitLog - Logger function for console output
  * @returns Promise<void>
  */
 export async function test(env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<void> {
