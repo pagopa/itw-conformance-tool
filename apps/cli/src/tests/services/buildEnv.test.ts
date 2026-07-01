@@ -9,7 +9,8 @@ const mockConfigs: ConfigType = {
   global: {
     data_dir: '/data/.itw-conformance-tool',
     log_level: 'info',
-    https: true
+    https: true,
+    wallet_provider_backend_url: 'https://wallet-provider-backend.example.com'
   },
   'itw-credential-issuer': {
     auth_flow: 'l3',
@@ -43,6 +44,7 @@ describe('buildEnv', () => {
     expect(env.ITW_CT_RP_BASE_URL).toBe('https://127.0.0.1:8080');
     expect(env.ITW_CT_ISSUER_AUTH_FLOW).toBe('l3');
     expect(env.ITW_CT_RP_TRUST_ANCHOR_URL).toBe('https://trust-anchor.example.com');
+    expect(env.ITW_CT_WALLET_PROVIDER_BACKEND_URL).toBe('https://wallet-provider-backend.example.com');
   });
 
   it('merges with existing process.env variables', () => {
