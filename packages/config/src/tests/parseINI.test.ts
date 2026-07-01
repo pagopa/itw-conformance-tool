@@ -31,6 +31,7 @@ const httpsConfigContent = `[global]
 data_dir=~/.itw-conformance-tool
 log_level=info
 https=true
+wallet_provider_backend_url=https://127.0.0.1:8080
 
 [itw-credential-issuer]
 auth_flow=direct
@@ -42,12 +43,24 @@ port=8080
 `;
 
 const emptyConfigContent = ``;
-const missingSectionContent = `[global]
+const missingWalletWithValidSectionsContent = `[global]
+data_dir=~/.itw-conformance-tool
 log_level=info
+
+[itw-credential-issuer]
+port=4000
+
+[rp]
+port=9090
+entity_id=https://rp.example.org
+`;
+const minimalValidConfigContent = `[global]
+wallet_provider_backend_url=https://127.0.0.1:8080
 `;
 const extraKeysContent = `[global]
 data_dir=~/.itw-conformance-tool
 log_level=warn
+wallet_provider_backend_url=https://127.0.0.1:8080
 extra_key=foo
 
 [itw-credential-issuer]
@@ -61,6 +74,7 @@ trust_anchor=/.well-known/openid-federation
 const wrongTypeContent = `[global]
 data_dir=~/.itw-conformance-tool
 log_level=warn
+wallet_provider_backend_url=https://127.0.0.1:8080
 
 [itw-credential-issuer]
 auth_flow=notavalid
@@ -69,6 +83,17 @@ credential_types=pi
 
 [rp]
 port=8080
+`;
+const invalidWalletUrlContent = `[global]
+data_dir=~/.itw-conformance-tool
+log_level=warn
+wallet_provider_backend_url=not-a-url
+
+[itw-credential-issuer]
+port=4000
+
+[rp]
+port=9090
 `;
 
 describe('parseINI', () => {
@@ -126,25 +151,42 @@ describe('parseINI', () => {
     expect(result.data.global.https).toBe(true);
   });
 
-  it('returns default config for empty config file', () => {
+  it('returns error and default config for empty config file', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(emptyConfigContent);
     const result = parseINI('./files/config.empty.ini');
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(result.data).toEqual(DEFAULT_CONFIG);
-    expect('error' in result).toBe(false);
+    expect('error' in result).toBe(true);
   });
 
-  it('returns default config for missing section', () => {
+  it('parses config with only global wallet and defaults missing sections', () => {
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(readFileSync).mockReturnValue(missingSectionContent);
+    vi.mocked(readFileSync).mockReturnValue(minimalValidConfigContent);
     const result = parseINI('./missing-section.ini');
     expect(result.ok).toBe(true);
-    expect(result.data).toEqual(DEFAULT_CONFIG);
+    expect(result.data).toEqual({
+      global: {
+        data_dir: '~/.itw-conformance-tool',
+        log_level: 'info',
+        https: true,
+        wallet_provider_backend_url: 'https://127.0.0.1:8080'
+      },
+      'itw-credential-issuer': {
+        auth_flow: 'direct',
+        port: 3000,
+        credential_types: 'pid,mdl,badge,eaa'
+      },
+      rp: {
+        port: 8080,
+        entity_id: 'https://127.0.0.1:3000',
+        trust_anchor_url: '/.well-known/openid-federation'
+      }
+    });
     expect('error' in result).toBe(false);
   });
 
-  it('returns default config for extra keys', () => {
+  it('parses config with extra keys and applies defaults', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(extraKeysContent);
     const result = parseINI('./extra-keys.ini');
@@ -170,7 +212,7 @@ describe('parseINI', () => {
     expect('error' in result).toBe(false);
   });
 
-  it('returns default config for wrong type', () => {
+  it('parses config with wrong types and recovers with defaults', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue(wrongTypeContent);
     const result = parseINI('./wrong-type.ini');
@@ -196,6 +238,56 @@ describe('parseINI', () => {
     expect('error' in result).toBe(false);
   });
 
+  it('returns error and keeps valid values/defaults when wallet provider backend url is missing', () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue(missingWalletWithValidSectionsContent);
+    const result = parseINI('./missing-wallet.ini');
+    expect(result.ok).toBe(false);
+    expect(result.data).toEqual({
+      global: {
+        data_dir: '~/.itw-conformance-tool',
+        log_level: 'info',
+        https: true
+      },
+      'itw-credential-issuer': {
+        auth_flow: 'direct',
+        port: 4000,
+        credential_types: 'pid,mdl,badge,eaa'
+      },
+      rp: {
+        port: 9090,
+        entity_id: 'https://rp.example.org',
+        trust_anchor_url: '/.well-known/openid-federation'
+      }
+    });
+    expect('error' in result).toBe(true);
+  });
+
+  it('returns error and keeps valid values/defaults when wallet provider backend url is invalid', () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue(invalidWalletUrlContent);
+    const result = parseINI('./invalid-wallet.ini');
+    expect(result.ok).toBe(false);
+    expect(result.data).toEqual({
+      global: {
+        data_dir: '~/.itw-conformance-tool',
+        log_level: 'warn',
+        https: true
+      },
+      'itw-credential-issuer': {
+        auth_flow: 'direct',
+        port: 4000,
+        credential_types: 'pid,mdl,badge,eaa'
+      },
+      rp: {
+        port: 9090,
+        entity_id: 'https://127.0.0.1:3000',
+        trust_anchor_url: '/.well-known/openid-federation'
+      }
+    });
+    expect('error' in result).toBe(true);
+  });
+
   it('handles unreadable files', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockImplementation(() => {
@@ -213,7 +305,7 @@ describe('parseINI', () => {
   it('handles generic unknown errors', () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockImplementation(() => {
-      throw 'unexpected failure';
+      throw new Error('unexpected failure');
     });
 
     const result = parseINI('/broken/config.ini');

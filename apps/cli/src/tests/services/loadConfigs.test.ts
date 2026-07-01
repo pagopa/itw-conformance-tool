@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadConfigs } from '../../services/loadConfigs.js';
 import { existsFileSync } from '../../utils/search.js';
 
+import type { CLIFlags } from '../../types/types.js';
+
 vi.mock('../../utils/search.js');
 
 vi.mock('../../templates/templates.js', () => ({
@@ -26,20 +28,31 @@ const parsedConfigs: ConfigType = {
   global: {
     data_dir: '/custom/.itw-conformance-tool',
     log_level: 'warn',
-    https: false
+    https: false,
+    wallet_provider_backend_url: 'https://wallet.example.org'
   },
   'itw-credential-issuer': { auth_flow: 'direct', port: 4000, credential_types: 'pid' },
   rp: {
     port: 9090,
     entity_id: 'https://rp.example.com',
-    trust_anchor_url: 'https://trust-anchor.example.com',
-    x5c_cert_path: '/custom/rp/x5c-cert.pem'
+    trust_anchor_url: 'https://trust-anchor.example.com'
   }
+};
+
+const baseFlags: CLIFlags = {
+  issuer: false,
+  rp: false,
+  all: false,
+  force: false,
+  config: { value: false, path: '' },
+  runId: undefined,
+  format: 'html'
 };
 
 describe('loadConfigs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(parseINI).mockReturnValue({ ok: false, error: 'Config file not found', data: parsedConfigs });
   });
 
   describe('with explicit config flag (flags.config.value = true)', () => {
@@ -47,47 +60,32 @@ describe('loadConfigs', () => {
       vi.mocked(existsFileSync).mockReturnValue(true);
       vi.mocked(parseINI).mockReturnValue({ ok: true, data: parsedConfigs });
 
-      const flags = {
-        issuer: false,
-        rp: false,
-        all: false,
-        force: false,
-        config: { value: true, path: '/custom/config.ini' }
-      };
+      const flags: CLIFlags = { ...baseFlags, config: { value: true, path: '/custom/config.ini' } };
       const result = loadConfigs(flags);
 
-      expect(result['itw-credential-issuer'].port).toBe(4000);
+      expect(result.ok).toBe(true);
+      expect(result.data['itw-credential-issuer'].port).toBe(4000);
     });
 
     it('returns default configs and logs warn when file exists but parseINI fails', () => {
       vi.mocked(existsFileSync).mockReturnValue(true);
       vi.mocked(parseINI).mockReturnValue({ ok: false, error: 'Invalid INI', data: parsedConfigs });
 
-      const flags = {
-        issuer: false,
-        rp: false,
-        all: false,
-        force: false,
-        config: { value: true, path: '/custom/config.ini' }
-      };
+      const flags: CLIFlags = { ...baseFlags, config: { value: true, path: '/custom/config.ini' } };
       const result = loadConfigs(flags);
 
-      expect(result.global.log_level).toBe('warn');
+      expect(result.ok).toBe(false);
+      expect(result.data.global.log_level).toBe('warn');
     });
 
     it('returns default configs and logs when the file does not exist', () => {
       vi.mocked(existsFileSync).mockReturnValue(false);
 
-      const flags = {
-        issuer: false,
-        rp: false,
-        all: false,
-        force: false,
-        config: { value: true, path: '/custom/config.ini' }
-      };
+      const flags: CLIFlags = { ...baseFlags, config: { value: true, path: '/custom/config.ini' } };
       const result = loadConfigs(flags);
 
-      expect(result.global.log_level).toBe('warn');
+      expect(result.ok).toBe(false);
+      expect(result.data.global.log_level).toBe('warn');
     });
   });
 
@@ -96,29 +94,32 @@ describe('loadConfigs', () => {
       vi.mocked(existsFileSync).mockReturnValue(true);
       vi.mocked(parseINI).mockReturnValue({ ok: true, data: parsedConfigs });
 
-      const flags = { issuer: false, rp: false, all: false, force: false, config: { value: false, path: '' } };
+      const flags: CLIFlags = { ...baseFlags };
       const result = loadConfigs(flags);
 
-      expect(result.global.log_level).toBe('warn');
-      expect(result['itw-credential-issuer'].port).toBe(4000);
+      expect(result.ok).toBe(true);
+      expect(result.data.global.log_level).toBe('warn');
+      expect(result.data['itw-credential-issuer'].port).toBe(4000);
     });
 
     it('returns default configs and logs warn when default config.ini exists but parseINI fails', () => {
       vi.mocked(existsFileSync).mockReturnValue(true);
       vi.mocked(parseINI).mockReturnValue({ ok: false, error: 'Bad format', data: parsedConfigs });
 
-      const flags = { issuer: false, rp: false, all: false, force: false, config: { value: false, path: '' } };
+      const flags: CLIFlags = { ...baseFlags };
       const result = loadConfigs(flags);
-      expect(result.global.log_level).toBe('warn');
+      expect(result.ok).toBe(false);
+      expect(result.data.global.log_level).toBe('warn');
     });
 
     it('returns default configs and logs when default config.ini does not exist', () => {
       vi.mocked(existsFileSync).mockReturnValue(false);
 
-      const flags = { issuer: false, rp: false, all: false, force: false, config: { value: false, path: '' } };
+      const flags: CLIFlags = { ...baseFlags };
       const result = loadConfigs(flags);
 
-      expect(result.global.log_level).toBe('warn');
+      expect(result.ok).toBe(false);
+      expect(result.data.global.log_level).toBe('warn');
     });
   });
 });

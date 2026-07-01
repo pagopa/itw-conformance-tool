@@ -61,7 +61,8 @@ const makeConfigs = (): ConfigType => ({
   global: {
     data_dir: '/root/.itw-conformance-tool',
     log_level: 'info',
-    https: false
+    https: false,
+    wallet_provider_backend_url: 'https://wallet.example.org'
   },
   'itw-credential-issuer': { auth_flow: 'direct', port: 3000, credential_types: 'pid' },
   rp: { port: 8080, entity_id: 'https://127.0.0.1:3000', trust_anchor_url: '' }

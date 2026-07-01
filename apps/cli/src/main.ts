@@ -30,7 +30,8 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    const configs = loadConfigs(flags);
+    const loadedConfigs = loadConfigs(flags);
+    const configs = loadedConfigs.data;
 
     // Change logger because log level might have been updated in the config file
     const paramLogger = createLogger({ level: configs.global.log_level });
@@ -51,7 +52,19 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    const missingFiles = filesToSearch(configs.global.data_dir, configs.global.https).filter((f) => !existsFileSync(f));
+    if (!loadedConfigs.ok) {
+      throw new Error(
+        `${loadedConfigs.error}\n` +
+          'The start/test commands require [global].wallet_provider_backend_url in config.ini.\n' +
+          'Run `itw-conformance-tool init` and set wallet_provider_backend_url, then retry.'
+      );
+    }
+
+    const runtimeConfigs = loadedConfigs.data;
+
+    const missingFiles = filesToSearch(runtimeConfigs.global.data_dir, runtimeConfigs.global.https).filter(
+      (f) => !existsFileSync(f)
+    );
     if (missingFiles.length > 0) {
       throw new Error(
         'Missing required files:\n' + missingFiles.join('\n') + '\n\nRun first: `itw-conformance-tool init`\n'
@@ -59,7 +72,7 @@ async function main(): Promise<void> {
     }
 
     const services = getNxCommands(flags);
-    const env = buildEnv(configs, emitLog);
+    const env = buildEnv(runtimeConfigs, emitLog);
 
     // __ Test section
     if (command === 'test') {
