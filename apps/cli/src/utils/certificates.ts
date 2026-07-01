@@ -115,7 +115,7 @@ export async function getTlsCertAndKey({
     organizationName,
     notAfterDays: 825,
     isCA: false,
-    keyUsageBits: 0x04 | 0x10
+    keyUsageBits: 0x01 // digitalSignature (ECDSA TLS)
   });
 
   return {

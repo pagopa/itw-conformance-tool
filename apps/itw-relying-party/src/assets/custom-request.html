@@ -450,7 +450,7 @@
         <div class="examples-section">
           <div class="examples-title">💡 Esempio Base:</div>
           <div class="example-code">
-            { "credentials": [ { "id": "PID", "format": "dc+sd-jwt", "meta": { "vct_values": [ "urn:eudi:pid:1" ] }, "claims": [ { "path": [ "given_name" ] }, { "path": [ "family_name" ] } ] } ] }
+            { "credentials": [ { "id": "PID", "format": "dc+sd-jwt", "meta": { "vct_values": [ "urn:eudi:pid:it:1" ] }, "claims": [ { "path": [ "given_name" ] }, { "path": [ "family_name" ] } ] } ] }
           </div>
 
           <div class="toggle-example" id="toggleSecondExample">
@@ -459,7 +459,7 @@
 
           <div id="secondExample">
             <div class="example-code">
-              { "credentials": [ { "id": "e156382b-5a8b-46a5-af9f-403329f55fa6", "format": "dc+sd-jwt", "meta": { "vct_values": ["urn:eudi:pid:1"] }, "claims": [ { "path": ["given_name"] }, { "path": ["family_name"] } ] }, { "id": "779ef07a-cc96-419a-9487-14950fd24b08", "format": "dc+sd-jwt", "meta": { "vct_values": ["https://pre.ta.wallet.ipzs.it/vct/v1.0.0/mdl"] }, "claims": [ { "path": ["birth_date"] } ] } ], "credential_sets": [ { "purpose": "Authentication services", "required": true, "options": [["e156382b-5a8b-46a5-af9f-403329f55fa6"]] }, { "options": [["779ef07a-cc96-419a-9487-14950fd24b08"]], "purpose": "Extra services", "required": false } ] }
+              { "credentials": [ { "id": "e156382b-5a8b-46a5-af9f-403329f55fa6", "format": "dc+sd-jwt", "meta": { "vct_values": ["urn:eudi:pid:it:1"] }, "claims": [ { "path": ["given_name"] }, { "path": ["family_name"] }, { "path": ["birthdate"] }, { "path": ["place_of_birth"] }, { "path": ["nationalities"] } ] }, { "id": "779ef07a-cc96-419a-9487-14950fd24b08", "format": "dc+sd-jwt", "meta": { "vct_values": ["https://pre.ta.wallet.ipzs.it/vct/v1.0.0/mdl"] }, "claims": [ { "path": ["birth_date"] } ] } ], "credential_sets": [ { "purpose": "Authentication services", "required": true, "options": [["e156382b-5a8b-46a5-af9f-403329f55fa6"]] }, { "options": [["779ef07a-cc96-419a-9487-14950fd24b08"]], "purpose": "Extra services", "required": false } ] }
             </div>
           </div>
         </div>

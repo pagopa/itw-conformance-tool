@@ -18,12 +18,14 @@
     "clean": "rimraf dist out-tsc"
   },
   "dependencies": {
+    "@itw-conformance-tool/database": "workspace:*",
     "puppeteer": "^24.0.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/crypto": "workspace:*",
     "@types/node": "^22.19.9",
+    "jose": "5.2.4",
     "vitest": "~4.1.0"
   }
 }

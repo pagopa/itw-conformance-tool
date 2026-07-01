@@ -144,6 +144,9 @@ const { config, configFileFound } = loadRpConfig({
 // - ITW_CT_RP_X5C_CERT_PATH (required — path to PEM certificate chain for x5c JWT header)
 ```
 
+When used through the CLI orchestration (`itwct start` / `itwct test`), the global config must also include `global.wallet_provider_backend_url` as a valid URL.
+If that field is missing, empty, or invalid, the CLI fails before service startup.
+
 ## Wiring Contracts (Dependency Injection)
 
 Implement these contracts to integrate the domain layer:
