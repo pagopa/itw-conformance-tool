@@ -15,6 +15,7 @@ import swaggerPlugin from './plugins/external/swagger.js';
 import keysPlugin from './plugins/keys.js';
 import sdkConfigPlugin from './plugins/sdk-config.js';
 import trustChainPlugin from './plugins/trust-chain.js';
+import walletProviderBackendPlugin from './plugins/wallet-provider-backend.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
@@ -23,6 +24,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
   await app.register(trustChainPlugin);
   await app.register(dbPlugin);
   await app.register(ephemeralKeysPlugin);
+  await app.register(walletProviderBackendPlugin);
 
   await app.register(corsPlugin, corsConfig);
   await app.register(formbodyPlugin);

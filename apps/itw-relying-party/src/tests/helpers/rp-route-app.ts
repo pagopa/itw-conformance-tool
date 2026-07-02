@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import { CompactEncrypt, SignJWT, importJWK, importPKCS8 } from 'jose';
 
 import { generateEphemeralKeyPair } from '../../crypto/ephemeral-keys.js';
+import { createWalletProviderBackendState } from '../../wallet-provider-backend/service.js';
 
 import type { IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
 import type { INonceRepository } from '@itw-conformance-tool/database';
@@ -215,6 +216,17 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     signingPrivateKeyPem: TEST_AUTH_REQUEST_PEM,
     x5cCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
   });
+
+  app.decorate(
+    'walletProviderBackend',
+    createWalletProviderBackendState({
+      baseUrl: options.baseUrl ?? TEST_CLIENT_ID,
+      keys: {
+        federationPrivateKeyPem: options.authRequestPrivateKeyPem ?? TEST_AUTH_REQUEST_PEM,
+        x5cCertPem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n'
+      }
+    })
+  );
 
   app.decorate('trustChain', ['insecure-http-local-dev']);
   app.decorate('ephemeralKeys', ephemeralKeys);

@@ -3,14 +3,22 @@ import { recordFederationFetchAccess } from '../wallet-provider-backend/service.
 
 import type { FastifyPluginAsync } from 'fastify';
 
-const federationRoute: FastifyPluginAsync = async (app) => {
+const fetchRoute: FastifyPluginAsync = async (app) => {
   app.route({
-    url: '/.well-known/openid-federation',
-    method: 'GET',
+    url: '/fetch',
+    method: 'POST',
     schema: {
-      tags: ['Federation']
+      tags: ['Wallet Provider']
     },
     handler: async (request, reply) => {
+      const body = request.body as { entity_id?: string } | undefined;
+      if (!body?.entity_id) {
+        return reply
+          .code(400)
+          .header('Content-Type', 'application/json')
+          .send({ error: 'bad_request', error_description: 'entity_id is required' });
+      }
+
       recordFederationFetchAccess(app.walletProviderBackend, request.method, request.url);
 
       try {
@@ -25,11 +33,11 @@ const federationRoute: FastifyPluginAsync = async (app) => {
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(entityStatement);
       } catch (error) {
-        request.log.error({ err: error }, 'OpenID federation metadata generation failed');
-        return reply.internalServerError('Failed to generate OpenID federation metadata');
+        request.log.error({ err: error }, 'OpenID federation fetch failed');
+        return reply.internalServerError('Failed to fetch OpenID federation metadata');
       }
     }
   });
 };
 
-export default federationRoute;
+export default fetchRoute;
