@@ -3,9 +3,13 @@ import { createHash, generateKeyPairSync } from 'node:crypto';
 import { CompactEncrypt, SignJWT, decodeJwt, decodeProtectedHeader, importJWK, importPKCS8 } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+// Allow self-signed TLS certificates when testing against a local RP server.
+process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+
 type JwkKey = Record<string, unknown>;
 
-const ALLOWED_JAR_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'];
+// Asymmetric algorithms allowed for JAR signing (not 'none', not HMAC MACs).
+const ALLOWED_JAR_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512', 'RS256', 'RS384', 'RS512'];
 
 /**
  * Builds a minimal but fully-valid JARM JWE for the RP's /auth/response endpoint.
@@ -25,6 +29,12 @@ async function buildAuthResponseJwe({
   state: string;
 }): Promise<string> {
   const rpPublicKey = await importJWK(encJwk as Parameters<typeof importJWK>[0]);
+  // The library (io-wallet-oid4vp) validates the JWE protected header against zEncryptedJarmHeader
+  // which requires `kid` as a mandatory string field.
+  const encKid = typeof encJwk.kid === 'string' ? encJwk.kid : undefined;
+  if (!encKid) {
+    throw new Error('Encryption JWK is missing required kid field');
+  }
 
   // Holder key pair – P-256, signs the KB-JWT
   const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -66,13 +76,14 @@ async function buildAuthResponseJwe({
     })
   );
 
-  return new CompactEncrypt(plaintext).setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM' }).encrypt(rpPublicKey);
+  return new CompactEncrypt(plaintext).setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM', kid: encKid }).encrypt(rpPublicKey);
 }
 
 describe.sequential('Relying Party Presentation', () => {
   let rpBaseUrl: string;
 
   // AUTHORIZE shared state
+  let walletUrl: string;
   let authRequestStatusCode: number;
   let authRequestContentType: string;
   let jarHeader: Record<string, unknown>;
@@ -81,6 +92,7 @@ describe.sequential('Relying Party Presentation', () => {
 
   // PRESENTATION_RESPONSE shared state
   let authResponseStatusCode: number;
+  let authResponseContentType: string;
   let authResponseBody: Record<string, unknown>;
 
   beforeAll(async () => {
@@ -105,7 +117,8 @@ describe.sequential('Relying Party Presentation', () => {
       throw new Error(`POST /request-object failed with HTTP ${reqObjRes.status}`);
     }
 
-    const { url: walletUrl } = (await reqObjRes.json()) as { url: string };
+    const body = (await reqObjRes.json()) as { url: string };
+    walletUrl = body.url;
     state = new URL(walletUrl).searchParams.get('state') ?? '';
 
     // Step 2: GET /auth/request/:state to fetch the JAR (also transitions session to 'checking')
@@ -130,7 +143,7 @@ describe.sequential('Relying Party Presentation', () => {
       jarPayload = {};
     }
 
-    // Step 3: build and submit a VP token to /auth/response
+    // Step 3: build and submit a valid VP token to /auth/response
     const clientMetadata = jarPayload.client_metadata as Record<string, unknown> | undefined;
     const jwks = clientMetadata?.jwks as { keys?: JwkKey[] } | undefined;
     const encJwk = jwks?.keys?.find((k) => k.use === 'enc');
@@ -155,68 +168,89 @@ describe.sequential('Relying Party Presentation', () => {
         });
 
         authResponseStatusCode = authRes.status;
+        authResponseContentType = authRes.headers.get('content-type') ?? '';
         authResponseBody = (await authRes.json().catch(() => ({}))) as Record<string, unknown>;
       } catch {
         authResponseStatusCode = 0;
+        authResponseContentType = '';
         authResponseBody = {};
       }
     } else {
       authResponseStatusCode = 0;
+      authResponseContentType = '';
       authResponseBody = {};
     }
   });
 
   // ── AUTHORIZE step ──────────────────────────────────────────────────────────
 
-  it('[PRESENTATION:AUTHORIZE] RPR-04 - GET /auth/request/:state returns HTTP 200', () => {
+  it('[PRESENTATION:AUTHORIZE] RPR-03 - POST /request-object URL contains client_id, request_uri, and state', () => {
+    const parsed = new URL(walletUrl);
+    expect(
+      parsed.searchParams.get('client_id'),
+      'Authorization Request URL must contain a non-empty client_id'
+    ).toBeTruthy();
+    expect(
+      parsed.searchParams.get('request_uri'),
+      'Authorization Request URL must contain a non-empty request_uri'
+    ).toBeTruthy();
+    expect(parsed.searchParams.get('state'), 'Authorization Request URL must contain a non-empty state').toBeTruthy();
+  });
+
+  it('[PRESENTATION:AUTHORIZE] RPR-08 - GET /auth/request/:state returns HTTP 200', () => {
     expect(authRequestStatusCode, 'Expected GET /auth/request/:state to return HTTP 200').toBe(200);
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-05 - Response Content-Type is application/oauth-authz-req+jwt', () => {
-    expect(authRequestContentType, 'Expected Content-Type to contain application/oauth-authz-req+jwt').toContain(
-      'application/oauth-authz-req+jwt'
-    );
+  it('[PRESENTATION:AUTHORIZE] RPR-89 - GET /auth/request/:state Content-Type is application/oauth-authz-req+jwt', () => {
+    expect(
+      authRequestContentType,
+      'Expected Content-Type to contain application/oauth-authz-req+jwt'
+    ).toContain('application/oauth-authz-req+jwt');
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-06 - JAR header typ is oauth-authz-req+jwt', () => {
-    expect(jarHeader.typ, 'Expected JAR header.typ to be oauth-authz-req+jwt').toBe('oauth-authz-req+jwt');
+  it('[PRESENTATION:AUTHORIZE] RPR-89 - JAR header typ is oauth-authz-req+jwt', () => {
+    expect(jarHeader.typ, 'Expected JAR protected header typ to be oauth-authz-req+jwt').toBe('oauth-authz-req+jwt');
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-07 - JAR signing algorithm is an allowed JOSE algorithm', () => {
-    expect(ALLOWED_JAR_ALGORITHMS, `Expected alg "${String(jarHeader.alg)}" to be in the allowed list`).toContain(
-      jarHeader.alg
-    );
+  it('[PRESENTATION:AUTHORIZE] RPR-88 - JAR signing algorithm is an asymmetric JOSE algorithm', () => {
+    expect(
+      ALLOWED_JAR_ALGORITHMS,
+      `Expected JAR alg "${String(jarHeader.alg)}" to be an asymmetric algorithm (not none or MAC)`
+    ).toContain(jarHeader.alg);
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-08 - JAR payload contains non-empty client_id', () => {
-    expect(typeof jarPayload.client_id).toBe('string');
+  it('[PRESENTATION:AUTHORIZE] RPR-10 - JAR payload contains non-empty client_id', () => {
+    expect(typeof jarPayload.client_id, 'client_id must be a string').toBe('string');
     expect((jarPayload.client_id as string).length, 'client_id must not be empty').toBeGreaterThan(0);
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-09 - JAR payload response_type is vp_token', () => {
+  it('[PRESENTATION:AUTHORIZE] RPR-91 - JAR payload response_type is vp_token', () => {
     expect(jarPayload.response_type, 'Expected response_type to be vp_token').toBe('vp_token');
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-10 - JAR payload contains non-empty nonce', () => {
-    expect(typeof jarPayload.nonce).toBe('string');
-    expect((jarPayload.nonce as string).length, 'nonce must not be empty').toBeGreaterThan(0);
+  it('[PRESENTATION:AUTHORIZE] RPR-93 - JAR payload nonce has at least 32 characters', () => {
+    expect(typeof jarPayload.nonce, 'nonce must be a string').toBe('string');
+    expect(
+      (jarPayload.nonce as string).length,
+      'nonce must have at least 32 characters to provide sufficient entropy'
+    ).toBeGreaterThanOrEqual(32);
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-11 - JAR payload contains response_uri', () => {
-    expect(typeof jarPayload.response_uri).toBe('string');
+  it('[PRESENTATION:AUTHORIZE] RPR-92 - JAR payload contains a non-empty response_uri', () => {
+    expect(typeof jarPayload.response_uri, 'response_uri must be a string').toBe('string');
     expect((jarPayload.response_uri as string).length, 'response_uri must not be empty').toBeGreaterThan(0);
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-12 - JAR payload contains dcql_query', () => {
-    expect(jarPayload.dcql_query, 'Expected dcql_query to be an object').toBeDefined();
-    expect(typeof jarPayload.dcql_query).toBe('object');
+  it('[PRESENTATION:AUTHORIZE] RPR-10 - JAR payload contains dcql_query object', () => {
+    expect(jarPayload.dcql_query, 'Expected dcql_query to be present and be an object').toBeDefined();
+    expect(typeof jarPayload.dcql_query, 'dcql_query must be an object').toBe('object');
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-13 - JAR payload response_mode is direct_post.jwt', () => {
+  it('[PRESENTATION:AUTHORIZE] RPR-90 - JAR payload response_mode is direct_post.jwt', () => {
     expect(jarPayload.response_mode, 'Expected response_mode to be direct_post.jwt').toBe('direct_post.jwt');
   });
 
-  it('[PRESENTATION:AUTHORIZE] RPR-14 - JAR client_metadata contains an encryption JWK with use=enc', () => {
+  it('[PRESENTATION:AUTHORIZE] RPR-13 - JAR client_metadata contains an encryption JWK with use=enc', () => {
     const clientMetadata = jarPayload.client_metadata as Record<string, unknown> | undefined;
     expect(clientMetadata, 'client_metadata must be present').toBeDefined();
 
@@ -224,25 +258,74 @@ describe.sequential('Relying Party Presentation', () => {
     expect(Array.isArray(jwks?.keys), 'client_metadata.jwks.keys must be an array').toBe(true);
 
     const encKey = (jwks?.keys as JwkKey[]).find((k) => k.use === 'enc');
-    expect(encKey, 'client_metadata.jwks.keys must contain a key with use=enc').toBeDefined();
+    expect(encKey, 'client_metadata.jwks.keys must contain a key with use=enc for response encryption').toBeDefined();
+  });
+
+  it('[PRESENTATION:AUTHORIZE] RPR-94 - JAR payload exp is set and is in the future', () => {
+    expect(typeof jarPayload.exp, 'exp must be a number').toBe('number');
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    expect(jarPayload.exp as number, 'JAR exp must be in the future (not expired)').toBeGreaterThan(nowSeconds);
   });
 
   // ── PRESENTATION_RESPONSE step ──────────────────────────────────────────────
 
-  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-15 - POST /auth/response with valid JWE returns HTTP 200', () => {
+  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-110 - POST /auth/response with valid JWE returns HTTP 200', () => {
     expect(authResponseStatusCode, 'Expected POST /auth/response to return HTTP 200').toBe(200);
   });
 
-  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-16 - Response body contains redirect_uri', () => {
-    expect(typeof authResponseBody.redirect_uri, 'Expected redirect_uri to be a string').toBe('string');
+  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-110 - POST /auth/response response Content-Type is application/json', () => {
+    expect(
+      authResponseContentType,
+      'Expected POST /auth/response Content-Type to contain application/json'
+    ).toContain('application/json');
+  });
+
+  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-83 - Response body contains a non-empty redirect_uri', () => {
+    expect(typeof authResponseBody.redirect_uri, 'redirect_uri must be a string').toBe('string');
     expect((authResponseBody.redirect_uri as string).length, 'redirect_uri must not be empty').toBeGreaterThan(0);
   });
 
-  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-17 - redirect_uri contains response_code query parameter', () => {
+  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-112 - redirect_uri contains response_code query parameter', () => {
     const redirectUri = new URL(authResponseBody.redirect_uri as string);
     expect(
       redirectUri.searchParams.get('response_code'),
       'redirect_uri must include a response_code query parameter'
     ).not.toBeNull();
   });
+
+  it(
+    '[PRESENTATION:PRESENTATION_RESPONSE] RPR-114 - POST /auth/response with invalid JWE returns an HTTP 4xx error response',
+    async () => {
+      // Create a fresh session so this error-path test does not interfere with the happy-path session.
+      const reqRes = await fetch(`${rpBaseUrl}/request-object`, {
+        body: JSON.stringify({
+          dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
+          flow_type: 'cross-device'
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        signal: AbortSignal.timeout(10_000)
+      });
+      expect(reqRes.ok, 'POST /request-object must succeed for error-path session').toBe(true);
+
+      const { url: freshUrl } = (await reqRes.json()) as { url: string };
+      const freshState = new URL(freshUrl).searchParams.get('state') ?? '';
+
+      // Transition the fresh session to 'checking' by fetching its JAR
+      await fetch(`${rpBaseUrl}/auth/request/${freshState}`, { signal: AbortSignal.timeout(10_000) });
+
+      // Submit a completely invalid (non-JWE) value to the response endpoint
+      const responseUri =
+        typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
+
+      const errRes = await fetch(responseUri, {
+        body: new URLSearchParams({ response: 'not.a.valid.jwe.value' }).toString(),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: 'POST',
+        signal: AbortSignal.timeout(10_000)
+      });
+
+      expect(errRes.status, 'Submitting an invalid JWE must return HTTP 4xx (not 200)').toBeGreaterThanOrEqual(400);
+    }
+  );
 });
