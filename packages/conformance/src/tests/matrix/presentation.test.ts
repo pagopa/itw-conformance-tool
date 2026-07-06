@@ -76,7 +76,9 @@ async function buildAuthResponseJwe({
     })
   );
 
-  return new CompactEncrypt(plaintext).setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM', kid: encKid }).encrypt(rpPublicKey);
+  return new CompactEncrypt(plaintext)
+    .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A256GCM', kid: encKid })
+    .encrypt(rpPublicKey);
 }
 
 describe.sequential('Relying Party Presentation', () => {
@@ -202,10 +204,9 @@ describe.sequential('Relying Party Presentation', () => {
   });
 
   it('[PRESENTATION:AUTHORIZE] RPR-89 - GET /auth/request/:state Content-Type is application/oauth-authz-req+jwt', () => {
-    expect(
-      authRequestContentType,
-      'Expected Content-Type to contain application/oauth-authz-req+jwt'
-    ).toContain('application/oauth-authz-req+jwt');
+    expect(authRequestContentType, 'Expected Content-Type to contain application/oauth-authz-req+jwt').toContain(
+      'application/oauth-authz-req+jwt'
+    );
   });
 
   it('[PRESENTATION:AUTHORIZE] RPR-89 - JAR header typ is oauth-authz-req+jwt', () => {
@@ -274,10 +275,9 @@ describe.sequential('Relying Party Presentation', () => {
   });
 
   it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-110 - POST /auth/response response Content-Type is application/json', () => {
-    expect(
-      authResponseContentType,
-      'Expected POST /auth/response Content-Type to contain application/json'
-    ).toContain('application/json');
+    expect(authResponseContentType, 'Expected POST /auth/response Content-Type to contain application/json').toContain(
+      'application/json'
+    );
   });
 
   it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-83 - Response body contains a non-empty redirect_uri', () => {
@@ -293,39 +293,36 @@ describe.sequential('Relying Party Presentation', () => {
     ).not.toBeNull();
   });
 
-  it(
-    '[PRESENTATION:PRESENTATION_RESPONSE] RPR-114 - POST /auth/response with invalid JWE returns an HTTP 4xx error response',
-    async () => {
-      // Create a fresh session so this error-path test does not interfere with the happy-path session.
-      const reqRes = await fetch(`${rpBaseUrl}/request-object`, {
-        body: JSON.stringify({
-          dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
-          flow_type: 'cross-device'
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-        signal: AbortSignal.timeout(10_000)
-      });
-      expect(reqRes.ok, 'POST /request-object must succeed for error-path session').toBe(true);
+  it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-114 - POST /auth/response with invalid JWE returns an HTTP 4xx error response', async () => {
+    // Create a fresh session so this error-path test does not interfere with the happy-path session.
+    const reqRes = await fetch(`${rpBaseUrl}/request-object`, {
+      body: JSON.stringify({
+        dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
+        flow_type: 'cross-device'
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      signal: AbortSignal.timeout(10_000)
+    });
+    expect(reqRes.ok, 'POST /request-object must succeed for error-path session').toBe(true);
 
-      const { url: freshUrl } = (await reqRes.json()) as { url: string };
-      const freshState = new URL(freshUrl).searchParams.get('state') ?? '';
+    const { url: freshUrl } = (await reqRes.json()) as { url: string };
+    const freshState = new URL(freshUrl).searchParams.get('state') ?? '';
 
-      // Transition the fresh session to 'checking' by fetching its JAR
-      await fetch(`${rpBaseUrl}/auth/request/${freshState}`, { signal: AbortSignal.timeout(10_000) });
+    // Transition the fresh session to 'checking' by fetching its JAR
+    await fetch(`${rpBaseUrl}/auth/request/${freshState}`, { signal: AbortSignal.timeout(10_000) });
 
-      // Submit a completely invalid (non-JWE) value to the response endpoint
-      const responseUri =
-        typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
+    // Submit a completely invalid (non-JWE) value to the response endpoint
+    const responseUri =
+      typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
 
-      const errRes = await fetch(responseUri, {
-        body: new URLSearchParams({ response: 'not.a.valid.jwe.value' }).toString(),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        method: 'POST',
-        signal: AbortSignal.timeout(10_000)
-      });
+    const errRes = await fetch(responseUri, {
+      body: new URLSearchParams({ response: 'not.a.valid.jwe.value' }).toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      signal: AbortSignal.timeout(10_000)
+    });
 
-      expect(errRes.status, 'Submitting an invalid JWE must return HTTP 4xx (not 200)').toBeGreaterThanOrEqual(400);
-    }
-  );
+    expect(errRes.status, 'Submitting an invalid JWE must return HTTP 4xx (not 200)').toBeGreaterThanOrEqual(400);
+  });
 });
