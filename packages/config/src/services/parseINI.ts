@@ -35,7 +35,10 @@ const GlobalWithoutWalletSchema = z.preprocess(
   })
 );
 
-const WalletProviderBackendUrlSchema = z.url();
+const WalletProviderBackendUrlSchema = z
+  .string()
+  .min(1)
+  .refine((value) => new URL(value).protocol === 'https:', { message: 'must be an https URL' });
 
 /** Read config file and parse it into a valid one.
  *
