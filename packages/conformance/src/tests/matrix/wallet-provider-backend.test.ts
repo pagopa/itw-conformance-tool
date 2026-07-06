@@ -57,11 +57,15 @@ type EntityPayload = {
   [key: string]: unknown;
 };
 
+function hasJsonLikeJwksContentType(contentType: string): boolean {
+  return contentType.includes('application/json') || contentType.includes('application/jwk-set+json');
+}
+
 async function fetchJwksFromUri(jwksUri: string): Promise<JwkLike[]> {
   try {
     const response = await fetch(jwksUri, { signal: AbortSignal.timeout(5_000) });
     const contentType = response.headers.get('content-type') ?? '';
-    if (response.status !== 200 || !contentType.includes('application/json')) {
+    if (response.status !== 200 || !hasJsonLikeJwksContentType(contentType)) {
       return [];
     }
 
@@ -96,8 +100,8 @@ async function resolveWalletSolutionKeys(
 }
 
 function buildSha256DigestHeader(body: string): string {
-  const digestHex = createHash('sha256').update(body).digest('hex');
-  return `SHA-256=${digestHex}`;
+  const digestB64 = createHash('sha256').update(body).digest('base64');
+  return `SHA-256=${digestB64}`;
 }
 
 const httpsUrlSchema = z.string().refine((value) => isHttpsUrl(value));
@@ -420,7 +424,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
     const jwksUri = walletSolution?.jwks_uri;
     const jwksUriValid = isHttpsUrl(jwksUri);
     let jwksUriResolvable = false;
-    let jsonContentType = false;
+    let jsonLikeContentType = false;
     let bodyHasJwks = false;
     let allKeysValid = false;
 
@@ -428,9 +432,9 @@ describe.sequential(`Wallet Provider Backend`, () => {
       try {
         const response = await fetch(jwksUri as string, { signal: AbortSignal.timeout(5_000) });
         jwksUriResolvable = response.status === 200;
-        jsonContentType = (response.headers.get('content-type') ?? '').includes('application/json');
+        jsonLikeContentType = hasJsonLikeJwksContentType(response.headers.get('content-type') ?? '');
 
-        if (jwksUriResolvable && jsonContentType) {
+        if (jwksUriResolvable && jsonLikeContentType) {
           const decoded = (await response.json()) as { keys?: JwkLike[] };
           const keys = decoded.keys ?? [];
           bodyHasJwks = Array.isArray(keys) && keys.length > 0;
@@ -442,8 +446,8 @@ describe.sequential(`Wallet Provider Backend`, () => {
     }
 
     expect(
-      jwksUriValid && jwksUriResolvable && jsonContentType && bodyHasJwks && allKeysValid,
-      `metadata.wallet_solution.jwks_uri must be HTTPS, return HTTP 200 JSON, and contain valid JWKS`
+      jwksUriValid && jwksUriResolvable && jsonLikeContentType && bodyHasJwks && allKeysValid,
+      `metadata.wallet_solution.jwks_uri must be HTTPS, return HTTP 200 JSON/JWK-SET+JSON, and contain valid JWKS`
     ).toBe(true);
   });
 
@@ -541,7 +545,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
       responseContentType = '';
     }
 
-    const expectedStatus = [207, 400, 401, 404, 429, 500, 503].includes(revocationResponseStatus);
+    const expectedStatus = [207, 400, 401, 429].includes(revocationResponseStatus);
     const responseCompatible =
       (revocationResponseStatus === 207 &&
         responseContentType.includes('application/json') &&
