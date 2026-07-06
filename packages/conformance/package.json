@@ -26,6 +26,7 @@
     "@itw-conformance-tool/crypto": "workspace:*",
     "@types/node": "^22.19.9",
     "jose": "5.2.4",
-    "vitest": "~4.1.0"
+    "vitest": "~4.1.0",
+    "zod": "^4.4.3"
   }
 }

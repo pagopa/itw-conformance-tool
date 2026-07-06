@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+function isHttpsAbsoluteUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export const GLOBAL_SECTION_DEFAULTS = {
   data_dir: '~/.itw-conformance-tool',
   log_level: 'info',
@@ -77,7 +85,7 @@ export const ConfigSchema = z.object({
       wallet_provider_backend_url: z
         .string()
         .min(1)
-        .refine((value) => new URL(value).protocol === 'https:')
+        .refine((value) => isHttpsAbsoluteUrl(value))
     })
   ),
   'itw-credential-issuer': z
