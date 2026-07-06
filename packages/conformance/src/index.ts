@@ -29,5 +29,6 @@ export {
   type ReportFormat
 } from './reporters/html-pdf-generator.js';
 export { extractIssuerSessionId, extractRpSessionId } from './utils/session-extractor.js';
+export { isHttpsUrl, normalizeUrl } from './utils/url.js';
 export type { RequirementDefinition } from './utils/requirement-mapper.js';
 export { getRequirements } from './utils/requirement-mapper.js';
