@@ -2,6 +2,11 @@
 
 Relying Party service for IT Wallet conformance flows (OID4VP side).
 
+## Runtime Notes
+
+When this service is launched through the conformance CLI (`itwct start` / `itwct test`), the CLI requires `global.wallet_provider_backend_url` in `config.ini` to be set to a valid URL.
+If the value is missing, empty, or invalid, the CLI exits before starting the service.
+
 ## Endpoints
 
 - `POST /request-object`: create authorization request and session

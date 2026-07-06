@@ -160,6 +160,14 @@ describe('parseCLIArgs', () => {
     });
   });
 
+  describe('test command', () => {
+    it('parses test command', () => {
+      vi.stubGlobal('process', { ...process, argv: ['node', 'cli', 'test'] });
+      const result = parseCLIArgs(['test'], rootPath);
+      expect(result.command).toBe('test');
+    });
+  });
+
   describe('tokenization of single-argument input', () => {
     it('tokenizes a single "start --all" string', () => {
       const result = parseCLIArgs(['start --all'], rootPath);
