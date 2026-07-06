@@ -1,5 +1,31 @@
 import { z } from 'zod';
 
+function isHttpsAbsoluteUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export const GLOBAL_SECTION_DEFAULTS = {
+  data_dir: '~/.itw-conformance-tool',
+  log_level: 'info',
+  https: true
+} as const;
+
+export const ISSUER_SECTION_DEFAULTS = {
+  auth_flow: 'direct',
+  port: 3000,
+  credential_types: 'pid,mdl,badge,eaa'
+} as const;
+
+export const RP_SECTION_DEFAULTS = {
+  port: 8080,
+  entity_id: 'https://127.0.0.1:3000',
+  trust_anchor_url: '/.well-known/openid-federation'
+} as const;
+
 export const ConfigINITemplate = `[global]
 ; Local directory for keys, certificates, and generated data
 ; Default: ~/.itw-conformance-tool
@@ -10,6 +36,8 @@ log_level = info
 ; Enable HTTPS mode (CLI generates/checks local TLS cert/key and forwards ITW_CT_HTTPS) (true | false)
 ; Default: true
 https = true
+; Mandatory Wallet Provider Backend URL (used for conformance tests)
+wallet_provider_backend_url = 
 
 [itw-credential-issuer]
 ; Authentication flow: direct | l2plus | l3
@@ -35,17 +63,31 @@ trust_anchor_url = /.well-known/openid-federation
 `;
 
 export const ConfigSchema = z.object({
-  global: z
-    .object({
+  global: z.preprocess(
+    (input) => {
+      if (input === undefined) {
+        return GLOBAL_SECTION_DEFAULTS;
+      }
+
+      if (typeof input !== 'object' || input === null) {
+        return input;
+      }
+
+      return {
+        ...GLOBAL_SECTION_DEFAULTS,
+        ...(input as Record<string, unknown>)
+      };
+    },
+    z.object({
       data_dir: z.string().min(1).catch('~/.itw-conformance-tool'),
       log_level: z.enum(['debug', 'info', 'warn', 'error']).catch('info'),
-      https: z.boolean().default(true)
+      https: z.boolean().catch(true),
+      wallet_provider_backend_url: z
+        .string()
+        .min(1)
+        .refine((value) => isHttpsAbsoluteUrl(value))
     })
-    .default({
-      data_dir: '~/.itw-conformance-tool',
-      log_level: 'info',
-      https: true
-    }),
+  ),
   'itw-credential-issuer': z
     .object({
       auth_flow: z.enum(['direct', 'l2plus', 'l3']).catch('direct'),
@@ -62,22 +104,18 @@ export const ConfigSchema = z.object({
         })
         .catch('pid,mdl,badge,eaa')
     })
-    .default({
-      auth_flow: 'direct',
-      port: 3000,
-      credential_types: 'pid,mdl,badge,eaa'
-    }),
+    .default(ISSUER_SECTION_DEFAULTS),
   rp: z
     .object({
       port: z.coerce.number().int().min(1).max(65535).catch(8080),
-      entity_id: z.string().url().catch('https://127.0.0.1:3000'),
+      entity_id: z.string().min(1).catch('https://127.0.0.1:3000'),
       trust_anchor_url: z.string().min(1).catch('/.well-known/openid-federation')
     })
-    .default({
-      port: 8080,
-      entity_id: 'https://127.0.0.1:3000',
-      trust_anchor_url: '/.well-known/openid-federation'
-    })
+    .default(RP_SECTION_DEFAULTS)
 });
 
-export const DEFAULT_CONFIG = ConfigSchema.parse({});
+export const DEFAULT_CONFIG = {
+  global: GLOBAL_SECTION_DEFAULTS,
+  'itw-credential-issuer': ISSUER_SECTION_DEFAULTS,
+  rp: RP_SECTION_DEFAULTS
+} as const;

@@ -1,4 +1,4 @@
-export type ConformancePhase = 'ISSUANCE' | 'PRESENTATION';
+export type ConformancePhase = 'ISSUANCE' | 'PRESENTATION' | 'WALLET_PROVIDER_BACKEND';
 
 export type ConformanceSessionStatus = 'OPEN' | 'PASSED' | 'FAILED' | 'INCOMPLETE';
 
@@ -13,7 +13,8 @@ export type ConformanceStep =
   | 'AUTHORIZATION_CODE'
   | 'TOKEN'
   | 'NONCE'
-  | 'CREDENTIAL';
+  | 'CREDENTIAL'
+  | 'WALLET_PROVIDER_BACKEND';
 
 export interface ConformanceCheck {
   requirementId: string;

@@ -17,6 +17,7 @@
     "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "@peculiar/x509": "^1.12.4",
+    "jose": "^6.1.0",
     "node-forge": "^1.4.0"
   },
   "devDependencies": {

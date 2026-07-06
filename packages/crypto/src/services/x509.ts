@@ -140,11 +140,21 @@ export const createSelfSignedCertificateFromJwk = async (jwk: JWK): Promise<stri
   return certificate.toString();
 };
 
-// Convert a base64 DER-encoded certificate string to PEM format by adding the appropriate header and footer lines.
+/** Converts a base64 DER-encoded certificate string to PEM format
+ * by adding the appropriate header and footer lines.
+ *
+ * @param certificate - The base64 DER-encoded certificate string
+ * @returns The certificate in PEM format
+ */
 export const convertBase64DerToPem = (certificate: string): string =>
   `-----BEGIN CERTIFICATE-----\n${certificate}\n-----END CERTIFICATE-----`;
 
-// Convert a PEM-encoded certificate to base64 DER format by parsing it and re-encoding the raw data.
+/** Converts a PEM-encoded certificate to base64 DER format
+ * by parsing it and re-encoding the raw data.
+ *
+ * @param certificatePem - The PEM-encoded certificate string
+ * @returns The certificate in base64 DER format
+ */
 export const convertPemToBase64Der = (certificatePem: string): string =>
   Buffer.from(new X509Certificate(certificatePem).rawData).toString('base64');
 

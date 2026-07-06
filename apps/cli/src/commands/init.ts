@@ -10,12 +10,16 @@ import { existsFileSync } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
 
+type InitConfig = {
+  global: Pick<ConfigType['global'], 'data_dir' | 'https' | 'log_level'>;
+};
+
 /** Initializes the configuration file.
  *
  * @param flags - The command-line flags, which may include a `force` flag to overwrite existing configuration.
  * @returns The parsed configuration object.
  */
-function checkConfig(flags: CLIFlags): ConfigType {
+function checkConfig(flags: CLIFlags): InitConfig {
   const configFilePath = resolve(process.cwd(), 'config.ini');
   if (!existsFileSync(configFilePath) || flags.force) {
     writeFileSync(configFilePath, ConfigINITemplate, { encoding: 'utf8', flag: 'w' });
@@ -44,7 +48,7 @@ function checkConfig(flags: CLIFlags): ConfigType {
  * @param flags - The command-line flags.
  * @returns It performs file system operations to create directories and files as needed based on the configuration and flags.
  */
-async function createFilesAndDirs(configs: ConfigType, flags: CLIFlags): Promise<void> {
+async function createFilesAndDirs(configs: InitConfig, flags: CLIFlags): Promise<void> {
   const issuerDirPath = join(configs.global.data_dir, 'issuer');
   mkdirSync(issuerDirPath, { recursive: true });
 

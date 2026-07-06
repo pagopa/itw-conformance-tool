@@ -27,7 +27,7 @@ class InMemoryConformanceSessionRepository implements IConformanceSessionReposit
 
   async appendCheck(sessionId: string, check: ConformanceCheck): Promise<void> {
     const current = this.sessions.get(sessionId);
-    if (!current || current.status !== 'OPEN') {
+    if (current?.status !== 'OPEN') {
       return;
     }
 
@@ -36,7 +36,7 @@ class InMemoryConformanceSessionRepository implements IConformanceSessionReposit
 
   async close(sessionId: string, status: ClosedConformanceSessionStatus): Promise<void> {
     const current = this.sessions.get(sessionId);
-    if (!current || current.status !== 'OPEN') {
+    if (current?.status !== 'OPEN') {
       return;
     }
 
@@ -44,7 +44,7 @@ class InMemoryConformanceSessionRepository implements IConformanceSessionReposit
     current.closedAt = new Date().toISOString();
   }
 
-  async markOpenSessionsIncompleteOlderThan(_cutoffIso: string): Promise<number> {
+  async markOpenSessionsIncompleteOlderThan(): Promise<number> {
     return 0;
   }
 }
@@ -99,10 +99,10 @@ describe('json-reporter', () => {
 
     expectVitestShape(jsonReporter);
     expect(jsonReporter.meta.runId).toBe('550e8400-e29b-41d4-a716-446655440000');
-    expect(jsonReporter.numTotalTestSuites).toBe(7);
+    expect(jsonReporter.numTotalTestSuites).toBe(10);
     expect(jsonReporter.numPassedTests).toBe(1);
     expect(jsonReporter.numFailedTests).toBe(1);
-    expect(jsonReporter.numPendingTests).toBe(5);
+    expect(jsonReporter.numPendingTests).toBe(8);
     expect(jsonReporter.success).toBe(false);
 
     const tokenSuite = jsonReporter.testResults.find((suite) => suite.name === 'TOKEN');
@@ -137,5 +137,56 @@ describe('json-reporter', () => {
     expect(result?.lazilyClosed).toBe(true);
     expect(result?.session.status).toBe('INCOMPLETE');
     expect(result?.jsonReporter.meta.status).toBe('INCOMPLETE');
+  });
+
+  it('keeps suites separated by phase when a session contains mixed phases', () => {
+    const mixedSession: ConformanceSession = {
+      checks: [
+        {
+          description: 'Wallet backend check',
+          phase: 'WALLET_PROVIDER_BACKEND',
+          requirementId: 'WP_001',
+          result: 'PASS',
+          step: 'WALLET_PROVIDER_BACKEND',
+          timestamp: '2026-06-12T12:00:05.000Z'
+        },
+        {
+          description: 'Presentation authorize check',
+          phase: 'PRESENTATION',
+          requirementId: 'PR_001',
+          result: 'PASS',
+          step: 'AUTHORIZE',
+          timestamp: '2026-06-12T12:00:06.000Z'
+        }
+      ],
+      sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      startedAt: '2026-06-12T12:00:00.000Z',
+      status: 'PASSED'
+    };
+
+    const jsonReporter = buildJsonReporterFromSession(mixedSession);
+
+    const walletSuite = jsonReporter.testResults.find(
+      (suite) =>
+        suite.name === 'WALLET_PROVIDER_BACKEND' && suite.assertionResults[0]?.meta.phase === 'WALLET_PROVIDER_BACKEND'
+    );
+    const presentationSuite = jsonReporter.testResults.find(
+      (suite) => suite.name === 'AUTHORIZE' && suite.assertionResults[0]?.meta.phase === 'PRESENTATION'
+    );
+
+    const issuanceParSuite = jsonReporter.testResults.find(
+      (suite) => suite.name === 'PAR' && suite.assertionResults[0]?.meta.phase === 'ISSUANCE'
+    );
+    expect(issuanceParSuite?.status).toBe('pending');
+    expect(issuanceParSuite?.assertionResults[0]?.meta.result).toBe('NOT_REACHED');
+
+    expect(walletSuite).toBeDefined();
+    expect(presentationSuite).toBeDefined();
+    expect(walletSuite?.assertionResults.every((assertion) => assertion.meta.phase === 'WALLET_PROVIDER_BACKEND')).toBe(
+      true
+    );
+    expect(presentationSuite?.assertionResults.every((assertion) => assertion.meta.phase === 'PRESENTATION')).toBe(
+      true
+    );
   });
 });

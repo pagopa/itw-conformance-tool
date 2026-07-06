@@ -19,6 +19,20 @@ export {
   createDecryptJweCallback,
   createEncryptJweCallback
 } from './services/callbacks.js';
+export {
+  ALLOWED_FEDERATION_JOSE_ALGORITHMS,
+  fetchSignedJwksFromUri,
+  hasCompactJwtShape,
+  hasNoPrivateJwkParams,
+  isKeySemanticallyConsistent,
+  isPublicSigningJwk,
+  isValidPublicJwks,
+  validateSignedJwksUri,
+  verifyEntityStatementWithFederationJwks,
+  type JwkLike,
+  type JwksLike,
+  type SignedJwksValidationResult
+} from './services/federation.js';
 export { generateKeyPair } from './services/keys.js';
 export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
-export { validateIACAKeyPair, validateJWKS } from './services/validate.js';
+export { validateIACAKeyPair, validateJWKS, isValidJwk } from './services/validate.js';
