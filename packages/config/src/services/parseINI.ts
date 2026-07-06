@@ -38,7 +38,6 @@ const GlobalWithoutWalletSchema = z.preprocess(
 const WalletProviderBackendUrlSchema = z
   .string()
   .min(1)
-  .url()
   .refine((value) => {
     try {
       return new URL(value).protocol === 'https:';
