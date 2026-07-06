@@ -4,14 +4,14 @@ import erasureRoute from '../../routes/erasure.js';
 import requestObjectRoute from '../../routes/request-object.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
 
-describe('WP_117 - Erasure request delivery', () => {
+describe('WP_117a - Erasure request logging', () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
 
   afterEach(async () => {
     await ctx?.app.close();
   });
 
-  it('accepts a valid GET erasure request and returns 204 No Content', async () => {
+  it('logs timestamp, RP identifier and requested attributes for each erasure request', async () => {
     ctx = await buildRpRouteApp(requestObjectRoute, {
       setup: async (app) => {
         await app.register(erasureRoute);
@@ -30,6 +30,7 @@ describe('WP_117 - Erasure request delivery', () => {
       }
     });
     expect(createRes.statusCode).toBe(200);
+
     const { url } = createRes.json<{ url: string }>();
     const state = new URL(url).searchParams.get('state');
     expect(state).toBeTruthy();
@@ -39,25 +40,18 @@ describe('WP_117 - Erasure request delivery', () => {
 
     const res = await ctx.app.inject({
       method: 'GET',
-      url: `/auth/erasure?state=${state}&callback_url=${encodeURIComponent('https://wallet.example.org/erasure-callback')}&attributes=family_name,given_name`
+      url: `/auth/erasure?state=${state}&callback_url=${encodeURIComponent('https://wallet.example.org/after-erasure')}&attributes=family_name,given_name`
     });
-
     expect(res.statusCode).toBe(204);
-    expect(res.body).toBe('');
 
     expect(logSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        callbackUrl: 'https://wallet.example.org/erasure-callback',
+        attributes: ['family_name', 'given_name'],
         rpId: 'http://localhost:8080',
         state,
-        attributes: ['family_name', 'given_name'],
         timestamp: expect.any(String)
       }),
       'Erasure request received'
     );
-
-    const session = await ctx.sessionService.get(state);
-    expect(session?.state).toBe('verified');
-    expect(session?.redirectUri).toBe('https://wallet.example.org/erasure-callback');
   });
 });

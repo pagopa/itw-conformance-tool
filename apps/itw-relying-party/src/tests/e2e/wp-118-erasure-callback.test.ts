@@ -27,7 +27,7 @@ describe('WP_118 - User redirect and callback', () => {
     await ctx?.app.close();
   });
 
-  it('returns redirect_uri on callback and exposes it via /status/:state', async () => {
+  it('returns 204 from erasure endpoint and exposes callback URL via /status/:state', async () => {
     ctx = await buildRpRouteApp(requestObjectRoute, {
       setup: async (app) => {
         await app.register(erasureRoute);
@@ -44,31 +44,17 @@ describe('WP_118 - User redirect and callback', () => {
 
     const { url } = requestObjectRes.json<{ url: string }>();
     const state = requireSearchParam(new URL(url), 'state');
+    const callbackUrl = 'https://wallet.example.org/after-erasure';
 
     const redirectRes = await ctx.app.inject({
       method: 'GET',
-      url: `/auth/erasure?state=${state}&callback_uri=${encodeURIComponent('https://wallet.example.org/erasure-callback')}`
+      url: `/auth/erasure?state=${state}&callback_url=${encodeURIComponent(callbackUrl)}`
     });
-    expect(redirectRes.statusCode).toBe(200);
-    expect(redirectRes.json<{ callback_uri: string }>().callback_uri).toContain(`state=${state}`);
-
-    const callbackRes = await ctx.app.inject({
-      method: 'POST',
-      url: '/auth/erasure/callback',
-      payload: {
-        state,
-        outcome: 'success',
-        redirect_uri: 'https://wallet.example.org/after-erasure?response_code=success'
-      }
-    });
-
-    expect(callbackRes.statusCode).toBe(200);
-    const callbackBody = callbackRes.json<{ redirect_uri: string }>();
-    expect(callbackBody.redirect_uri).toContain('after-erasure');
-    expect(callbackBody.redirect_uri).toContain('response_code=success');
+    expect(redirectRes.statusCode).toBe(204);
+    expect(redirectRes.body).toBe('');
 
     const statusRes = await ctx.app.inject({ method: 'GET', url: `/status/${state}` });
     expect(statusRes.statusCode).toBe(200);
-    expect(statusRes.json<{ redirect_uri: string }>().redirect_uri).toBe(callbackBody.redirect_uri);
+    expect(statusRes.json<{ redirect_uri: string }>().redirect_uri).toBe(`${callbackUrl}?response_code=success`);
   });
 });

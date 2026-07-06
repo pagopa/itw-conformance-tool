@@ -1,90 +1,83 @@
 import { z } from 'zod';
 
 import type { FastifyPluginAsync } from 'fastify';
-
-const erasureRequestSchema = z.object({
-  attributes: z.array(z.string().trim().min(1)).min(1),
-  callback_uri: z.string().trim().url(),
-  state: z.string().trim().uuid()
-});
-
-const erasureCallbackSchema = z.object({
-  outcome: z.enum(['rejected', 'success']),
-  redirect_uri: z.string().trim().url().optional(),
-  state: z.string().trim().uuid()
-});
+import type { FastifyReply } from 'fastify';
 
 const erasureQuerySchema = z.object({
-  callback_uri: z.string().trim().url(),
+  attributes: z.union([z.string().trim(), z.array(z.string().trim())]).optional(),
+  callback_url: z.string().trim().url(),
   state: z.string().trim().uuid()
 });
 
-function buildCallbackUri(callbackUri: string, state: string): string {
-  const callbackUrl = new URL(callbackUri);
-  callbackUrl.searchParams.set('state', state);
-  return callbackUrl.toString();
+function parseAttributes(input: string | string[] | undefined): string[] {
+  if (input === undefined) {
+    return [];
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((attribute) => attribute.trim()).filter((attribute) => attribute.length > 0);
+  }
+
+  return input
+    .split(',')
+    .map((attribute) => attribute.trim())
+    .filter((attribute) => attribute.length > 0);
+}
+
+function sendErasureError(
+  reply: FastifyReply,
+  statusCode: number,
+  error: 'bad_request' | 'unauthorized' | 'server_error' | 'temporarily_unavailable',
+  errorDescription: string
+) {
+  return reply.code(statusCode).type('application/json').send({
+    error,
+    error_description: errorDescription
+  });
 }
 
 const erasureRoute: FastifyPluginAsync = async (app) => {
   app.get('/auth/erasure', { schema: { tags: ['Relying Party'] } }, async (request, reply) => {
     const parsed = erasureQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return reply.code(400).send({ message: 'Invalid erasure redirect query' });
+      return sendErasureError(
+        reply,
+        400,
+        'bad_request',
+        'The request is malformed, missing required parameters, or includes invalid values.'
+      );
     }
 
-    const session = await app.sessionService.get(parsed.data.state);
-    if (session === undefined) {
-      return reply.code(404).send({ message: 'Session not found' });
+    try {
+      const session = await app.sessionService.get(parsed.data.state);
+      if (session === undefined) {
+        return sendErasureError(reply, 400, 'bad_request', 'The request state is invalid, expired, or unknown.');
+      }
+
+      const attributes = parseAttributes(parsed.data.attributes);
+      await app.sessionService.update(parsed.data.state, 'verified', { redirectUri: parsed.data.callback_url });
+
+      app.log.info(
+        {
+          attributes,
+          callbackUrl: parsed.data.callback_url,
+          rpId: app.config.entityId,
+          state: parsed.data.state,
+          timestamp: new Date().toISOString()
+        },
+        'Erasure request received'
+      );
+
+      return reply.code(204).send();
+    } catch (error) {
+      app.log.error({ err: error }, 'Erasure request failed');
+      return sendErasureError(
+        reply,
+        500,
+        'server_error',
+        'The request cannot be fulfilled due to an internal server error.'
+      );
     }
-
-    return reply.code(200).send({ callback_uri: buildCallbackUri(parsed.data.callback_uri, parsed.data.state) });
-  });
-
-  app.post('/auth/erasure', { schema: { tags: ['Relying Party'] } }, async (request, reply) => {
-    const parsed = erasureRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ message: 'Invalid erasure request payload' });
-    }
-
-    const session = await app.sessionService.get(parsed.data.state);
-    if (session === undefined) {
-      return reply.code(404).send({ message: 'Session not found' });
-    }
-
-    await app.sessionService.update(parsed.data.state, 'checking');
-
-    app.log.info(
-      {
-        attributes: parsed.data.attributes,
-        rpId: app.config.entityId,
-        state: parsed.data.state,
-        timestamp: new Date().toISOString()
-      },
-      'Erasure request received'
-    );
-
-    return reply.code(200).send({ callback_uri: buildCallbackUri(parsed.data.callback_uri, parsed.data.state) });
-  });
-
-  app.post('/auth/erasure/callback', { schema: { tags: ['Relying Party'] } }, async (request, reply) => {
-    const parsed = erasureCallbackSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ message: 'Invalid erasure callback payload' });
-    }
-
-    const session = await app.sessionService.get(parsed.data.state);
-    if (session === undefined) {
-      return reply.code(404).send({ message: 'Session not found' });
-    }
-
-    if (parsed.data.outcome === 'success') {
-      const redirectUri = parsed.data.redirect_uri ?? 'success.html?response_code=success';
-      await app.sessionService.update(parsed.data.state, 'verified', { redirectUri });
-      return reply.code(200).send({ redirect_uri: redirectUri });
-    }
-
-    await app.sessionService.update(parsed.data.state, 'rejected');
-    return reply.code(200).send({ redirect_uri: 'rejected-error.html?response_code=rejected' });
   });
 };
 
