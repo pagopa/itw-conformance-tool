@@ -19,6 +19,10 @@ describe('WP_116 - Federation metadata endpoint validation', () => {
       }
     });
 
+    if (!metadata) {
+      throw new Error('Expected metadata to be defined');
+    }
+
     expect(metadata.openid_credential_verifier?.erasure_endpoint).toBe('https://localhost:8080/auth/erasure');
     expect(metadata.openid_credential_verifier?.request_uris).toEqual(['https://localhost:8080/auth/request']);
     expect(metadata.openid_credential_verifier?.response_uris).toEqual(['https://localhost:8080/auth/response']);

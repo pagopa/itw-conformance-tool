@@ -41,7 +41,7 @@ describe('WP_117 - Erasure request delivery', () => {
 
     const res = await ctx.app.inject({
       method: 'GET',
-      url: `/auth/erasure?state=${state}&callback_url=${encodeURIComponent('https://wallet.example.org/erasure-callback')}&attributes=family_name,given_name`
+      url: `/auth/erasure?state=${state}&callback_url=${encodeURIComponent('https://wallet.example.org/erasure-callback')}&attributes=family_name,given_name&attributes=birth_date`
     });
 
     expect(res.statusCode).toBe(204);
@@ -52,7 +52,7 @@ describe('WP_117 - Erasure request delivery', () => {
         callbackUrl: 'https://wallet.example.org/erasure-callback',
         rpId: 'https://localhost:8080',
         state,
-        attributes: ['family_name', 'given_name'],
+        attributes: ['family_name', 'given_name', 'birth_date'],
         timestamp: expect.any(String)
       }),
       'Erasure request received'

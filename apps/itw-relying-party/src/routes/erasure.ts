@@ -15,7 +15,10 @@ function parseAttributes(input: string | string[] | undefined): string[] {
   }
 
   if (Array.isArray(input)) {
-    return input.map((attribute) => attribute.trim()).filter((attribute) => attribute.length > 0);
+    return input
+      .flatMap((attribute) => attribute.split(','))
+      .map((attribute) => attribute.trim())
+      .filter((attribute) => attribute.length > 0);
   }
 
   return input
