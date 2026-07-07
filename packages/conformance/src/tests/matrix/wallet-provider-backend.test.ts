@@ -251,27 +251,42 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   it("WP_002a - 'alg' must be allowed and not 'none'", async () => {
     const { header } = requireParsedEntityConfiguration();
-    const isValidAlg =
-      typeof header.alg === 'string' &&
-      ALLOWED_FEDERATION_JOSE_ALGORITHMS.includes(header.alg as (typeof ALLOWED_FEDERATION_JOSE_ALGORITHMS)[number]);
+    const hasAlgString = typeof header.alg === 'string';
 
-    expect(isValidAlg, `JWT header alg is missing, unsupported, or set to none`).toBe(true);
+    expect(hasAlgString, `JWT header alg must be present and be a string`).toBe(true);
+    if (!hasAlgString) {
+      return;
+    }
+
+    const isAllowedAlg = ALLOWED_FEDERATION_JOSE_ALGORITHMS.includes(
+      header.alg as (typeof ALLOWED_FEDERATION_JOSE_ALGORITHMS)[number]
+    );
+    const isNotNone = header.alg !== 'none';
+
+    expect(isAllowedAlg, `JWT header alg must be one of the allowed federation algorithms`).toBe(true);
+    expect(isNotNone, `JWT header alg must not be 'none'`).toBe(true);
   });
 
   it("WP_002b - 'kid' must equal public key thumbprint", async () => {
     const { header, payload } = requireParsedEntityConfiguration();
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks?.keys.length > 0;
     const foundJwk = payload.jwks?.keys?.find((key: Jwk) => key.kid === header.kid);
-    const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === header.kid;
+    expect(hasJwks, `Entity configuration payload must contain a non-empty jwks before checking kid`).toBe(true);
+    expect(!!foundJwk, `JWT header kid must match one of the keys in payload.jwks`).toBe(true);
+    if (!foundJwk) {
+      return;
+    }
+
+    const kidMatchesThumbprint = (await calculateJwkThumbprint(foundJwk)) === header.kid;
     const signatureVerifiedWithFederationJwks =
       hasJwks && payload.jwks
         ? await verifyEntityStatementWithFederationJwks(entityConfigResponse.body, payload.jwks)
         : false;
 
-    expect(
-      kidMatchesThumbprint && signatureVerifiedWithFederationJwks,
-      `JWT header kid must match a JWK thumbprint and verify the JWT signature`
-    ).toBe(true);
+    expect(kidMatchesThumbprint, `JWT header kid must equal the matched JWK thumbprint`).toBe(true);
+    expect(signatureVerifiedWithFederationJwks, `Entity statement signature must verify with federation jwks`).toBe(
+      true
+    );
   });
 
   it("WP_002c - 'typ' must be 'entity-statement+jwt'", async () => {
@@ -339,11 +354,15 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const { payload } = requireParsedEntityConfiguration();
     const authorityHints = payload.authority_hints;
     const hasAuthorityHints = Array.isArray(authorityHints);
-    const allValidAuthorityHints = hasAuthorityHints && authorityHints.length > 0 && authorityHints.every(isHttpsUrl);
+    expect(hasAuthorityHints, `JWT payload authority_hints must be an array`).toBe(true);
+    if (!hasAuthorityHints) {
+      return;
+    }
 
+    expect(authorityHints.length > 0, `JWT payload authority_hints must not be empty`).toBe(true);
     expect(
-      allValidAuthorityHints,
-      `JWT payload authority_hints must be a non-empty array of valid HTTPS URLs; trust-chain validation requires dedicated fixtures`
+      authorityHints.every(isHttpsUrl),
+      `JWT payload authority_hints must contain only valid HTTPS URLs; trust-chain validation requires dedicated fixtures`
     ).toBe(true);
   });
 
@@ -351,17 +370,18 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const { payload } = requireParsedEntityConfiguration();
     const jwksKeys = payload.jwks?.keys ?? [];
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks.keys.length > 0;
-    const jwksStructurallyValid = hasJwks ? await isValidPublicJwks(payload.jwks) : false;
-    const hasPublicSigningKey = jwksKeys.some((key) => isPublicSigningJwk(key));
-    const signatureVerified =
-      hasJwks && payload.jwks
-        ? await verifyEntityStatementWithFederationJwks(entityConfigResponse.body, payload.jwks)
-        : false;
+    expect(hasJwks, `JWT payload jwks must be present and non-empty`).toBe(true);
+    if (!hasJwks || !payload.jwks) {
+      return;
+    }
 
-    expect(
-      jwksStructurallyValid && hasPublicSigningKey && signatureVerified,
-      `JWT payload jwks must contain valid public signing keys and verify the entity statement signature`
-    ).toBe(true);
+    const jwksStructurallyValid = await isValidPublicJwks(payload.jwks);
+    const hasPublicSigningKey = jwksKeys.some((key) => isPublicSigningJwk(key));
+    const signatureVerified = await verifyEntityStatementWithFederationJwks(entityConfigResponse.body, payload.jwks);
+
+    expect(jwksStructurallyValid, `JWT payload jwks must be structurally valid`).toBe(true);
+    expect(hasPublicSigningKey, `JWT payload jwks must contain at least one public signing key`).toBe(true);
+    expect(signatureVerified, `JWT payload jwks must verify the entity statement signature`).toBe(true);
   });
 
   it("WP_002h - 'metadata' must contain required wallet_solution and federation_entity fields", async () => {
@@ -395,26 +415,32 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const hasWalletSolution = typeof walletSolution === 'object' && walletSolution !== null;
     const hasFederationJwks = !!federationJwks && Array.isArray(federationJwks.keys) && federationJwks.keys.length > 0;
 
-    expect(
-      hasWalletSolution && hasFederationJwks,
-      `Entity configuration must expose metadata.wallet_solution and federation jwks`
-    ).toBe(true);
+    expect(hasWalletSolution, `Entity configuration must expose metadata.wallet_solution`).toBe(true);
+    expect(hasFederationJwks, `Entity configuration must expose a non-empty federation jwks`).toBe(true);
+    if (!hasWalletSolution || !hasFederationJwks) {
+      return;
+    }
 
-    const candidateKeys =
-      hasWalletSolution && hasFederationJwks ? await resolveWalletSolutionKeys(walletSolution, federationJwks) : [];
+    const candidateKeys = await resolveWalletSolutionKeys(walletSolution, federationJwks);
 
     expect(
       candidateKeys.length > 0,
       `No wallet_solution keys could be resolved from jwks, jwks_uri, or signed_jwks_uri`
     ).toBe(true);
 
+    if (candidateKeys.length === 0) {
+      return;
+    }
+
     const allCandidateKeysValid = (await Promise.all(candidateKeys.map(isValidJwk))).every(Boolean);
     const allKeysPublic = candidateKeys.every((key: Jwk) => hasNoPrivateJwkParams(key));
     const allKeysForSigningOrEncryption = candidateKeys.every((key: Jwk) => isKeySemanticallyConsistent(key));
 
+    expect(allCandidateKeysValid, `Wallet Provider keys must be valid JWKs`).toBe(true);
+    expect(allKeysPublic, `Wallet Provider keys must not contain private JWK parameters`).toBe(true);
     expect(
-      allCandidateKeysValid && allKeysPublic && allKeysForSigningOrEncryption,
-      `Wallet Provider keys must be valid public JWKs and restricted to signing/encryption semantics`
+      allKeysForSigningOrEncryption,
+      `Wallet Provider keys must be restricted to signing/encryption semantics`
     ).toBe(true);
   });
 
@@ -426,10 +452,22 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
 
-    const count = [hasJwksRef, hasJwksUriRef, hasSignedJwksUriRef].filter(Boolean).length;
-    const exactlyOne = count === 1;
-
-    expect(exactlyOne, `Expected exactly one of metadata.wallet_solution.jwks/jwks_uri/signed_jwks_uri`).toBe(true);
+    expect(
+      hasJwksRef || hasJwksUriRef || hasSignedJwksUriRef,
+      `Expected at least one of metadata.wallet_solution.jwks/jwks_uri/signed_jwks_uri`
+    ).toBe(true);
+    expect(
+      !(hasJwksRef && hasJwksUriRef),
+      `metadata.wallet_solution.jwks and metadata.wallet_solution.jwks_uri must not both be present`
+    ).toBe(true);
+    expect(
+      !(hasJwksRef && hasSignedJwksUriRef),
+      `metadata.wallet_solution.jwks and metadata.wallet_solution.signed_jwks_uri must not both be present`
+    ).toBe(true);
+    expect(
+      !(hasJwksUriRef && hasSignedJwksUriRef),
+      `metadata.wallet_solution.jwks_uri and metadata.wallet_solution.signed_jwks_uri must not both be present`
+    ).toBe(true);
   });
 
   it('WP_004a - jwks is a valid public JWKS document when present', async () => {
@@ -454,33 +492,49 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     }
 
     const jwksUri = walletSolution?.jwks_uri;
+    const jwksUriIsString = typeof jwksUri === 'string';
+    expect(jwksUriIsString, `metadata.wallet_solution.jwks_uri must be a string when present`).toBe(true);
+    if (!jwksUriIsString) {
+      return;
+    }
+
     const jwksUriValid = isHttpsUrl(jwksUri);
+    expect(jwksUriValid, `metadata.wallet_solution.jwks_uri must be a valid HTTPS URL`).toBe(true);
+
     let jwksUriResolvable = false;
     let jsonLikeContentType = false;
     let bodyHasJwks = false;
     let allKeysValid = false;
 
-    if (jwksUriValid) {
-      try {
-        const response = await fetch(jwksUri as string, { signal: AbortSignal.timeout(5_000) });
-        jwksUriResolvable = response.status === 200;
-        jsonLikeContentType = hasJsonLikeJwksContentType(response.headers.get('content-type') ?? '');
+    try {
+      const response = await fetch(jwksUri, { signal: AbortSignal.timeout(5_000) });
+      jwksUriResolvable = response.status === 200;
+      expect(jwksUriResolvable, `metadata.wallet_solution.jwks_uri must return HTTP 200`).toBe(true);
 
-        if (jwksUriResolvable && jsonLikeContentType) {
-          const decoded = (await response.json()) as { keys?: Jwk[] };
-          const keys = decoded.keys ?? [];
-          bodyHasJwks = Array.isArray(keys) && keys.length > 0;
-          allKeysValid = bodyHasJwks && (await isValidPublicJwks(decoded));
+      jsonLikeContentType = hasJsonLikeJwksContentType(response.headers.get('content-type') ?? '');
+      expect(
+        jsonLikeContentType,
+        `metadata.wallet_solution.jwks_uri must return JSON or application/jwk-set+json`
+      ).toBe(true);
+
+      if (jwksUriResolvable && jsonLikeContentType) {
+        const decoded = (await response.json()) as { keys?: Jwk[] };
+        const keys = decoded.keys ?? [];
+        bodyHasJwks = Array.isArray(keys) && keys.length > 0;
+        expect(bodyHasJwks, `metadata.wallet_solution.jwks_uri response body must include a non-empty keys array`).toBe(
+          true
+        );
+
+        if (bodyHasJwks) {
+          allKeysValid = await isValidPublicJwks(decoded);
+          expect(allKeysValid, `metadata.wallet_solution.jwks_uri response must contain valid public JWKS keys`).toBe(
+            true
+          );
         }
-      } catch {
-        jwksUriResolvable = false;
       }
+    } catch {
+      jwksUriResolvable = false;
     }
-
-    expect(
-      jwksUriValid && jwksUriResolvable && jsonLikeContentType && bodyHasJwks && allKeysValid,
-      `metadata.wallet_solution.jwks_uri must be HTTPS, return HTTP 200 JSON/JWK-SET+JSON, and contain valid JWKS`
-    ).toBe(true);
   });
 
   it('WP_004c - signed_jwks_uri points to valid signed JWKS when present', async () => {
@@ -493,32 +547,44 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     }
 
     const signedJwksUri = walletSolution?.signed_jwks_uri;
-    const signedJwksUriString = typeof signedJwksUri === 'string' ? signedJwksUri : '';
+    const signedJwksUriIsString = typeof signedJwksUri === 'string';
+    expect(signedJwksUriIsString, `metadata.wallet_solution.signed_jwks_uri must be a string when present`).toBe(true);
+    if (!signedJwksUriIsString) {
+      return;
+    }
+
     const signedJwksUriValid = isHttpsUrl(signedJwksUri);
+    expect(signedJwksUriValid, `metadata.wallet_solution.signed_jwks_uri must be a valid HTTPS URL`).toBe(true);
+
     const hasFederationJwks = !!payload.jwks && Array.isArray(payload.jwks.keys) && payload.jwks.keys.length > 0;
-
-    const signedValidation =
-      signedJwksUriValid && hasFederationJwks && payload.jwks
-        ? await validateSignedJwksUri(signedJwksUriString, payload.jwks)
-        : {
-            uriResolvable: false,
-            contentTypeValid: false,
-            compactJwt: false,
-            payloadHasJwks: false,
-            signatureValid: false
-          };
-
-    const validSignedJwks =
-      signedJwksUriValid &&
-      signedValidation.uriResolvable &&
-      signedValidation.contentTypeValid &&
-      signedValidation.compactJwt &&
-      signedValidation.payloadHasJwks &&
-      signedValidation.signatureValid;
-
     expect(
-      validSignedJwks,
-      `metadata.wallet_solution.signed_jwks_uri must be HTTPS, return HTTP 200 application/jwk-set+jwt, include JWKS payload, and pass signature verification`
+      hasFederationJwks,
+      `Entity configuration must expose a non-empty federation jwks for signed_jwks_uri validation`
+    ).toBe(true);
+
+    if (!hasFederationJwks || !payload.jwks) {
+      return;
+    }
+
+    const signedValidation = await validateSignedJwksUri(signedJwksUri, payload.jwks);
+
+    expect(signedValidation.uriResolvable, `metadata.wallet_solution.signed_jwks_uri must resolve successfully`).toBe(
+      true
+    );
+    expect(
+      signedValidation.contentTypeValid,
+      `metadata.wallet_solution.signed_jwks_uri must return application/jwk-set+jwt`
+    ).toBe(true);
+    expect(signedValidation.compactJwt, `metadata.wallet_solution.signed_jwks_uri response must be a compact JWT`).toBe(
+      true
+    );
+    expect(
+      signedValidation.payloadHasJwks,
+      `metadata.wallet_solution.signed_jwks_uri JWT payload must include jwks`
+    ).toBe(true);
+    expect(
+      signedValidation.signatureValid,
+      `metadata.wallet_solution.signed_jwks_uri JWT signature must verify with federation jwks`
     ).toBe(true);
   });
 
