@@ -4,6 +4,7 @@ export {
   type DecryptJweCallback,
   type HashAlgorithm,
   type Jwk,
+  type JwkSet,
   type SignJwtCallback,
   type VerifyJwtCallback
 } from '@pagopa/io-wallet-oauth2';
@@ -73,10 +74,6 @@ export interface GenerateKeyMaterialResult {
   publicJwk: JwkRecord;
   privateKeyPem?: string;
   publicKeyPem?: string;
-}
-
-export interface JwkSet {
-  keys: JwkRecord[];
 }
 
 export interface KeyDescriptor {

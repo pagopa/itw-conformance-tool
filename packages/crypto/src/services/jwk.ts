@@ -4,7 +4,7 @@ import { exportJWK, generateKeyPair as joseGenerateKeyPair } from 'jose';
 
 import { generateKeyPair } from './keys.js';
 
-import type { GenerateJwksOptions, JwkDescriptor, JwkRecord, JwkSet, KeyDescriptor } from '../types/types.js';
+import type { GenerateJwksOptions, Jwk, JwkDescriptor, JwkRecord, JwkSet, KeyDescriptor } from '../types/types.js';
 
 const allOps = new Set(['sign', 'verify', 'encrypt', 'decrypt', 'deriveKey', 'deriveBits', 'wrapKey', 'unwrapKey']);
 
@@ -69,7 +69,7 @@ function validateKeyOps(use: 'sig' | 'enc', alg: string, keyOps?: string[]): voi
  * @param keys - An array of JWK records to check for unique 'kid' values.
  * @returns void
  */
-function ensureUniqueKids(keys: JwkRecord[]): void {
+function ensureUniqueKids(keys: Jwk[]): void {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
 
@@ -125,13 +125,17 @@ export async function generateJWKS(options: GenerateJwksOptions): Promise<JwkSet
         });
         const privateJwk = await exportJWK(privateKey);
 
+        if (typeof privateJwk.kty !== 'string' || privateJwk.kty.length === 0) {
+          throw new Error('Generated JWK is missing required kty');
+        }
+
         return {
           ...privateJwk,
           kid,
           use: spec.use,
           alg: spec.alg,
           key_ops: spec.keyOps ?? resolveDefaultKeyOps(spec.use, spec.alg)
-        };
+        } as Jwk;
       });
     })
   );
@@ -152,6 +156,10 @@ export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
 
   const privateJwk = privateKey.export({ format: 'jwk' });
 
+  if (typeof privateJwk.kty !== 'string' || privateJwk.kty.length === 0) {
+    throw new Error('Generated JWK is missing required kty');
+  }
+
   return {
     keys: [
       {
@@ -160,7 +168,7 @@ export function generateSigningJwks(descriptor: KeyDescriptor): JwkSet {
         alg: 'RS256',
         use: descriptor.use,
         key_ops: descriptor.use === 'sig' ? ['sign'] : ['decrypt']
-      }
+      } as Jwk
     ]
   };
 }
@@ -192,6 +200,10 @@ export function generateEcPrivateJwk(descriptor: JwkDescriptor): JwkSet {
 
   const privateJwk = privateKey.export({ format: 'jwk' });
 
+  if (typeof privateJwk.kty !== 'string' || privateJwk.kty.length === 0) {
+    throw new Error('Generated JWK is missing required kty');
+  }
+
   return {
     keys: [
       {
@@ -200,7 +212,7 @@ export function generateEcPrivateJwk(descriptor: JwkDescriptor): JwkSet {
         alg: descriptor.alg,
         use: descriptor.use,
         key_ops: descriptor.keyOps
-      }
+      } as Jwk
     ]
   };
 }

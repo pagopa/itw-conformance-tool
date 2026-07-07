@@ -29,8 +29,6 @@ export {
   isValidPublicJwks,
   validateSignedJwksUri,
   verifyEntityStatementWithFederationJwks,
-  type JwkLike,
-  type JwksLike,
   type SignedJwksValidationResult
 } from './services/federation.js';
 export { generateKeyPair } from './services/keys.js';

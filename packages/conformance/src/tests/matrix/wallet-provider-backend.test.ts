@@ -10,7 +10,9 @@ import {
   isValidJwk,
   isValidPublicJwks,
   validateSignedJwksUri,
-  verifyEntityStatementWithFederationJwks
+  verifyEntityStatementWithFederationJwks,
+  type Jwk,
+  type JwkSet
 } from '@itw-conformance-tool/crypto';
 import {
   itWalletMetadataV1_3,
@@ -23,30 +25,11 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { isHttpsUrl, normalizeUrl } from '../../utils/url.js';
 
-type JwkLike = {
-  [key: string]: unknown;
-  kty?: string;
-  kid?: string;
-  key_ops?: string[];
-  use?: string;
-};
-
-type Override<Base, Replacements> = Omit<Base, keyof Replacements> & Replacements;
-
-type EntityPayload = Override<
-  ItWalletEntityConfigurationClaims,
-  {
-    authority_hints: string[];
-    jwks?: { keys: JwkLike[] };
-    metadata: ItWalletMetadataV1_3;
-  }
->;
-
 function hasJsonLikeJwksContentType(contentType: string): boolean {
   return contentType.includes('application/json') || contentType.includes('application/jwk-set+json');
 }
 
-async function fetchJwksFromUri(jwksUri: string): Promise<JwkLike[]> {
+async function fetchJwksFromUri(jwksUri: string): Promise<Jwk[]> {
   try {
     const response = await fetch(jwksUri, { signal: AbortSignal.timeout(5_000) });
     const contentType = response.headers.get('content-type') ?? '';
@@ -54,7 +37,7 @@ async function fetchJwksFromUri(jwksUri: string): Promise<JwkLike[]> {
       return [];
     }
 
-    const body = (await response.json()) as { keys?: JwkLike[] };
+    const body = (await response.json()) as { keys?: Jwk[] };
     return Array.isArray(body.keys) ? body.keys : [];
   } catch {
     return [];
@@ -65,8 +48,8 @@ type HeaderMap = Record<string, string>;
 
 async function resolveWalletSolutionKeys(
   walletSolution: ItWalletSolutionEntityMetadataV1_3,
-  federationJwks: { keys: JwkLike[] }
-): Promise<JwkLike[]> {
+  federationJwks: JwkSet
+): Promise<Jwk[]> {
   if (Array.isArray(walletSolution.jwks?.keys) && walletSolution.jwks.keys.length > 0) {
     return walletSolution.jwks.keys;
   }
@@ -120,6 +103,13 @@ function hasExclusiveRevocationPartition(ids: string[], result: PdndRevocationRe
   });
 }
 
+function parseItWalletMetadata(
+  claims: ItWalletEntityConfigurationClaims
+): { success: true; data: ItWalletMetadataV1_3 } | { success: false } {
+  const parsed = itWalletMetadataV1_3.safeParse(claims.metadata);
+  return parsed.success ? { success: true, data: parsed.data } : { success: false };
+}
+
 type PdndRevocationResult = {
   revoked: string[];
   not_found: string[];
@@ -135,10 +125,10 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   // __ Bones values
   let jwt = {
     header: {} as Record<string, unknown>,
-    payload: {} as EntityPayload,
+    payload: {} as ItWalletEntityConfigurationClaims,
     signature: ''
   };
-  let payload = {} as EntityPayload;
+  let payload = {} as ItWalletEntityConfigurationClaims;
   let entityStatementSignatureValid = false;
 
   beforeAll(async () => {
@@ -172,7 +162,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   it('WP_002 - Entity configuration is an OpenID Federation-compliant signed JWT with all required components', async () => {
     try {
       const header = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
-      const decodedPayload = decodeJwt(entityConfigResponse.body) as EntityPayload;
+      const decodedPayload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
       const signature = entityConfigResponse.body.split('.')[2] ?? '';
 
       if (!decodedPayload.jwks || !Array.isArray(decodedPayload.jwks.keys) || decodedPayload.jwks.keys.length === 0) {
@@ -206,7 +196,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   it("WP_002b - 'kid' must equal public key thumbprint", async () => {
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks?.keys.length > 0;
-    const foundJwk = payload.jwks?.keys?.find((key: JwkLike) => key.kid === jwt.header.kid);
+    const foundJwk = payload.jwks?.keys?.find((key: Jwk) => key.kid === jwt.header.kid);
     const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === jwt.header.kid;
     const signatureVerifiedWithFederationJwks =
       hasJwks && payload.jwks
@@ -278,9 +268,9 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it("WP_002f - 'authority_hints' must be array of valid HTTPS URLs", async () => {
-    const hasAuthorityHints = Array.isArray(payload.authority_hints);
-    const allValidAuthorityHints =
-      hasAuthorityHints && payload.authority_hints.length > 0 && payload.authority_hints.every(isHttpsUrl);
+    const authorityHints = payload.authority_hints;
+    const hasAuthorityHints = Array.isArray(authorityHints);
+    const allValidAuthorityHints = hasAuthorityHints && authorityHints.length > 0 && authorityHints.every(isHttpsUrl);
 
     expect(
       allValidAuthorityHints,
@@ -312,10 +302,10 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       return;
     }
 
-    const metadata = payload.metadata;
+    const metadata = payload.metadata as Record<string, unknown>;
     const hasWalletSolution = typeof metadata.wallet_solution === 'object' && metadata.wallet_solution !== null;
     const hasFederationEntity = typeof metadata.federation_entity === 'object' && metadata.federation_entity !== null;
-    const metadataParseResult = itWalletMetadataV1_3.safeParse(metadata);
+    const metadataParseResult = itWalletMetadataV1_3.safeParse(payload.metadata);
     const schemaErrorDetails = metadataParseResult.success
       ? ''
       : metadataParseResult.error.issues
@@ -332,8 +322,9 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_003 ____
   it('WP_003 - Public keys are used exclusively for signing/encryption in Wallet Provider role', async () => {
-    const decodedPayload = decodeJwt(entityConfigResponse.body) as EntityPayload;
-    const walletSolution = decodedPayload.metadata?.wallet_solution;
+    const decodedPayload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
+    const parsedMetadata = parseItWalletMetadata(decodedPayload);
+    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const federationJwks = decodedPayload.jwks;
     const hasWalletSolution = typeof walletSolution === 'object' && walletSolution !== null;
     const hasFederationJwks = !!federationJwks && Array.isArray(federationJwks.keys) && federationJwks.keys.length > 0;
@@ -352,8 +343,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     ).toBe(true);
 
     const allCandidateKeysValid = (await Promise.all(candidateKeys.map(isValidJwk))).every(Boolean);
-    const allKeysPublic = candidateKeys.every((key: JwkLike) => hasNoPrivateJwkParams(key));
-    const allKeysForSigningOrEncryption = candidateKeys.every((key: JwkLike) => isKeySemanticallyConsistent(key));
+    const allKeysPublic = candidateKeys.every((key: Jwk) => hasNoPrivateJwkParams(key));
+    const allKeysForSigningOrEncryption = candidateKeys.every((key: Jwk) => isKeySemanticallyConsistent(key));
 
     expect(
       allCandidateKeysValid && allKeysPublic && allKeysForSigningOrEncryption,
@@ -364,19 +355,22 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   // ___ WP_004 ____
   it('WP_004 - Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri', async () => {
     try {
-      payload = decodeJwt(entityConfigResponse.body) as EntityPayload;
+      payload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
     } catch {
       throw new Error('Entity configuration is not a well-formed compact JWT for WP_004 checks');
     }
 
+    const parsedMetadata = parseItWalletMetadata(payload);
+    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     expect(
-      typeof payload.metadata?.wallet_solution === 'object' && payload.metadata.wallet_solution !== null,
+      typeof walletSolution === 'object' && walletSolution !== null,
       `metadata.wallet_solution must be present`
     ).toBe(true);
   });
 
   it('WP_004a - exactly one key reference claim is present and jwks is valid when used', async () => {
-    const walletSolution = payload.metadata.wallet_solution;
+    const parsedMetadata = parseItWalletMetadata(payload);
+    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const hasJwksRef = walletSolution?.jwks !== undefined;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
@@ -393,7 +387,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004b - jwks_uri is valid HTTPS and resolvable when present', async () => {
-    const walletSolution = payload.metadata.wallet_solution;
+    const parsedMetadata = parseItWalletMetadata(payload);
+    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
     if (!hasJwksUriRef) {
       expect(hasJwksUriRef).toBe(false);
@@ -414,7 +409,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
         jsonLikeContentType = hasJsonLikeJwksContentType(response.headers.get('content-type') ?? '');
 
         if (jwksUriResolvable && jsonLikeContentType) {
-          const decoded = (await response.json()) as { keys?: JwkLike[] };
+          const decoded = (await response.json()) as { keys?: Jwk[] };
           const keys = decoded.keys ?? [];
           bodyHasJwks = Array.isArray(keys) && keys.length > 0;
           allKeysValid = bodyHasJwks && (await isValidPublicJwks(decoded));
@@ -431,7 +426,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004c - signed_jwks_uri points to valid signed JWKS when present', async () => {
-    const walletSolution = payload.metadata.wallet_solution;
+    const parsedMetadata = parseItWalletMetadata(payload);
+    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
     if (!hasSignedJwksUriRef) {
       expect(hasSignedJwksUriRef).toBe(false);

@@ -27,9 +27,9 @@ describe('federation helpers', () => {
   });
 
   it('isKeySemanticallyConsistent validates use/key_ops consistency', () => {
-    expect(isKeySemanticallyConsistent({ use: 'sig', key_ops: ['sign', 'verify'] })).toBe(true);
-    expect(isKeySemanticallyConsistent({ use: 'sig', key_ops: ['decrypt'] })).toBe(false);
-    expect(isKeySemanticallyConsistent({ use: 'enc', key_ops: ['encrypt', 'decrypt'] })).toBe(true);
+    expect(isKeySemanticallyConsistent({ kty: 'EC', use: 'sig', key_ops: ['sign', 'verify'] })).toBe(true);
+    expect(isKeySemanticallyConsistent({ kty: 'EC', use: 'sig', key_ops: ['decrypt'] })).toBe(false);
+    expect(isKeySemanticallyConsistent({ kty: 'EC', use: 'enc', key_ops: ['encrypt', 'decrypt'] })).toBe(true);
   });
 
   it('isValidPublicJwks returns false for private-key-only jwks', async () => {

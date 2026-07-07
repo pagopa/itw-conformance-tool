@@ -2,17 +2,7 @@ import { createLocalJWKSet, decodeJwt, decodeProtectedHeader, jwtVerify } from '
 
 import { validateJWKS } from './validate.js';
 
-export type JwkLike = {
-  [key: string]: unknown;
-  kty?: string;
-  kid?: string;
-  key_ops?: string[];
-  use?: string;
-};
-
-export type JwksLike = {
-  keys: JwkLike[];
-};
+import type { Jwk, JwkSet } from '@pagopa/io-wallet-oauth2';
 
 export type SignedJwksValidationResult = {
   uriResolvable: boolean;
@@ -31,11 +21,11 @@ export function hasCompactJwtShape(value: string): boolean {
   return parts.length === 3 && parts.every((part) => part.length > 0);
 }
 
-export function hasNoPrivateJwkParams(key: JwkLike): boolean {
+export function hasNoPrivateJwkParams(key: Jwk): boolean {
   return Object.keys(key).every((prop) => !PRIVATE_JWK_PARAMS.has(prop));
 }
 
-export function isPublicSigningJwk(key: JwkLike): boolean {
+export function isPublicSigningJwk(key: Jwk): boolean {
   const useAllowsSigning = key.use === undefined || key.use === 'sig';
   const keyOpsAllowsSigning =
     key.key_ops === undefined ||
@@ -46,7 +36,7 @@ export function isPublicSigningJwk(key: JwkLike): boolean {
   return useAllowsSigning && keyOpsAllowsSigning && hasNoPrivateJwkParams(key);
 }
 
-export function isKeySemanticallyConsistent(key: JwkLike): boolean {
+export function isKeySemanticallyConsistent(key: Jwk): boolean {
   if (!Array.isArray(key.key_ops)) {
     return key.use === undefined || key.use === 'sig' || key.use === 'enc';
   }
@@ -72,7 +62,7 @@ export function isKeySemanticallyConsistent(key: JwkLike): boolean {
 
 export async function verifyEntityStatementWithFederationJwks(
   entityStatementJwt: string,
-  federationJwks: JwksLike,
+  federationJwks: JwkSet,
   algorithms: readonly string[] = ALLOWED_FEDERATION_JOSE_ALGORITHMS
 ): Promise<boolean> {
   try {
@@ -88,7 +78,7 @@ export async function verifyEntityStatementWithFederationJwks(
 export async function isValidPublicJwks(jwks: unknown): Promise<boolean> {
   try {
     await validateJWKS(jwks);
-    const keys = (jwks as { keys?: JwkLike[] })?.keys;
+    const keys = (jwks as { keys?: Jwk[] })?.keys;
     return Array.isArray(keys) && keys.every((key) => hasNoPrivateJwkParams(key));
   } catch {
     return false;
@@ -97,9 +87,9 @@ export async function isValidPublicJwks(jwks: unknown): Promise<boolean> {
 
 export async function fetchSignedJwksFromUri(
   signedJwksUri: string,
-  federationJwks: JwksLike,
+  federationJwks: JwkSet,
   timeoutMs = 5_000
-): Promise<JwkLike[]> {
+): Promise<Jwk[]> {
   try {
     const response = await fetch(signedJwksUri, { signal: AbortSignal.timeout(timeoutMs) });
     const contentType = response.headers.get('content-type') ?? '';
@@ -113,7 +103,7 @@ export async function fetchSignedJwksFromUri(
     }
 
     decodeProtectedHeader(signedJwt);
-    const decoded = decodeJwt(signedJwt) as { jwks?: { keys?: JwkLike[] } };
+    const decoded = decodeJwt(signedJwt) as { jwks?: { keys?: Jwk[] } };
     const signatureValid = await verifyEntityStatementWithFederationJwks(signedJwt, federationJwks);
 
     if (!signatureValid) {
@@ -128,7 +118,7 @@ export async function fetchSignedJwksFromUri(
 
 export async function validateSignedJwksUri(
   signedJwksUri: string,
-  federationJwks: JwksLike,
+  federationJwks: JwkSet,
   timeoutMs = 5_000
 ): Promise<SignedJwksValidationResult> {
   const result: SignedJwksValidationResult = {
