@@ -116,20 +116,29 @@ type PdndRevocationResult = {
   already_revoked: string[];
 };
 
+type ParsedEntityConfiguration = {
+  header: Record<string, unknown>;
+  payload: ItWalletEntityConfigurationClaims;
+  signature: string;
+  entityStatementSignatureValid: boolean;
+};
+
 let lastPdndRevocationResult: PdndRevocationResult | null = null;
 
 describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   let walletProviderUrl: string;
   let entityConfigResponse: { statusCode: number; body: string };
+  let parsedEntityConfiguration: ParsedEntityConfiguration | null = null;
+  let parsedEntityConfigurationError: string | null = null;
 
-  // __ Bones values
-  let jwt = {
-    header: {} as Record<string, unknown>,
-    payload: {} as ItWalletEntityConfigurationClaims,
-    signature: ''
-  };
-  let payload = {} as ItWalletEntityConfigurationClaims;
-  let entityStatementSignatureValid = false;
+  function requireParsedEntityConfiguration(): ParsedEntityConfiguration {
+    if (parsedEntityConfiguration) {
+      return parsedEntityConfiguration;
+    }
+
+    const setupErrorSuffix = parsedEntityConfigurationError ? `: ${parsedEntityConfigurationError}` : '';
+    throw new Error(`Entity configuration setup failed${setupErrorSuffix}`);
+  }
 
   beforeAll(async () => {
     const walletProviderBackendUrl = process.env.ITW_CT_WALLET_PROVIDER_BACKEND_URL?.trim();
@@ -146,6 +155,38 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       entityConfigResponse = { statusCode: rawResponse.status, body: await rawResponse.text() };
     } catch {
       entityConfigResponse = { statusCode: 0, body: '' };
+      parsedEntityConfigurationError = 'Failed to fetch entity configuration';
+      return;
+    }
+
+    if (!hasCompactJwtShape(entityConfigResponse.body)) {
+      parsedEntityConfigurationError = 'Entity configuration response is not a compact JWT';
+      return;
+    }
+
+    try {
+      const header = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
+      const payload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
+      const signature = entityConfigResponse.body.split('.')[2] ?? '';
+
+      if (!payload.jwks || !Array.isArray(payload.jwks.keys) || payload.jwks.keys.length === 0) {
+        parsedEntityConfigurationError = 'Entity configuration payload jwks is missing or empty';
+        return;
+      }
+
+      const entityStatementSignatureValid = await verifyEntityStatementWithFederationJwks(
+        entityConfigResponse.body,
+        payload.jwks
+      );
+
+      parsedEntityConfiguration = {
+        header,
+        payload,
+        signature,
+        entityStatementSignatureValid
+      };
+    } catch (error: unknown) {
+      parsedEntityConfigurationError = error instanceof Error ? error.message : 'Entity configuration decode failed';
     }
   });
 
@@ -160,44 +201,36 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_002 ____
   it('WP_002 - Entity configuration is an OpenID Federation-compliant signed JWT with all required components', async () => {
-    try {
-      const header = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
-      const decodedPayload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
-      const signature = entityConfigResponse.body.split('.')[2] ?? '';
+    expect(
+      parsedEntityConfigurationError,
+      `Entity configuration must be decodable and include jwks for WP_002 prerequisites`
+    ).toBeNull();
 
-      if (!decodedPayload.jwks || !Array.isArray(decodedPayload.jwks.keys) || decodedPayload.jwks.keys.length === 0) {
-        throw new Error('Entity configuration payload jwks is missing or empty');
-      }
-
-      entityStatementSignatureValid = await verifyEntityStatementWithFederationJwks(
-        entityConfigResponse.body,
-        decodedPayload.jwks
-      );
-
-      jwt = { header, payload: decodedPayload, signature };
-      payload = decodedPayload;
-    } catch (error: unknown) {
-      const details = error instanceof Error && error.message.length > 0 ? `: ${error.message}` : '';
-      throw new Error(`Entity configuration validation failed${details}`, { cause: error });
+    if (!parsedEntityConfiguration) {
+      const validationErrorSuffix = parsedEntityConfigurationError ? `: ${parsedEntityConfigurationError}` : '';
+      throw new Error(`Entity configuration validation failed${validationErrorSuffix}`);
     }
 
-    expect(entityStatementSignatureValid, `Entity configuration JWT signature is invalid`).toBe(true);
+    expect(
+      parsedEntityConfiguration.entityStatementSignatureValid,
+      `Entity configuration JWT signature is invalid`
+    ).toBe(true);
   });
 
   it("WP_002a - 'alg' must be allowed and not 'none'", async () => {
+    const { header } = requireParsedEntityConfiguration();
     const isValidAlg =
-      typeof jwt.header.alg === 'string' &&
-      ALLOWED_FEDERATION_JOSE_ALGORITHMS.includes(
-        jwt.header.alg as (typeof ALLOWED_FEDERATION_JOSE_ALGORITHMS)[number]
-      );
+      typeof header.alg === 'string' &&
+      ALLOWED_FEDERATION_JOSE_ALGORITHMS.includes(header.alg as (typeof ALLOWED_FEDERATION_JOSE_ALGORITHMS)[number]);
 
     expect(isValidAlg, `JWT header alg is missing, unsupported, or set to none`).toBe(true);
   });
 
   it("WP_002b - 'kid' must equal public key thumbprint", async () => {
+    const { header, payload } = requireParsedEntityConfiguration();
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks?.keys.length > 0;
-    const foundJwk = payload.jwks?.keys?.find((key: Jwk) => key.kid === jwt.header.kid);
-    const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === jwt.header.kid;
+    const foundJwk = payload.jwks?.keys?.find((key: Jwk) => key.kid === header.kid);
+    const kidMatchesThumbprint = !!foundJwk && (await calculateJwkThumbprint(foundJwk)) === header.kid;
     const signatureVerifiedWithFederationJwks =
       hasJwks && payload.jwks
         ? await verifyEntityStatementWithFederationJwks(entityConfigResponse.body, payload.jwks)
@@ -210,12 +243,14 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it("WP_002c - 'typ' must be 'entity-statement+jwt'", async () => {
-    const isValidTyp = jwt.header.typ === 'entity-statement+jwt';
+    const { header } = requireParsedEntityConfiguration();
+    const isValidTyp = header.typ === 'entity-statement+jwt';
 
     expect(isValidTyp, `JWT header typ is missing or incorrect`).toBe(true);
   });
 
   it("WP_002d - 'iss' and 'sub' must be equal and valid HTTPS URLs", async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const hasIssuerString = typeof payload.iss === 'string';
     const hasSubjectString = typeof payload.sub === 'string';
 
@@ -251,6 +286,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it("WP_002e - 'iat' and 'exp' must be valid Unix timestamps and not expired", async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const clockSkewToleranceSeconds = 120;
     const nowUnix = Math.floor(Date.now() / 1000);
     const isValidIat = typeof payload.iat === 'number' && Number.isInteger(payload.iat) && payload.iat > 0;
@@ -268,6 +304,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it("WP_002f - 'authority_hints' must be array of valid HTTPS URLs", async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const authorityHints = payload.authority_hints;
     const hasAuthorityHints = Array.isArray(authorityHints);
     const allValidAuthorityHints = hasAuthorityHints && authorityHints.length > 0 && authorityHints.every(isHttpsUrl);
@@ -279,6 +316,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it("WP_002g - 'jwks' must contain valid JWK signing keys", async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const jwksKeys = payload.jwks?.keys ?? [];
     const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks.keys.length > 0;
     const jwksStructurallyValid = hasJwks ? await isValidPublicJwks(payload.jwks) : false;
@@ -295,6 +333,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it("WP_002h - 'metadata' must contain required wallet_solution and federation_entity fields", async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const metadataValid = typeof payload.metadata === 'object' && payload.metadata !== null;
 
     expect(metadataValid, `JWT payload metadata must be present and be an object`).toBe(true);
@@ -322,10 +361,10 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_003 ____
   it('WP_003 - Public keys are used exclusively for signing/encryption in Wallet Provider role', async () => {
-    const decodedPayload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
-    const parsedMetadata = parseItWalletMetadata(decodedPayload);
+    const { payload } = requireParsedEntityConfiguration();
+    const parsedMetadata = parseItWalletMetadata(payload);
     const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
-    const federationJwks = decodedPayload.jwks;
+    const federationJwks = payload.jwks;
     const hasWalletSolution = typeof walletSolution === 'object' && walletSolution !== null;
     const hasFederationJwks = !!federationJwks && Array.isArray(federationJwks.keys) && federationJwks.keys.length > 0;
 
@@ -354,12 +393,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_004 ____
   it('WP_004 - Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri', async () => {
-    try {
-      payload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
-    } catch {
-      throw new Error('Entity configuration is not a well-formed compact JWT for WP_004 checks');
-    }
-
+    const { payload } = requireParsedEntityConfiguration();
     const parsedMetadata = parseItWalletMetadata(payload);
     const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     expect(
@@ -369,6 +403,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004a - exactly one key reference claim is present and jwks is valid when used', async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const parsedMetadata = parseItWalletMetadata(payload);
     const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const hasJwksRef = walletSolution?.jwks !== undefined;
@@ -387,6 +422,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004b - jwks_uri is valid HTTPS and resolvable when present', async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const parsedMetadata = parseItWalletMetadata(payload);
     const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
@@ -426,6 +462,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004c - signed_jwks_uri points to valid signed JWKS when present', async () => {
+    const { payload } = requireParsedEntityConfiguration();
     const parsedMetadata = parseItWalletMetadata(payload);
     const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
