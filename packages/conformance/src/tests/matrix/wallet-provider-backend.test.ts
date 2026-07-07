@@ -77,6 +77,27 @@ function hasProblemJsonContentType(contentType: string): boolean {
   return contentType.includes('application/problem+json');
 }
 
+function buildPdndRevocationHeaders(body: string): HeaderMap {
+  const digest = buildSha256DigestHeader(body);
+  const configuredAgidJwtSignature = process.env.ITW_CT_PDND_AGID_JWT_SIGNATURE?.trim();
+  const configuredAuthorization = process.env.ITW_CT_PDND_AUTHORIZATION?.trim();
+  const configuredDpop = process.env.ITW_CT_PDND_DPOP?.trim();
+  const headers: HeaderMap = {
+    'Content-Type': 'application/merge-patch+json',
+    Digest: digest,
+    'Agid-JWT-Signature': configuredAgidJwtSignature ?? 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.dGVzdA.dGVzdA'
+  };
+
+  if (configuredAuthorization && configuredAuthorization.length > 0) {
+    headers.Authorization = configuredAuthorization;
+  }
+  if (configuredDpop && configuredDpop.length > 0) {
+    headers.DPoP = configuredDpop;
+  }
+
+  return headers;
+}
+
 function parseJsonObject(text: string, context: string): Record<string, unknown> {
   let parsed: unknown;
   try {
@@ -103,13 +124,6 @@ function hasExclusiveRevocationPartition(ids: string[], result: PdndRevocationRe
   });
 }
 
-function parseItWalletMetadata(
-  claims: ItWalletEntityConfigurationClaims
-): { success: true; data: ItWalletMetadataV1_3 } | { success: false } {
-  const parsed = itWalletMetadataV1_3.safeParse(claims.metadata);
-  return parsed.success ? { success: true, data: parsed.data } : { success: false };
-}
-
 type PdndRevocationResult = {
   revoked: string[];
   not_found: string[];
@@ -119,7 +133,6 @@ type PdndRevocationResult = {
 type ParsedEntityConfiguration = {
   header: Record<string, unknown>;
   payload: ItWalletEntityConfigurationClaims;
-  signature: string;
   entityStatementSignatureValid: boolean;
 };
 
@@ -130,6 +143,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   let entityConfigResponse: { statusCode: number; body: string };
   let parsedEntityConfiguration: ParsedEntityConfiguration | null = null;
   let parsedEntityConfigurationError: string | null = null;
+  let parsedWalletMetadata: ItWalletMetadataV1_3 | null = null;
+  let parsedWalletMetadataError: string | null = null;
 
   function requireParsedEntityConfiguration(): ParsedEntityConfiguration {
     if (parsedEntityConfiguration) {
@@ -138,6 +153,16 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
     const setupErrorSuffix = parsedEntityConfigurationError ? `: ${parsedEntityConfigurationError}` : '';
     throw new Error(`Entity configuration setup failed${setupErrorSuffix}`);
+  }
+
+  function requireParsedWalletMetadata(): ItWalletMetadataV1_3 {
+    requireParsedEntityConfiguration();
+    if (parsedWalletMetadata) {
+      return parsedWalletMetadata;
+    }
+
+    const metadataErrorSuffix = parsedWalletMetadataError ? `: ${parsedWalletMetadataError}` : '';
+    throw new Error(`Entity configuration metadata validation failed${metadataErrorSuffix}`);
   }
 
   beforeAll(async () => {
@@ -167,7 +192,6 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     try {
       const header = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
       const payload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
-      const signature = entityConfigResponse.body.split('.')[2] ?? '';
 
       if (!payload.jwks || !Array.isArray(payload.jwks.keys) || payload.jwks.keys.length === 0) {
         parsedEntityConfigurationError = 'Entity configuration payload jwks is missing or empty';
@@ -182,9 +206,17 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       parsedEntityConfiguration = {
         header,
         payload,
-        signature,
         entityStatementSignatureValid
       };
+
+      const metadataParseResult = itWalletMetadataV1_3.safeParse(payload.metadata);
+      if (metadataParseResult.success) {
+        parsedWalletMetadata = metadataParseResult.data;
+      } else {
+        parsedWalletMetadataError = metadataParseResult.error.issues
+          .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+          .join('; ');
+      }
     } catch (error: unknown) {
       parsedEntityConfigurationError = error instanceof Error ? error.message : 'Entity configuration decode failed';
     }
@@ -344,26 +376,21 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const metadata = payload.metadata as Record<string, unknown>;
     const hasWalletSolution = typeof metadata.wallet_solution === 'object' && metadata.wallet_solution !== null;
     const hasFederationEntity = typeof metadata.federation_entity === 'object' && metadata.federation_entity !== null;
-    const metadataParseResult = itWalletMetadataV1_3.safeParse(payload.metadata);
-    const schemaErrorDetails = metadataParseResult.success
-      ? ''
-      : metadataParseResult.error.issues
-          .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
-          .join('; ');
+    const schemaErrorDetails = parsedWalletMetadataError ?? '';
     const metadataSchemaErrorMessage =
       'JWT payload metadata must be valid against io-wallet-sdk schemas' +
       (schemaErrorDetails.length > 0 ? `: ${schemaErrorDetails}` : '');
 
     expect(hasWalletSolution, `JWT payload metadata.wallet_solution must be present and be an object`).toBe(true);
     expect(hasFederationEntity, `JWT payload metadata.federation_entity must be present and be an object`).toBe(true);
-    expect(metadataParseResult.success, metadataSchemaErrorMessage).toBe(true);
+    expect(!!parsedWalletMetadata, metadataSchemaErrorMessage).toBe(true);
   });
 
   // ___ WP_003 ____
   it('WP_003 - Public keys are used exclusively for signing/encryption in Wallet Provider role', async () => {
     const { payload } = requireParsedEntityConfiguration();
-    const parsedMetadata = parseItWalletMetadata(payload);
-    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
+    const walletMetadata = requireParsedWalletMetadata();
+    const walletSolution = walletMetadata.wallet_solution;
     const federationJwks = payload.jwks;
     const hasWalletSolution = typeof walletSolution === 'object' && walletSolution !== null;
     const hasFederationJwks = !!federationJwks && Array.isArray(federationJwks.keys) && federationJwks.keys.length > 0;
@@ -393,19 +420,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_004 ____
   it('WP_004 - Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri', async () => {
-    const { payload } = requireParsedEntityConfiguration();
-    const parsedMetadata = parseItWalletMetadata(payload);
-    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
-    expect(
-      typeof walletSolution === 'object' && walletSolution !== null,
-      `metadata.wallet_solution must be present`
-    ).toBe(true);
-  });
-
-  it('WP_004a - exactly one key reference claim is present and jwks is valid when used', async () => {
-    const { payload } = requireParsedEntityConfiguration();
-    const parsedMetadata = parseItWalletMetadata(payload);
-    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
+    const walletMetadata = requireParsedWalletMetadata();
+    const walletSolution = walletMetadata.wallet_solution;
     const hasJwksRef = walletSolution?.jwks !== undefined;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
@@ -413,21 +429,27 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const count = [hasJwksRef, hasJwksUriRef, hasSignedJwksUriRef].filter(Boolean).length;
     const exactlyOne = count === 1;
 
-    const jwksValid = !hasJwksRef || (await isValidPublicJwks(walletSolution?.jwks));
+    expect(exactlyOne, `Expected exactly one of metadata.wallet_solution.jwks/jwks_uri/signed_jwks_uri`).toBe(true);
+  });
 
-    expect(
-      exactlyOne && jwksValid,
-      `Expected exactly one of metadata.wallet_solution.jwks/jwks_uri/signed_jwks_uri and valid public jwks when present`
-    ).toBe(true);
+  it('WP_004a - jwks is a valid public JWKS document when present', async () => {
+    const walletMetadata = requireParsedWalletMetadata();
+    const walletSolution = walletMetadata.wallet_solution;
+    const hasJwksRef = walletSolution?.jwks !== undefined;
+    if (!hasJwksRef) {
+      return;
+    }
+
+    const jwksValid = await isValidPublicJwks(walletSolution.jwks);
+
+    expect(jwksValid, `metadata.wallet_solution.jwks must be a valid public JWKS document`).toBe(true);
   });
 
   it('WP_004b - jwks_uri is valid HTTPS and resolvable when present', async () => {
-    const { payload } = requireParsedEntityConfiguration();
-    const parsedMetadata = parseItWalletMetadata(payload);
-    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
+    const walletMetadata = requireParsedWalletMetadata();
+    const walletSolution = walletMetadata.wallet_solution;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
     if (!hasJwksUriRef) {
-      expect(hasJwksUriRef).toBe(false);
       return;
     }
 
@@ -463,11 +485,10 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   it('WP_004c - signed_jwks_uri points to valid signed JWKS when present', async () => {
     const { payload } = requireParsedEntityConfiguration();
-    const parsedMetadata = parseItWalletMetadata(payload);
-    const walletSolution = parsedMetadata.success ? parsedMetadata.data.wallet_solution : undefined;
+    const walletMetadata = requireParsedWalletMetadata();
+    const walletSolution = walletMetadata.wallet_solution;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
     if (!hasSignedJwksUriRef) {
-      expect(hasSignedJwksUriRef).toBe(false);
       return;
     }
 
@@ -506,21 +527,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     const walletInstanceIds = ['itw-conformance-test-wallet-instance-id'];
     const revocationEndpoint = `${walletProviderUrl}/wallet-instances`;
     const body = JSON.stringify({ wallet_instance_ids: walletInstanceIds });
-    const digest = buildSha256DigestHeader(body);
-    const configuredAgidJwtSignature = process.env.ITW_CT_PDND_AGID_JWT_SIGNATURE?.trim();
-    const configuredAuthorization = process.env.ITW_CT_PDND_AUTHORIZATION?.trim();
-    const configuredDpop = process.env.ITW_CT_PDND_DPOP?.trim();
-    const headers: HeaderMap = {
-      'Content-Type': 'application/merge-patch+json',
-      Digest: digest,
-      'Agid-JWT-Signature': configuredAgidJwtSignature ?? 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.dGVzdA.dGVzdA'
-    };
-    if (configuredAuthorization && configuredAuthorization.length > 0) {
-      headers.Authorization = configuredAuthorization;
-    }
-    if (configuredDpop && configuredDpop.length > 0) {
-      headers.DPoP = configuredDpop;
-    }
+    const headers = buildPdndRevocationHeaders(body);
 
     let revocationResponse: Response;
     try {
@@ -611,43 +618,79 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   // ___ WP_010 ____
   it('WP_010 - Wallet instance revocation terminates all instance operations', async () => {
     const candidateId =
-      lastPdndRevocationResult?.revoked?.[0] ??
-      lastPdndRevocationResult?.already_revoked?.[0] ??
-      'itw-conformance-test-wallet-instance-id';
+      lastPdndRevocationResult?.revoked?.[0] ?? lastPdndRevocationResult?.already_revoked?.[0] ?? null;
 
-    const revocationEndpoint = `${walletProviderUrl}/wallet-instances/${encodeURIComponent(candidateId)}`;
-
-    const revokeResponse = await fetch(revocationEndpoint, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'REVOKED' }),
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(10_000)
-    });
-
-    const revocationAcknowledged = [200, 202, 204].includes(revokeResponse.status);
-
-    let followupStatus = 0;
-    try {
-      const followupResponse = await fetch(`${walletProviderUrl}/verify-credential`, {
-        method: 'POST',
-        body: JSON.stringify({
-          instance_id: candidateId,
-          operation: 'verify_credential',
-          data: {}
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(10_000)
-      });
-      followupStatus = followupResponse.status;
-    } catch {
-      followupStatus = 0;
+    expect(candidateId, `WP_010 prerequisite failed: no wallet_instance_id available from WP_008`).toBeTruthy();
+    if (!candidateId) {
+      return;
     }
 
-    const followupOperationBlocked = [401, 403, 404, 410].includes(followupStatus);
+    const revocationEndpoint = `${walletProviderUrl}/wallet-instances`;
+    const body = JSON.stringify({ wallet_instance_ids: [candidateId] });
+    const headers = buildPdndRevocationHeaders(body);
+
+    let followupResponse: Response;
+    try {
+      followupResponse = await fetch(revocationEndpoint, {
+        method: 'PATCH',
+        body,
+        headers,
+        signal: AbortSignal.timeout(10_000)
+      });
+    } catch (error: unknown) {
+      throw new Error(`Failed to call PDND revocation endpoint PATCH ${revocationEndpoint}`, { cause: error });
+    }
+
+    const followupStatus = followupResponse.status;
+    const followupContentType = followupResponse.headers.get('content-type') ?? '';
+    const followupText = await followupResponse.text();
+
+    expect(followupStatus, `WP_010 requires follow-up revocation to return HTTP 207`).toBe(207);
+    if (followupStatus !== 207) {
+      const hasProblemContentType = hasProblemJsonContentType(followupContentType);
+      expect(hasProblemContentType, `Non-207 response must use application/problem+json content type`).toBe(true);
+      throw new Error(
+        `WP_010 requires a successful authorized follow-up revocation flow (HTTP 207); received ${followupStatus}. Configure valid PDND credentials (e.g. ITW_CT_PDND_AGID_JWT_SIGNATURE/ITW_CT_PDND_AUTHORIZATION/ITW_CT_PDND_DPOP).`
+      );
+    }
 
     expect(
-      revocationAcknowledged && followupOperationBlocked,
-      `Revoked Wallet Instance must be terminated and blocked from further operations. Revocation status ${revokeResponse.status}, post-revocation status ${followupStatus}`
+      followupContentType.includes('application/json'),
+      `207 response must use application/json content type`
+    ).toBe(true);
+
+    const parsed = parseJsonObject(followupText, 'PDND revocation follow-up 207 response');
+    const result = parsed.result as Record<string, unknown> | undefined;
+    const hasExpectedResultShape =
+      typeof parsed.result_description === 'string' &&
+      !!result &&
+      Array.isArray(result.revoked) &&
+      Array.isArray(result.not_found) &&
+      Array.isArray(result.already_revoked);
+
+    expect(
+      hasExpectedResultShape,
+      `207 follow-up response must include result_description and result.{revoked,not_found,already_revoked} arrays`
+    ).toBe(true);
+    if (!hasExpectedResultShape) {
+      return;
+    }
+
+    const followupResult: PdndRevocationResult = {
+      revoked: result.revoked as string[],
+      not_found: result.not_found as string[],
+      already_revoked: result.already_revoked as string[]
+    };
+
+    expect(
+      hasExclusiveRevocationPartition([candidateId], followupResult),
+      `Follow-up response must classify wallet_instance_id in exactly one of revoked/not_found/already_revoked`
+    ).toBe(true);
+
+    const isAlreadyRevoked = followupResult.already_revoked.includes(candidateId);
+    expect(
+      isAlreadyRevoked,
+      `Revoked Wallet Instance must be reported as already_revoked on follow-up revocation request`
     ).toBe(true);
   });
 });
