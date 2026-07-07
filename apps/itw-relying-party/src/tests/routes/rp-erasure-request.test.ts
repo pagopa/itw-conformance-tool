@@ -4,7 +4,7 @@ import erasureRoute from '../../routes/erasure.js';
 import requestObjectRoute from '../../routes/request-object.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
 
-describe('WP_117 - Erasure request delivery', () => {
+describe('RP local - Erasure request delivery', () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
 
   afterEach(async () => {

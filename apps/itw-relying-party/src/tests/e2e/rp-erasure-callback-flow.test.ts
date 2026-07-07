@@ -20,7 +20,7 @@ function requireSearchParam(url: URL, name: string): string {
   return value;
 }
 
-describe('WP_118 - User redirect and callback', () => {
+describe('RP local - User redirect and callback flow', () => {
   let ctx: Awaited<ReturnType<typeof buildRpRouteApp>>;
 
   afterEach(async () => {

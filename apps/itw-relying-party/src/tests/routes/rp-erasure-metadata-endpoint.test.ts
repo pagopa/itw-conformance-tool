@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildEntityConfigurationMetadata } from '../../federation/entity-configuration.js';
 
-describe('WP_116 - Federation metadata endpoint validation', () => {
+describe('RP local - Federation metadata exposes erasure endpoint', () => {
   it('builds verifier metadata containing a valid erasure endpoint', () => {
     const metadata = buildEntityConfigurationMetadata({
       entityId: 'https://localhost:8080',
