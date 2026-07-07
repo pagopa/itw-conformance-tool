@@ -1,14 +1,59 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
+import { request as httpsRequest } from 'node:https';
 
 import { CompactEncrypt, SignJWT, decodeJwt, decodeProtectedHeader, importJWK, importPKCS8 } from 'jose';
-import { Agent, fetch as localFetch } from 'undici';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 type JwkKey = Record<string, unknown>;
 
-const ALLOWED_JAR_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512', 'RS256', 'RS384', 'RS512'];
+type InsecureResponse = {
+  ok: boolean;
+  status: number;
+  headers: { get(name: string): string | null };
+  json(): Promise<unknown>;
+  text(): Promise<string>;
+};
 
-const insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
+function insecureFetch(
+  url: string,
+  init?: { body?: string; headers?: Record<string, string>; method?: string; signal?: AbortSignal }
+): Promise<InsecureResponse> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = httpsRequest(
+      {
+        headers: init?.headers,
+        hostname: parsed.hostname,
+        method: init?.method ?? 'GET',
+        path: parsed.pathname + parsed.search,
+        port: parsed.port || 443,
+        rejectUnauthorized: false
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf-8');
+          const status = res.statusCode ?? 0;
+          resolve({
+            headers: { get: (name) => (res.headers[name.toLowerCase()] as string | undefined) ?? null },
+            json: async () => JSON.parse(text) as unknown,
+            ok: status >= 200 && status < 300,
+            status,
+            text: async () => text
+          });
+        });
+        res.on('error', reject);
+      }
+    );
+    req.on('error', reject);
+    init?.signal?.addEventListener('abort', () => req.destroy());
+    if (init?.body) req.write(init.body);
+    req.end();
+  });
+}
+
+const ALLOWED_JAR_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512', 'RS256', 'RS384', 'RS512'];
 
 async function buildAuthResponseJwe({
   clientId,
@@ -88,12 +133,11 @@ describe.sequential('Relying Party Presentation', () => {
     }
     rpBaseUrl = rawUrl.replace(/\/$/, '');
 
-    const reqObjRes = await localFetch(`${rpBaseUrl}/request-object`, {
+    const reqObjRes = await insecureFetch(`${rpBaseUrl}/request-object`, {
       body: JSON.stringify({
         dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
         flow_type: 'cross-device'
       }),
-      dispatcher: insecureAgent,
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000)
@@ -107,8 +151,7 @@ describe.sequential('Relying Party Presentation', () => {
     walletUrl = body.url;
     state = new URL(walletUrl).searchParams.get('state') ?? '';
 
-    const authReqRes = await localFetch(`${rpBaseUrl}/auth/request/${state}`, {
-      dispatcher: insecureAgent,
+    const authReqRes = await insecureFetch(`${rpBaseUrl}/auth/request/${state}`, {
       signal: AbortSignal.timeout(10_000)
     });
 
@@ -145,9 +188,8 @@ describe.sequential('Relying Party Presentation', () => {
         const responseUri =
           typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
 
-        const authRes = await localFetch(responseUri, {
+        const authRes = await insecureFetch(responseUri, {
           body: new URLSearchParams({ response: jwe }).toString(),
-          dispatcher: insecureAgent,
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           method: 'POST',
           signal: AbortSignal.timeout(10_000)
@@ -274,12 +316,11 @@ describe.sequential('Relying Party Presentation', () => {
   });
 
   it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-114 - POST /auth/response with invalid JWE returns an HTTP 4xx error response', async () => {
-    const reqRes = await localFetch(`${rpBaseUrl}/request-object`, {
+    const reqRes = await insecureFetch(`${rpBaseUrl}/request-object`, {
       body: JSON.stringify({
         dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
         flow_type: 'cross-device'
       }),
-      dispatcher: insecureAgent,
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000)
@@ -289,25 +330,13 @@ describe.sequential('Relying Party Presentation', () => {
     const { url: freshUrl } = (await reqRes.json()) as { url: string };
     const freshState = new URL(freshUrl).searchParams.get('state') ?? '';
 
-    const jarRes = await localFetch(`${rpBaseUrl}/auth/request/${freshState}`, {
-      dispatcher: insecureAgent,
-      signal: AbortSignal.timeout(10_000)
-    });
+    await insecureFetch(`${rpBaseUrl}/auth/request/${freshState}`, { signal: AbortSignal.timeout(10_000) });
 
-    const jarJwt = await jarRes.text();
+    const responseUri =
+      typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
 
-    let responseUri = `${rpBaseUrl}/auth/response`;
-    try {
-      const jar = decodeJwt(jarJwt) as Record<string, unknown>;
-      if (typeof jar.response_uri === 'string') {
-        responseUri = jar.response_uri;
-      }
-    } catch {
-      // ignore decode errors; fall back to default response endpoint
-    }
-    const errRes = await localFetch(responseUri, {
+    const errRes = await insecureFetch(responseUri, {
       body: new URLSearchParams({ response: 'not.a.valid.jwe.value' }).toString(),
-      dispatcher: insecureAgent,
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000)

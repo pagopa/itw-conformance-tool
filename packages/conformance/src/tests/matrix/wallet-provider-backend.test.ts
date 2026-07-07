@@ -41,7 +41,18 @@ type EntityPayload = {
   [key: string]: unknown;
 };
 
-const ALLOWED_JOSE_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512', 'RS256', 'RS384', 'RS512', 'EdDSA'] as const;
+const ALLOWED_JOSE_ALGORITHMS = [
+  'ES256',
+  'ES384',
+  'ES512',
+  'PS256',
+  'PS384',
+  'PS512',
+  'RS256',
+  'RS384',
+  'RS512',
+  'EdDSA'
+] as const;
 
 const PRIVATE_JWK_PARAMS = new Set(['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth', 'k']);
 

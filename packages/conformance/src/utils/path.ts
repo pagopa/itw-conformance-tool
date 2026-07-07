@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
  * @returns The resolved path.
  */
 export function expandPath(inputPath: string): string {
-  let path = inputPath.trim().replace(/^['"`]+|['"`]+$/g, '');
+  const path = inputPath.trim().replace(/^['"`]+|['"`]+$/g, '');
 
   if (path === '~') {
     return homedir();
