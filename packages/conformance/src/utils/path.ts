@@ -1,4 +1,5 @@
-import { isAbsolute, join } from 'node:path';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 
 /** Utility function to resolve a file path, expanding the tilde (~)
  * to the user's home directory and resolving relative paths.
@@ -6,16 +7,16 @@ import { isAbsolute, join } from 'node:path';
  * @param path - The path to resolve.
  * @returns The resolved path.
  */
-export function expandPath(path: string): string {
-  path = path.replace(/"'`+/g, '').trim();
+export function expandPath(inputPath: string): string {
+  let path = inputPath.trim().replace(/^['"`]+|['"`]+$/g, '');
 
-  if (path.startsWith('~')) {
-    path = path.replace('~', process.cwd());
+  if (path === '~') {
+    return homedir();
   }
 
-  if (!isAbsolute(path)) {
-    return join(path);
+  if (path.startsWith('~/')) {
+    return resolve(homedir(), path.slice(2));
   }
 
-  return join(path);
+  return resolve(path);
 }
