@@ -96,7 +96,7 @@ function parseIsoTimestamp(value: string | undefined, fallback: number): number 
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-function getSessionPhases(session: ConformanceSession): ConformancePhase[] {
+function getSessionPhases(_session: ConformanceSession): ConformancePhase[] {
   const allPhases: ConformancePhase[] = ['ISSUANCE', 'PRESENTATION', 'WALLET_PROVIDER_BACKEND'];
   return allPhases;
 }
