@@ -7,7 +7,7 @@ const erasureQuerySchema = z.object({
   attributes: z.union([z.string().trim(), z.array(z.string().trim())]).optional(),
   callback_url: z.string().trim().url(),
   state: z.string().trim().uuid()
-});
+}).strict();
 
 function parseAttributes(input: string | string[] | undefined): string[] {
   if (input === undefined) {
@@ -58,7 +58,21 @@ const erasureRoute: FastifyPluginAsync = async (app) => {
       }
 
       const attributes = parseAttributes(parsed.data.attributes);
-      await app.sessionService.update(parsed.data.state, 'verified', { redirectUri: parsed.data.callback_url });
+      if (session.state === 'verified') {
+        const ttlMs = Math.max(session.expiresAt - Date.now(), 1);
+        await app.sessionService.delete(parsed.data.state);
+        await app.sessionService.create({
+          id: session.id,
+          jwt: session.jwt,
+          flowType: session.flowType,
+          ttlMs
+        });
+      }
+
+      await app.sessionService.update(parsed.data.state, 'verified', {
+        redirectUri: parsed.data.callback_url,
+        values: null
+      });
 
       app.log.info(
         {
