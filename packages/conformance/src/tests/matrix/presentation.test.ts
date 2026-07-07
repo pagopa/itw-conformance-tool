@@ -289,14 +289,22 @@ describe.sequential('Relying Party Presentation', () => {
     const { url: freshUrl } = (await reqRes.json()) as { url: string };
     const freshState = new URL(freshUrl).searchParams.get('state') ?? '';
 
-    await localFetch(`${rpBaseUrl}/auth/request/${freshState}`, {
+    const jarRes = await localFetch(`${rpBaseUrl}/auth/request/${freshState}`, {
       dispatcher: insecureAgent,
       signal: AbortSignal.timeout(10_000)
     });
 
-    const responseUri =
-      typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
+    const jarJwt = await jarRes.text();
 
+    let responseUri = `${rpBaseUrl}/auth/response`;
+    try {
+      const jar = decodeJwt(jarJwt) as Record<string, unknown>;
+      if (typeof jar.response_uri === 'string') {
+        responseUri = jar.response_uri;
+      }
+    } catch {
+      // ignore decode errors; fall back to default response endpoint
+    }
     const errRes = await localFetch(responseUri, {
       body: new URLSearchParams({ response: 'not.a.valid.jwe.value' }).toString(),
       dispatcher: insecureAgent,
