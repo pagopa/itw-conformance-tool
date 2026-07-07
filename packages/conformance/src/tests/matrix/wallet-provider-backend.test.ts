@@ -561,7 +561,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
   });
 
   // ___ WP_008 ____
-  it('WP_008 - Wallet Provider supports credential revocation requests from Issuers', async () => {
+  it.skip('WP_008 - Wallet Provider supports credential revocation requests from Issuers', async () => {
     // const walletInstanceIds = parseStringArrayEnv('ITW_CT_WP_PDND_WALLET_INSTANCE_IDS');
     // const revocationEndpoint =
     //   readTrimmedEnv('ITW_CT_WP_PDND_WALLET_INSTANCES_ENDPOINT') ?? `${walletProviderUrl}/wallet-instances`;
