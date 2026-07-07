@@ -79,21 +79,10 @@ function hasProblemJsonContentType(contentType: string): boolean {
 
 function buildPdndRevocationHeaders(body: string): HeaderMap {
   const digest = buildSha256DigestHeader(body);
-  const configuredAgidJwtSignature = process.env.ITW_CT_PDND_AGID_JWT_SIGNATURE?.trim();
-  const configuredAuthorization = process.env.ITW_CT_PDND_AUTHORIZATION?.trim();
-  const configuredDpop = process.env.ITW_CT_PDND_DPOP?.trim();
   const headers: HeaderMap = {
     'Content-Type': 'application/merge-patch+json',
-    Digest: digest,
-    'Agid-JWT-Signature': configuredAgidJwtSignature ?? 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.dGVzdA.dGVzdA'
+    Digest: digest
   };
-
-  if (configuredAuthorization && configuredAuthorization.length > 0) {
-    headers.Authorization = configuredAuthorization;
-  }
-  if (configuredDpop && configuredDpop.length > 0) {
-    headers.DPoP = configuredDpop;
-  }
 
   return headers;
 }
@@ -129,6 +118,61 @@ type PdndRevocationResult = {
   not_found: string[];
   already_revoked: string[];
 };
+
+type PdndRevocationSuccessResponse = {
+  result_description: string;
+  result: PdndRevocationResult;
+};
+
+type PdndProblemDetails = {
+  title: string;
+  status: number;
+  type?: string;
+};
+
+function parsePdndRevocationSuccessResponse(text: string, context: string): PdndRevocationSuccessResponse {
+  const parsed = parseJsonObject(text, context);
+  const result = parsed.result as Record<string, unknown> | undefined;
+  const hasExpectedResultShape =
+    typeof parsed.result_description === 'string' &&
+    !!result &&
+    Array.isArray(result.revoked) &&
+    Array.isArray(result.not_found) &&
+    Array.isArray(result.already_revoked);
+
+  if (!hasExpectedResultShape) {
+    throw new Error(
+      `${context}: response must include result_description and result.{revoked,not_found,already_revoked} arrays`
+    );
+  }
+
+  return {
+    result_description: parsed.result_description as string,
+    result: {
+      revoked: result.revoked as string[],
+      not_found: result.not_found as string[],
+      already_revoked: result.already_revoked as string[]
+    }
+  };
+}
+
+function parsePdndProblemDetails(text: string, context: string): PdndProblemDetails {
+  const parsed = parseJsonObject(text, context);
+  const hasProblemShape =
+    typeof parsed.title === 'string' &&
+    typeof parsed.status === 'number' &&
+    (parsed.type === undefined || typeof parsed.type === 'string');
+
+  if (!hasProblemShape) {
+    throw new Error(`${context}: error response must comply with RFC7807 problem+json shape`);
+  }
+
+  return {
+    title: parsed.title as string,
+    status: parsed.status as number,
+    type: typeof parsed.type === 'string' ? parsed.type : undefined
+  };
+}
 
 type ParsedEntityConfiguration = {
   header: Record<string, unknown>;
@@ -589,7 +633,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   // ___ WP_008 ____
-  it('WP_008 - Wallet Provider supports credential revocation requests from Issuers', async () => {
+  it('WP_008 - Wallet Provider implements and supports revocation requests triggered by PID Providers via the PDND Endpoint.', async () => {
     const walletInstanceIds = ['itw-conformance-test-wallet-instance-id'];
     const revocationEndpoint = `${walletProviderUrl}/wallet-instances`;
     const body = JSON.stringify({ wallet_instance_ids: walletInstanceIds });
@@ -623,29 +667,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
         `207 response must use application/json content type`
       ).toBe(true);
 
-      const parsed = parseJsonObject(responseText, 'PDND revocation 207 response');
-      const result = parsed.result as Record<string, unknown> | undefined;
-      const hasExpectedResultShape =
-        typeof parsed.result_description === 'string' &&
-        !!result &&
-        Array.isArray(result.revoked) &&
-        Array.isArray(result.not_found) &&
-        Array.isArray(result.already_revoked);
-
-      expect(
-        hasExpectedResultShape,
-        `207 response must include result_description and result.{revoked,not_found,already_revoked} arrays`
-      ).toBe(true);
-
-      if (!hasExpectedResultShape) {
-        return;
-      }
-
-      const revocationResult: PdndRevocationResult = {
-        revoked: result.revoked as string[],
-        not_found: result.not_found as string[],
-        already_revoked: result.already_revoked as string[]
-      };
+      const parsedSuccess = parsePdndRevocationSuccessResponse(responseText, 'PDND revocation 207 response');
+      const revocationResult = parsedSuccess.result;
 
       expect(
         hasExclusiveRevocationPartition(walletInstanceIds, revocationResult),
@@ -668,13 +691,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       `Error responses must use application/problem+json content type`
     ).toBe(true);
 
-    const problem = parseJsonObject(responseText, 'PDND revocation error response');
-    const hasProblemShape =
-      typeof problem.title === 'string' &&
-      typeof problem.status === 'number' &&
-      (problem.type === undefined || typeof problem.type === 'string');
-
-    expect(hasProblemShape, `Error responses must comply with RFC7807 problem+json shape`).toBe(true);
+    parsePdndProblemDetails(responseText, 'PDND revocation error response');
 
     throw new Error(
       `WP_008 requires a successful authorized PDND revocation flow (HTTP 207); received ${revocationResponseStatus}. Configure valid PDND credentials (e.g. ITW_CT_PDND_AGID_JWT_SIGNATURE/ITW_CT_PDND_AUTHORIZATION/ITW_CT_PDND_DPOP).`
@@ -682,11 +699,13 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   // ___ WP_010 ____
-  it('WP_010 - Wallet instance revocation terminates all instance operations', async () => {
-    const candidateId =
-      lastPdndRevocationResult?.revoked?.[0] ?? lastPdndRevocationResult?.already_revoked?.[0] ?? null;
+  it('WP_010 - Follow-up revocation classifies a revoked wallet instance as already_revoked', async () => {
+    const candidateId = lastPdndRevocationResult?.revoked?.[0] ?? null;
 
-    expect(candidateId, `WP_010 prerequisite failed: no wallet_instance_id available from WP_008`).toBeTruthy();
+    expect(
+      candidateId,
+      `WP_010 prerequisite failed: no freshly revoked wallet_instance_id available from WP_008`
+    ).toBeTruthy();
     if (!candidateId) {
       return;
     }
@@ -725,28 +744,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       `207 response must use application/json content type`
     ).toBe(true);
 
-    const parsed = parseJsonObject(followupText, 'PDND revocation follow-up 207 response');
-    const result = parsed.result as Record<string, unknown> | undefined;
-    const hasExpectedResultShape =
-      typeof parsed.result_description === 'string' &&
-      !!result &&
-      Array.isArray(result.revoked) &&
-      Array.isArray(result.not_found) &&
-      Array.isArray(result.already_revoked);
-
-    expect(
-      hasExpectedResultShape,
-      `207 follow-up response must include result_description and result.{revoked,not_found,already_revoked} arrays`
-    ).toBe(true);
-    if (!hasExpectedResultShape) {
-      return;
-    }
-
-    const followupResult: PdndRevocationResult = {
-      revoked: result.revoked as string[],
-      not_found: result.not_found as string[],
-      already_revoked: result.already_revoked as string[]
-    };
+    const parsedSuccess = parsePdndRevocationSuccessResponse(followupText, 'PDND revocation follow-up 207 response');
+    const followupResult = parsedSuccess.result;
 
     expect(
       hasExclusiveRevocationPartition([candidateId], followupResult),
