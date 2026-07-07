@@ -13,6 +13,8 @@ describe('WP_117 - Erasure request delivery', () => {
 
   it('accepts a valid GET erasure request and returns 204 No Content', async () => {
     ctx = await buildRpRouteApp(requestObjectRoute, {
+      baseUrl: 'https://localhost:8080',
+      entityId: 'https://localhost:8080',
       setup: async (app) => {
         await app.register(erasureRoute);
       }
@@ -48,7 +50,7 @@ describe('WP_117 - Erasure request delivery', () => {
     expect(logSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         callbackUrl: 'https://wallet.example.org/erasure-callback',
-        rpId: 'http://localhost:8080',
+        rpId: 'https://localhost:8080',
         state,
         attributes: ['family_name', 'given_name'],
         timestamp: expect.any(String)
