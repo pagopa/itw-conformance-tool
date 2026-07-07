@@ -44,8 +44,9 @@ async function toPrivateJwk(privateKeyPem: string, kid: string): Promise<JsonWeb
   };
 }
 
-function buildEntityConfigurationMetadata(input: {
+export function buildEntityConfigurationMetadata(input: {
   entityId: string;
+  erasureUri: string;
   requestUri: string;
   responseUri: string;
   verifierJwks: { keys: JsonWebKey[] };
@@ -63,6 +64,7 @@ function buildEntityConfigurationMetadata(input: {
       client_id: input.entityId,
       client_name: 'PagoPa S.p.A.',
       encrypted_response_enc_values_supported: ['A256GCM'],
+      erasure_endpoint: input.erasureUri,
       jwks: input.verifierJwks,
       logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
       request_uris: [input.requestUri],
@@ -104,6 +106,7 @@ export async function createEntityConfigurationJwt(input: {
   const signingPrivateJwk = await toPrivateJwk(input.federationPrivateKeyPem, federationSigningJwk.kid);
   const metadata = buildEntityConfigurationMetadata({
     entityId,
+    erasureUri: `${entityId}/auth/erasure`,
     requestUri: `${entityId}/auth/request`,
     responseUri: `${entityId}/auth/response`,
     verifierJwks: { keys: [verifierSigningJwk, encryptionJwk] }
