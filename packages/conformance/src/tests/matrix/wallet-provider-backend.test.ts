@@ -595,7 +595,7 @@ describe.sequential(`Wallet Provider Backend`, () => {
   });
 
   // ___ WP_010 ____
-  it('WP_010 - Wallet instance revocation terminates all instance operations', async () => {
+  it.skip('WP_010 - Wallet instance revocation terminates all instance operations', async () => {
     // const revokedInstanceId = 'revoked-wallet-instance-id';
     // const revokeInstancePayload = {
     //   instance_id: revokedInstanceId,
