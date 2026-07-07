@@ -27,7 +27,7 @@ function insecureFetch(
         method: init?.method ?? 'GET',
         path: parsed.pathname + parsed.search,
         port: parsed.port || 443,
-        rejectUnauthorized: false
+        rejectUnauthorized: true
       },
       (res) => {
         const chunks: Buffer[] = [];
