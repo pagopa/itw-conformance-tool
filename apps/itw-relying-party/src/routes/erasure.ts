@@ -3,11 +3,13 @@ import { z } from 'zod';
 import type { FastifyPluginAsync } from 'fastify';
 import type { FastifyReply } from 'fastify';
 
-const erasureQuerySchema = z.object({
-  attributes: z.union([z.string().trim(), z.array(z.string().trim())]).optional(),
-  callback_url: z.string().trim().url(),
-  state: z.string().trim().uuid()
-}).strict();
+const erasureQuerySchema = z
+  .object({
+    attributes: z.union([z.string().trim(), z.array(z.string().trim())]).optional(),
+    callback_url: z.string().trim().url(),
+    state: z.string().trim().uuid()
+  })
+  .strict();
 
 function parseAttributes(input: string | string[] | undefined): string[] {
   if (input === undefined) {
