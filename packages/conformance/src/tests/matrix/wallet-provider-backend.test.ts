@@ -12,9 +12,14 @@ import {
   validateSignedJwksUri,
   verifyEntityStatementWithFederationJwks
 } from '@itw-conformance-tool/crypto';
+import {
+  itWalletMetadataV1_3,
+  type ItWalletEntityConfigurationClaims,
+  type ItWalletMetadataV1_3,
+  type ItWalletSolutionEntityMetadataV1_3
+} from '@pagopa/io-wallet-oid-federation';
 import { calculateJwkThumbprint, decodeJwt, decodeProtectedHeader } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { z } from 'zod';
 
 import { isHttpsUrl, normalizeUrl } from '../../utils/url.js';
 
@@ -26,36 +31,16 @@ type JwkLike = {
   use?: string;
 };
 
-type WalletMetadata = {
-  wallet_name?: string;
-  credential_offer_endpoint?: string;
-  [key: string]: unknown;
-};
+type Override<Base, Replacements> = Omit<Base, keyof Replacements> & Replacements;
 
-type WalletSolutionMetadata = {
-  jwks?: { keys?: JwkLike[] };
-  jwks_uri?: string;
-  signed_jwks_uri?: string;
-  logo_uri?: string;
-  wallet_metadata?: WalletMetadata;
-  [key: string]: unknown;
-};
-
-type EntityMetadata = {
-  wallet_solution?: WalletSolutionMetadata;
-  federation_entity?: Record<string, unknown>;
-};
-
-type EntityPayload = {
-  iss: string;
-  sub: string;
-  iat: number;
-  exp: number;
-  authority_hints: string[];
-  jwks?: { keys: JwkLike[] };
-  metadata: EntityMetadata;
-  [key: string]: unknown;
-};
+type EntityPayload = Override<
+  ItWalletEntityConfigurationClaims,
+  {
+    authority_hints: string[];
+    jwks?: { keys: JwkLike[] };
+    metadata: ItWalletMetadataV1_3;
+  }
+>;
 
 function hasJsonLikeJwksContentType(contentType: string): boolean {
   return contentType.includes('application/json') || contentType.includes('application/jwk-set+json');
@@ -79,7 +64,7 @@ async function fetchJwksFromUri(jwksUri: string): Promise<JwkLike[]> {
 type HeaderMap = Record<string, string>;
 
 async function resolveWalletSolutionKeys(
-  walletSolution: WalletSolutionMetadata,
+  walletSolution: ItWalletSolutionEntityMetadataV1_3,
   federationJwks: { keys: JwkLike[] }
 ): Promise<JwkLike[]> {
   if (Array.isArray(walletSolution.jwks?.keys) && walletSolution.jwks.keys.length > 0) {
@@ -104,69 +89,6 @@ function buildSha256DigestHeader(body: string): string {
   return `SHA-256=${digestB64}`;
 }
 
-const httpsUrlSchema = z.string().refine((value) => isHttpsUrl(value));
-const optionalHttpsUrlSchema = httpsUrlSchema.optional();
-const nonEmptyStringSchema = z.string().trim().min(1);
-
-const walletJwksSchema = z
-  .object({
-    keys: z.array(z.custom<JwkLike>((value) => typeof value === 'object' && value !== null)).min(1)
-  })
-  .superRefine(async (value, ctx) => {
-    const jwksValid = await isValidPublicJwks(value);
-    if (!jwksValid) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Invalid public JWKS in wallet_solution.jwks'
-      });
-    }
-  });
-
-const walletMetadataSchema = z
-  .object({
-    wallet_name: nonEmptyStringSchema,
-    credential_offer_endpoint: httpsUrlSchema
-  })
-  .catchall(z.unknown());
-
-const walletSolutionMetadataSchema = z
-  .object({
-    jwks: walletJwksSchema.optional(),
-    jwks_uri: optionalHttpsUrlSchema,
-    signed_jwks_uri: optionalHttpsUrlSchema,
-    logo_uri: httpsUrlSchema,
-    wallet_metadata: walletMetadataSchema
-  })
-  .catchall(z.unknown())
-  .superRefine((value, ctx) => {
-    const keyRefCount = [value.jwks, value.jwks_uri, value.signed_jwks_uri].filter(
-      (entry) => entry !== undefined
-    ).length;
-    if (keyRefCount !== 1) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Exactly one of jwks, jwks_uri, or signed_jwks_uri must be present'
-      });
-    }
-  });
-
-const federationEntityMetadataSchema = z
-  .object({
-    organization_name: nonEmptyStringSchema.optional(),
-    homepage_uri: optionalHttpsUrlSchema,
-    policy_uri: optionalHttpsUrlSchema,
-    logo_uri: optionalHttpsUrlSchema,
-    contacts: z.array(nonEmptyStringSchema).min(1).optional(),
-    tos_uri: optionalHttpsUrlSchema,
-    federation_resolve_endpoint: optionalHttpsUrlSchema,
-    federation_fetch_endpoint: optionalHttpsUrlSchema,
-    federation_list_endpoint: optionalHttpsUrlSchema,
-    federation_trust_mark_status_endpoint: optionalHttpsUrlSchema,
-    federation_trust_mark_list_endpoint: optionalHttpsUrlSchema,
-    federation_subordinate_events_endpoint: optionalHttpsUrlSchema
-  })
-  .catchall(z.unknown());
-
 type PdndRevocationResult = {
   revoked: string[];
   not_found: string[];
@@ -175,16 +97,7 @@ type PdndRevocationResult = {
 
 let lastPdndRevocationResult: PdndRevocationResult | null = null;
 
-async function isValidWalletSolutionMetadataSchema(walletSolution: WalletSolutionMetadata): Promise<boolean> {
-  const parsed = await walletSolutionMetadataSchema.safeParseAsync(walletSolution);
-  return parsed.success;
-}
-
-function isValidFederationEntityMetadataSchema(federationEntity: unknown): boolean {
-  return federationEntityMetadataSchema.safeParse(federationEntity).success;
-}
-
-describe.sequential(`Wallet Provider Backend`, () => {
+describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   let walletProviderUrl: string;
   let entityConfigResponse: { statusCode: number; body: string };
 
@@ -242,8 +155,9 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
       jwt = { header, payload: decodedPayload, signature };
       payload = decodedPayload;
-    } catch {
-      throw new Error('Entity configuration is not a well-formed compact JWT');
+    } catch (error: unknown) {
+      const details = error instanceof Error && error.message.length > 0 ? `: ${error.message}` : '';
+      throw new Error(`Entity configuration validation failed${details}`, { cause: error });
     }
 
     expect(entityStatementSignatureValid, `Entity configuration JWT signature is invalid`).toBe(true);
@@ -281,27 +195,54 @@ describe.sequential(`Wallet Provider Backend`, () => {
   });
 
   it("WP_002d - 'iss' and 'sub' must be equal and valid HTTPS URLs", async () => {
-    const isValidIssuer = typeof payload.iss === 'string' && isHttpsUrl(payload.iss);
-    const isValidSubject = typeof payload.sub === 'string' && isHttpsUrl(payload.sub);
-    const normalizedIssuer = isValidIssuer ? normalizeUrl(payload.iss) : '';
-    const normalizedSubject = isValidSubject ? normalizeUrl(payload.sub) : '';
-    const issEqualsSubject = normalizedIssuer.length > 0 && normalizedIssuer === normalizedSubject;
+    const hasIssuerString = typeof payload.iss === 'string';
+    const hasSubjectString = typeof payload.sub === 'string';
+
+    expect(hasIssuerString, `JWT payload iss must be present and be a string`).toBe(true);
+    expect(hasSubjectString, `JWT payload sub must be present and be a string`).toBe(true);
+
+    if (!hasIssuerString || !hasSubjectString) {
+      return;
+    }
+
+    const issuer = payload.iss;
+    const subject = payload.sub;
+    const isValidIssuerHttps = isHttpsUrl(issuer);
+    const isValidSubjectHttps = isHttpsUrl(subject);
+
+    expect(isValidIssuerHttps, `JWT payload iss must be a valid HTTPS URL`).toBe(true);
+    expect(isValidSubjectHttps, `JWT payload sub must be a valid HTTPS URL`).toBe(true);
+
+    if (!isValidIssuerHttps || !isValidSubjectHttps) {
+      return;
+    }
+
+    const normalizedIssuer = normalizeUrl(issuer);
+    const normalizedSubject = normalizeUrl(subject);
+    const issEqualsSubject = normalizedIssuer === normalizedSubject;
     const matchesWalletProviderUrl = normalizedIssuer === walletProviderUrl && normalizedSubject === walletProviderUrl;
 
+    expect(issEqualsSubject, `JWT payload iss and sub must be equal after URL normalization`).toBe(true);
     expect(
-      isValidIssuer && isValidSubject && issEqualsSubject && matchesWalletProviderUrl,
-      `JWT payload iss and sub must be equal HTTPS URLs and match wallet provider public URL`
+      matchesWalletProviderUrl,
+      `JWT payload iss/sub must match wallet provider public URL (iss=${normalizedIssuer}, sub=${normalizedSubject}, expected=${walletProviderUrl})`
     ).toBe(true);
   });
 
   it("WP_002e - 'iat' and 'exp' must be valid Unix timestamps and not expired", async () => {
+    const clockSkewToleranceSeconds = 120;
+    const nowUnix = Math.floor(Date.now() / 1000);
     const isValidIat = typeof payload.iat === 'number' && Number.isInteger(payload.iat) && payload.iat > 0;
-    const isValidExp = typeof payload.exp === 'number' && Number.isInteger(payload.exp) && payload.exp > payload.iat;
-    const isNotExpired = typeof payload.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000);
+    const isValidExp = typeof payload.exp === 'number' && Number.isInteger(payload.exp) && payload.exp > 0;
+    const expAfterIat = isValidIat && isValidExp ? payload.exp > payload.iat : false;
+    const isNotExpiredWithTolerance = isValidExp ? payload.exp >= nowUnix - clockSkewToleranceSeconds : false;
 
+    expect(isValidIat, `JWT payload iat must be a valid positive Unix timestamp`).toBe(true);
+    expect(isValidExp, `JWT payload exp must be a valid positive Unix timestamp`).toBe(true);
+    expect(expAfterIat, `JWT payload exp must be greater than iat`).toBe(true);
     expect(
-      isValidIat && isValidExp && isNotExpired,
-      `JWT payload iat and exp must be valid Unix timestamps and not expired`
+      isNotExpiredWithTolerance,
+      `JWT payload exp must be in the future allowing ${clockSkewToleranceSeconds}s clock skew (exp=${String(payload.exp)}, now=${nowUnix})`
     ).toBe(true);
   });
 
@@ -334,21 +275,28 @@ describe.sequential(`Wallet Provider Backend`, () => {
 
   it("WP_002h - 'metadata' must contain required wallet_solution and federation_entity fields", async () => {
     const metadataValid = typeof payload.metadata === 'object' && payload.metadata !== null;
-    const metadata = metadataValid ? payload.metadata : undefined;
-    const walletSolution = metadata?.wallet_solution;
-    const walletSolutionValid = typeof walletSolution === 'object' && walletSolution !== null;
-    const walletSolutionSchemaValid = walletSolutionValid
-      ? await isValidWalletSolutionMetadataSchema(walletSolution)
-      : false;
 
-    const federationEntityPresent = metadata?.federation_entity !== undefined;
-    const federationEntitySchemaValid =
-      !federationEntityPresent || isValidFederationEntityMetadataSchema(metadata?.federation_entity);
+    expect(metadataValid, `JWT payload metadata must be present and be an object`).toBe(true);
+    if (!metadataValid) {
+      return;
+    }
 
-    expect(
-      metadataValid && walletSolutionValid && walletSolutionSchemaValid && federationEntitySchemaValid,
-      `JWT payload metadata must contain wallet_solution and may include federation_entity; when federation_entity is present it must respect its schema types`
-    ).toBe(true);
+    const metadata = payload.metadata;
+    const hasWalletSolution = typeof metadata.wallet_solution === 'object' && metadata.wallet_solution !== null;
+    const hasFederationEntity = typeof metadata.federation_entity === 'object' && metadata.federation_entity !== null;
+    const metadataParseResult = itWalletMetadataV1_3.safeParse(metadata);
+    const schemaErrorDetails = metadataParseResult.success
+      ? ''
+      : metadataParseResult.error.issues
+          .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+          .join('; ');
+    const metadataSchemaErrorMessage =
+      'JWT payload metadata must be valid against io-wallet-sdk schemas' +
+      (schemaErrorDetails.length > 0 ? `: ${schemaErrorDetails}` : '');
+
+    expect(hasWalletSolution, `JWT payload metadata.wallet_solution must be present and be an object`).toBe(true);
+    expect(hasFederationEntity, `JWT payload metadata.federation_entity must be present and be an object`).toBe(true);
+    expect(metadataParseResult.success, metadataSchemaErrorMessage).toBe(true);
   });
 
   // ___ WP_003 ____

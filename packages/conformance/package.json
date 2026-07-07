@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@itw-conformance-tool/crypto": "workspace:*",
+    "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
     "@types/node": "^22.19.9",
     "jose": "5.2.4",
     "vitest": "~4.1.0",

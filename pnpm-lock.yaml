@@ -398,6 +398,9 @@ importers:
       '@itw-conformance-tool/crypto':
         specifier: workspace:*
         version: link:../crypto
+      '@pagopa/io-wallet-oid-federation':
+        specifier: catalog:pagopa
+        version: 1.5.2
       '@types/node':
         specifier: ^22.19.9
         version: 22.19.17
@@ -1871,6 +1874,9 @@ packages:
   '@pagopa/io-wallet-oid-federation@1.5.2':
     resolution: {integrity: sha512-SRJpdXT301qFlMGYJ6hYQTG/r306C32cJtUDFv2D3BdG+xJ1vmr4h+SbuwQoZWzhhxSS4TmRsHCsvuxzNCcX/w==}
 
+  '@pagopa/io-wallet-oid-federation@1.5.3':
+    resolution: {integrity: sha512-aU1i/EkWBjlwcZdRCjBgPQWbc6FHJMyWF4pgSPcynNcwjmIT+RwRMl0MQG5/PDLnPUhOyIAiMUElmKpQaqbICw==}
+
   '@pagopa/io-wallet-oid4vci@1.5.2':
     resolution: {integrity: sha512-AwwiGKPuljq9jocT6lyb33X/tFh/wzPKGwKUY2QTIt4noYuA3tYaSb29np3j8ae5hh04dDiCFVA4Hsz9Om/nNg==}
 
@@ -1879,6 +1885,9 @@ packages:
 
   '@pagopa/io-wallet-utils@1.5.2':
     resolution: {integrity: sha512-i5Rnb+PDi+9mhifn5nVxFkeJLgIBNiLaDVqGV9slxzzYAi3InTtG+UrDb/It6kky2UvK2fHRoGENues4pD1Xfg==}
+
+  '@pagopa/io-wallet-utils@1.5.3':
+    resolution: {integrity: sha512-l2ZFoPXgOgQnUtW9mzGW6g5hMM57OBcnXcc+X6PAFYi8YnGF9vRB0/GCzE1UqzRL4VSTaFiHfrqrGVV2xZrWHQ==}
 
   '@panva/hkdf@1.2.1':
     resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
@@ -6291,7 +6300,7 @@ snapshots:
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@openid4vc/utils@0.4.3':
     dependencies:
@@ -6382,9 +6391,15 @@ snapshots:
 
   '@pagopa/io-wallet-oid-federation@1.5.2':
     dependencies:
-      '@pagopa/io-wallet-utils': 1.5.2
+      '@pagopa/io-wallet-utils': 1.5.3
       buffer: 6.0.3
-      zod: 4.3.6
+      zod: 4.4.3
+
+  '@pagopa/io-wallet-oid-federation@1.5.3':
+    dependencies:
+      '@pagopa/io-wallet-utils': 1.5.3
+      buffer: 6.0.3
+      zod: 4.4.3
 
   '@pagopa/io-wallet-oid4vci@1.5.2':
     dependencies:
@@ -6403,7 +6418,7 @@ snapshots:
       '@openid4vc/openid4vp': 0.4.3
       '@openid4vc/utils': 0.4.3
       '@pagopa/io-wallet-oauth2': 1.5.2
-      '@pagopa/io-wallet-oid-federation': 1.5.2
+      '@pagopa/io-wallet-oid-federation': 1.5.3
       '@pagopa/io-wallet-utils': 1.5.2
       zod: 4.3.6
 
@@ -6412,6 +6427,12 @@ snapshots:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
       zod: 4.3.6
+
+  '@pagopa/io-wallet-utils@1.5.3':
+    dependencies:
+      '@openid4vc/oauth2': 0.4.3
+      '@openid4vc/utils': 0.4.3
+      zod: 4.4.3
 
   '@panva/hkdf@1.2.1': {}
 
