@@ -1,22 +1,15 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
 
 import { CompactEncrypt, SignJWT, decodeJwt, decodeProtectedHeader, importJWK, importPKCS8 } from 'jose';
+import { Agent, fetch as localFetch } from 'undici';
 import { beforeAll, describe, expect, it } from 'vitest';
-
-// Allow self-signed TLS certificates when testing against a local RP server.
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
 
 type JwkKey = Record<string, unknown>;
 
-// Asymmetric algorithms allowed for JAR signing (not 'none', not HMAC MACs).
 const ALLOWED_JAR_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512', 'RS256', 'RS384', 'RS512'];
 
-/**
- * Builds a minimal but fully-valid JARM JWE for the RP's /auth/response endpoint.
- *
- * The VP token is a single dc+sd-jwt credential (no disclosures) bound to a
- * freshly generated holder key, encrypted to the RP's public JWK.
- */
+const insecureAgent = new Agent({ connect: { rejectUnauthorized: false } });
+
 async function buildAuthResponseJwe({
   clientId,
   encJwk,
@@ -29,23 +22,18 @@ async function buildAuthResponseJwe({
   state: string;
 }): Promise<string> {
   const rpPublicKey = await importJWK(encJwk as Parameters<typeof importJWK>[0]);
-  // The library (io-wallet-oid4vp) validates the JWE protected header against zEncryptedJarmHeader
-  // which requires `kid` as a mandatory string field.
   const encKid = typeof encJwk.kid === 'string' ? encJwk.kid : undefined;
   if (!encKid) {
     throw new Error('Encryption JWK is missing required kid field');
   }
 
-  // Holder key pair – P-256, signs the KB-JWT
   const { privateKey: holderPrivNode, publicKey: holderPubNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const holderPrivJose = await importPKCS8(holderPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
   const holderPubJwk = holderPubNode.export({ format: 'jwk' });
 
-  // Issuer key pair – P-256, signs the SD-JWT
   const { privateKey: issuerPrivNode } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const issuerPrivJose = await importPKCS8(issuerPrivNode.export({ format: 'pem', type: 'pkcs8' }).toString(), 'ES256');
 
-  // Issuer SD-JWT – no disclosures; cnf binds the holder key
   const issuerJwt = await new SignJWT({
     cnf: { jwk: holderPubJwk },
     iss: 'https://issuer.example.com',
@@ -54,7 +42,6 @@ async function buildAuthResponseJwe({
     .setProtectedHeader({ alg: 'ES256', typ: 'dc+sd-jwt' })
     .sign(issuerPrivJose);
 
-  // KB-JWT – sd_hash = sha256('') because there are no disclosures
   const sdHash = createHash('sha256').update('').digest('base64url');
   const kbJwt = await new SignJWT({
     aud: clientId,
@@ -67,7 +54,6 @@ async function buildAuthResponseJwe({
 
   const sdJwtWithKb = `${issuerJwt}~${kbJwt}`;
 
-  // Encrypt as ECDH-ES / A256GCM JWE
   const plaintext = new TextEncoder().encode(
     JSON.stringify({
       presentation_submission: { definition_id: 'test', descriptor_map: [], id: 'test-submission' },
@@ -84,7 +70,6 @@ async function buildAuthResponseJwe({
 describe.sequential('Relying Party Presentation', () => {
   let rpBaseUrl: string;
 
-  // AUTHORIZE shared state
   let walletUrl: string;
   let authRequestStatusCode: number;
   let authRequestContentType: string;
@@ -92,7 +77,6 @@ describe.sequential('Relying Party Presentation', () => {
   let jarPayload: Record<string, unknown>;
   let state: string;
 
-  // PRESENTATION_RESPONSE shared state
   let authResponseStatusCode: number;
   let authResponseContentType: string;
   let authResponseBody: Record<string, unknown>;
@@ -104,12 +88,12 @@ describe.sequential('Relying Party Presentation', () => {
     }
     rpBaseUrl = rawUrl.replace(/\/$/, '');
 
-    // Step 1: POST /request-object to create an authorization session
-    const reqObjRes = await fetch(`${rpBaseUrl}/request-object`, {
+    const reqObjRes = await localFetch(`${rpBaseUrl}/request-object`, {
       body: JSON.stringify({
         dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
         flow_type: 'cross-device'
       }),
+      dispatcher: insecureAgent,
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000)
@@ -123,8 +107,8 @@ describe.sequential('Relying Party Presentation', () => {
     walletUrl = body.url;
     state = new URL(walletUrl).searchParams.get('state') ?? '';
 
-    // Step 2: GET /auth/request/:state to fetch the JAR (also transitions session to 'checking')
-    const authReqRes = await fetch(`${rpBaseUrl}/auth/request/${state}`, {
+    const authReqRes = await localFetch(`${rpBaseUrl}/auth/request/${state}`, {
+      dispatcher: insecureAgent,
       signal: AbortSignal.timeout(10_000)
     });
 
@@ -145,7 +129,6 @@ describe.sequential('Relying Party Presentation', () => {
       jarPayload = {};
     }
 
-    // Step 3: build and submit a valid VP token to /auth/response
     const clientMetadata = jarPayload.client_metadata as Record<string, unknown> | undefined;
     const jwks = clientMetadata?.jwks as { keys?: JwkKey[] } | undefined;
     const encJwk = jwks?.keys?.find((k) => k.use === 'enc');
@@ -162,8 +145,9 @@ describe.sequential('Relying Party Presentation', () => {
         const responseUri =
           typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
 
-        const authRes = await fetch(responseUri, {
+        const authRes = await localFetch(responseUri, {
           body: new URLSearchParams({ response: jwe }).toString(),
+          dispatcher: insecureAgent,
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           method: 'POST',
           signal: AbortSignal.timeout(10_000)
@@ -183,8 +167,6 @@ describe.sequential('Relying Party Presentation', () => {
       authResponseBody = {};
     }
   });
-
-  // ── AUTHORIZE step ──────────────────────────────────────────────────────────
 
   it('[PRESENTATION:AUTHORIZE] RPR-03 - POST /request-object URL contains client_id, request_uri, and state', () => {
     const parsed = new URL(walletUrl);
@@ -268,8 +250,6 @@ describe.sequential('Relying Party Presentation', () => {
     expect(jarPayload.exp as number, 'JAR exp must be in the future (not expired)').toBeGreaterThan(nowSeconds);
   });
 
-  // ── PRESENTATION_RESPONSE step ──────────────────────────────────────────────
-
   it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-110 - POST /auth/response with valid JWE returns HTTP 200', () => {
     expect(authResponseStatusCode, 'Expected POST /auth/response to return HTTP 200').toBe(200);
   });
@@ -294,12 +274,12 @@ describe.sequential('Relying Party Presentation', () => {
   });
 
   it('[PRESENTATION:PRESENTATION_RESPONSE] RPR-114 - POST /auth/response with invalid JWE returns an HTTP 4xx error response', async () => {
-    // Create a fresh session so this error-path test does not interfere with the happy-path session.
-    const reqRes = await fetch(`${rpBaseUrl}/request-object`, {
+    const reqRes = await localFetch(`${rpBaseUrl}/request-object`, {
       body: JSON.stringify({
         dcqlQuery: { credentials: [{ format: 'dc+sd-jwt', id: 'pid' }] },
         flow_type: 'cross-device'
       }),
+      dispatcher: insecureAgent,
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000)
@@ -309,15 +289,17 @@ describe.sequential('Relying Party Presentation', () => {
     const { url: freshUrl } = (await reqRes.json()) as { url: string };
     const freshState = new URL(freshUrl).searchParams.get('state') ?? '';
 
-    // Transition the fresh session to 'checking' by fetching its JAR
-    await fetch(`${rpBaseUrl}/auth/request/${freshState}`, { signal: AbortSignal.timeout(10_000) });
+    await localFetch(`${rpBaseUrl}/auth/request/${freshState}`, {
+      dispatcher: insecureAgent,
+      signal: AbortSignal.timeout(10_000)
+    });
 
-    // Submit a completely invalid (non-JWE) value to the response endpoint
     const responseUri =
       typeof jarPayload.response_uri === 'string' ? jarPayload.response_uri : `${rpBaseUrl}/auth/response`;
 
-    const errRes = await fetch(responseUri, {
+    const errRes = await localFetch(responseUri, {
       body: new URLSearchParams({ response: 'not.a.valid.jwe.value' }).toString(),
+      dispatcher: insecureAgent,
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000)
