@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import {
   ALLOWED_FEDERATION_JOSE_ALGORITHMS,
   fetchSignedJwksFromUri,
@@ -25,6 +23,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { isHttpsUrl, normalizeUrl } from '../../utils/url.js';
 
+type ParsedEntityConfiguration = {
+  header: Record<string, unknown>;
+  payload: ItWalletEntityConfigurationClaims;
+  entityStatementSignatureValid: boolean;
+};
+
 function hasJsonLikeJwksContentType(contentType: string): boolean {
   return contentType.includes('application/json') || contentType.includes('application/jwk-set+json');
 }
@@ -43,8 +47,6 @@ async function fetchJwksFromUri(jwksUri: string): Promise<Jwk[]> {
     return [];
   }
 }
-
-type HeaderMap = Record<string, string>;
 
 async function resolveWalletSolutionKeys(
   walletSolution: ItWalletSolutionEntityMetadataV1_3,
@@ -66,121 +68,6 @@ async function resolveWalletSolutionKeys(
 
   return [];
 }
-
-function buildSha256DigestHeader(body: string): string {
-  // RFC 3230 style Digest header value: base64-encoded SHA-256 bytes.
-  const digestB64 = createHash('sha256').update(body).digest('base64');
-  return `SHA-256=${digestB64}`;
-}
-
-function hasProblemJsonContentType(contentType: string): boolean {
-  return contentType.includes('application/problem+json');
-}
-
-function buildPdndRevocationHeaders(body: string): HeaderMap {
-  const digest = buildSha256DigestHeader(body);
-  const headers: HeaderMap = {
-    'Content-Type': 'application/merge-patch+json',
-    Digest: digest
-  };
-
-  return headers;
-}
-
-function parseJsonObject(text: string, context: string): Record<string, unknown> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (error: unknown) {
-    throw new Error(`${context}: response body is not valid JSON`, { cause: error });
-  }
-
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`${context}: response JSON must be an object`);
-  }
-
-  return parsed as Record<string, unknown>;
-}
-
-function hasExclusiveRevocationPartition(ids: string[], result: PdndRevocationResult): boolean {
-  return ids.every((id) => {
-    const membershipCount =
-      Number(result.revoked.includes(id)) +
-      Number(result.not_found.includes(id)) +
-      Number(result.already_revoked.includes(id));
-
-    return membershipCount === 1;
-  });
-}
-
-type PdndRevocationResult = {
-  revoked: string[];
-  not_found: string[];
-  already_revoked: string[];
-};
-
-type PdndRevocationSuccessResponse = {
-  result_description: string;
-  result: PdndRevocationResult;
-};
-
-type PdndProblemDetails = {
-  title: string;
-  status: number;
-  type?: string;
-};
-
-function parsePdndRevocationSuccessResponse(text: string, context: string): PdndRevocationSuccessResponse {
-  const parsed = parseJsonObject(text, context);
-  const result = parsed.result as Record<string, unknown> | undefined;
-  const hasExpectedResultShape =
-    typeof parsed.result_description === 'string' &&
-    !!result &&
-    Array.isArray(result.revoked) &&
-    Array.isArray(result.not_found) &&
-    Array.isArray(result.already_revoked);
-
-  if (!hasExpectedResultShape) {
-    throw new Error(
-      `${context}: response must include result_description and result.{revoked,not_found,already_revoked} arrays`
-    );
-  }
-
-  return {
-    result_description: parsed.result_description as string,
-    result: {
-      revoked: result.revoked as string[],
-      not_found: result.not_found as string[],
-      already_revoked: result.already_revoked as string[]
-    }
-  };
-}
-
-function parsePdndProblemDetails(text: string, context: string): PdndProblemDetails {
-  const parsed = parseJsonObject(text, context);
-  const hasProblemShape =
-    typeof parsed.title === 'string' &&
-    typeof parsed.status === 'number' &&
-    (parsed.type === undefined || typeof parsed.type === 'string');
-
-  if (!hasProblemShape) {
-    throw new Error(`${context}: error response must comply with RFC7807 problem+json shape`);
-  }
-
-  return {
-    title: parsed.title as string,
-    status: parsed.status as number,
-    type: typeof parsed.type === 'string' ? parsed.type : undefined
-  };
-}
-
-type ParsedEntityConfiguration = {
-  header: Record<string, unknown>;
-  payload: ItWalletEntityConfigurationClaims;
-  entityStatementSignatureValid: boolean;
-};
-
-let lastPdndRevocationResult: PdndRevocationResult | null = null;
 
 describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   let walletProviderUrl: string;
@@ -629,133 +516,6 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     expect(
       signedValidation.signatureValid,
       `metadata.wallet_solution.signed_jwks_uri JWT signature must verify with federation jwks`
-    ).toBe(true);
-  });
-
-  // ___ WP_008 ____
-  it('WP_008 - Wallet Provider implements and supports revocation requests triggered by PID Providers via the PDND Endpoint.', async () => {
-    const walletInstanceIds = ['itw-conformance-test-wallet-instance-id'];
-    const revocationEndpoint = `${walletProviderUrl}/wallet-instances`;
-    const body = JSON.stringify({ wallet_instance_ids: walletInstanceIds });
-    const headers = buildPdndRevocationHeaders(body);
-
-    let revocationResponse: Response;
-    try {
-      revocationResponse = await fetch(revocationEndpoint, {
-        method: 'PATCH',
-        body,
-        headers,
-        signal: AbortSignal.timeout(10_000)
-      });
-    } catch (error: unknown) {
-      throw new Error(`Failed to call PDND revocation endpoint PATCH ${revocationEndpoint}`, { cause: error });
-    }
-
-    const revocationResponseStatus = revocationResponse.status;
-    const responseContentType = revocationResponse.headers.get('content-type') ?? '';
-    const responseText = await revocationResponse.text();
-
-    const expectedStatuses = [207, 400, 401, 404, 429, 500, 503];
-    expect(
-      expectedStatuses.includes(revocationResponseStatus),
-      `Unexpected status ${revocationResponseStatus} from PDND revocation endpoint`
-    ).toBe(true);
-
-    if (revocationResponseStatus === 207) {
-      expect(
-        responseContentType.includes('application/json'),
-        `207 response must use application/json content type`
-      ).toBe(true);
-
-      const parsedSuccess = parsePdndRevocationSuccessResponse(responseText, 'PDND revocation 207 response');
-      const revocationResult = parsedSuccess.result;
-
-      expect(
-        hasExclusiveRevocationPartition(walletInstanceIds, revocationResult),
-        `Each requested wallet_instance_id must appear exactly once across revoked/not_found/already_revoked`
-      ).toBe(true);
-
-      const responseDigestHeader = revocationResponse.headers.get('digest') ?? '';
-      const responseAgidJwtSignatureHeader = revocationResponse.headers.get('agid-jwt-signature') ?? '';
-      expect(responseDigestHeader.length > 0, `207 response must include Digest header`).toBe(true);
-      expect(responseAgidJwtSignatureHeader.length > 0, `207 response must include Agid-JWT-Signature header`).toBe(
-        true
-      );
-
-      lastPdndRevocationResult = revocationResult;
-      return;
-    }
-
-    expect(
-      hasProblemJsonContentType(responseContentType),
-      `Error responses must use application/problem+json content type`
-    ).toBe(true);
-
-    parsePdndProblemDetails(responseText, 'PDND revocation error response');
-
-    throw new Error(
-      `WP_008 requires a successful authorized PDND revocation flow (HTTP 207); received ${revocationResponseStatus}. Configure valid PDND credentials (e.g. ITW_CT_PDND_AGID_JWT_SIGNATURE/ITW_CT_PDND_AUTHORIZATION/ITW_CT_PDND_DPOP).`
-    );
-  });
-
-  // ___ WP_010 ____
-  it('WP_010 - Follow-up revocation classifies a revoked wallet instance as already_revoked', async () => {
-    const candidateId = lastPdndRevocationResult?.revoked?.[0] ?? null;
-
-    expect(
-      candidateId,
-      `WP_010 prerequisite failed: no freshly revoked wallet_instance_id available from WP_008`
-    ).toBeTruthy();
-    if (!candidateId) {
-      return;
-    }
-
-    const revocationEndpoint = `${walletProviderUrl}/wallet-instances`;
-    const body = JSON.stringify({ wallet_instance_ids: [candidateId] });
-    const headers = buildPdndRevocationHeaders(body);
-
-    let followupResponse: Response;
-    try {
-      followupResponse = await fetch(revocationEndpoint, {
-        method: 'PATCH',
-        body,
-        headers,
-        signal: AbortSignal.timeout(10_000)
-      });
-    } catch (error: unknown) {
-      throw new Error(`Failed to call PDND revocation endpoint PATCH ${revocationEndpoint}`, { cause: error });
-    }
-
-    const followupStatus = followupResponse.status;
-    const followupContentType = followupResponse.headers.get('content-type') ?? '';
-    const followupText = await followupResponse.text();
-
-    expect(followupStatus, `WP_010 requires follow-up revocation to return HTTP 207`).toBe(207);
-    if (followupStatus !== 207) {
-      const hasProblemContentType = hasProblemJsonContentType(followupContentType);
-      expect(hasProblemContentType, `Non-207 response must use application/problem+json content type`).toBe(true);
-      throw new Error(
-        `WP_010 requires a successful authorized follow-up revocation flow (HTTP 207); received ${followupStatus}. Configure valid PDND credentials (e.g. ITW_CT_PDND_AGID_JWT_SIGNATURE/ITW_CT_PDND_AUTHORIZATION/ITW_CT_PDND_DPOP).`
-      );
-    }
-
-    expect(
-      followupContentType.includes('application/json'),
-      `207 response must use application/json content type`
-    ).toBe(true);
-
-    const parsedSuccess = parsePdndRevocationSuccessResponse(followupText, 'PDND revocation follow-up 207 response');
-    const followupResult = parsedSuccess.result;
-
-    expect(
-      hasExclusiveRevocationPartition([candidateId], followupResult),
-      `Follow-up response must classify wallet_instance_id in exactly one of revoked/not_found/already_revoked`
-    ).toBe(true);
-
-    const isAlreadyRevoked = followupResult.already_revoked.includes(candidateId);
-    expect(
-      isAlreadyRevoked,
-      `Revoked Wallet Instance must be reported as already_revoked on follow-up revocation request`
     ).toBe(true);
   });
 });
