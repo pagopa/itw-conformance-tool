@@ -10,6 +10,7 @@ export type SignedJwksValidationResult = {
   compactJwt: boolean;
   payloadHasJwks: boolean;
   signatureValid: boolean;
+  jwksValid: boolean;
 };
 
 export const ALLOWED_FEDERATION_JOSE_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'PS256', 'PS384', 'PS512'] as const;
@@ -126,7 +127,8 @@ export async function validateSignedJwksUri(
     contentTypeValid: false,
     compactJwt: false,
     payloadHasJwks: false,
-    signatureValid: false
+    signatureValid: false,
+    jwksValid: false
   };
 
   try {
@@ -154,6 +156,11 @@ export async function validateSignedJwksUri(
     }
 
     result.signatureValid = await verifyEntityStatementWithFederationJwks(jwtContent, federationJwks);
+    if (!result.signatureValid) {
+      return result;
+    }
+
+    result.jwksValid = await isValidPublicJwks(signedPayload.jwks);
     return result;
   } catch {
     return result;
