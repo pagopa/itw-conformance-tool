@@ -369,8 +369,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       (typeof metadata.federation_entity === 'object' && metadata.federation_entity !== null);
     const schemaErrorDetails = parsedWalletMetadataError ?? '';
     const metadataSchemaErrorMessage =
-      'JWT payload metadata must be valid against io-wallet-sdk schemas' +
-      (schemaErrorDetails.length > 0 ? `: ${schemaErrorDetails}` : '');
+      'JWT payload metadata must be a valid schema' + (schemaErrorDetails.length > 0 ? `: ${schemaErrorDetails}` : '');
 
     expect(hasWalletSolution, `JWT payload metadata.wallet_solution must be present and be an object`).toBe(true);
     expect(
