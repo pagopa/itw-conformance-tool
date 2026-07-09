@@ -30,23 +30,15 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-function assertionBadgeClass(status: JsonReporterAssertionResult['status']): string {
-  if (status === 'passed') {
-    return 'ok';
-  }
-  if (status === 'failed') {
-    return 'ko';
-  }
+function assertionBadgeClass(status: JsonReporterAssertionResult['status']): 'ok' | 'ko' | 'pending' {
+  if (status === 'passed') return 'ok';
+  if (status === 'failed') return 'ko';
   return 'pending';
 }
 
 function assertionLabel(status: JsonReporterAssertionResult['status']): string {
-  if (status === 'passed') {
-    return 'SUPERATO';
-  }
-  if (status === 'failed') {
-    return 'FALLITO';
-  }
+  if (status === 'passed') return 'SUPERATO';
+  if (status === 'failed') return 'FALLITO';
   return 'PARZIALE';
 }
 
@@ -62,266 +54,288 @@ function computeComplianceTheme(percent: number): ComplianceTheme {
   if (percent >= 100) {
     return {
       key: 'complete',
-      label: 'Conformita completa',
-      bannerBg: '#ecfdf3',
-      bannerBorder: '#0e6b3f',
-      bannerText: '#0e6b3f'
+      label: 'Conformità completa',
+      bannerBg: '#f0fdf4',
+      bannerBorder: '#bbf7d0',
+      bannerText: '#15803d'
     };
   }
-
   if (percent >= 50) {
     return {
       key: 'partial',
-      label: 'Conformita parziale',
-      bannerBg: '#fff8e8',
-      bannerBorder: '#8b5d00',
-      bannerText: '#8b5d00'
+      label: 'Conformità parziale',
+      bannerBg: '#fffbeb',
+      bannerBorder: '#fde68a',
+      bannerText: '#92400e'
     };
   }
-
   return {
     key: 'low',
-    label: 'Conformita bassa',
-    bannerBg: '#fef1f3',
-    bannerBorder: '#9f1239',
-    bannerText: '#9f1239'
+    label: 'Conformità bassa',
+    bannerBg: '#fef2f2',
+    bannerBorder: '#fecdd3',
+    bannerText: '#be123c'
   };
 }
 
 function statusIcon(status: JsonReporterAssertionResult['status']): string {
-  if (status === 'passed') {
-    return '✓';
-  }
-
-  if (status === 'failed') {
-    return '!';
-  }
-
-  return '△';
+  if (status === 'passed') return '✓';
+  if (status === 'failed') return '!';
+  return '▲';
 }
 
 export function renderHtmlReport(jsonReporter: JsonReporterResult, options: HtmlPdfGeneratorOptions = {}): string {
   const title = options.title ?? 'IT-Wallet Conformance Report';
-  const generatedAt = (options.generatedAt ?? new Date()).toISOString();
+  const generatedAt = options.generatedAt ?? new Date();
   const totalTests = Math.max(jsonReporter.numTotalTests, 1);
   const compliancePercent = Math.round((jsonReporter.numPassedTests / totalTests) * 100);
-  const complianceTheme = computeComplianceTheme(compliancePercent);
+  const ct = computeComplianceTheme(compliancePercent);
   const reportVersion = options.reportVersion ?? 'V. 2.3.1';
-
-  const detailCards: Array<{ label: string; value: string }> = [
-    { label: 'Ente', value: options.solutionEntity ?? '-' },
-    { label: 'Nome della soluzione', value: options.solutionName ?? '-' },
-    { label: 'Profilo', value: options.profile ?? '-' },
-    { label: 'Data e ora', value: jsonReporter.meta.startedAt },
-    { label: 'Versione regole', value: options.rulesVersion ?? '-' },
-    { label: 'Run ID', value: jsonReporter.meta.runId }
-  ];
+  const solutionEntity = options.solutionEntity ?? '-';
+  const solutionName = options.solutionName ?? '-';
+  const profile = options.profile ?? '-';
+  const rulesVersion = options.rulesVersion ?? '-';
+  const isComplete = compliancePercent >= 100;
 
   const criticalFailures = jsonReporter.testResults
-    .flatMap((suite) =>
-      suite.assertionResults
-        .filter((assertion) => assertion.status === 'failed')
-        .map((assertion) => `${suite.name} - ${assertion.title}`)
-    )
+    .flatMap((suite) => suite.assertionResults.filter((a) => a.status === 'failed').map((a) => a.title))
     .slice(0, 5);
 
-  const detailCardsHtml = detailCards
+  const showCritical = !isComplete && criticalFailures.length > 0;
+
+  const passedWord = jsonReporter.numPassedTests === 1 ? 'è stato superato' : 'sono stati superati';
+  const partialWord = jsonReporter.numPendingTests === 1 ? 'è parzialmente conforme' : 'sono parzialmente conformi';
+  const failedWord = jsonReporter.numFailedTests === 1 ? 'è fallito' : 'sono falliti';
+  const controlWord = isComplete ? 'di validazione' : 'di conformità';
+
+  const sintesiP1 = `${escapeHtml(solutionEntity)} ha eseguito ${isComplete ? 'la validazione di conformità' : 'una verifica di conformità'} per ${escapeHtml(solutionName)} (profilo ${escapeHtml(profile)}) secondo le Regole Tecniche ${escapeHtml(rulesVersion)} il ${escapeHtml(jsonReporter.meta.startedAt)}.`;
+  const sintesiP2 = `Su ${jsonReporter.numTotalTests} controlli ${controlWord}, ${jsonReporter.numPassedTests} ${passedWord} con successo, ${jsonReporter.numPendingTests} ${partialWord} e ${jsonReporter.numFailedTests} ${failedWord}. Questo porta a un tasso di conformità del ${compliancePercent}% e a uno stato complessivo di <strong style="color:${ct.bannerText}">${escapeHtml(ct.label)}</strong>.`;
+
+  const detailRows: Array<{ icon: string; label: string; value: string; full?: boolean }> = [
+    { icon: '🏛', label: 'Ente', value: solutionEntity },
+    { icon: '', label: 'Nome della soluzione', value: solutionName },
+    { icon: '', label: 'Profilo', value: profile },
+    { icon: '🗓', label: "Data e ora dell'esecuzione", value: jsonReporter.meta.startedAt },
+    { icon: '', label: 'Versione delle regole tecniche', value: rulesVersion, full: true }
+  ];
+
+  const detailHtml = detailRows
     .map(
-      (item) => `<article class="detail-card">
-        <div class="detail-k">${escapeHtml(item.label)}</div>
-        <div class="detail-v">${escapeHtml(item.value)}</div>
-      </article>`
+      (row) =>
+        `<article class="det-card${row.full ? ' det-full' : ''}">
+          <div class="det-lbl">${row.icon ? `<span>${escapeHtml(row.icon)}</span> ` : ''}${escapeHtml(row.label)}</div>
+          <div class="det-val">${escapeHtml(row.value)}</div>
+        </article>`
     )
-    .join('\n');
+    .join('');
 
-  let controlIndex = 0;
+  const criticalHtml = showCritical
+    ? `<div class="crit-box">
+        <p class="crit-title">Problemi critici che richiedono un'azione correttiva:</p>
+        <div class="crit-list">
+          ${criticalFailures.map((item) => `<div class="crit-item">${escapeHtml(item)}</div>`).join('')}
+        </div>
+      </div>`
+    : '';
 
-  const controls = jsonReporter.testResults
-    .map((suite) => {
-      return suite.assertionResults
-        .map((assertion) => {
-          controlIndex += 1;
-          const statusClass = assertionBadgeClass(assertion.status);
-          const hasDetails = assertion.failureMessages.length > 0;
-          const controlId = `CI_${String(controlIndex).padStart(3, '0')}`;
-
-          const detailsHtml = hasDetails
-            ? `<section class="control-extra ${statusClass === 'ko' ? 'fail' : 'pending'}">
-                <div class="extra-row">
-                  <div class="extra-k">Problema Identificato</div>
-                  <div class="extra-v">${escapeHtml(assertion.failureMessages[0] ?? '-')}</div>
-                </div>
-                <div class="extra-row">
-                  <div class="extra-k">Motivo</div>
-                  <div class="extra-v">${escapeHtml(assertion.failureMessages.slice(1).join(' | ') || assertion.title)}</div>
-                </div>
-              </section>`
-            : '';
-
-          return `<article class="control-card ${statusClass}">
-            <div class="control-head">
-              <div class="control-left">
-                <span class="status-icon ${statusClass}">${statusIcon(assertion.status)}</span>
-                <span class="control-id">${escapeHtml(controlId)}</span>
-                <h3>${escapeHtml(suite.name)} - ${escapeHtml(assertion.title)}</h3>
+  let ctrlIdx = 0;
+  const controlsHtml = jsonReporter.testResults
+    .flatMap((suite) =>
+      suite.assertionResults.map((a) => {
+        ctrlIdx += 1;
+        const cls = assertionBadgeClass(a.status);
+        const ctrlId = `CI_${String(ctrlIdx).padStart(3, '0')}`;
+        const hasDetail = a.failureMessages.length > 0;
+        const detailBoxes = hasDetail
+          ? `<div class="ctrl-details">
+              <div class="ctrl-det-row ${cls === 'ko' ? 'det-fail' : 'det-warn'}">
+                <div class="ctrl-det-k">Problema Identificato:</div>
+                <div class="ctrl-det-v">${escapeHtml(a.failureMessages[0] ?? '-')}</div>
               </div>
-              <span class="badge ${statusClass}">${assertionLabel(assertion.status)}</span>
-            </div>
-            <div class="control-meta">
-              <span>Requirement: ${escapeHtml(assertion.meta.requirementId || '-')}</span>
-              <span>Step: ${escapeHtml(suite.name)}</span>
-              <span>Timestamp: ${escapeHtml(assertion.meta.timestamp || '-')}</span>
-              <span>HTTP: ${assertion.meta.httpStatus ?? '-'}</span>
-            </div>
-            ${detailsHtml}
-          </article>`;
-        })
-        .join('\n');
-    })
-    .join('\n');
+              <div class="ctrl-det-row ${cls === 'ko' ? 'det-fail' : 'det-warn'}">
+                <div class="ctrl-det-k">Motivo:</div>
+                <div class="ctrl-det-v">${escapeHtml(a.failureMessages.slice(1).join(' | ') || a.title)}</div>
+              </div>
+            </div>`
+          : '';
 
-  const criticalIssuesHtml =
-    complianceTheme.key === 'low' && criticalFailures.length > 0
-      ? `<section class="critical-box">
-          <h2>Problemi critici</h2>
-          <ul>
-            ${criticalFailures.map((item) => `<li>${escapeHtml(item)}</li>`).join('\n')}
-          </ul>
-        </section>`
-      : '';
+        return `<article class="ctrl-card ctrl-${cls}">
+          <div class="ctrl-row">
+            <div class="ctrl-l">
+              <span class="ctrl-icon ctrl-icon-${cls}">${statusIcon(a.status)}</span>
+              <div class="ctrl-info">
+                <div class="ctrl-hd">
+                  <span class="ctrl-id">${escapeHtml(ctrlId)}</span>
+                  <span class="ctrl-name">${escapeHtml(a.title)}</span>
+                </div>
+                ${a.meta.requirementId ? `<div class="ctrl-req">${escapeHtml(a.meta.requirementId)}</div>` : ''}
+              </div>
+            </div>
+            <span class="ctrl-badge ctrl-badge-${cls}">${assertionLabel(a.status)}</span>
+          </div>
+          ${detailBoxes}
+        </article>`;
+      })
+    )
+    .join('');
 
   return `<!doctype html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(title)}</title>
+  <title>Wallet Conformance Tool Report</title>
   <style>
-    :root {
-      --bg: #f3f4f6;
-      --card: #ffffff;
-      --ink: #142033;
-      --muted: #6b7280;
-      --ok: #0e6b3f;
-      --ko: #9f1239;
-      --pending: #8b5d00;
-      --border: #e5e7eb;
-      --soft: #f9fafb;
-      --ok-soft: #e8f4e9;
-      --ko-soft: #f9e2e4;
-      --pending-soft: #f8f3da;
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#f0f1f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111827}
+    .page{padding:32px 24px;min-height:100vh}
+    .page-lbl{color:#9ca3af;font-size:13px;margin-bottom:12px}
+    .card{max-width:960px;margin:0 auto;background:#fff;border-radius:20px;padding:36px;box-shadow:0 4px 24px rgba(0,0,0,.07)}
+    .rpt-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+    .rpt-title{font-size:26px;font-weight:700;color:#111827;line-height:1.2}
+    .rpt-sub{font-size:13px;color:#6b7280;margin-top:5px}
+    .ver-badge{border:1.5px solid #d1d5db;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;color:#374151;white-space:nowrap}
+    .banner{border-radius:12px;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+    .banner-l{display:flex;flex-direction:column;gap:6px}
+    .banner-meta{font-size:12px;font-weight:500}
+    .banner-status{font-size:28px;font-weight:700;line-height:1.2}
+    .banner-r{text-align:right;flex-shrink:0}
+    .banner-pct{font-size:52px;font-weight:700;line-height:1}
+    .banner-pct-lbl{font-size:12px;font-weight:500;margin-top:3px}
+    .section{margin-top:28px}
+    .sec-title{font-size:16px;font-weight:600;color:#111827;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+    .det-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .det-card{border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;background:#fafafa}
+    .det-full{grid-column:1/-1}
+    .det-lbl{font-size:12px;color:#6b7280;margin-bottom:5px}
+    .det-val{font-size:14px;font-weight:600;color:#111827}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .stat{border-radius:10px;padding:16px;border:1.5px solid}
+    .stat-lbl{font-size:12px;font-weight:500;margin-bottom:8px}
+    .stat-val{font-size:34px;font-weight:700;line-height:1}
+    .s-total{border-color:#d1d5db;background:#f9fafb}.s-total .stat-lbl,.s-total .stat-val{color:#4b5563}
+    .s-pass{border-color:#86efac;background:#f0fdf4}.s-pass .stat-lbl,.s-pass .stat-val{color:#15803d}
+    .s-partial{border-color:#fde68a;background:#fffbeb}.s-partial .stat-lbl,.s-partial .stat-val{color:#92400e}
+    .s-fail{border-color:#fca5a5;background:#fef2f2}.s-fail .stat-lbl,.s-fail .stat-val{color:#be123c}
+    .sintesi{font-size:14px;color:#374151;line-height:1.75}
+    .sintesi p{margin-bottom:10px}
+    .crit-box{margin-top:16px;border:1.5px solid #fca5a5;border-radius:10px;background:#fff5f5;padding:16px}
+    .crit-title{font-size:13px;font-weight:600;color:#be123c;margin-bottom:10px}
+    .crit-list{display:flex;flex-direction:column;gap:6px}
+    .crit-item{background:#fff;border:1px solid #fee2e2;border-radius:7px;padding:10px 14px;color:#be123c;font-size:13px;font-weight:500}
+    .ctrl-list{display:flex;flex-direction:column;gap:10px}
+    .ctrl-card{border-radius:12px;border:1.5px solid;padding:16px}
+    .ctrl-ok{border-color:#86efac;background:#f0fdf4}
+    .ctrl-ko{border-color:#fca5a5;background:#fef2f2}
+    .ctrl-pending{border-color:#fde68a;background:#fffbeb}
+    .ctrl-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .ctrl-l{display:flex;align-items:flex-start;gap:12px;flex:1;min-width:0}
+    .ctrl-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;margin-top:1px}
+    .ctrl-icon-ok{background:#15803d;color:#fff}
+    .ctrl-icon-ko{background:#be123c;color:#fff}
+    .ctrl-icon-pending{background:#92400e;color:#fff}
+    .ctrl-info{flex:1;min-width:0}
+    .ctrl-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .ctrl-id{font-size:11px;font-weight:700;color:#6b7280;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:5px;padding:2px 8px;white-space:nowrap}
+    .ctrl-name{font-size:14px;font-weight:600;color:#111827}
+    .ctrl-req{font-size:11px;color:#9ca3af;margin-top:3px}
+    .ctrl-badge{border-radius:999px;padding:5px 13px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
+    .ctrl-badge-ok{color:#15803d;background:#dcfce7}
+    .ctrl-badge-ko{color:#be123c;background:#fee2e2}
+    .ctrl-badge-pending{color:#92400e;background:#fef3c7}
+    .ctrl-details{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+    .ctrl-det-row{border:1px solid #e5e7eb;border-left:4px solid;border-radius:8px;background:#fff;padding:10px 14px}
+    .det-fail{border-left-color:#f87171}
+    .det-warn{border-left-color:#fbbf24}
+    .ctrl-det-k{font-size:11px;font-weight:700;color:#374151;margin-bottom:4px}
+    .ctrl-det-v{font-size:13px;color:#111827}
+    .rpt-footer{margin-top:32px;padding-top:20px;border-top:1px solid #e5e7eb}
+    .ft-text{font-size:13px;color:#6b7280}
+    .ft-id{font-size:13px;color:#374151;font-weight:500;margin-top:4px}
+    .ft-date{font-size:12px;color:#9ca3af;margin-top:3px}
+    @media(max-width:700px){
+      .stats{grid-template-columns:1fr 1fr}
+      .det-grid{grid-template-columns:1fr}
+      .det-full{grid-column:auto}
+      .rpt-hdr{flex-direction:column}
+      .banner{flex-direction:column;gap:12px;align-items:flex-start}
+      .ctrl-row{flex-direction:column}
     }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 28px; background: var(--bg); color: var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
-    .container { max-width: 1024px; margin: 0 auto; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); }
-    h1 { margin: 0; font-size: 32px; line-height: 1.12; font-weight: 700; color: #111827; }
-    h2 { margin: 0 0 12px; font-size: 18px; color: #111827; }
-    h3 { margin: 0; font-size: 14px; color: #111827; font-weight: 600; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
-    .subtitle { color: var(--muted); font-size: 13px; margin-top: 6px; }
-    .version { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; color: #4b5563; font-size: 12px; font-weight: 600; }
-    .banner { border: 1px solid ${complianceTheme.bannerBorder}; background: ${complianceTheme.bannerBg}; border-radius: 12px; padding: 14px; color: ${complianceTheme.bannerText}; font-weight: 700; margin: 8px 0 24px; }
-    .banner small { font-weight: 600; margin-left: 8px; }
-    .section { margin-top: 24px; }
-    .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .detail-card { border: 1px solid var(--border); border-radius: 12px; background: var(--soft); padding: 14px; min-height: 74px; }
-    .detail-k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-    .detail-v { color: #1f2937; font-size: 14px; font-weight: 600; word-break: break-word; }
-    .stats { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; }
-    .stat { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: #ffffff; min-height: 94px; }
-    .stat .k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-    .stat .v { font-size: 24px; font-weight: 700; color: #111827; }
-    .stat.pass { border-color: #0e6b3f; background: #ecfdf3; }
-    .stat.partial { border-color: #8b5d00; background: #fff8e8; }
-    .stat.fail { border-color: #9f1239; background: #fef1f3; }
-    .controls { display: grid; gap: 12px; }
-    .control-card { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 14px; }
-    .control-card.ok { background: var(--ok-soft); border-color: #9bc6a8; }
-    .control-card.ko { background: var(--ko-soft); border-color: #de9aa4; }
-    .control-card.pending { background: var(--pending-soft); border-color: #d1bc78; }
-    .control-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .control-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .control-id { display: inline-flex; align-items: center; border: 1px solid #d1d5db; border-radius: 999px; background: #f5f6f8; color: #4b5563; padding: 4px 10px; font-size: 12px; font-weight: 700; }
-    .status-icon { width: 26px; height: 26px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; }
-    .status-icon.ok { color: var(--ok); background: #dcfce7; }
-    .status-icon.ko { color: var(--ko); background: #ffe4e6; }
-    .status-icon.pending { color: var(--pending); background: #fef3c7; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-    .badge.ok { color: var(--ok); background: #e8f7ee; }
-    .badge.ko { color: var(--ko); background: #fdecef; }
-    .badge.pending { color: var(--pending); background: #fff5e6; }
-    .control-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: #6b7280; font-size: 12px; }
-    .control-extra { margin-top: 10px; display: grid; gap: 8px; }
-    .control-extra.fail .extra-row { border-left-color: #ef4444; }
-    .control-extra.pending .extra-row { border-left-color: #eab308; }
-    .extra-row { margin-bottom: 8px; }
-    .extra-row:last-child { margin-bottom: 0; }
-    .extra-row { border: 1px solid #e5e7eb; border-left: 4px solid #d1d5db; border-radius: 10px; background: #ffffff; padding: 10px; }
-    .extra-k { color: #374151; font-size: 12px; font-weight: 700; }
-    .extra-v { color: #111827; font-size: 13px; margin-top: 4px; }
-    .critical-box { margin-top: 16px; border: 1px solid #fda4af; background: #ffe4e6; border-radius: 12px; padding: 12px; }
-    .critical-box h2 { color: #9f1239; font-size: 16px; margin: 0 0 8px; }
-    .critical-box ul { margin: 0; padding-left: 20px; }
-    .critical-box li { color: #9f1239; margin: 4px 0; font-size: 13px; }
-    @media (max-width: 800px) {
-      .header { flex-direction: column; }
-      .detail-grid { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .control-head { flex-direction: column; align-items: flex-start; }
-    }
-    @media print {
-      body { padding: 0; background: #fff; }
-      .card { box-shadow: none; border: none; border-radius: 0; }
-      .control-card { page-break-inside: avoid; }
+    @media print{
+      body{background:#fff;padding:0}
+      .card{box-shadow:none;border:none;border-radius:0}
+      .ctrl-card{page-break-inside:avoid}
     }
   </style>
 </head>
 <body>
-  <main class="container card">
-    <header class="header">
-      <div>
-        <h1>${escapeHtml(title)}</h1>
-        <div class="subtitle">Report di verifica di conformita IT-Wallet</div>
+  <div class="page">
+    <p class="page-lbl">Wallet Conformance Tool Report</p>
+    <main class="card">
+
+      <header class="rpt-hdr">
+        <div>
+          <h1 class="rpt-title">${escapeHtml(title)}</h1>
+          <p class="rpt-sub">Risultato della verifica di conformità tecnica</p>
+        </div>
+        <span class="ver-badge">${escapeHtml(reportVersion)}</span>
+      </header>
+
+      <div class="banner" style="background:${ct.bannerBg};border:1.5px solid ${ct.bannerBorder};color:${ct.bannerText}">
+        <div class="banner-l">
+          <span class="banner-meta">Stato di Conformità Complessivo</span>
+          <span class="banner-status">${escapeHtml(ct.label)}</span>
+        </div>
+        <div class="banner-r">
+          <div class="banner-pct">${compliancePercent}%</div>
+          <div class="banner-pct-lbl">Tasso di Conformità</div>
+        </div>
       </div>
-      <div class="version">${escapeHtml(reportVersion)}</div>
-    </header>
 
-    <section class="banner">
-      ${escapeHtml(complianceTheme.label)}
-      <small>(${compliancePercent}% di controlli superati)</small>
-    </section>
+      <section class="section">
+        <h2 class="sec-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          Dettagli del test
+        </h2>
+        <div class="det-grid">${detailHtml}</div>
+      </section>
 
-    <section class="section">
-      <h2>Dettagli del test</h2>
-      <div class="detail-grid">
-        ${detailCardsHtml}
-      </div>
-    </section>
+      <section class="section">
+        <h2 class="sec-title">${isComplete ? 'Riepilogo Validazione' : 'Riepilogo della verifica'}</h2>
+        <div class="stats">
+          <article class="stat s-total"><div class="stat-lbl">Controlli Totali</div><div class="stat-val">${jsonReporter.numTotalTests}</div></article>
+          <article class="stat s-pass"><div class="stat-lbl">Superati</div><div class="stat-val">${jsonReporter.numPassedTests}</div></article>
+          <article class="stat s-partial"><div class="stat-lbl">Parziali</div><div class="stat-val">${jsonReporter.numPendingTests}</div></article>
+          <article class="stat s-fail"><div class="stat-lbl">Falliti</div><div class="stat-val">${jsonReporter.numFailedTests}</div></article>
+        </div>
+      </section>
 
-    <section class="section">
-      <h2>Riepilogo della verifica</h2>
-      <div class="stats">
-        <article class="stat"><div class="k">Controlli Totali</div><div class="v">${jsonReporter.numTotalTests}</div></article>
-        <article class="stat pass"><div class="k">Superati</div><div class="v">${jsonReporter.numPassedTests}</div></article>
-        <article class="stat partial"><div class="k">Parziali</div><div class="v">${jsonReporter.numPendingTests}</div></article>
-        <article class="stat fail"><div class="k">Falliti</div><div class="v">${jsonReporter.numFailedTests}</div></article>
-      </div>
-    </section>
+      <section class="section">
+        <h2 class="sec-title">Sintesi Esecutiva</h2>
+        <div class="sintesi">
+          <p>${sintesiP1}</p>
+          <p>${sintesiP2}</p>
+        </div>
+        ${criticalHtml}
+      </section>
 
-    ${criticalIssuesHtml}
+      ${
+        controlsHtml.trim().length > 0
+          ? `<section class="section">
+        <h2 class="sec-title">Dettaglio dei controlli di conformità</h2>
+        <div class="ctrl-list">${controlsHtml}</div>
+      </section>`
+          : ''
+      }
 
-    <section class="section">
-      <h2>Dettaglio dei controlli di conformita</h2>
-      <div class="controls">
-        ${controls}
-      </div>
-    </section>
+      <footer class="rpt-footer">
+        <p class="ft-text">Questo rapporto è stato generato automaticamente dallo Strumento di Conformità IT-Wallet.</p>
+        <p class="ft-id">ID Rapporto: ${escapeHtml(jsonReporter.meta.runId)}</p>
+        <p class="ft-date">Generato il: ${escapeHtml(generatedAt.toLocaleString('it-IT'))}</p>
+      </footer>
 
-    <div class="subtitle" style="margin-top: 18px;">
-      Stato run: ${escapeHtml(jsonReporter.meta.status)} | Avvio: ${escapeHtml(jsonReporter.meta.startedAt)} | Chiusura: ${escapeHtml(jsonReporter.meta.closedAt ?? '-')} | Generato: ${escapeHtml(generatedAt)}
-    </div>
-  </main>
+    </main>
+  </div>
 </body>
 </html>`;
 }

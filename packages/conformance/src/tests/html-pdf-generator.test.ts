@@ -100,8 +100,9 @@ describe('html-pdf-generator', () => {
     expect(html).toContain('IT-Wallet Conformance Report');
     expect(html).toContain('Dettagli del test');
     expect(html).toContain('Riepilogo della verifica');
-    expect(html).toContain('Dettaglio dei controlli di conformita');
-    expect(html).toContain('Conformita parziale');
+    expect(html).toContain('Dettaglio dei controlli di conformità');
+    expect(html).toContain('Conformità parziale');
+    expect(html).toContain('Sintesi Esecutiva');
     expect(html).toContain('CI_001');
     expect(html).toContain('IT-WALLET-1.4-§4.3.2');
     expect(html).toContain('FALLITO');
