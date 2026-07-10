@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
+import { ConfigIniTemplate, parseConfigIni, type ConfigSchemaType } from '@itw-conformance-tool/config';
 
 import { createSelfSignedCertificateFromJwk, getIACAChain } from '../utils/certificates.js';
 import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
@@ -11,7 +11,7 @@ import { existsFileSync } from '../utils/search.js';
 import type { CLIFlags } from '../types/types.js';
 
 type InitConfig = {
-  global: Pick<ConfigType['global'], 'data_dir' | 'https' | 'log_level'>;
+  global: Pick<ConfigSchemaType['global'], 'data_dir' | 'https' | 'log_level'>;
 };
 
 /** Initializes the configuration file.
@@ -22,14 +22,13 @@ type InitConfig = {
 function checkConfig(flags: CLIFlags): InitConfig {
   const configFilePath = resolve(process.cwd(), 'config.ini');
   if (!existsFileSync(configFilePath) || flags.force) {
-    writeFileSync(configFilePath, ConfigINITemplate, { encoding: 'utf8', flag: 'w' });
-
+    writeFileSync(configFilePath, ConfigIniTemplate, { encoding: 'utf8', flag: 'w' });
     process.stdout.write(`✓ ${flags.force ? 'Overwritten' : 'Created'} config.ini → ./config.ini\n`);
   } else {
     process.stdout.write(`✓ config.ini already exists → skipped (use --force to overwrite)\n`);
   }
 
-  const configs = parseINI(configFilePath).data;
+  const configs = parseConfigIni(configFilePath);
   const previousDataDir = configs.global.data_dir;
   configs.global.data_dir = expandPath(configs.global.data_dir);
 

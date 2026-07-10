@@ -1,9 +1,9 @@
-import type { ConfigType } from '@itw-conformance-tool/config';
+import type { ConfigSchemaType } from '@itw-conformance-tool/config';
 
 /**
  * Builds the environment variables for the Nx CLI based on the provided configuration.
  */
-export function buildEnv(configs: ConfigType) {
+export function buildEnv(configs: ConfigSchemaType) {
   const keysToAdd = {
     ITW_CT_DATA_DIR: configs.global.data_dir,
     ITW_CT_LOG_LEVEL: configs.global.log_level,

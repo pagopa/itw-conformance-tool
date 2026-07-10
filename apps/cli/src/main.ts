@@ -17,9 +17,6 @@ async function main() {
   const { command, flags } = parseCLIArgs(process.argv.slice(2), nxRootPath);
 
   const configResult = loadConfig(flags);
-  if (!configResult.ok) {
-    throw new Error('Failed to load configuration: ' + configResult.error);
-  }
 
   const config = configResult.data;
 

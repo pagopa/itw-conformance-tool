@@ -1,4 +1,3 @@
-export { parseINI } from './services/parseINI.js';
+export { parseConfigIni } from './parser.js';
 
-export type { ConfigType, ParseINIReturn } from './types/types.js';
-export { ConfigINITemplate } from './schemas/schemas.js';
+export { ConfigIniTemplate, type ConfigSchemaType, DEFAULT_CONFIG } from './schemas.js';

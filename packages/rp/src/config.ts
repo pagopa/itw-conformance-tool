@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { parseINI } from '@itw-conformance-tool/config';
+import { DEFAULT_CONFIG, parseConfigIni } from '@itw-conformance-tool/config';
 import { z } from 'zod';
 
 export const DEFAULT_HOST = '0.0.0.0';
@@ -76,7 +76,7 @@ export function deriveBaseUrl(input: { host: string; port: number; scheme?: 'htt
 export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
   const env = input.env ?? process.env;
   const configFileFound = existsSync(input.configFilePath);
-  const { data } = parseINI(input.configFilePath);
+  const data = configFileFound ? parseConfigIni(input.configFilePath) : DEFAULT_CONFIG;
 
   const port = parsePortOverride(env, 'ITW_CT_RP_PORT') ?? data.rp.port;
 

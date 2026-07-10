@@ -1,13 +1,13 @@
 import { resolve } from 'node:path';
 
-import { parseINI, type ParseINIReturn } from '@itw-conformance-tool/config';
+import { DEFAULT_CONFIG, parseConfigIni, type ConfigSchemaType } from '@itw-conformance-tool/config';
 
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
 
-export type LoadConfigResult = ParseINIReturn & { configFileFound: boolean };
+export type LoadConfigResult = { data: ConfigSchemaType; configFileFound: boolean };
 
 /** It loads the configuration file based on the provided CLI flags and root path.
  *
@@ -15,32 +15,32 @@ export type LoadConfigResult = ParseINIReturn & { configFileFound: boolean };
  * @returns The loaded configuration object.
  */
 export function loadConfig(flags: CLIFlags): LoadConfigResult {
-  let parsedConfig = parseINI('.');
-  let configFileExists = false;
+  let configFileFound = false;
+  let data: ConfigSchemaType = DEFAULT_CONFIG;
 
   if (flags.config.value) {
     const configFilePath = expandPath(flags.config.path);
-    const alreadyExists = existsFileSync(configFilePath);
-
-    if (alreadyExists) {
-      parsedConfig = parseINI(configFilePath);
-      configFileExists = true;
+    if (!existsFileSync(configFilePath)) {
+      throw new Error(`Config file not found at path: ${configFilePath}`);
     }
+
+    data = parseConfigIni(configFilePath);
+    configFileFound = true;
   } else {
     const defaultConfigPath = resolve(process.cwd(), 'config.ini');
     if (existsFileSync(defaultConfigPath)) {
-      parsedConfig = parseINI(defaultConfigPath);
-      configFileExists = true;
+      data = parseConfigIni(defaultConfigPath);
+      configFileFound = true;
     }
   }
 
-  if (!configFileExists) {
+  if (!configFileFound) {
     process.stdout.write(
       `WARN: config.ini not found. Starting with default values.` +
         `\n      Run \`itw-conformance-tool init\` to create the configuration file.\n`
     );
   }
 
-  parsedConfig.data.global.data_dir = expandPath(parsedConfig.data.global.data_dir);
-  return { ...parsedConfig, configFileFound: configFileExists };
+  data.global.data_dir = expandPath(data.global.data_dir);
+  return { data, configFileFound };
 }
