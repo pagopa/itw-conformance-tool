@@ -9,7 +9,7 @@ declare module 'fastify' {
     config: {
       BASE_URL: string;
       DATA_DIR: string;
-      AUTH_FLOW: 'direct' | 'l2plus' | 'l3';
+      AUTH_FLOW: (typeof AUTH_FLOW_VALUES)[number];
     };
   }
 }

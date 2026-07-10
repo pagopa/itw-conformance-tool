@@ -23,7 +23,7 @@ declare module 'fastify' {
   }
 }
 
-const REQUIRED_FILES = ['signing-keys.jwks.json', 'iaca-cert.pem', 'iaca-key.pem'] as const;
+const REQUIRED_FILES = ['jwks.json', 'iaca-cert.pem', 'iaca-key.pem'] as const;
 
 type StoredJwk = {
   kty?: string;
@@ -135,7 +135,7 @@ async function ensureKeyMaterialExists(dir: string): Promise<{
 export default fp(
   async function keysPlugin(app) {
     const keysDir = path.join(app.config.DATA_DIR, 'issuer');
-    const jwksPath = path.join(keysDir, 'signing-keys.jwks.json');
+    const jwksPath = path.join(keysDir, 'jwks.json');
 
     const { jwks, certPem, keyPem } = await ensureKeyMaterialExists(keysDir);
 

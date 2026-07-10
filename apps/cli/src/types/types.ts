@@ -15,7 +15,7 @@ export type Service = 'issuer' | 'rp';
 export type ServiceCommand = 'init' | 'start';
 
 // Interfaces
-export interface CLIFlags {
+export interface CliFlags {
   issuer: boolean;
   rp: boolean;
   all: boolean;

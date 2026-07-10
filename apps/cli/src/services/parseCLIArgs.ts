@@ -2,7 +2,7 @@ import { expandPath } from '../utils/path.js';
 import { printHelp, printVersion } from '../utils/prompt.js';
 import { searchParamValue } from '../utils/search.js';
 
-import type { CLIFlags } from '../types/types.js';
+import type { CliFlags } from '../types/types.js';
 
 /** Parses start command flags.
  *
@@ -10,7 +10,7 @@ import type { CLIFlags } from '../types/types.js';
  * @param flags - The flags object to populate.
  * @returns void
  */
-function parseStartFlags(args: string[], flags: CLIFlags): void {
+function parseStartFlags(args: string[], flags: CliFlags): void {
   const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
   if (configResult) {
     flags.config.value = true;
@@ -45,7 +45,7 @@ function parseStartFlags(args: string[], flags: CLIFlags): void {
  * @param flags - The flags object to populate.
  * @returns void
  */
-function parseInitFlags(args: string[], flags: CLIFlags): void {
+function parseInitFlags(args: string[], flags: CliFlags): void {
   for (const arg of args) {
     const lowerArg = arg.toLowerCase();
     if (lowerArg === '--force' || lowerArg === '-f') {
@@ -62,7 +62,7 @@ function parseInitFlags(args: string[], flags: CLIFlags): void {
  * @param flags - The flags object to populate.
  * @returns void
  */
-function parseReportListFlags(args: string[], flags: CLIFlags): void {
+function parseReportListFlags(args: string[], flags: CliFlags): void {
   const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
   if (configResult) {
     flags.config.value = true;
@@ -81,7 +81,7 @@ function parseReportListFlags(args: string[], flags: CLIFlags): void {
  * @param flags - The flags object to populate.
  * @returns void
  */
-function parseReportCreateFlags(args: string[], flags: CLIFlags): void {
+function parseReportCreateFlags(args: string[], flags: CliFlags): void {
   const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
   if (configResult) {
     flags.config.value = true;
@@ -113,7 +113,7 @@ function parseReportCreateFlags(args: string[], flags: CLIFlags): void {
  * @param flags - The flags object to populate.
  * @returns void
  */
-function parseTestFlags(args: string[], flags: CLIFlags): void {
+function parseTestFlags(args: string[], flags: CliFlags): void {
   const configResult = searchParamValue('--config', args) ?? searchParamValue('-c', args);
   if (configResult) {
     flags.config.value = true;
@@ -132,7 +132,7 @@ function parseTestFlags(args: string[], flags: CLIFlags): void {
  * @param argv - The array of command-line arguments.
  * @returns An object containing the parsed command and flags.
  */
-export function parseCLIArgs(argv: string[], rootPath: string): { command: string; flags: CLIFlags } {
+export function parseCLIArgs(argv: string[], rootPath: string): { command: string; flags: CliFlags } {
   if (argv.length === 0) {
     process.stdout.write(`No command provided. These are the available commands:\n`);
     printHelp();
@@ -166,7 +166,7 @@ export function parseCLIArgs(argv: string[], rootPath: string): { command: strin
     process.exit(1);
   }
 
-  const flags: CLIFlags = {
+  const flags: CliFlags = {
     issuer: false,
     rp: false,
     all: false,

@@ -8,7 +8,7 @@ import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
 
-import type { CLIFlags } from '../types/types.js';
+import type { CliFlags } from '../types/types.js';
 
 type InitConfig = {
   global: Pick<ConfigSchemaType['global'], 'data_dir' | 'https' | 'log_level'>;
@@ -19,7 +19,7 @@ type InitConfig = {
  * @param flags - The command-line flags, which may include a `force` flag to overwrite existing configuration.
  * @returns The parsed configuration object.
  */
-function checkConfig(flags: CLIFlags): InitConfig {
+function checkConfig(flags: CliFlags): InitConfig {
   const configFilePath = resolve(process.cwd(), 'config.ini');
   if (!existsFileSync(configFilePath) || flags.force) {
     writeFileSync(configFilePath, ConfigIniTemplate, { encoding: 'utf8', flag: 'w' });
@@ -47,7 +47,7 @@ function checkConfig(flags: CLIFlags): InitConfig {
  * @param flags - The command-line flags.
  * @returns It performs file system operations to create directories and files as needed based on the configuration and flags.
  */
-async function createFilesAndDirs(configs: InitConfig, flags: CLIFlags): Promise<void> {
+async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise<void> {
   const issuerDirPath = join(configs.global.data_dir, 'issuer');
   mkdirSync(issuerDirPath, { recursive: true });
 
@@ -67,7 +67,7 @@ async function createFilesAndDirs(configs: InitConfig, flags: CLIFlags): Promise
     process.stdout.write(`✓ Generated mock IACA certificates → ${iacaCertPath}\n`);
   }
 
-  const signingKeysPath = join(issuerDirPath, 'signing-keys.jwks.json');
+  const signingKeysPath = join(issuerDirPath, 'jwks.json');
   if (!existsFileSync(signingKeysPath) || flags.force) {
     const signingKeys = getSigningKeys();
     writeFileSync(signingKeysPath, signingKeys, { encoding: 'utf8', flag: 'w' });
@@ -124,7 +124,7 @@ async function createFilesAndDirs(configs: InitConfig, flags: CLIFlags): Promise
  * @param flags - The command-line flags.
  * @returns It performs file system operations and exits the process upon completion.
  */
-export async function init(flags: CLIFlags): Promise<void> {
+export async function init(flags: CliFlags): Promise<void> {
   const configs = checkConfig(flags);
   await createFilesAndDirs(configs, flags);
 }

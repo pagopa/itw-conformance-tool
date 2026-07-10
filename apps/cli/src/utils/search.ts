@@ -55,7 +55,7 @@ export function searchNx(rootPath: string): string {
  */
 export function filesToSearch(filePath: string): string[] {
   const paths = [
-    join(filePath, 'issuer', 'signing-keys.jwks.json'),
+    join(filePath, 'issuer', 'jwks.json'),
     join(filePath, 'issuer', 'iaca-cert.pem'),
     join(filePath, 'issuer', 'iaca-key.pem'),
     join(filePath, 'rp', 'auth-request-key.jwk.json'),
