@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 
 import { ConfigINITemplate, parseINI, type ConfigType } from '@itw-conformance-tool/config';
 
-import { createSelfSignedCertificateFromJwk, getIACAChain, getTlsCertAndKey } from '../utils/certificates.js';
+import { createSelfSignedCertificateFromJwk, getIACAChain } from '../utils/certificates.js';
 import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
 import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
@@ -55,16 +55,6 @@ async function createFilesAndDirs(configs: InitConfig, flags: CLIFlags): Promise
   const rpDirPath = join(configs.global.data_dir, 'rp');
   mkdirSync(rpDirPath, { recursive: true });
 
-  const tlsCertPath = join(configs.global.data_dir, 'tls-cert.pem');
-  const tlsKeyPath = join(configs.global.data_dir, 'tls-key.pem');
-  if (configs.global.https && (!(existsFileSync(tlsCertPath) && existsFileSync(tlsKeyPath)) || flags.force)) {
-    const generatedTls = await getTlsCertAndKey();
-    writeFileSync(tlsCertPath, generatedTls.cert, { encoding: 'utf8', flag: 'w' });
-    writeFileSync(tlsKeyPath, generatedTls.key, { encoding: 'utf8', flag: 'w' });
-
-    process.stdout.write(`✓ Generated local TLS certificate → ${tlsCertPath}\n`);
-  }
-
   const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
   const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
   if (!(existsFileSync(iacaCertPath) && existsFileSync(iacaKeyPath)) || flags.force) {
@@ -99,7 +89,7 @@ async function createFilesAndDirs(configs: InitConfig, flags: CLIFlags): Promise
   for (const [fileName, factory] of rpArtifacts) {
     const filePath = join(rpDirPath, fileName);
     if (!existsFileSync(filePath) || flags.force) {
-      const content = await factory();
+      const content = factory();
       writeFileSync(filePath, content, { encoding: 'utf8', flag: 'w' });
       if (fileName === 'auth-request-key.jwk.json') {
         authRequestKeyContent = content;

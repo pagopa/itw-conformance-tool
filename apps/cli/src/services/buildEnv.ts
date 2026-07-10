@@ -1,13 +1,9 @@
-import type { LogLevel } from '../types/types.js';
 import type { ConfigType } from '@itw-conformance-tool/config';
 
-/** Builds the environment variables for the Nx CLI based on the provided configuration.
- *
- * @param configs - The configuration object containing the necessary values for the environment variables.
- * @param emitLog - A function to emit log messages.
- * @returns An object containing the environment variables for the Nx CLI.
+/**
+ * Builds the environment variables for the Nx CLI based on the provided configuration.
  */
-export function buildEnv(configs: ConfigType, emitLog: (event: string, type?: LogLevel) => void) {
+export function buildEnv(configs: ConfigType) {
   const keysToAdd = {
     ITW_CT_DATA_DIR: configs.global.data_dir,
     ITW_CT_LOG_LEVEL: configs.global.log_level,
@@ -20,8 +16,6 @@ export function buildEnv(configs: ConfigType, emitLog: (event: string, type?: Lo
     ITW_CT_RP_TRUST_ANCHOR_URL: String(configs.rp.trust_anchor_url),
     ITW_CT_WALLET_PROVIDER_BACKEND_URL: String(configs.global.wallet_provider_backend_url)
   };
-
-  emitLog(`\nEnvironment variables for Nx CLI:\n${JSON.stringify(keysToAdd, null, 2)}\n`);
 
   return { ...process.env, ...keysToAdd };
 }

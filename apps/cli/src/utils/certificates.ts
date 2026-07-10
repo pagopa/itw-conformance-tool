@@ -20,12 +20,6 @@ type CertificateOptions = {
   organizationName?: string;
 };
 
-type TlsCertParams = {
-  altNames?: string[];
-  commonName?: string;
-  organizationName?: string;
-};
-
 type IacaChainParams = {
   commonName?: string;
   countryName?: string;
@@ -101,26 +95,6 @@ export async function getIACAChain({
   return {
     certificate: certPem,
     privateKey: keyPem
-  };
-}
-
-export async function getTlsCertAndKey({
-  altNames = [],
-  commonName = 'localhost',
-  organizationName = 'ITW Conformance Tool'
-}: TlsCertParams = {}): Promise<{ cert: string; key: string }> {
-  const { certPem, keyPem } = await generateCertificate({
-    altNames,
-    commonName,
-    organizationName,
-    notAfterDays: 825,
-    isCA: false,
-    keyUsageBits: 0x01 // digitalSignature (ECDSA TLS)
-  });
-
-  return {
-    cert: certPem,
-    key: keyPem
   };
 }
 

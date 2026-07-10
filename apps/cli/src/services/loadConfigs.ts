@@ -7,14 +7,14 @@ import { existsFileSync } from '../utils/search.js';
 
 import type { CLIFlags } from '../types/types.js';
 
-export type LoadConfigsReturn = ParseINIReturn & { configFileFound: boolean };
+export type LoadConfigResult = ParseINIReturn & { configFileFound: boolean };
 
 /** It loads the configuration file based on the provided CLI flags and root path.
  *
  * @param flags - The command-line flags that may contain the path to the configuration file.
  * @returns The loaded configuration object.
  */
-export function loadConfigs(flags: CLIFlags): LoadConfigsReturn {
+export function loadConfig(flags: CLIFlags): LoadConfigResult {
   let parsedConfig = parseINI('.');
   let configFileExists = false;
 

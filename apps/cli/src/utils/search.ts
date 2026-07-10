@@ -53,7 +53,7 @@ export function searchNx(rootPath: string): string {
  * @param httpsEnabled - Whether HTTPS is enabled; when true, TLS cert/key paths are included.
  * @returns An array of file paths for the required keys and certificates.
  */
-export function filesToSearch(filePath: string, httpsEnabled = false): string[] {
+export function filesToSearch(filePath: string): string[] {
   const paths = [
     join(filePath, 'issuer', 'signing-keys.jwks.json'),
     join(filePath, 'issuer', 'iaca-cert.pem'),
@@ -63,10 +63,6 @@ export function filesToSearch(filePath: string, httpsEnabled = false): string[] 
     join(filePath, 'rp', 'federation-key.jwk.json'),
     join(filePath, 'rp', 'x5c-cert.pem')
   ];
-
-  if (httpsEnabled) {
-    paths.push(join(filePath, 'tls-cert.pem'), join(filePath, 'tls-key.pem'));
-  }
 
   return paths;
 }
