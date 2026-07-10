@@ -29,6 +29,7 @@ describe('DatabaseClient', () => {
     expect(names).toContain('par_entries');
     expect(names).toContain('presentation_sessions');
     expect(names).toContain('conformance_sessions');
+    expect(names).toContain('conformance_events');
   });
 
   it('is idempotent — init twice on the same dataDir does not throw', () => {

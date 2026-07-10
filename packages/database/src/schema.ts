@@ -27,4 +27,23 @@ export const DDL = `
     status      TEXT    NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'PASSED', 'FAILED', 'INCOMPLETE')),
     checks      TEXT    NOT NULL DEFAULT '[]' CHECK(json_type(checks) = 'array')
   );
+
+  CREATE TABLE IF NOT EXISTS conformance_events (
+    id             TEXT    PRIMARY KEY,
+    name           TEXT    NOT NULL,
+    scenario_id    TEXT,
+    correlation_id TEXT,
+    service        TEXT    NOT NULL,
+    timestamp      TEXT    NOT NULL,
+    monotonic_ms   REAL    NOT NULL,
+    request_id     TEXT,
+    artifact_refs  TEXT,
+    diagnostic     TEXT,
+    http           TEXT,
+    error          TEXT,
+    validation     TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS conformance_events_timestamp_idx
+    ON conformance_events(timestamp, id);
 `;

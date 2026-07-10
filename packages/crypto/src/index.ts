@@ -36,3 +36,4 @@ export {
 export { generateKeyPair } from './services/keys.js';
 export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
 export { validateIACAKeyPair, validateJWKS, isValidJwk } from './services/validate.js';
+export * from './utils/tls.js';
