@@ -31,9 +31,6 @@ If the value is missing, empty, or invalid, the CLI exits before starting the se
 
 ## Note
 
-The `TO_MIGRATE` folder is intentionally kept for an additional verification phase.
-It is not part of the active runtime path for the current relying party flow.
-
 From repository root:
 
 ```bash

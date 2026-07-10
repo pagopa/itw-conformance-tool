@@ -29,7 +29,6 @@
 - OAuth error callback path still updates session to rejected when state exists
 - Verified status keeps existing `response_code` if already present
 - Verified status appends `response_code=success` when missing
-- No references to RP `TO_MIGRATE` remain in active RP code path
 
 ## Commands
 
