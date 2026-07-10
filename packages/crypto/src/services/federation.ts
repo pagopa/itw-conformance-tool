@@ -17,6 +17,10 @@ export const ALLOWED_FEDERATION_JOSE_ALGORITHMS = ['ES256', 'ES384', 'ES512', 'P
 
 const PRIVATE_JWK_PARAMS = new Set(['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth', 'k']);
 
+function parseMediaType(contentType: string): string {
+  return contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
 export function hasCompactJwtShape(value: string): boolean {
   const parts = value.split('.');
   return parts.length === 3 && parts.every((part) => part.length > 0);
@@ -94,7 +98,7 @@ export async function fetchSignedJwksFromUri(
   try {
     const response = await fetch(signedJwksUri, { signal: AbortSignal.timeout(timeoutMs) });
     const contentType = response.headers.get('content-type') ?? '';
-    if (response.status !== 200 || !contentType.includes('application/jwk-set+jwt')) {
+    if (response.status !== 200 || parseMediaType(contentType) !== 'application/jwk-set+jwt') {
       return [];
     }
 
@@ -134,7 +138,7 @@ export async function validateSignedJwksUri(
   try {
     const response = await fetch(signedJwksUri, { signal: AbortSignal.timeout(timeoutMs) });
     result.uriResolvable = response.status === 200;
-    result.contentTypeValid = (response.headers.get('content-type') ?? '').includes('application/jwk-set+jwt');
+    result.contentTypeValid = parseMediaType(response.headers.get('content-type') ?? '') === 'application/jwk-set+jwt';
 
     if (!result.uriResolvable || !result.contentTypeValid) {
       return result;

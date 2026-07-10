@@ -13,6 +13,7 @@ import {
   type JwkSet
 } from '@itw-conformance-tool/crypto';
 import {
+  itWalletEntityConfigurationClaimsSchema,
   itWalletMetadataV1_3,
   type ItWalletEntityConfigurationClaims,
   type ItWalletMetadataV1_3,
@@ -29,8 +30,17 @@ type ParsedEntityConfiguration = {
   entityStatementSignatureValid: boolean;
 };
 
+function parseMediaType(contentType: string): string {
+  return contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
 function hasJsonLikeJwksContentType(contentType: string): boolean {
-  return contentType.includes('application/json') || contentType.includes('application/jwk-set+json');
+  const mediaType = parseMediaType(contentType);
+  return mediaType === 'application/json' || mediaType === 'application/jwk-set+json';
+}
+
+function hasEntityStatementJwtContentType(contentType: string): boolean {
+  return parseMediaType(contentType) === 'application/entity-statement+jwt';
 }
 
 async function fetchJwksFromUri(jwksUri: string): Promise<Jwk[]> {
@@ -122,7 +132,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     }
 
     let header: Record<string, unknown>;
-    let payload: ItWalletEntityConfigurationClaims;
+    let decodedPayload: unknown;
 
     try {
       header = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
@@ -134,13 +144,25 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     }
 
     try {
-      payload = decodeJwt(entityConfigResponse.body) as ItWalletEntityConfigurationClaims;
+      decodedPayload = decodeJwt(entityConfigResponse.body);
     } catch (error: unknown) {
       parsedEntityConfigurationError = `JWT payload decode failed: ${
         error instanceof Error ? error.message : 'Unknown error'
       }`;
       return;
     }
+
+    const entityConfigurationClaimsParseResult = itWalletEntityConfigurationClaimsSchema.safeParse(decodedPayload);
+    if (!entityConfigurationClaimsParseResult.success) {
+      const schemaIssues = entityConfigurationClaimsParseResult.error.issues
+        .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+        .join('; ');
+      parsedEntityConfigurationError =
+        'Entity configuration payload schema validation failed' + (schemaIssues.length > 0 ? `: ${schemaIssues}` : '');
+      return;
+    }
+
+    const payload: ItWalletEntityConfigurationClaims = entityConfigurationClaimsParseResult.data;
 
     if (!payload.jwks) {
       parsedEntityConfigurationError = 'Entity configuration payload jwks is missing';
@@ -195,9 +217,10 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   // ___ WP_001 ____
   it('WP_001 - Execute a GET request to /.well-known/openid-federation and returns 200', async () => {
     expect(entityConfigResponse.statusCode, `Expected /.well-known/openid-federation to return HTTP 200`).toBe(200);
-    expect(entityConfigResponse.contentType, `Expected Content-Type to be application/entity-statement+jwt`).toMatch(
-      /application\/entity-statement\+jwt/
-    );
+    expect(
+      hasEntityStatementJwtContentType(entityConfigResponse.contentType),
+      `Expected Content-Type to be exactly application/entity-statement+jwt (ignoring parameters)`
+    ).toBe(true);
   });
 
   // ___ WP_002 ____
@@ -475,16 +498,12 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     expect(jwksUriValid, `metadata.wallet_solution.jwks_uri must be a valid HTTPS URL`).toBe(true);
 
     let response: Response;
-    let decodedBody: unknown;
 
     try {
       response = await fetch(jwksUri, { signal: AbortSignal.timeout(5_000) });
-      decodedBody = await response.json();
     } catch (error: unknown) {
       throw new Error(
-        `metadata.wallet_solution.jwks_uri must be resolvable and return valid JSON: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
+        `metadata.wallet_solution.jwks_uri must be resolvable: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
 
@@ -497,6 +516,17 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     );
 
     if (jwksUriResolvable && jsonLikeContentType) {
+      let decodedBody: unknown;
+      try {
+        decodedBody = await response.json();
+      } catch (error: unknown) {
+        throw new Error(
+          `metadata.wallet_solution.jwks_uri must return valid JSON when HTTP 200 and JSON content-type are satisfied: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
+        );
+      }
+
       const decoded = decodedBody as { keys?: Jwk[] };
       const keys = decoded.keys ?? [];
       const bodyHasJwks = Array.isArray(keys) && keys.length > 0;
