@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a pnpm + Nx TypeScript monorepo for the IT Wallet conformance tool. Runnable services live under `apps/`: `apps/itw-credential-issuer` and `apps/itw-relying-party`. Shared libraries live under `packages/`, currently `packages/logger`. Application code is in each project’s `src/` directory, with Fastify routes under `src/routes` and external plugins under `src/plugins/external`. Legacy migration material is kept in `TO_MIGRATE/` and is ignored by the root ESLint config.
+This repository is a pnpm + Nx TypeScript monorepo for the IT Wallet conformance tool. Runnable services live under `apps/`: `apps/itw-credential-issuer` and `apps/itw-relying-party`. Shared libraries live under `packages/`, currently `packages/logger`. Application code is in each project’s `src/` directory, with Fastify routes under `src/routes` and external plugins under `src/plugins/external`.
 
 ## Build, Test, and Development Commands
 
