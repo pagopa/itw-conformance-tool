@@ -26,10 +26,6 @@ function toHeaders(request: FastifyRequest): Headers {
   return new Headers(entries as Array<[string, string]>);
 }
 
-function getBaseURL(app: FastifyInstance): string {
-  return `${app.config.BASE_URL_SCHEME}://${app.config.HOST}:${app.config.PORT}`;
-}
-
 interface RuntimeConfig {
   headers: Headers;
   sdkConfig: IoWalletSdkConfig;
@@ -160,7 +156,7 @@ export function makeOauthCallbacks(app: FastifyInstance, request: FastifyRequest
       signJwt: getSignJwtCallback([signPrivate]),
       fetch: fetch.bind(globalThis)
     },
-    baseURL: getBaseURL(app)
+    baseURL: app.config.BASE_URL
   };
 }
 

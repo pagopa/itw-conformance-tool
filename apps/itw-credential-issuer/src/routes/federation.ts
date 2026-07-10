@@ -1,3 +1,4 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { FederationService } from '@itw-conformance-tool/issuer';
 
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
@@ -5,11 +6,9 @@ import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 import type { FastifyPluginAsync } from 'fastify';
 
 const federationRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/.well-known/openid-federation',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Federation']
     },
@@ -19,6 +18,19 @@ const federationRoute: FastifyPluginAsync = async (app) => {
       try {
         const service = new FederationService(makeJwksRepository(app));
         const statement = await service.getEntityConfiguration(baseURL, sdkConfig);
+
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.entity_configuration.requested',
+            scenarioId: request.conformance?.correlation?.scenarioId ?? null,
+            correlationId: request.conformance?.correlation?.correlationId ?? null,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/.well-known/openid-federation'
+            }
+          })
+        );
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(statement);
       } catch (error) {

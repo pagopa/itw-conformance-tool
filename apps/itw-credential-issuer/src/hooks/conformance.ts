@@ -1,5 +1,6 @@
 import { extractIssuerSessionId, getRequirements } from '@itw-conformance-tool/conformance';
 import fp from 'fastify-plugin';
+import { decodeJwt } from 'jose';
 
 import type { ConformanceStep } from '@itw-conformance-tool/conformance';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -21,16 +22,6 @@ const STEP_MAP: Partial<Record<string, ConformanceStep>> = {
 
 function resolveStep(method: string, routeUrl: string): ConformanceStep | undefined {
   return STEP_MAP[`${method}:${routeUrl}`];
-}
-
-function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
-  const parts = jwt.split('.');
-  if (parts.length !== 3) return null;
-  try {
-    return JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf-8')) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 function parseJsonPayload(payload: unknown): Record<string, unknown> | null {
@@ -115,7 +106,7 @@ export default fp(
         const auth = request.headers['authorization'];
         if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
           const token = auth.slice(7);
-          const payload = decodeJwtPayload(token);
+          const payload = decodeJwt(token);
           const jti = typeof payload?.['jti'] === 'string' ? payload['jti'] : null;
           if (jti) {
             sessionId = tokenJtiMap.get(jti) ?? null;
@@ -159,7 +150,7 @@ export default fp(
         const body = parseJsonPayload(payload);
         const accessToken = typeof body?.['access_token'] === 'string' ? body['access_token'] : null;
         if (accessToken) {
-          const tokenPayload = decodeJwtPayload(accessToken);
+          const tokenPayload = decodeJwt(accessToken);
           const jti = typeof tokenPayload?.['jti'] === 'string' ? tokenPayload['jti'] : null;
           if (jti) {
             tokenJtiMap.set(jti, sessionId);

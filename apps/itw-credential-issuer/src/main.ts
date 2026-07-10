@@ -1,6 +1,4 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
+import { createHttpsOptions } from '@itw-conformance-tool/crypto';
 import { logger } from '@itw-conformance-tool/logger';
 import closeWithGrace from 'close-with-grace';
 import Fastify from 'fastify';
@@ -8,39 +6,15 @@ import fp from 'fastify-plugin';
 
 import bootstrap from './app.js';
 
-function resolveTlsOptions(): { cert: Buffer; key: Buffer } | undefined {
-  const httpsEnabledRaw = (process.env['ITW_CT_HTTPS'] ?? process.env['HTTPS_ENABLED'])?.trim().toLowerCase();
-  if (httpsEnabledRaw !== 'true' && httpsEnabledRaw !== '1') {
-    return undefined;
-  }
-
-  const dataDir = (process.env['ITW_CT_DATA_DIR'] ?? process.env['DATA_DIR'] ?? '').trim();
-  const defaultCertPath = dataDir.length > 0 ? path.join(dataDir, 'tls-cert.pem') : '';
-  const defaultKeyPath = dataDir.length > 0 ? path.join(dataDir, 'tls-key.pem') : '';
-
-  const certPath = (process.env['ITW_CT_TLS_CERT_PATH'] ?? process.env['TLS_CERT_PATH'] ?? defaultCertPath).trim();
-  const keyPath = (process.env['ITW_CT_TLS_KEY_PATH'] ?? process.env['TLS_KEY_PATH'] ?? defaultKeyPath).trim();
-
-  if (!certPath || !keyPath) {
-    throw new Error(
-      'HTTPS is enabled but no TLS cert/key could be resolved. Provide TLS_CERT_PATH/TLS_KEY_PATH (or ITW_CT_TLS_CERT_PATH/ITW_CT_TLS_KEY_PATH), or ensure DATA_DIR contains tls-cert.pem and tls-key.pem.'
-    );
-  }
-
-  return { cert: readFileSync(certPath), key: readFileSync(keyPath) };
-}
-
 async function startServer() {
-  const tls = resolveTlsOptions();
-
   const app = Fastify({
-    loggerInstance: logger,
-    ...(tls ? { https: tls } : {}),
-    // Apply recommended timeouts to prevent slow or idle clients from holding connections open
     connectionTimeout: 120_000,
+    // 1 minute: suitable for most payloads, including moderate file uploads
     requestTimeout: 60_000,
+    // 10 seconds: ensures efficient resource usage for idle connections
     keepAliveTimeout: 10_000,
-    ...(tls ? {} : { http: { headersTimeout: 15_000 } }),
+    https: await createHttpsOptions(),
+    loggerInstance: logger,
     ajv: {
       customOptions: {
         coerceTypes: 'array', // change type of data to match type keyword
@@ -48,6 +22,9 @@ async function startServer() {
       }
     }
   });
+
+  // 15 seconds: prevents slow clients from holding connections too long
+  app.server.headersTimeout = 15_000;
 
   app.register(fp(bootstrap));
 
@@ -66,12 +43,13 @@ async function startServer() {
   app.server.headersTimeout = 15_000;
 
   // Start server
+  const url = new URL(app.config.BASE_URL);
+
   try {
     await app.listen({
-      host: app.config.HOST,
-      port: app.config.PORT,
-      listenTextResolver: (address) =>
-        `IT Wallet Credential Issuer listening on ${tls ? address.replace('http://', 'https://') : address}`
+      host: url.hostname,
+      port: parseInt(url.port, 10),
+      listenTextResolver: (address) => `IT Wallet Credential Issuer listening on ${address}`
     });
   } catch (err) {
     app.log.error(err);

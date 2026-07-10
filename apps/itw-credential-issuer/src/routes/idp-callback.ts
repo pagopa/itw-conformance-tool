@@ -28,7 +28,6 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request: FastifyRequest<{ Querystring: IdpCallbackQuerystring }>, reply) => {
       const { mrtd_auth_session, mrtd_val_pop_nonce } = request.query;
-      const baseURL = `${app.config.BASE_URL_SCHEME}://${app.config.HOST}:${app.config.PORT}`;
 
       try {
         const parEntry = await app.parRepository.getByMrtdAuthSession(mrtd_auth_session);
@@ -82,7 +81,7 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
         let jwtPayload;
         try {
           const { payload } = await jwtVerify(mrtd_val_pop_nonce, walletPublicKey, {
-            audience: baseURL,
+            audience: app.config.BASE_URL,
             clockTolerance: 30,
             typ: 'mrtd-val-pop+jwt'
           });
@@ -127,7 +126,7 @@ const idpCallbackRoute: FastifyPluginAsync = async (app) => {
         }
         location.searchParams.set('code', code);
         location.searchParams.set('state', parRequest.state);
-        location.searchParams.set('iss', baseURL);
+        location.searchParams.set('iss', app.config.BASE_URL);
 
         return reply.code(302).header('Location', location.toString()).send();
       } catch (error) {

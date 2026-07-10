@@ -388,6 +388,12 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database
+      fastify:
+        specifier: catalog:fastify
+        version: 5.8.5
+      fastify-plugin:
+        specifier: catalog:fastify
+        version: 5.1.0
       puppeteer:
         specifier: ^24.0.0
         version: 24.43.1(typescript@5.9.3)
@@ -395,9 +401,6 @@ importers:
         specifier: ^2.3.0
         version: 2.8.1
     devDependencies:
-      '@itw-conformance-tool/crypto':
-        specifier: workspace:*
-        version: link:../crypto
       '@types/node':
         specifier: ^22.19.9
         version: 22.19.17
@@ -6279,24 +6282,24 @@ snapshots:
   '@openid4vc/oauth2@0.4.3':
     dependencies:
       '@openid4vc/utils': 0.4.3
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@openid4vc/openid4vci@0.4.3':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@openid4vc/openid4vp@0.4.3':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@openid4vc/utils@0.4.3':
     dependencies:
       buffer: 6.0.3
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@owf/mdoc@0.6.0':
     dependencies:

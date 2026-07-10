@@ -15,8 +15,6 @@ declare module 'fastify' {
       trustAnchorUrl?: string;
       x5cCertPath: string;
       httpsEnabled: boolean;
-      tlsCertPath: string;
-      tlsKeyPath: string;
     };
   }
 }
@@ -35,9 +33,7 @@ export default fp(
       dataDir: config.dataDir,
       configFilePath,
       x5cCertPath: config.x5cCertPath,
-      httpsEnabled: config.httpsEnabled,
-      tlsCertPath: config.tlsCertPath,
-      tlsKeyPath: config.tlsKeyPath
+      httpsEnabled: config.httpsEnabled
     });
   },
   { name: 'config' }

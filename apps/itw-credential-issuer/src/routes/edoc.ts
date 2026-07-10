@@ -43,12 +43,11 @@ const EdocInit: FastifyPluginAsync = async (app) => {
       const { mrtd_auth_session, mrtd_pop_jwt_nonce } = request.body;
       const clientAttestationJwt = request.headers['oauth-client-attestation'];
       const clientAttestationPopJwt = request.headers['oauth-client-attestation-pop'];
-      const baseURL = `${app.config.BASE_URL_SCHEME}://${app.config.HOST}:${app.config.PORT}`;
 
       try {
         const service = new EdocProofService(makeEdocParRepository(app), makeJwksRepository(app));
         const responseJwt = await service.processInit({
-          baseURL,
+          baseURL: app.config.BASE_URL,
           clientAttestationJwt,
           clientAttestationPopJwt,
           mrtdAuthSessionId: mrtd_auth_session,

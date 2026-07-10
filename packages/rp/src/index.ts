@@ -6,7 +6,6 @@ export {
   deriveBaseUrl,
   loadRpConfig,
   resolveHttpsEnabled,
-  resolveTlsPaths,
   rpConfigSchema,
   type LoadRpConfigInput,
   type LoadRpConfigResult,
