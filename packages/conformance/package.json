@@ -19,11 +19,12 @@
   },
   "dependencies": {
     "@itw-conformance-tool/database": "workspace:*",
+    "fastify": "catalog:fastify",
+    "fastify-plugin": "catalog:fastify",
     "puppeteer": "^24.0.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@itw-conformance-tool/crypto": "workspace:*",
     "@types/node": "^22.19.9",
     "jose": "5.2.4",
     "vitest": "~4.1.0",

@@ -26,6 +26,7 @@ const REPORTER_CONFIG: Record<ReporterType, { phase: ConformancePhase; step: Con
 const PHASE_VALUES = new Set<ConformancePhase>(['ISSUANCE', 'PRESENTATION', 'WALLET_PROVIDER_BACKEND']);
 
 const STEP_VALUES = new Set<ConformanceStep>([
+  'FEDERATION',
   'PAR',
   'AUTHORIZE',
   'PRESENTATION_RESPONSE',
@@ -192,7 +193,6 @@ export class VitestConformanceReporter implements Reporter {
 
     const status = resolveFinalStatus(this.results);
     await this.repository.close(this.sessionId, status);
-    process.stdout.write(`Conformance session ID: ${this.sessionId}\n`);
 
     await this.client.close();
     this.repository = undefined;

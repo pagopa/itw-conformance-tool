@@ -7,6 +7,7 @@ export type ClosedConformanceSessionStatus = Exclude<ConformanceSessionStatus, '
 export type ConformanceCheckResult = 'PASS' | 'FAIL' | 'NOT_REACHED';
 
 export type ConformanceStep =
+  | 'FEDERATION'
   | 'PAR'
   | 'AUTHORIZE'
   | 'PRESENTATION_RESPONSE'
