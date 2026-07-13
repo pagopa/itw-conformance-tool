@@ -1,16 +1,13 @@
-import { CreateCredentialError, CredentialService, InvalidProofError } from '@itw-conformance-tool/issuer';
-
+import { CreateCredentialError, CredentialService, InvalidProofError } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';
 
 const credentialRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/credential',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Credential']
     },

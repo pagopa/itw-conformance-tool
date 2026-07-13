@@ -1,15 +1,12 @@
-import { CodeJwtService, InvalidRequestUriError } from '@itw-conformance-tool/issuer';
-
+import { CodeJwtService, InvalidRequestUriError } from '../domain/index.js';
 import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
 const codeJwtRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 30, timeWindow: '1 minute' });
   app.route({
     url: '/code/jwt',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {

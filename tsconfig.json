@@ -22,9 +22,6 @@
       "path": "./packages/database"
     },
     {
-      "path": "./packages/issuer"
-    },
-    {
       "path": "./packages/conformance"
     },
     {

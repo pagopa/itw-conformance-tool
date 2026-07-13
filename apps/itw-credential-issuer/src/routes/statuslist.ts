@@ -1,15 +1,12 @@
-import { StatusListService } from '@itw-conformance-tool/issuer';
-
+import { StatusListService } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
 const statusListRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/statuslist/1',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Credential']
     },

@@ -5,7 +5,7 @@ import {
   getSdkConfig,
   resolveSpecVersionFromHeaders,
   toPublicJwk
-} from '@itw-conformance-tool/issuer';
+} from '../domain/index.js';
 
 import type {
   ICodeJwtParRepository,
@@ -13,7 +13,7 @@ import type {
   ITokenParRepository,
   JwksRepository,
   ParRequest
-} from '@itw-conformance-tool/issuer';
+} from '../domain/index.js';
 import type { CallbackContext } from '@pagopa/io-wallet-oauth2';
 import type { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import type { FastifyInstance, FastifyRequest } from 'fastify';

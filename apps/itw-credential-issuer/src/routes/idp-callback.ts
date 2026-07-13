@@ -10,11 +10,9 @@ interface IdpCallbackQuerystring {
 }
 
 const idpCallbackRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '1 minute' });
   app.route({
     url: '/idp/callback',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['EDoc Proof'],
       querystring: {
