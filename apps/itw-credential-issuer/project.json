@@ -2,7 +2,7 @@
   "targets": {
     "typecheck": {
       "executor": "nx:run-commands",
-      "dependsOn": ["^typecheck"],
+      "dependsOn": ["^build"],
       "options": {
         "cwd": "apps/itw-credential-issuer",
         "command": "tsc --noEmit -p tsconfig.app.json"

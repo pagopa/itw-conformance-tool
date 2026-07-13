@@ -1,15 +1,12 @@
-import { AuthorizationRequestError, AuthorizationService } from '@itw-conformance-tool/issuer';
-
+import { AuthorizationRequestError, AuthorizationService } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
 const authorizeRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/authorize',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {

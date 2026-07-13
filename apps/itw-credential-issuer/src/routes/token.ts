@@ -1,18 +1,12 @@
-import {
-  CreateAccessTokenError,
-  InvalidGrantError,
-  TokenService,
-  UnsupportedGrantTypeError
-} from '@itw-conformance-tool/issuer';
 import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 
+import { CreateAccessTokenError, InvalidGrantError, TokenService, UnsupportedGrantTypeError } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '../plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 
 const tokenRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   const noCacheHeaders = {
     'Cache-Control': 'no-store',
     Pragma: 'no-cache'
@@ -22,7 +16,6 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/token',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization']
     },

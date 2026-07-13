@@ -1,13 +1,11 @@
-import { NonceService } from '@itw-conformance-tool/issuer';
+import { NonceService } from '../domain/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
 const nonceRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/nonce',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Credential']
     },

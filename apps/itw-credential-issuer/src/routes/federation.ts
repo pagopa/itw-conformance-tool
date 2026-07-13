@@ -1,6 +1,6 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
-import { FederationService } from '@itw-conformance-tool/issuer';
 
+import { FederationService } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
