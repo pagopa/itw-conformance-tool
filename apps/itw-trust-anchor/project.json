@@ -1,5 +1,13 @@
 {
   "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^typecheck"],
+      "options": {
+        "cwd": "apps/itw-trust-anchor",
+        "command": "tsc --noEmit -p tsconfig.app.json"
+      }
+    },
     "build": {
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],

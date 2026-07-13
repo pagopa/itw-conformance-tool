@@ -25,8 +25,8 @@ export const DEFAULT_CONFIG = {
     entity_id: 'https://127.0.0.1:3000',
     trust_anchor_url: 'https://localhost:3001'
   },
-  'itw-trust-anchor': {
-    port: 3001,
+  'trust-anchor': {
+    url: 'https://127.0.0.1:3001',
     entity_id: 'https://localhost:3001'
   }
 } as const;
@@ -35,7 +35,7 @@ const globalDefaults = DEFAULT_CONFIG.global;
 const walletProviderDefaults = DEFAULT_CONFIG['wallet-provider'];
 const issuerDefaults = DEFAULT_CONFIG['credential-issuer'];
 const rpDefaults = DEFAULT_CONFIG['relying-party'];
-const trustAnchorDefaults = DEFAULT_CONFIG['itw-trust-anchor'];
+const trustAnchorDefaults = DEFAULT_CONFIG['trust-anchor'];
 
 export const ConfigIniTemplate = `[global]
 ; Local directory for keys, certificates, and generated data
@@ -76,10 +76,9 @@ entity_id = ${rpDefaults.entity_id}
 ; Default: ${rpDefaults.trust_anchor_url}
 trust_anchor_url = ${rpDefaults.trust_anchor_url}
 
-[itw-trust-anchor]
-; HTTP port for the local trust anchor service
-; Default: ${trustAnchorDefaults.port}
-port = ${trustAnchorDefaults.port}
+[trust-anchor]
+; Local Trust Anchor URL (used for conformance tests)
+url = ${trustAnchorDefaults.url}
 ; Trust Anchor OpenID Federation Entity ID (trust anchor entity)
 ; Example: https://trust-anchor.example.org
 entity_id = ${trustAnchorDefaults.entity_id}
@@ -112,7 +111,6 @@ function isCredentialTypesList(value: string): boolean {
 }
 
 const nonEmptyString = z.string().trim().min(1);
-const port = z.coerce.number().int().min(1).max(65535);
 
 const GlobalConfigSchema = z
   .object({
@@ -150,7 +148,7 @@ const RpConfigSchema = z
 
 const TrustAnchorConfigSchema = z
   .object({
-    port: port.default(trustAnchorDefaults.port),
+    url: z.url({ protocol: /^https$/ }).default(trustAnchorDefaults.url),
     entity_id: nonEmptyString.default(trustAnchorDefaults.entity_id)
   })
   .default(trustAnchorDefaults);
@@ -160,7 +158,7 @@ export const ConfigSchema = z.object({
   'wallet-provider': WalletProviderConfigSchema,
   'credential-issuer': IssuerConfigSchema,
   'relying-party': RpConfigSchema,
-  'itw-trust-anchor': TrustAnchorConfigSchema
+  'trust-anchor': TrustAnchorConfigSchema
 });
 
 export type ConfigSchemaType = z.infer<typeof ConfigSchema>;
