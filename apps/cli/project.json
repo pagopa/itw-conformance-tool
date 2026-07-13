@@ -1,13 +1,5 @@
 {
   "name": "itw-conformance-cli",
-  "typecheck": {
-    "executor": "nx:run-commands",
-    "dependsOn": ["^typecheck"],
-    "options": {
-      "cwd": "apps/cli",
-      "command": "tsc --noEmit -p tsconfig.app.json"
-    }
-  },
   "targets": {
     "build": {
       "executor": "@nx/esbuild:esbuild",
@@ -73,6 +65,7 @@
     },
     "typecheck": {
       "executor": "nx:run-commands",
+      "dependsOn": ["^build"],
       "options": {
         "command": "tsc --noEmit -p apps/cli/tsconfig.app.json"
       }
