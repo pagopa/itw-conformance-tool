@@ -6,6 +6,7 @@
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
     "paths": {
+      "@itw-conformance-tool/config": ["../../packages/config/dist/index.d.ts"],
       "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"],
       "@itw-conformance-tool/database": ["../../packages/database/dist/index.d.ts"],
       "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"],

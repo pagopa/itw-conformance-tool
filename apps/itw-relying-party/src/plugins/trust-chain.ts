@@ -23,32 +23,6 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-function resolveFetchTimeoutMs(value: string | undefined): number {
-  if (value === undefined || value.trim().length === 0) {
-    return DEFAULT_TRUST_CHAIN_FETCH_TIMEOUT_MS;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed < 1) {
-    return DEFAULT_TRUST_CHAIN_FETCH_TIMEOUT_MS;
-  }
-
-  return parsed;
-}
-
-function resolvePositiveInt(value: string | undefined, fallback: number): number {
-  if (value === undefined || value.trim().length === 0) {
-    return fallback;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed < 1) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
 function waitMs(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
@@ -77,15 +51,9 @@ export default fp(
       return;
     }
 
-    const timeoutMs = resolveFetchTimeoutMs(process.env.ITW_CT_TRUST_CHAIN_FETCH_TIMEOUT_MS);
-    const maxRetries = resolvePositiveInt(
-      process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRIES,
-      DEFAULT_TRUST_CHAIN_FETCH_RETRIES
-    );
-    const retryDelayMs = resolvePositiveInt(
-      process.env.ITW_CT_TRUST_CHAIN_FETCH_RETRY_DELAY_MS,
-      DEFAULT_TRUST_CHAIN_RETRY_DELAY_MS
-    );
+    const timeoutMs = DEFAULT_TRUST_CHAIN_FETCH_TIMEOUT_MS;
+    const maxRetries = DEFAULT_TRUST_CHAIN_FETCH_RETRIES;
+    const retryDelayMs = DEFAULT_TRUST_CHAIN_RETRY_DELAY_MS;
 
     if (isHttpUrl(entityId) || isHttpUrl(trustAnchorUrl)) {
       app.decorate('trustChain', [INSECURE_HTTP_TRUST_CHAIN_PLACEHOLDER]);

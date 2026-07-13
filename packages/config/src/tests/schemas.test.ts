@@ -7,7 +7,6 @@ describe('ConfigIniTemplate', () => {
   it('is generated from DEFAULT_CONFIG', () => {
     expect(ConfigIniTemplate).toContain(`data_dir = ${DEFAULT_CONFIG.global.data_dir}`);
     expect(ConfigIniTemplate).toContain(`log_level = ${DEFAULT_CONFIG.global.log_level}`);
-    expect(ConfigIniTemplate).toContain(`https = ${DEFAULT_CONFIG.global.https}`);
     expect(ConfigIniTemplate).toContain(
       `wallet_provider_backend_url = ${DEFAULT_CONFIG.global.wallet_provider_backend_url}`
     );

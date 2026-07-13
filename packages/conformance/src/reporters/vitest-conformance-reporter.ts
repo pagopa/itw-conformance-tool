@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { loadConfig } from '@itw-conformance-tool/config';
 import { DatabaseClient } from '@itw-conformance-tool/database';
 import { type TestResult } from 'vitest/node';
 
@@ -131,11 +132,8 @@ export class VitestConformanceReporter implements Reporter {
   }
 
   async onTestRunStart(): Promise<void> {
-    const dataDir = process.env.ITW_CT_DATA_DIR;
-    if (!dataDir) {
-      throw new Error('Missing required env: ITW_CT_DATA_DIR');
-    }
-    this.client = new DatabaseClient({ dataDir });
+    const { global } = loadConfig();
+    this.client = new DatabaseClient({ dataDir: global.data_dir });
     this.repository = new SqliteConformanceSessionRepository(this.client.db);
     this.sessionId = randomUUID();
     this.results.length = 0;

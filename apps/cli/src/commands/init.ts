@@ -1,17 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { ConfigIniTemplate, parseConfigIni, type ConfigSchemaType } from '@itw-conformance-tool/config';
+import { ConfigIniTemplate, loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 
 import { createSelfSignedCertificateFromJwk, getIACAChain } from '../utils/certificates.js';
 import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
-import { expandPath } from '../utils/path.js';
 import { existsFileSync } from '../utils/search.js';
 
 import type { CliFlags } from '../types/types.js';
 
 type InitConfig = {
-  global: Pick<ConfigSchemaType['global'], 'data_dir' | 'https' | 'log_level'>;
+  global: Pick<ConfigSchemaType['global'], 'data_dir' | 'log_level'>;
 };
 
 /** Initializes the configuration file.
@@ -28,10 +27,11 @@ function checkConfig(flags: CliFlags): InitConfig {
     process.stdout.write(`✓ config.ini already exists → skipped (use --force to overwrite)\n`);
   }
 
-  const configs = parseConfigIni(configFilePath);
-  const previousDataDir = configs.global.data_dir;
-  configs.global.data_dir = expandPath(configs.global.data_dir);
-
+  const rawConfigs = loadConfig({ configFilePath });
+  const previousDataDir = rawConfigs.global.data_dir;
+  const configs: InitConfig = {
+    global: rawConfigs.global
+  };
   const dataDirExists = existsSync(configs.global.data_dir) && statSync(configs.global.data_dir).isDirectory();
   mkdirSync(configs.global.data_dir, { recursive: true });
   if (!dataDirExists || flags.force) {

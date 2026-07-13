@@ -117,7 +117,7 @@ Generated structure:
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
 
-The Trust Anchor URL (`trust_anchor_url` / `ITW_CT_RP_TRUST_ANCHOR_URL`) must be set before starting the RP service.
+The Trust Anchor URL (`trust_anchor_url`) must be set before starting the RP service.
 
 Default locations:
 
@@ -172,7 +172,7 @@ itwct report:list --config ./ci/config.ini
 The command:
 
 - spawns a child process running `pnpm vitest run --config vitest.conformance-test.config.mts`
-- exports `ITW_CT_DATA_DIR` and related runtime variables to the test process
+- reads runtime configuration from `config.ini`
 - stores conformance sessions in `<data_dir>/itw.db`, so they can later be listed by `report:list` and rendered by `report:create`
 
 `test` requires `global.wallet_provider_backend_url` in config, with the same validation rules used by `start`.
