@@ -91,3 +91,17 @@ export function getFederationKey(): string {
 
   return JSON.stringify(jwk.keys[0], null, 2);
 }
+
+/** Generates and returns an EC P-256 private key JWK for trust-anchor
+ * federation entity- and subordinate-statement signing.
+ */
+export function getTrustAnchorFederationKey(): string {
+  const jwk = generateEcPrivateJwk({
+    kid: 'trust-anchor-federation-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+
+  return JSON.stringify(jwk.keys[0], null, 2);
+}

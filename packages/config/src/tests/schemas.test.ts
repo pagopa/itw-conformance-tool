@@ -15,9 +15,12 @@ describe('ConfigIniTemplate', () => {
     expect(ConfigIniTemplate).toContain(
       `credential_types = ${DEFAULT_CONFIG['itw-credential-issuer'].credential_types}`
     );
+    expect(ConfigIniTemplate).toContain(`entity_id = ${DEFAULT_CONFIG['itw-credential-issuer'].entity_id}`);
     expect(ConfigIniTemplate).toContain(`port = ${DEFAULT_CONFIG.rp.port}`);
     expect(ConfigIniTemplate).toContain(`entity_id = ${DEFAULT_CONFIG.rp.entity_id}`);
     expect(ConfigIniTemplate).toContain(`trust_anchor_url = ${DEFAULT_CONFIG.rp.trust_anchor_url}`);
+    expect(ConfigIniTemplate).toContain(`port = ${DEFAULT_CONFIG['itw-trust-anchor'].port}`);
+    expect(ConfigIniTemplate).toContain(`entity_id = ${DEFAULT_CONFIG['itw-trust-anchor'].entity_id}`);
   });
 
   it('deserializes to DEFAULT_CONFIG', () => {

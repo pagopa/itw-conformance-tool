@@ -11,6 +11,23 @@ declare module 'fastify' {
   }
 }
 
+function trimTrailingSlashes(value: string): string {
+  let result = value;
+  while (result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+  return result;
+}
+
+// The issuer's public OpenID Federation entity ID must be stable and match what
+// other services (e.g. the Trust Anchor) resolve for the same [itw-credential-issuer]
+// config section, so it is derived from entity_id first, falling back to the local
+// listen address only when entity_id is left blank.
+function resolveBaseUrl(entityId: string, port: number): string {
+  const trimmed = entityId.trim();
+  return trimTrailingSlashes(trimmed.length > 0 ? trimmed : `https://localhost:${port}`);
+}
+
 export default fp(
   async function configPlugin(app) {
     const config = loadConfig();
@@ -18,7 +35,7 @@ export default fp(
 
     app.decorate('config', {
       AUTH_FLOW: issuerConfig.auth_flow,
-      BASE_URL: `https://127.0.0.1:${issuerConfig.port}`,
+      BASE_URL: resolveBaseUrl(issuerConfig.entity_id, issuerConfig.port),
       DATA_DIR: config.global.data_dir
     });
   },

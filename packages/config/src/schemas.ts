@@ -13,18 +13,24 @@ export const DEFAULT_CONFIG = {
   'itw-credential-issuer': {
     auth_flow: 'direct',
     port: 3000,
-    credential_types: 'pid,mdl,badge,eaa'
+    credential_types: 'pid,mdl,badge,eaa',
+    entity_id: 'https://localhost:3000'
   },
   rp: {
     port: 8080,
     entity_id: 'https://127.0.0.1:3000',
     trust_anchor_url: '/.well-known/openid-federation'
+  },
+  'itw-trust-anchor': {
+    port: 3001,
+    entity_id: 'https://localhost:3001'
   }
 } as const;
 
 const globalDefaults = DEFAULT_CONFIG.global;
 const issuerDefaults = DEFAULT_CONFIG['itw-credential-issuer'];
 const rpDefaults = DEFAULT_CONFIG.rp;
+const trustAnchorDefaults = DEFAULT_CONFIG['itw-trust-anchor'];
 
 export const ConfigIniTemplate = `[global]
 ; Local directory for keys, certificates, and generated data
@@ -46,6 +52,9 @@ port = ${issuerDefaults.port}
 ; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
 ; Default: ${issuerDefaults.credential_types}
 credential_types = ${issuerDefaults.credential_types}
+; Issuer OpenID Federation Entity ID
+; Example: https://issuer.example.org
+entity_id = ${issuerDefaults.entity_id}
 
 [rp]
 ; HTTP port for the local relying party service
@@ -56,6 +65,14 @@ port = ${rpDefaults.port}
 entity_id = ${rpDefaults.entity_id}
 ; Trust Anchor URL for Federation validation
 trust_anchor_url = ${rpDefaults.trust_anchor_url}
+
+[itw-trust-anchor]
+; HTTP port for the local trust anchor service
+; Default: ${trustAnchorDefaults.port}
+port = ${trustAnchorDefaults.port}
+; Trust Anchor OpenID Federation Entity ID (trust anchor entity)
+; Example: https://trust-anchor.example.org
+entity_id = ${trustAnchorDefaults.entity_id}
 `;
 
 function trimLowercaseString(value: unknown): unknown {
@@ -110,7 +127,8 @@ const IssuerConfigSchema = z
     credential_types: z
       .preprocess(normalizeCredentialTypes, nonEmptyString)
       .refine(isCredentialTypesList)
-      .default(issuerDefaults.credential_types)
+      .default(issuerDefaults.credential_types),
+    entity_id: nonEmptyString.default(issuerDefaults.entity_id)
   })
   .default(issuerDefaults);
 
@@ -122,10 +140,18 @@ const RpConfigSchema = z
   })
   .default(rpDefaults);
 
+const TrustAnchorConfigSchema = z
+  .object({
+    port: port.default(trustAnchorDefaults.port),
+    entity_id: nonEmptyString.default(trustAnchorDefaults.entity_id)
+  })
+  .default(trustAnchorDefaults);
+
 export const ConfigSchema = z.object({
   global: GlobalConfigSchema,
   'itw-credential-issuer': IssuerConfigSchema,
-  rp: RpConfigSchema
+  rp: RpConfigSchema,
+  'itw-trust-anchor': TrustAnchorConfigSchema
 });
 
 export type ConfigSchemaType = z.infer<typeof ConfigSchema>;

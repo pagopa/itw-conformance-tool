@@ -4,7 +4,13 @@ import { join, resolve } from 'node:path';
 import { ConfigIniTemplate, loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 
 import { createSelfSignedCertificateFromJwk, getIACAChain } from '../utils/certificates.js';
-import { getAuthRequestKey, getAuthResponseKey, getFederationKey, getSigningKeys } from '../utils/crypto.js';
+import {
+  getAuthRequestKey,
+  getAuthResponseKey,
+  getFederationKey,
+  getSigningKeys,
+  getTrustAnchorFederationKey
+} from '../utils/crypto.js';
 import { existsFileSync } from '../utils/search.js';
 
 import type { CliFlags } from '../types/types.js';
@@ -53,6 +59,9 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
 
   const rpDirPath = join(configs.global.data_dir, 'rp');
   mkdirSync(rpDirPath, { recursive: true });
+
+  const trustAnchorDirPath = join(configs.global.data_dir, 'trust-anchor');
+  mkdirSync(trustAnchorDirPath, { recursive: true });
 
   const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
   const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
@@ -116,6 +125,15 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     process.stdout.write(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)\n`);
   } else {
     process.stdout.write(`✓ Generated relying-party keys → ${generatedRpPaths.join(', ')}\n`);
+  }
+
+  const trustAnchorFederationKeyPath = join(trustAnchorDirPath, 'federation-key.jwk.json');
+  if (!existsFileSync(trustAnchorFederationKeyPath) || flags.force) {
+    const trustAnchorFederationKey = getTrustAnchorFederationKey();
+    writeFileSync(trustAnchorFederationKeyPath, trustAnchorFederationKey, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated trust-anchor federation key → ${trustAnchorFederationKeyPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Trust-anchor federation key already exists → skipped (use --force to regenerate)\n`);
   }
 }
 
