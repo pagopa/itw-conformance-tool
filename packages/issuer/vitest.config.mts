@@ -10,6 +10,7 @@ export default defineConfig(() => ({
     environment: 'node',
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}'],
     reporters: ['default'],
+    passWithNoTests: true,
     // node:sqlite requires --experimental-sqlite on Node.js 22
     pool: 'forks',
     coverage: {
