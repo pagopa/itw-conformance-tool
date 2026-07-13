@@ -14,7 +14,8 @@ export const loggerOptions: LoggerOptions = {
       : {
           target: 'pino-pretty',
           options: {
-            colorize: true
+            colorize: true,
+            singleLine: true
           }
         }
 };

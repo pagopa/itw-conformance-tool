@@ -20,6 +20,7 @@
     "@fastify/sensible": "catalog:fastify",
     "@fastify/swagger": "catalog:fastify",
     "@fastify/swagger-ui": "catalog:fastify",
+    "@itw-conformance-tool/config": "workspace:",
     "@itw-conformance-tool/conformance": "workspace:*",
     "@itw-conformance-tool/crypto": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",

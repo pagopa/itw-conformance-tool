@@ -18,6 +18,7 @@
     "clean": "rimraf dist out-tsc"
   },
   "dependencies": {
+    "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",

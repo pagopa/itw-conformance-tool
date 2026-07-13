@@ -69,8 +69,8 @@ import {
 ```typescript
 import { deriveBaseUrl, loadRpConfig, SessionService } from '@itw-conformance-tool/rp';
 
-const { config, configFileFound } = loadRpConfig({ configFilePath: './config.ini' });
-const baseUrl = deriveBaseUrl({ host: config.host, port: config.port });
+const { config } = loadRpConfig({ configFilePath: './config.ini' });
+const baseUrl = deriveBaseUrl({ host: config.host, port: config.port, scheme: config.httpsEnabled ? 'https' : 'http' });
 
 // Implement your repository
 class MySessionRepository implements SessionRepository {
@@ -129,19 +129,19 @@ try {
 
 ## Configuration
 
-Load configuration from environment variables or ini file:
+Load configuration from the shared INI file:
 
 ```typescript
-const { config, configFileFound } = loadRpConfig({
-  configFilePath: './config.ini',
-  env: process.env // optional, defaults to process.env
+const { config } = loadRpConfig({
+  configFilePath: './config.ini'
 });
 
-// Supported environment variables take precedence:
-// - ITW_CT_RP_PORT (default: 8080)
-// - ITW_CT_DATA_DIR (default: "~/.itw-conformance-tool")
-// - ITW_CT_RP_TRUST_ANCHOR_URL (required — Trust Anchor URL for Federation validation)
-// - ITW_CT_RP_X5C_CERT_PATH (required — path to PEM certificate chain for x5c JWT header)
+// Runtime values are derived from the validated INI config:
+// - [rp].port
+// - [rp].entity_id
+// - [rp].trust_anchor_url
+// - [global].data_dir
+// - [global].https
 ```
 
 When used through the CLI orchestration (`itwct start` / `itwct test`), the global config must also include `global.wallet_provider_backend_url` as a valid URL.

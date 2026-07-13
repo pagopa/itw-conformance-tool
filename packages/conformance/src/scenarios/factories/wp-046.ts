@@ -30,8 +30,7 @@ export const wp046Scenario: ProtocolObservedScenarioDefinition = {
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan QR payloads.',
       'The local Credential Issuer and other selected local services are already running before launching the test matrix.',
-      'The device running the wallet can reach the advertised local Credential Issuer base URL printed by this test.',
-      'If the wallet runs on a physical device, expose this machine on the same network or through a tunnel and set ITW_CT_ADVERTISED_HOST or ITW_CT_ISSUER_ADVERTISED_BASE_URL accordingly.'
+      'The device running the wallet can reach the local Credential Issuer base URL printed by this test.'
     ],
     steps: [
       'Start this scenario through the conformance test matrix command after the local services are already running: nx run itw-conformance-cli:run --args="test".',

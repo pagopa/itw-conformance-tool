@@ -50,7 +50,6 @@ export function searchNx(rootPath: string): string {
 /** Utility function to create an array of file paths that need to be checked for existence,
  *
  * @param filePath - The base path for the files.
- * @param httpsEnabled - Whether HTTPS is enabled; when true, TLS cert/key paths are included.
  * @returns An array of file paths for the required keys and certificates.
  */
 export function filesToSearch(filePath: string): string[] {

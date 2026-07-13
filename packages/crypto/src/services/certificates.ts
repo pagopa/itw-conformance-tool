@@ -9,7 +9,7 @@ import {
   X509CertificateGenerator
 } from '@peculiar/x509';
 
-import type { IacaChain, IacaChainParams, TlsCertAndKey, TlsCertParams, X5cCertParams } from '../types/types.js';
+import type { IacaChain, IacaChainParams, X5cCertParams } from '../types/types.js';
 
 interface CertificateOptions {
   commonName: string;
@@ -100,32 +100,6 @@ export async function getIACAChain({
   return {
     certificate: certPem,
     privateKey: keyPem
-  };
-}
-
-/** Generates a self-signed TLS certificate and private key for 127.0.0.1.
- * The certificate is valid for 825 days (the maximum accepted by macOS).
- *
- * @param params - Optional parameters to customize the certificate subject and alternative names.
- * @returns An object containing the certificate and private key in PEM format.
- */
-export async function getTlsCertAndKey({
-  commonName = '127.0.0.1',
-  organizationName = 'ITW Conformance Tool',
-  altNames = ['localhost']
-}: TlsCertParams = {}): Promise<TlsCertAndKey> {
-  const { certPem, keyPem } = await generateCertificate({
-    commonName,
-    organizationName,
-    notAfterDays: 825,
-    isCA: false,
-    keyUsageBits: 0x01, // digitalSignature (ECDSA TLS)
-    altNames
-  });
-
-  return {
-    cert: certPem,
-    key: keyPem
   };
 }
 

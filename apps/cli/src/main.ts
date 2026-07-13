@@ -4,35 +4,40 @@ import { init } from './commands/init.js';
 import { reportCreate } from './commands/reportCreate.js';
 import { reportList } from './commands/reportList.js';
 import { runConformanceTests } from './commands/runTests.js';
-import { buildEnv } from './services/buildEnv.js';
 import { getNxCommands } from './services/getNxCommands.js';
 import { loadConfig } from './services/loadConfig.js';
-import { parseCLIArgs } from './services/parseCliArgs.js';
+import { parseCliArgs } from './services/parseCliArgs.js';
 import { runCommands } from './services/runCommands.js';
 import { createEmitter } from './utils/prompt.js';
 import { findNxRoot, existsFileSync, filesToSearch } from './utils/search.js';
 
 async function main() {
   const nxRootPath = findNxRoot();
-  const { command, flags } = parseCLIArgs(process.argv.slice(2), nxRootPath);
+  const { command, flags } = parseCliArgs(process.argv.slice(2), nxRootPath);
 
-  const configResult = loadConfig(flags);
+  const config = loadConfig(flags).data;
+  const logLevel = config.global.log_level;
+  const dataDir = config.global.data_dir;
 
-  const config = configResult.data;
-
-  const starterLogger = createLogger({ level: config.global.log_level });
+  const starterLogger = createLogger({ level: logLevel });
   const emitLog = createEmitter(starterLogger);
 
   // __ Init section
   if (command === 'init') {
     await init(flags);
-    process.stdout.write('\nStart services with:\n  itw-conformance-tool start --all\n');
+    process.stdout.write('Start services with: itwct start --all');
+    process.exit(0);
+  }
+
+  // __ Test section
+  if (command === 'test') {
+    await runConformanceTests();
     process.exit(0);
   }
 
   // __ Report list section
   if (command === 'report:list') {
-    reportList(config.global.data_dir, emitLog);
+    reportList(dataDir, emitLog);
     process.exit(0);
   }
 
@@ -41,11 +46,11 @@ async function main() {
     if (!flags.runId) {
       throw new Error('Missing required param: <uuid>');
     }
-    await reportCreate(flags.runId, flags.format, config.global.data_dir, emitLog);
+    await reportCreate(flags.runId, flags.format, dataDir, emitLog);
     process.exit(0);
   }
 
-  const missingFiles = filesToSearch(config.global.data_dir).filter((f) => !existsFileSync(f));
+  const missingFiles = filesToSearch(dataDir).filter((f) => !existsFileSync(f));
   if (missingFiles.length > 0) {
     throw new Error(
       'Missing required files:\n' + missingFiles.join('\n') + '\n\nRun first: `itw-conformance-tool init`\n'
@@ -53,16 +58,9 @@ async function main() {
   }
 
   const services = getNxCommands(flags);
-  const env = buildEnv(config);
-
-  // __ Test section
-  if (command === 'test') {
-    await runConformanceTests(env);
-    process.exit(0);
-  }
 
   // __ Start section
-  const exitCode = await runCommands(nxRootPath, services, env, emitLog);
+  const exitCode = await runCommands(nxRootPath, services, emitLog);
 
   process.exit(exitCode);
 }

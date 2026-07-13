@@ -1,6 +1,7 @@
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+import { loadConfig } from '@itw-conformance-tool/config';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import {
@@ -13,45 +14,19 @@ import {
 
 import type { ScenarioRunner } from '../../index.js';
 
-function readBooleanEnv(name: string, defaultValue: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
-  if (!value) return defaultValue;
-  return value === 'true' || value === '1';
-}
-
-function readPositivePort(value: string | undefined, defaultPort: number): number {
-  if (!value?.trim()) return defaultPort;
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error(`Invalid port: ${value}`);
-  return port;
-}
-
-function resolveDataDir(): string {
-  return process.env.ITW_CT_DATA_DIR?.trim() || resolve(process.cwd(), '.itw-conformance-tool');
-}
-
-function resolveCredentialIssuerEndpoint(): string {
-  const explicitBaseUrl = process.env.ITW_CT_ISSUER_ADVERTISED_BASE_URL?.trim();
-  if (explicitBaseUrl) return explicitBaseUrl.replace(/\/$/, '');
-
-  const httpsEnabled = readBooleanEnv('ITW_CT_HTTPS', true);
-  const scheme = httpsEnabled ? 'https' : 'http';
-  const host = process.env.ITW_CT_ADVERTISED_HOST?.trim() || '127.0.0.1';
-  const port = readPositivePort(process.env.ITW_CT_ISSUER_PORT, 3000);
-
-  return `${scheme}://${host}:${port}`;
-}
-
 describe.sequential('Issuance protocol-observed tests', () => {
   let runner: ScenarioRunner;
   let db: DatabaseSync;
+  let issuerBaseUrl: string;
 
   beforeAll(() => {
-    db = new DatabaseSync(join(resolveDataDir(), 'itw.db'));
+    const config = loadConfig();
+    db = new DatabaseSync(join(config.global.data_dir, 'itw.db'));
     db.exec('PRAGMA busy_timeout = 5000;');
+    issuerBaseUrl = `https://127.0.0.1:${config['itw-credential-issuer'].port}`;
 
     runner = createProtocolObservedScenarioRunner({
-      endpoints: { credentialIssuer: resolveCredentialIssuerEndpoint() },
+      endpoints: { credentialIssuer: issuerBaseUrl },
       eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
       registry: issuanceScenarioRegistry
     });

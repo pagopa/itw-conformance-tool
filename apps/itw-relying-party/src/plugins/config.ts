@@ -1,5 +1,3 @@
-import { resolve } from 'node:path';
-
 import { loadRpConfig } from '@itw-conformance-tool/rp';
 import fp from 'fastify-plugin';
 
@@ -14,15 +12,13 @@ declare module 'fastify' {
       configFilePath: string;
       trustAnchorUrl?: string;
       x5cCertPath: string;
-      httpsEnabled: boolean;
     };
   }
 }
 
 export default fp(
   async function configPlugin(app) {
-    const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
-    const { config } = loadRpConfig({ configFilePath });
+    const { config } = loadRpConfig();
 
     app.decorate('config', {
       host: config.host,
@@ -31,9 +27,8 @@ export default fp(
       entityId: config.entityId,
       trustAnchorUrl: config.trustAnchorUrl,
       dataDir: config.dataDir,
-      configFilePath,
-      x5cCertPath: config.x5cCertPath,
-      httpsEnabled: config.httpsEnabled
+      configFilePath: config.configFilePath,
+      x5cCertPath: config.x5cCertPath
     });
   },
   { name: 'config' }

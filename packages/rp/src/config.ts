@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { DEFAULT_CONFIG, parseConfigIni } from '@itw-conformance-tool/config';
+import { loadConfig, resolveConfigFilePath } from '@itw-conformance-tool/config';
 import { z } from 'zod';
 
 export const DEFAULT_HOST = '0.0.0.0';
@@ -17,20 +16,17 @@ export const rpConfigSchema = z.object({
   dataDir: z.string().min(1),
   configFilePath: z.string().min(1),
   trustAnchorUrl: z.string().min(1).optional(),
-  x5cCertPath: z.string().min(1),
-  httpsEnabled: z.boolean().default(true)
+  x5cCertPath: z.string().min(1)
 });
 
 export type RpConfig = z.infer<typeof rpConfigSchema>;
 
 export interface LoadRpConfigInput {
-  configFilePath: string;
-  env?: NodeJS.ProcessEnv;
+  configFilePath?: string;
 }
 
 export interface LoadRpConfigResult {
   config: RpConfig;
-  configFileFound: boolean;
 }
 
 export interface RpTlsPaths {
@@ -38,87 +34,31 @@ export interface RpTlsPaths {
   keyPath: string;
 }
 
-function expandHome(pathValue: string): string {
-  if (pathValue === '~') {
-    return homedir();
+function trimTrailingSlashes(value: string): string {
+  let result = value;
+  while (result.endsWith('/')) {
+    result = result.slice(0, -1);
   }
-  if (pathValue.startsWith('~/')) {
-    return resolve(homedir(), pathValue.slice(2));
-  }
-  return resolve(pathValue);
+  return result;
 }
 
-function parsePortOverride(env: NodeJS.ProcessEnv, variableName: string): number | undefined {
-  const value = env[variableName];
-  if (value === undefined || value.trim().length === 0) {
-    return undefined;
-  }
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid ${variableName} value: ${value}`);
-  }
-  return port;
-}
-
-export function resolveHttpsEnabled(env: NodeJS.ProcessEnv, fallback: boolean): boolean {
-  const httpsRaw = env.ITW_CT_HTTPS?.trim().toLowerCase();
-  return httpsRaw !== undefined ? httpsRaw === 'true' || httpsRaw === '1' : fallback;
-}
-
-export function deriveBaseUrl(input: { host: string; port: number; scheme?: 'http' | 'https' }): string {
+export function deriveBaseUrl(input: { host: string; port: number }): string {
   // INI [rp].host can be 0.0.0.0 to listen on all interfaces, but the public
   // base URL should be addressable — fall back to localhost in that case.
   const reachableHost = input.host === '0.0.0.0' ? 'localhost' : input.host;
-  const scheme = input.scheme ?? 'http';
-  return `${scheme}://${reachableHost}:${input.port}`;
+  return `https://${reachableHost}:${input.port}`;
 }
 
-export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
-  const env = input.env ?? process.env;
-  const configFileFound = existsSync(input.configFilePath);
-  const data = configFileFound ? parseConfigIni(input.configFilePath) : DEFAULT_CONFIG;
-
-  const port = parsePortOverride(env, 'ITW_CT_RP_PORT') ?? data.rp.port;
-
-  const dataDirOverride = env.ITW_CT_DATA_DIR;
-  const dataDir =
-    dataDirOverride !== undefined && dataDirOverride.trim().length > 0
-      ? expandHome(dataDirOverride.trim())
-      : expandHome(data.global.data_dir);
-
-  const httpsEnabled = resolveHttpsEnabled(env, data.global.https);
-
+export function loadRpConfig(input: LoadRpConfigInput = {}): LoadRpConfigResult {
+  const configFilePath = resolveConfigFilePath({ configFilePath: input.configFilePath });
+  const data = loadConfig({ configFilePath });
+  const port = data.rp.port;
+  const dataDir = data.global.data_dir;
   const host = DEFAULT_HOST;
-
-  const baseUrlOverride = env.ITW_CT_RP_BASE_URL?.trim();
-  const baseUrlCandidate =
-    baseUrlOverride && baseUrlOverride.length > 0
-      ? baseUrlOverride
-      : deriveBaseUrl({ host, port, scheme: httpsEnabled ? 'https' : 'http' });
-
-  const entityIdOverride = env.ITW_CT_RP_ENTITY_ID?.trim();
-  const entityIdFromConfig = data.rp.entity_id?.trim();
-  const entityIdCandidate =
-    entityIdOverride && entityIdOverride.length > 0
-      ? entityIdOverride
-      : entityIdFromConfig && entityIdFromConfig.length > 0
-        ? entityIdFromConfig
-        : baseUrlCandidate;
-
-  let baseUrl = baseUrlCandidate;
-  while (baseUrl.endsWith('/')) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
-
-  let entityId = entityIdCandidate;
-  while (entityId.endsWith('/')) {
-    entityId = entityId.slice(0, -1);
-  }
-  const trustAnchorUrlOverride = env.ITW_CT_RP_TRUST_ANCHOR_URL?.trim();
-  const trustAnchorUrlCandidate =
-    trustAnchorUrlOverride && trustAnchorUrlOverride.length > 0
-      ? trustAnchorUrlOverride
-      : data.rp.trust_anchor_url?.trim();
+  const baseUrl = trimTrailingSlashes(deriveBaseUrl({ host, port }));
+  const entityIdFromConfig = data.rp.entity_id.trim();
+  const entityId = trimTrailingSlashes(entityIdFromConfig.length > 0 ? entityIdFromConfig : baseUrl);
+  const trustAnchorUrlCandidate = data.rp.trust_anchor_url?.trim();
   const trustAnchorUrl =
     trustAnchorUrlCandidate && trustAnchorUrlCandidate.length > 0 ? trustAnchorUrlCandidate : undefined;
 
@@ -128,11 +68,10 @@ export function loadRpConfig(input: LoadRpConfigInput): LoadRpConfigResult {
     baseUrl,
     entityId,
     dataDir,
-    configFilePath: input.configFilePath,
+    configFilePath,
     trustAnchorUrl,
-    x5cCertPath: join(dataDir, 'rp/x5c-cert.pem'),
-    httpsEnabled
+    x5cCertPath: join(dataDir, 'rp/x5c-cert.pem')
   });
 
-  return { config, configFileFound };
+  return { config };
 }

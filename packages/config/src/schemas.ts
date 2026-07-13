@@ -1,15 +1,14 @@
 import { z } from 'zod';
 
-const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
-const ISSUER_AUTH_FLOWS = ['direct', 'l2plus', 'l3'] as const;
-const CREDENTIAL_TYPES = ['pid', 'mdl', 'badge', 'eaa'] as const;
+export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+export const ISSUER_AUTH_FLOWS = ['direct', 'l2plus', 'l3'] as const;
+export const CREDENTIAL_TYPES = ['pid', 'mdl', 'badge', 'eaa'] as const;
 
 export const DEFAULT_CONFIG = {
   global: {
     data_dir: '~/.itw-conformance-tool',
     log_level: 'info',
-    https: true,
-    wallet_provider_backend_url: 'https://127.0.0.1:8080'
+    wallet_provider_backend_url: 'https://wallet-provider-backend.example.com'
   },
   'itw-credential-issuer': {
     auth_flow: 'direct',
@@ -34,18 +33,14 @@ data_dir = ${globalDefaults.data_dir}
 ; Logging level: debug | info | warn | error
 ; Default: ${globalDefaults.log_level}
 log_level = ${globalDefaults.log_level}
-; Enable HTTPS mode (CLI generates/checks local TLS cert/key and forwards ITW_CT_HTTPS) (true | false)
-; Default: ${globalDefaults.https}
-https = ${globalDefaults.https}
 ; Wallet Provider Backend URL (used for conformance tests)
-; Default: ${globalDefaults.wallet_provider_backend_url}
 wallet_provider_backend_url = ${globalDefaults.wallet_provider_backend_url}
 
 [itw-credential-issuer]
 ; Authentication flow: direct | l2plus | l3
 ; Default: ${issuerDefaults.auth_flow}
 auth_flow = ${issuerDefaults.auth_flow}
-; HTTP port for the issuer service
+; HTTP port for the local issuer service
 ; Default: ${issuerDefaults.port}
 port = ${issuerDefaults.port}
 ; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
@@ -53,14 +48,13 @@ port = ${issuerDefaults.port}
 credential_types = ${issuerDefaults.credential_types}
 
 [rp]
-; HTTP port for the itw-relying-party service
+; HTTP port for the local relying party service
 ; Default: ${rpDefaults.port}
 port = ${rpDefaults.port}
 ; RP OpenID Federation Entity ID (leaf entity)
 ; Example: https://rp.example.org
 entity_id = ${rpDefaults.entity_id}
 ; Trust Anchor URL for Federation validation
-; Override with env: ITW_CT_RP_TRUST_ANCHOR_URL
 trust_anchor_url = ${rpDefaults.trust_anchor_url}
 `;
 
@@ -105,7 +99,6 @@ const GlobalConfigSchema = z
   .object({
     data_dir: nonEmptyString.default(globalDefaults.data_dir),
     log_level: z.preprocess(trimLowercaseString, z.enum(LOG_LEVELS)).default(globalDefaults.log_level),
-    https: z.boolean().default(globalDefaults.https),
     wallet_provider_backend_url: nonEmptyString.refine(isHttpsUrl).default(globalDefaults.wallet_provider_backend_url)
   })
   .default(globalDefaults);
@@ -136,3 +129,6 @@ export const ConfigSchema = z.object({
 });
 
 export type ConfigSchemaType = z.infer<typeof ConfigSchema>;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+export type IssuerAuthFlow = (typeof ISSUER_AUTH_FLOWS)[number];
+export type CredentialType = (typeof CREDENTIAL_TYPES)[number];

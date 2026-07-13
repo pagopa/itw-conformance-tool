@@ -6,23 +6,15 @@ import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';
 
 const parRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
-  app.route({
+  app.route<{ Body: Record<string, string> }>({
     url: '/as/par',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization']
     },
     handler: async (request, reply) => {
-      const bodyString =
-        typeof request.body === 'string'
-          ? request.body
-          : new URLSearchParams(
-              Object.entries((request.body ?? {}) as Record<string, string | number | boolean | null | undefined>)
-                .filter(([, value]) => value !== undefined && value !== null)
-                .map(([key, value]) => [key, String(value)] as [string, string])
-            ).toString();
+      const bodyString = new URLSearchParams(request.body).toString();
+
       const { baseURL, headers, jwksRepository, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
       try {

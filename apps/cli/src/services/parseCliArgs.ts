@@ -132,7 +132,7 @@ function parseTestFlags(args: string[], flags: CliFlags): void {
  * @param argv - The array of command-line arguments.
  * @returns An object containing the parsed command and flags.
  */
-export function parseCLIArgs(argv: string[], rootPath: string): { command: string; flags: CliFlags } {
+export function parseCliArgs(argv: string[], rootPath: string): { command: string; flags: CliFlags } {
   if (argv.length === 0) {
     process.stdout.write(`No command provided. These are the available commands:\n`);
     printHelp();
