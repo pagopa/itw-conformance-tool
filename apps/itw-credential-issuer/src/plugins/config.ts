@@ -18,7 +18,7 @@ export default fp(
 
     app.decorate('config', {
       AUTH_FLOW: issuerConfig.auth_flow,
-      BASE_URL: `https://localhost:${issuerConfig.port}`,
+      BASE_URL: `https://127.0.0.1:${issuerConfig.port}`,
       DATA_DIR: config.global.data_dir
     });
   },
