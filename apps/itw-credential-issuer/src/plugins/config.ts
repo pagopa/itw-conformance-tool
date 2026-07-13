@@ -14,11 +14,11 @@ declare module 'fastify' {
 export default fp(
   async function configPlugin(app) {
     const config = loadConfig();
-    const issuerConfig = config['itw-credential-issuer'];
+    const issuerConfig = config['credential-issuer'];
 
     app.decorate('config', {
       AUTH_FLOW: issuerConfig.auth_flow,
-      BASE_URL: `https://127.0.0.1:${issuerConfig.port}`,
+      BASE_URL: issuerConfig.url,
       DATA_DIR: config.global.data_dir
     });
   },

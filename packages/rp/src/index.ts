@@ -1,9 +1,6 @@
 // Config
 export {
   DEFAULT_DATA_DIR,
-  DEFAULT_HOST,
-  DEFAULT_PORT,
-  deriveBaseUrl,
   loadRpConfig,
   rpConfigSchema,
   type LoadRpConfigInput,
