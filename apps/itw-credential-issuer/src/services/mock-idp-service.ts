@@ -2,8 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 
 import { importJWK, SignJWT } from 'jose';
 
+import type { JwksRepository, MockIdentity, MrtdAuthSession, ParRequest } from '../domain/index.js';
 import type { IPARRepository } from '@itw-conformance-tool/database';
-import type { JwksRepository, MockIdentity, MrtdAuthSession, ParRequest } from '@itw-conformance-tool/issuer';
 
 const MOCK_IDENTITY: MockIdentity = {
   birthdate: '1990-12-12',

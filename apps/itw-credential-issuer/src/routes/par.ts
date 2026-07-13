@@ -1,5 +1,4 @@
-import { PARService, PostPushedAuthorizationError } from '@itw-conformance-tool/issuer';
-
+import { PARService, PostPushedAuthorizationError } from '../domain/index.js';
 import { makeOauthCallbacks } from '../plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';

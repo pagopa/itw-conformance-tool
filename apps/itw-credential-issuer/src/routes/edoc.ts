@@ -1,5 +1,4 @@
-import { EdocProofInitError, EdocProofService } from '@itw-conformance-tool/issuer';
-
+import { EdocProofInitError, EdocProofService } from '../domain/index.js';
 import { makeEdocParRepository, makeJwksRepository } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -15,11 +14,9 @@ interface EdocProofInitHeaders {
 }
 
 const EdocInit: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route<{ Body: EdocProofInitBody; Headers: EdocProofInitHeaders }>({
     url: '/edoc-proof/init',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Edoc'],
       headers: {

@@ -12,9 +12,6 @@
       "path": "./tsconfig.lib.json"
     },
     {
-      "path": "../issuer/tsconfig.lib.json"
-    },
-    {
       "path": "../config/tsconfig.lib.json"
     }
   ]
