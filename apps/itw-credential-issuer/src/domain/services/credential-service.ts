@@ -180,7 +180,6 @@ export class CredentialService {
 
       const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
 
-      // Memorizziamo il nonce da consumare (evitando duplicati se condiviso nel batch)
       noncesToConsume.add(nonce);
 
       const holderPublicKey = JwkPublicKey.safeParse(proofResult.header.jwk);
@@ -192,7 +191,6 @@ export class CredentialService {
         throw new CreateCredentialError('Private keys are not allowed in the proof JWT!');
       }
 
-      // Generazione della credenziale legata alla specifica chiave di questa proof
       const credential = await this.#createCredentialByConfiguration(
         credentialIdentifier,
         options.baseURL,
@@ -212,7 +210,6 @@ export class CredentialService {
       }
     }
 
-    // Restituiamo l'intero array di credenziali generate
     return this.#buildCredentialResponse(options, credentials);
   }
 
