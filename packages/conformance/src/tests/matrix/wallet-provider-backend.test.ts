@@ -225,25 +225,23 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_002 ____
   it('WP_002 - Entity configuration is an OpenID Federation-compliant signed JWT with all required components', async () => {
-    expect(
-      parsedEntityConfigurationError,
-      `Entity configuration must be decodable and include jwks for WP_002 prerequisites`
-    ).toBeNull();
+    const entityStatementSignatureValid = parsedEntityConfiguration?.entityStatementSignatureValid ?? false;
 
-    if (!parsedEntityConfiguration) {
-      const validationErrorSuffix = parsedEntityConfigurationError ? `: ${parsedEntityConfigurationError}` : '';
-      throw new Error(`Entity configuration validation failed${validationErrorSuffix}`);
-    }
-
-    expect(
-      parsedEntityConfiguration.entityStatementSignatureValid,
-      `Entity configuration JWT signature is invalid`
-    ).toBe(true);
+    expect(entityStatementSignatureValid, `Entity configuration JWT signature is invalid`).toBe(true);
   });
 
   it("WP_002a - 'alg' must be allowed and not 'none'", async () => {
-    const { header } = requireParsedEntityConfiguration();
-    const hasAlgString = typeof header.alg === 'string';
+    let decodedHeader: Record<string, unknown> | null = null;
+    if (hasCompactJwtShape(entityConfigResponse.body)) {
+      try {
+        decodedHeader = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
+      } catch {
+        decodedHeader = null;
+      }
+    }
+
+    const alg = decodedHeader?.alg;
+    const hasAlgString = typeof alg === 'string';
 
     expect(hasAlgString, `JWT header alg must be present and be a string`).toBe(true);
     if (!hasAlgString) {
@@ -251,34 +249,48 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     }
 
     const isAllowedAlg = ALLOWED_FEDERATION_JOSE_ALGORITHMS.includes(
-      header.alg as (typeof ALLOWED_FEDERATION_JOSE_ALGORITHMS)[number]
+      alg as (typeof ALLOWED_FEDERATION_JOSE_ALGORITHMS)[number]
     );
-    const isNotNone = header.alg !== 'none';
+    const isNotNone = alg !== 'none';
 
     expect(isAllowedAlg, `JWT header alg must be one of the allowed federation algorithms`).toBe(true);
     expect(isNotNone, `JWT header alg must not be 'none'`).toBe(true);
   });
 
   it("WP_002b - 'kid' must equal public key thumbprint", async () => {
-    const { header, payload } = requireParsedEntityConfiguration();
-    const hasJwks = Array.isArray(payload.jwks?.keys) && payload.jwks?.keys.length > 0;
-    const foundJwk = payload.jwks?.keys?.find((key: Jwk) => key.kid === header.kid);
+    let decodedHeader: Record<string, unknown> | null = null;
+    let decodedPayload: unknown;
+
+    if (hasCompactJwtShape(entityConfigResponse.body)) {
+      try {
+        decodedHeader = decodeProtectedHeader(entityConfigResponse.body) as Record<string, unknown>;
+        decodedPayload = decodeJwt(entityConfigResponse.body);
+      } catch {
+        decodedHeader = null;
+        decodedPayload = undefined;
+      }
+    }
+
+    const kid = decodedHeader?.kid;
+    const hasKidString = typeof kid === 'string';
+    expect(hasKidString, `JWT header kid must be present and be a string`).toBe(true);
+
+    const payloadJwks =
+      typeof decodedPayload === 'object' && decodedPayload !== null
+        ? ((decodedPayload as { jwks?: unknown }).jwks as JwkSet | undefined)
+        : undefined;
+    const hasJwks = Array.isArray(payloadJwks?.keys) && payloadJwks.keys.length > 0;
+    const foundJwk = hasKidString ? payloadJwks?.keys?.find((key: Jwk) => key.kid === kid) : undefined;
+
     expect(hasJwks, `Entity configuration payload must contain a non-empty jwks before checking kid`).toBe(true);
     expect(!!foundJwk, `JWT header kid must match one of the keys in payload.jwks`).toBe(true);
     if (!foundJwk) {
       return;
     }
 
-    const kidMatchesThumbprint = (await calculateJwkThumbprint(foundJwk)) === header.kid;
-    const signatureVerifiedWithFederationJwks =
-      hasJwks && payload.jwks
-        ? await verifyEntityStatementWithFederationJwks(entityConfigResponse.body, payload.jwks)
-        : false;
+    const kidMatchesThumbprint = hasKidString ? (await calculateJwkThumbprint(foundJwk)) === kid : false;
 
     expect(kidMatchesThumbprint, `JWT header kid must equal the matched JWK thumbprint`).toBe(true);
-    expect(signatureVerifiedWithFederationJwks, `Entity statement signature must verify with federation jwks`).toBe(
-      true
-    );
   });
 
   it("WP_002c - 'typ' must be 'entity-statement+jwt'", async () => {
