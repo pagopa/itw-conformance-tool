@@ -14,12 +14,13 @@ export const DEFAULT_CONFIG = {
     auth_flow: 'direct',
     port: 3000,
     credential_types: 'pid,mdl,badge,eaa',
-    entity_id: 'https://localhost:3000'
+    entity_id: 'https://localhost:3000',
+    trust_anchor_url: 'https://localhost:3001'
   },
   rp: {
     port: 8080,
     entity_id: 'https://127.0.0.1:3000',
-    trust_anchor_url: '/.well-known/openid-federation'
+    trust_anchor_url: 'https://localhost:3001'
   },
   'itw-trust-anchor': {
     port: 3001,
@@ -55,6 +56,9 @@ credential_types = ${issuerDefaults.credential_types}
 ; Issuer OpenID Federation Entity ID
 ; Example: https://issuer.example.org
 entity_id = ${issuerDefaults.entity_id}
+; Trust Anchor Entity ID used in the issuer's authority_hints
+; Default: ${issuerDefaults.trust_anchor_url}
+trust_anchor_url = ${issuerDefaults.trust_anchor_url}
 
 [rp]
 ; HTTP port for the local relying party service
@@ -63,7 +67,8 @@ port = ${rpDefaults.port}
 ; RP OpenID Federation Entity ID (leaf entity)
 ; Example: https://rp.example.org
 entity_id = ${rpDefaults.entity_id}
-; Trust Anchor URL for Federation validation
+; Trust Anchor Entity ID used for Federation validation and authority_hints
+; Default: ${rpDefaults.trust_anchor_url}
 trust_anchor_url = ${rpDefaults.trust_anchor_url}
 
 [itw-trust-anchor]
@@ -128,7 +133,8 @@ const IssuerConfigSchema = z
       .preprocess(normalizeCredentialTypes, nonEmptyString)
       .refine(isCredentialTypesList)
       .default(issuerDefaults.credential_types),
-    entity_id: nonEmptyString.default(issuerDefaults.entity_id)
+    entity_id: nonEmptyString.default(issuerDefaults.entity_id),
+    trust_anchor_url: nonEmptyString.default(issuerDefaults.trust_anchor_url)
   })
   .default(issuerDefaults);
 

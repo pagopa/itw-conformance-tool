@@ -11,6 +11,7 @@ export interface GetFederationMetadataOptions {
   baseURL: string;
   config: IoWalletSdkConfig;
   jwksRepository: JwksRepository;
+  trustAnchorEntityId: string;
 }
 
 export const getFederationMetadata = async (options: GetFederationMetadataOptions): Promise<string> => {
@@ -21,7 +22,7 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
 
   return await createItWalletEntityConfiguration({
     claims: {
-      authority_hints: [`${options.baseURL}/trust_anchor`],
+      authority_hints: [options.trustAnchorEntityId],
       exp: Math.floor(Date.now() / 1000) + 3600,
       iat: Math.floor(Date.now() / 1000),
       iss: options.baseURL,

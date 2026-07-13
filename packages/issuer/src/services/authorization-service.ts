@@ -37,6 +37,7 @@ export type AuthorizeOptions = {
   readonly clientId: string;
   readonly config: IoWalletSdkConfig;
   readonly requestUri: string;
+  readonly trustAnchorEntityId: string;
 };
 
 export class AuthorizationService {
@@ -185,7 +186,8 @@ export class AuthorizationService {
     const federationMetadata = await getFederationMetadata({
       baseURL: options.baseURL,
       config: options.config,
-      jwksRepository: this.#jwksRepository
+      jwksRepository: this.#jwksRepository,
+      trustAnchorEntityId: options.trustAnchorEntityId
     });
 
     const baseOptions = {

@@ -10,7 +10,7 @@ export class FederationService {
     this.#jwksRepository = jwksRepository;
   }
 
-  getEntityConfiguration(baseURL: string, config: IoWalletSdkConfig): Promise<string> {
-    return getFederationMetadata({ baseURL, config, jwksRepository: this.#jwksRepository });
+  getEntityConfiguration(baseURL: string, config: IoWalletSdkConfig, trustAnchorEntityId: string): Promise<string> {
+    return getFederationMetadata({ baseURL, config, jwksRepository: this.#jwksRepository, trustAnchorEntityId });
   }
 }

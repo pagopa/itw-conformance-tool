@@ -35,7 +35,8 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
           },
           clientId: query.client_id,
           config: sdkConfig,
-          requestUri: query.request_uri
+          requestUri: query.request_uri,
+          trustAnchorEntityId: app.config.TRUST_ANCHOR_ENTITY_ID
         });
 
         if (result.kind === 'redirect') {
