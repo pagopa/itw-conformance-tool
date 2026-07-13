@@ -396,6 +396,12 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      '@pagopa/io-wallet-oid-federation':
+        specifier: catalog:pagopa
+        version: 1.5.2
+      '@pagopa/io-wallet-utils':
+        specifier: catalog:pagopa
+        version: 1.5.2
       close-with-grace:
         specifier: ^2.5.0
         version: 2.5.0
@@ -405,6 +411,9 @@ importers:
       fastify-plugin:
         specifier: catalog:fastify
         version: 5.1.0
+      jose:
+        specifier: ^5.10.0
+        version: 5.10.0
 
   packages/config:
     dependencies:
@@ -1927,6 +1936,9 @@ packages:
 
   '@pagopa/io-wallet-utils@1.5.2':
     resolution: {integrity: sha512-i5Rnb+PDi+9mhifn5nVxFkeJLgIBNiLaDVqGV9slxzzYAi3InTtG+UrDb/It6kky2UvK2fHRoGENues4pD1Xfg==}
+
+  '@pagopa/io-wallet-utils@1.5.3':
+    resolution: {integrity: sha512-l2ZFoPXgOgQnUtW9mzGW6g5hMM57OBcnXcc+X6PAFYi8YnGF9vRB0/GCzE1UqzRL4VSTaFiHfrqrGVV2xZrWHQ==}
 
   '@panva/hkdf@1.2.1':
     resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
@@ -6430,9 +6442,9 @@ snapshots:
 
   '@pagopa/io-wallet-oid-federation@1.5.2':
     dependencies:
-      '@pagopa/io-wallet-utils': 1.5.2
+      '@pagopa/io-wallet-utils': 1.5.3
       buffer: 6.0.3
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@pagopa/io-wallet-oid4vci@1.5.2':
     dependencies:
@@ -6459,7 +6471,13 @@ snapshots:
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.3.6
+      zod: 4.4.3
+
+  '@pagopa/io-wallet-utils@1.5.3':
+    dependencies:
+      '@openid4vc/oauth2': 0.4.3
+      '@openid4vc/utils': 0.4.3
+      zod: 4.4.3
 
   '@panva/hkdf@1.2.1': {}
 
