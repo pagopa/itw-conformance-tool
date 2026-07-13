@@ -69,7 +69,7 @@ const authResponseRoute: FastifyPluginAsync = async (app) => {
       }
 
       const result = await verifyAuthorizationResponseUseCase({
-        baseUrl: app.config.baseUrl,
+        baseUrl: app.config.url,
         jarmResponse: parsedBody.response,
         nonceRepository: app.nonceRepository,
         privateKeyPem: app.rpKeys.authResponsePrivateKeyPem,

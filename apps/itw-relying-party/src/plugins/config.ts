@@ -4,9 +4,7 @@ import fp from 'fastify-plugin';
 declare module 'fastify' {
   interface FastifyInstance {
     config: {
-      host: string;
-      port: number;
-      baseUrl: string;
+      url: string;
       entityId: string;
       dataDir: string;
       configFilePath: string;
@@ -21,9 +19,7 @@ export default fp(
     const { config } = loadRpConfig();
 
     app.decorate('config', {
-      host: config.host,
-      port: config.port,
-      baseUrl: config.baseUrl,
+      url: config.url,
       entityId: config.entityId,
       trustAnchorUrl: config.trustAnchorUrl,
       dataDir: config.dataDir,

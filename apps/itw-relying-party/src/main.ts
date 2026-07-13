@@ -43,7 +43,7 @@ async function startServer() {
   app.server.headersTimeout = 15_000;
 
   // Start server
-  const url = new URL(app.config.baseUrl);
+  const url = new URL(app.config.url);
 
   try {
     await app.listen({
