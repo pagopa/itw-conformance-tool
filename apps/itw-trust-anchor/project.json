@@ -1,0 +1,79 @@
+{
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "apps/itw-trust-anchor/dist",
+        "format": ["esm"],
+        "bundle": false,
+        "main": "apps/itw-trust-anchor/src/main.ts",
+        "tsConfig": "apps/itw-trust-anchor/tsconfig.app.json",
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "generateLockfile": true,
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "prune-lockfile": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "executor": "@nx/js:prune-lockfile",
+      "outputs": ["{projectRoot}/dist/package.json", "{projectRoot}/dist/package-lock.json"],
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "copy-workspace-modules": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "outputs": ["{projectRoot}/dist/workspace_modules"],
+      "executor": "@nx/js:copy-workspace-modules",
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "prune": {
+      "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
+      "executor": "nx:noop"
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "itw-trust-anchor:build",
+        "runBuildTargetDependencies": false,
+        "port": 9230
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "itw-trust-anchor:build:development"
+        },
+        "production": {
+          "buildTarget": "itw-trust-anchor:build:production"
+        }
+      }
+    },
+    "docker:build": {
+      "dependsOn": ["build", "prune"]
+    }
+  }
+}

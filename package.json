@@ -20,7 +20,8 @@
     "pre-commit": "pnpm format:check && nx affected -t lint typecheck",
     "prepare": "husky",
     "issuer": "nx serve itw-credential-issuer",
-    "rp": "nx serve itw-relying-party"
+    "rp": "nx serve itw-relying-party",
+    "trust-anchor": "nx serve itw-trust-anchor"
   },
   "devDependencies": {
     "@eslint/js": "^9.8.0",
