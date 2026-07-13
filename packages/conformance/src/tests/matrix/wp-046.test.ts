@@ -23,7 +23,7 @@ describe.sequential('Issuance protocol-observed tests', () => {
     const config = loadConfig();
     db = new DatabaseSync(join(config.global.data_dir, 'itw.db'));
     db.exec('PRAGMA busy_timeout = 5000;');
-    issuerBaseUrl = `https://127.0.0.1:${config['itw-credential-issuer'].port}`;
+    issuerBaseUrl = config['credential-issuer'].url;
 
     runner = createProtocolObservedScenarioRunner({
       endpoints: { credentialIssuer: issuerBaseUrl },
