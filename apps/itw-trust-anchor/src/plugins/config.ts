@@ -30,8 +30,8 @@ export default fp(
     app.decorate('config', {
       baseUrl: trustAnchorConfig.url,
       dataDir: config.global.data_dir,
-      issuerEntityId: trimTrailingSlashes(issuerConfig.entity_id.trim()),
-      rpEntityId: trimTrailingSlashes(rpConfig.entity_id.trim())
+      issuerEntityId: trimTrailingSlashes(issuerConfig.url.trim()),
+      rpEntityId: trimTrailingSlashes(rpConfig.url.trim())
     });
   },
 
