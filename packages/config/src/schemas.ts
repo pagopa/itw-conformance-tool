@@ -53,7 +53,7 @@ auth_flow = ${issuerDefaults.auth_flow}
 credential_types = ${issuerDefaults.credential_types}
 
 [relying-party]
-; Local Relying Party Backend URL (used for conformance tests)
+; Local Relying Party URL (used for conformance tests)
 url = ${rpDefaults.url}
 ; RP OpenID Federation Entity ID (leaf entity)
 ; Example: https://rp.example.org
