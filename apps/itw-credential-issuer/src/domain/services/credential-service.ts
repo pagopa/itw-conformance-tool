@@ -151,52 +151,66 @@ export class CredentialService {
     if (typeof sub !== 'string') {
       throw new CreateCredentialError('Access token is missing sub claim');
     }
-
-    const jwt = proofs[0]?.jwt;
-    if (typeof jwt !== 'string' || jwt.length === 0) {
-      throw new CreateCredentialError('Missing proof JWT in credential request');
-    }
-
-    let proofPayload: ReturnType<typeof decodeJwt>;
-    try {
-      proofPayload = decodeJwt(jwt);
-    } catch {
-      throw new CreateCredentialError('Invalid proof JWT in credential request');
-    }
-    const { nonce } = proofPayload;
-    if (typeof nonce !== 'string') {
-      throw new CreateCredentialError('Missing nonce in credential request');
-    }
-
-    const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
-    const consumedNonce = await this.#nonceRepository.consume(nonce);
-    if (!consumedNonce) {
-      throw new CreateCredentialError('Expected nonce not found');
-    }
-
-    const holderPublicKey = JwkPublicKey.safeParse(proofResult.header.jwk);
-    if (!holderPublicKey.success) {
-      throw new CreateCredentialError('Invalid parsing jwk!');
-    }
-
-    if (proofResult.header.jwk && 'd' in proofResult.header.jwk) {
-      throw new CreateCredentialError('Private keys are not allowed in the proof JWT!');
+    if (!proofs || proofs.length === 0) {
+      throw new CreateCredentialError('Missing proofs in credential request');
     }
 
     const fakeUser = generateFakeUser(sub);
-
     const credentialIdentifier = credentialRequest.credential_identifier as SupportedCredentialsId;
 
-    const credential = await this.#createCredentialByConfiguration(
-      credentialIdentifier,
-      options.baseURL,
-      options.config,
-      fakeUser,
-      holderPublicKey.data,
-      accessTokenPayload
-    );
+    const credentials: string[] = [];
+    const noncesToConsume = new Set<string>();
 
-    return this.#buildCredentialResponse(options, credential);
+    for (const proof of proofs) {
+      const jwt = proof.jwt;
+      if (typeof jwt !== 'string' || jwt.length === 0) {
+        throw new CreateCredentialError('Missing proof JWT in credential request');
+      }
+
+      let proofPayload: ReturnType<typeof decodeJwt>;
+      try {
+        proofPayload = decodeJwt(jwt);
+      } catch {
+        throw new CreateCredentialError('Invalid proof JWT in credential request');
+      }
+      const { nonce } = proofPayload;
+      if (typeof nonce !== 'string') {
+        throw new CreateCredentialError('Missing nonce in credential request');
+      }
+
+      const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
+
+      noncesToConsume.add(nonce);
+
+      const holderPublicKey = JwkPublicKey.safeParse(proofResult.header.jwk);
+      if (!holderPublicKey.success) {
+        throw new CreateCredentialError('Invalid parsing jwk!');
+      }
+
+      if (proofResult.header.jwk && 'd' in proofResult.header.jwk) {
+        throw new CreateCredentialError('Private keys are not allowed in the proof JWT!');
+      }
+
+      const credential = await this.#createCredentialByConfiguration(
+        credentialIdentifier,
+        options.baseURL,
+        options.config,
+        fakeUser,
+        holderPublicKey.data,
+        accessTokenPayload
+      );
+
+      credentials.push(credential);
+    }
+
+    for (const nonce of noncesToConsume) {
+      const consumedNonce = await this.#nonceRepository.consume(nonce);
+      if (!consumedNonce) {
+        throw new CreateCredentialError('Expected nonce not found');
+      }
+    }
+
+    return this.#buildCredentialResponse(options, credentials);
   }
 
   async #verifyCredentialProof(
@@ -232,11 +246,20 @@ export class CredentialService {
 
   async #buildCredentialResponse(
     options: CreateCredentialOptions,
-    credential: string
+    credentials: string[]
   ): Promise<CreateCredentialResponseResult> {
     const { config } = options;
-    const flow: { credentials: [{ credential: string }] } = {
-      credentials: [{ credential }]
+
+    const [firstCredential, ...restCredentials] = credentials;
+    if (!firstCredential) {
+      throw new CreateCredentialError('Expected at least one credential to build the response');
+    }
+
+    const flow = {
+      credentials: [{ credential: firstCredential }, ...restCredentials.map((credential) => ({ credential }))] as [
+        { credential: string },
+        ...{ credential: string }[]
+      ]
     };
 
     if (config.isVersion(ItWalletSpecsVersion.V1_3)) {
