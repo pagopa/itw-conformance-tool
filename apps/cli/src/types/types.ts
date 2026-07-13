@@ -10,7 +10,7 @@ export type SearchParamResult = {
   remainingArgs: string[];
 };
 
-export type Service = 'issuer' | 'rp';
+export type Service = 'issuer' | 'rp' | 'trust-anchor';
 
 export type ServiceCommand = 'init' | 'start';
 
@@ -18,6 +18,7 @@ export type ServiceCommand = 'init' | 'start';
 export interface CliFlags {
   issuer: boolean;
   rp: boolean;
+  trustAnchor: boolean;
   all: boolean;
   force: boolean;
   config: {

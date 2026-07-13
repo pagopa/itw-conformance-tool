@@ -58,7 +58,7 @@ Start the full conformance stack via CLI (recommended):
 # First run: initialize data directory, keys, and config template
 pnpm itw-conformance-tool:init
 
-# Start both services
+# Start all three services (trust anchor, issuer, relying party)
 pnpm itw-conformance-tool:start
 
 # Run CLI-driven conformance tests
@@ -84,6 +84,8 @@ The generated `config.ini` also supports the Wallet Provider backend URL used by
 ; Default: https://127.0.0.1:8080
 wallet_provider_backend_url = https://127.0.0.1:8080
 ```
+
+The issuer and relying party also trust a Trust Anchor service (`itw-trust-anchor`) by default, resolved from `trust_anchor_url` in their respective config sections (default: `https://localhost:3001`). Start it with `pnpm trust-anchor` or `itw-conformance-tool start --trust-anchor` if it isn't already running as part of `--all`.
 
 Behavior notes:
 
@@ -149,24 +151,26 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 
 ### Root-level `pnpm` scripts
 
-| Command                                                       | Description                                                                                                   |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `pnpm build`                                                  | Build all projects with a `build` target                                                                      |
-| `pnpm start`                                                  | Serve all runnable apps with a `serve` target                                                                 |
-| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test`, `report:list`, `report:create`)                       |
-| `pnpm itw-conformance-tool:init`                              | Initialize local data directory and config template                                                           |
-| `pnpm itw-conformance-tool:start`                             | Start both services via CLI (`start --all`), fails if `global.wallet_provider_backend_url` is missing/invalid |
-| `pnpm itw-conformance-tool:start:issuer`                      | Start only the issuer service via CLI                                                                         |
-| `pnpm itw-conformance-tool:start:rp`                          | Start only the relying-party service via CLI                                                                  |
-| `pnpm issuer`                                                 | Serve `itw-credential-issuer`                                                                                 |
-| `pnpm rp`                                                     | Serve `itw-relying-party`                                                                                     |
-| `pnpm test`                                                   | Run Vitest for projects with a `test` target                                                                  |
-| `pnpm vitest run --config vitest.conformance-test.config.mts` | Run conformance test matrix profile (`vitest.conformance-test.config.mts`)                                    |
-| `pnpm typecheck`                                              | Type-check projects with a `typecheck` target                                                                 |
-| `pnpm lint`                                                   | Lint projects with a `lint` target                                                                            |
-| `pnpm format`                                                 | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier                                         |
-| `pnpm clean`                                                  | Run project clean targets, then remove root `node_modules` and `.nx`                                          |
-| `pnpm pre-commit`                                             | Run lint and type-check on affected projects                                                                  |
+| Command                                                       | Description                                                                                                        |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `pnpm build`                                                  | Build all projects with a `build` target                                                                           |
+| `pnpm start`                                                  | Serve all runnable apps with a `serve` target                                                                      |
+| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test`, `report:list`, `report:create`)                            |
+| `pnpm itw-conformance-tool:init`                              | Initialize local data directory and config template                                                                |
+| `pnpm itw-conformance-tool:start`                             | Start all three services via CLI (`start --all`), fails if `global.wallet_provider_backend_url` is missing/invalid |
+| `pnpm itw-conformance-tool:start:issuer`                      | Start only the issuer service via CLI                                                                              |
+| `pnpm itw-conformance-tool:start:rp`                          | Start only the relying-party service via CLI                                                                       |
+| `pnpm itw-conformance-tool:start:trust-anchor`                | Start only the trust-anchor service via CLI                                                                        |
+| `pnpm issuer`                                                 | Serve `itw-credential-issuer`                                                                                      |
+| `pnpm rp`                                                     | Serve `itw-relying-party`                                                                                          |
+| `pnpm trust-anchor`                                           | Serve `itw-trust-anchor`                                                                                           |
+| `pnpm test`                                                   | Run Vitest for projects with a `test` target                                                                       |
+| `pnpm vitest run --config vitest.conformance-test.config.mts` | Run conformance test matrix profile (`vitest.conformance-test.config.mts`)                                         |
+| `pnpm typecheck`                                              | Type-check projects with a `typecheck` target                                                                      |
+| `pnpm lint`                                                   | Lint projects with a `lint` target                                                                                 |
+| `pnpm format`                                                 | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier                                              |
+| `pnpm clean`                                                  | Run project clean targets, then remove root `node_modules` and `.nx`                                               |
+| `pnpm pre-commit`                                             | Run lint and type-check on affected projects                                                                       |
 
 ### Targeting a single project with Nx
 
@@ -184,6 +188,9 @@ pnpm nx run itw-credential-issuer:serve
 
 # Serve the relying party locally
 pnpm nx run itw-relying-party:serve
+
+# Serve the trust anchor locally
+pnpm nx run itw-trust-anchor:serve
 ```
 
 ### Headless Conformance CLI
@@ -196,6 +203,7 @@ Current workspace projects include:
 | -------------------------------- | ---------------------------- | --------------------------------------------- |
 | `itw-credential-issuer`          | `apps/itw-credential-issuer` | `build`, `serve`, `test`, `typecheck`, `lint` |
 | `itw-relying-party`              | `apps/itw-relying-party`     | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `itw-trust-anchor`               | `apps/itw-trust-anchor`      | `build`, `serve`, `test`, `typecheck`, `lint` |
 | `itw-conformance-cli`            | `apps/cli`                   | `build`, `run`, `test`, `typecheck`, `lint`   |
 | `@itw-conformance-tool/config`   | `packages/config`            | `build`, `test`, `typecheck`, `lint`          |
 | `@itw-conformance-tool/database` | `packages/database`          | `build`, `test`, `typecheck`, `lint`          |

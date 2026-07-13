@@ -3,7 +3,7 @@
 Local CLI for the `itw-conformance-tool` monorepo. It supports the following workflows:
 
 - `init`, to generate the local configuration and key material
-- `start`, to launch the issuer and relying party services through Nx
+- `start`, to launch the trust anchor, issuer, and relying party services through Nx
 - `test`, to run conformance matrix specs (`WP_*`) through Vitest
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
@@ -50,6 +50,7 @@ From the workspace root through Nx-backed scripts:
 - `pnpm itw-conformance-tool --args="start --all"`
 - `pnpm itw-conformance-tool --args="start --issuer"`
 - `pnpm itw-conformance-tool --args="start --rp"`
+- `pnpm itw-conformance-tool --args="start --trust-anchor"`
 - `pnpm itw-conformance-tool --args="test"`
 - `pnpm itw-conformance-tool --args="report:list"`
 - `pnpm itw-conformance-tool --args="report:create <uuid>"`
@@ -61,6 +62,7 @@ Root shortcuts:
 - `pnpm itw-conformance-tool:start`
 - `pnpm itw-conformance-tool:start:issuer`
 - `pnpm itw-conformance-tool:start:rp`
+- `pnpm itw-conformance-tool:start:trust-anchor`
 - `pnpm itw-conformance-tool:test` (legacy shortcut)
 
 ## Supported Commands
@@ -76,9 +78,10 @@ Root shortcuts:
 ## Supported Options
 
 - `-c, --config <path>`: path to the configuration file. Supported by `start`, `test`, `report:list`, and `report:create`
-- `--all`: start both services. This is the default for `start`
+- `--all`: start the trust anchor, issuer, and relying party services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
+- `--trust-anchor`: start only the trust anchor service
 - `-f, --force`: overwrite generated files during `init`
 - `-h, --help`: print the CLI help
 - `-v, --version`: print the CLI version
@@ -114,10 +117,11 @@ Generated structure:
 - `<data_dir>/rp/auth-response-key.jwk.json`
 - `<data_dir>/rp/federation-key.jwk.json`
 - `<data_dir>/rp/x5c-cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/trust-anchor/federation-key.jwk.json`
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
 
-The Trust Anchor URL (`trust_anchor_url`) must be set before starting the RP service.
+The Trust Anchor URL (`trust_anchor_url`) defaults to `https://localhost:3001` for both the issuer and the relying party, matching the trust anchor's own default entity ID. Override it in `config.ini` if the trust anchor is served from a different URL.
 
 Default locations:
 
@@ -137,9 +141,10 @@ Wallet URL behavior during `init`:
 
 Service selection:
 
-- default or `--all`: `nx run-many -t serve -p itw-credential-issuer,itw-relying-party`
+- default or `--all`: starts `itw-trust-anchor`, `itw-credential-issuer`, and `itw-relying-party` (each spawned individually via `nx run <project>:serve`)
 - `--issuer`: `nx run itw-credential-issuer:serve`
 - `--rp`: `nx run itw-relying-party:serve`
+- `--trust-anchor`: `nx run itw-trust-anchor:serve`
 
 Before launching Nx, the CLI checks that the required files exist in the resolved data directory. If any required file is missing, the CLI throws and exits before starting the services.
 

@@ -27,13 +27,17 @@ function parseStartFlags(args: string[], flags: CliFlags): void {
       case '--rp':
         flags.rp = true;
         break;
+      case '--trust-anchor':
+        flags.trustAnchor = true;
+        break;
       case '--all':
       case '-a':
         flags.all = true;
         break;
       default:
         throw new Error(
-          `Invalid flag for start command: ${raw}. ` + `Allowed flags are: --all/-a, --rp, --issuer, --config/-c`
+          `Invalid flag for start command: ${raw}. ` +
+            `Allowed flags are: --all/-a, --rp, --issuer, --trust-anchor, --config/-c`
         );
     }
   }
@@ -169,6 +173,7 @@ export function parseCliArgs(argv: string[], rootPath: string): { command: strin
   const flags: CliFlags = {
     issuer: false,
     rp: false,
+    trustAnchor: false,
     all: false,
     force: false,
     config: {

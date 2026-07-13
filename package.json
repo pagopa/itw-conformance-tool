@@ -13,6 +13,7 @@
     "itw-conformance-tool:start": "nx run itw-conformance-cli:run --args=\"start --all\"",
     "itw-conformance-tool:start:issuer": "nx run itw-conformance-cli:run --args=\"start --issuer\"",
     "itw-conformance-tool:start:rp": "nx run itw-conformance-cli:run --args=\"start --rp\"",
+    "itw-conformance-tool:start:trust-anchor": "nx run itw-conformance-cli:run --args=\"start --trust-anchor\"",
     "itw-conformance-tool:test": "nx run itw-conformance-cli:run --args=\"test\"",
     "format": "prettier --write '**/*.{js,mjs,json,ts,mts,md}'",
     "format:check": "prettier --check '**/*.{js,mjs,json,ts,mts,md}'",
