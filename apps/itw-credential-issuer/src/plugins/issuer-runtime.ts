@@ -14,6 +14,7 @@ import type {
   JwksRepository,
   ParRequest
 } from '../domain/index.js';
+import type { IRefreshTokenRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext } from '@pagopa/io-wallet-oauth2';
 import type { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -185,6 +186,16 @@ export function makeTokenParRepository(app: FastifyInstance): ITokenParRepositor
       };
     }
   };
+}
+
+/**
+ * Exposes `app.refreshTokenRepository` as the plain `IRefreshTokenRepository`
+ * interface. Kept as an explicit adapter (rather than wiring the Fastify
+ * decorator directly into domain services) so domain code depends only on
+ * the interface and stays testable with an in-memory fake.
+ */
+export function makeRefreshTokenRepository(app: FastifyInstance): IRefreshTokenRepository {
+  return app.refreshTokenRepository;
 }
 
 export function makeCodeJwtParRepository(app: FastifyInstance): ICodeJwtParRepository {

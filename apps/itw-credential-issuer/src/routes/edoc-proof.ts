@@ -111,8 +111,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
 
         if (!walletJwk) {
           return reply

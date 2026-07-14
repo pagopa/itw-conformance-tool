@@ -103,9 +103,7 @@ const session = await sessionService.get(id);
 // Update session to verified
 await sessionService.update(id, 'verified', {
   redirectUri: 'http://...',
-  values: [
-    /* presented claims */
-  ]
+  values: [/* presented claims */]
 });
 ```
 
