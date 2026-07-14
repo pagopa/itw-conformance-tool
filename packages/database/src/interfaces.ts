@@ -44,6 +44,32 @@ export interface IPARRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Deferred credentials (Credential Issuer)
+// ---------------------------------------------------------------------------
+
+export interface DeferredCredentialEntry {
+  /** Serialised credentials generated for the original batch request. */
+  credentials: string[];
+  /** Subject (`sub`) of the access token that authorized the original request. */
+  subject: string;
+  /** JWK thumbprint (`cnf.jkt`) bound to the access token. */
+  jwkThumbprint: string;
+  /** Notification ID to return alongside the deferred credentials. */
+  notificationId: string;
+}
+
+export interface IDeferredCredentialRepository {
+  /**
+   * Atomically retrieves and deletes the record matching `transactionId`, `subject`, and
+   * `jwkThumbprint`. Returns `undefined` for unknown, mismatched, or already-consumed transactions.
+   * Throws if the stored payload is not valid JSON matching {@link DeferredCredentialEntry}.
+   */
+  consume(transactionId: string, subject: string, jwkThumbprint: string): Promise<DeferredCredentialEntry | undefined>;
+  /** Persists a new deferred credential batch under a cryptographically random `transactionId`. */
+  insert(transactionId: string, record: DeferredCredentialEntry): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
 // Presentation session (Relying Party)
 // ---------------------------------------------------------------------------
 
