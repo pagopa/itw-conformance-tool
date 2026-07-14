@@ -40,13 +40,16 @@ export { DISABILITY_CARD_ID, createDisabilityCardCredential } from './credential
 export * from './models/nonce.js';
 export * from './models/par-entry.js';
 export * from './models/credential.js';
+export * from './models/deferred-credential.js';
 export * from './models/token.js';
 export * from './models/status-list.js';
 
 // Services
 export * from './services/authorization-service.js';
 export * from './services/code-jwt-service.js';
+export * from './services/credential-request-auth-service.js';
 export * from './services/credential-service.js';
+export * from './services/deferred-credential-service.js';
 export * from './services/edoc-proof-service.js';
 export * from './services/federation-service.js';
 export * from './services/nonce-service.js';

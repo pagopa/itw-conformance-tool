@@ -15,10 +15,17 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
       const body = typeof request.body === 'string' ? request.body : JSON.stringify(request.body ?? {});
       const { baseURL, headers, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
+      reply.header('Cache-Control', 'no-store');
+
       try {
-        const service = new CredentialService(makeJwksRepository(app), app.nonceRepository);
+        const service = new CredentialService(
+          makeJwksRepository(app),
+          app.nonceRepository,
+          app.deferredCredentialRepository
+        );
         const result = await service.createCredential({
           baseURL,
+          batchIssuanceByDeferred: app.config.BATCH_ISSUANCE_BY_DEFERRED,
           body,
           callbacks: {
             hash: oauthCallbacks.hash,
@@ -30,7 +37,8 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
           url: `${baseURL}${request.url}`
         });
 
-        return reply.code(200).send(result.credentialResponse ?? result);
+        const statusCode = result.status === 'deferred' ? 202 : 200;
+        return reply.code(statusCode).send(result.sdkResult.credentialResponse ?? result.sdkResult);
       } catch (error) {
         if (error instanceof InvalidProofError) {
           return reply.code(400).send({ error: 'invalid_or_missing_proof', error_description: error.message });

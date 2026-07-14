@@ -1,6 +1,9 @@
 export { DatabaseClient } from './client.js';
 export type { DatabaseClientOptions } from './client.js';
+export { SqliteDeferredCredentialRepository } from './deferred-credential-repository.js';
 export type {
+  DeferredCredentialEntry,
+  IDeferredCredentialRepository,
   INonceRepository,
   IPARRepository,
   ISessionRepository,

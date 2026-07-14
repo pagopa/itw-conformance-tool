@@ -5,6 +5,7 @@ import {
 } from '@itw-conformance-tool/conformance';
 import {
   DatabaseClient,
+  SqliteDeferredCredentialRepository,
   SqliteNonceRepository,
   SqlitePARRepository,
   SqliteSessionRepository
@@ -12,12 +13,18 @@ import {
 import fp from 'fastify-plugin';
 
 import type { IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
-import type { INonceRepository, IPARRepository, ISessionRepository } from '@itw-conformance-tool/database';
+import type {
+  IDeferredCredentialRepository,
+  INonceRepository,
+  IPARRepository,
+  ISessionRepository
+} from '@itw-conformance-tool/database';
 
 declare module 'fastify' {
   interface FastifyInstance {
     conformanceSessionRepository: IConformanceSessionRepository;
     dbClient: DatabaseClient;
+    deferredCredentialRepository: IDeferredCredentialRepository;
     nonceRepository: INonceRepository;
     parRepository: IPARRepository;
     sessionRepository: ISessionRepository;
@@ -41,6 +48,7 @@ export default fp(
     app.decorate('nonceRepository', new SqliteNonceRepository(dbClient));
     app.decorate('parRepository', new SqlitePARRepository(dbClient));
     app.decorate('sessionRepository', new SqliteSessionRepository(dbClient));
+    app.decorate('deferredCredentialRepository', new SqliteDeferredCredentialRepository(dbClient));
 
     app.addHook('onClose', async () => {
       stopConformanceCleanup();

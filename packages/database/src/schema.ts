@@ -12,6 +12,14 @@ export const DDL = `
     expires_at     INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS deferred_credentials (
+    id              TEXT NOT NULL PRIMARY KEY,
+    subject         TEXT NOT NULL,
+    jwk_thumbprint  TEXT NOT NULL,
+    notification_id TEXT NOT NULL,
+    credentials     TEXT NOT NULL CHECK(json_valid(credentials))
+  );
+
   CREATE TABLE IF NOT EXISTS presentation_sessions (
     id             TEXT    PRIMARY KEY,
     state          TEXT    NOT NULL CHECK(state IN ('pending', 'completed', 'failed')),

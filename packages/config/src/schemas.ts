@@ -15,7 +15,8 @@ export const DEFAULT_CONFIG = {
   'credential-issuer': {
     url: 'https://127.0.0.1:3000',
     auth_flow: 'direct',
-    credential_types: 'pid,mdl,badge,eaa'
+    credential_types: 'pid,mdl,badge,eaa',
+    batch_issuance_by_deferred: false
   },
   'relying-party': {
     url: 'https://127.0.0.1:8080',
@@ -51,6 +52,10 @@ auth_flow = ${issuerDefaults.auth_flow}
 ; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
 ; Default: ${issuerDefaults.credential_types}
 credential_types = ${issuerDefaults.credential_types}
+; Return batch (multi-proof) credential requests through the deferred endpoint instead of issuing them immediately.
+; Only affects requests that include multiple proofs; single-proof requests are always issued immediately.
+; Default: ${issuerDefaults.batch_issuance_by_deferred}
+batch_issuance_by_deferred = ${issuerDefaults.batch_issuance_by_deferred}
 
 [relying-party]
 ; Local Relying Party URL (used for conformance tests)
@@ -76,6 +81,22 @@ function normalizeCredentialTypes(value: unknown): unknown {
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
     .join(',');
+}
+
+function normalizeStrictBoolean(value: unknown): unknown {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+
+  // Anything else (e.g. "yes", "1", "True ") is left untouched so z.boolean()
+  // rejects it explicitly instead of relying on JavaScript truthiness.
+  return value;
 }
 
 const allowedCredentialTypes = new Set<string>(CREDENTIAL_TYPES);
@@ -110,7 +131,10 @@ const IssuerConfigSchema = z
     credential_types: z
       .preprocess(normalizeCredentialTypes, nonEmptyString)
       .refine(isCredentialTypesList)
-      .default(issuerDefaults.credential_types)
+      .default(issuerDefaults.credential_types),
+    batch_issuance_by_deferred: z
+      .preprocess(normalizeStrictBoolean, z.boolean())
+      .default(issuerDefaults.batch_issuance_by_deferred)
   })
   .default(issuerDefaults);
 
