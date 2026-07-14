@@ -47,7 +47,7 @@ function makeJsonReporter(): JsonReporterResult {
             location: { column: 1, line: 1 },
             meta: {
               phase: 'ISSUANCE',
-              requirementId: 'IT-WALLET-1.4-§4.2.1',
+              requirementId: 'WP_051',
               result: 'PASS',
               step: 'PAR',
               timestamp: '2026-06-12T12:00:05.000Z'
@@ -73,7 +73,7 @@ function makeJsonReporter(): JsonReporterResult {
             meta: {
               httpStatus: 400,
               phase: 'ISSUANCE',
-              requirementId: 'IT-WALLET-1.4-§4.3.2',
+              requirementId: 'WP_058',
               result: 'FAIL',
               step: 'TOKEN',
               timestamp: '2026-06-12T12:00:15.000Z'
@@ -103,8 +103,8 @@ describe('html-pdf-generator', () => {
     expect(html).toContain('Dettaglio dei controlli di conformità');
     expect(html).toContain('Conformità parziale');
     expect(html).toContain('Sintesi Esecutiva');
-    expect(html).toContain('CI_001');
-    expect(html).toContain('IT-WALLET-1.4-§4.3.2');
+    expect(html).toContain('WP_051');
+    expect(html).toContain('WP_058');
     expect(html).toContain('FALLITO');
     expect(html).toContain('invalid dpop');
   });

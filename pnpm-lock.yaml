@@ -316,6 +316,9 @@ importers:
 
   packages/conformance:
     dependencies:
+      '@itw-conformance-tool/database':
+        specifier: workspace:*
+        version: link:../database
       puppeteer:
         specifier: ^24.0.0
         version: 24.43.1(typescript@5.9.3)
@@ -323,9 +326,6 @@ importers:
         specifier: ^2.3.0
         version: 2.8.1
     devDependencies:
-      '@itw-conformance-tool/database':
-        specifier: workspace:*
-        version: link:../database
       '@types/node':
         specifier: ^22.19.9
         version: 22.19.17

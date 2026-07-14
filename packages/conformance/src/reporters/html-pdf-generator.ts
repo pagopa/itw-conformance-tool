@@ -138,13 +138,11 @@ export function renderHtmlReport(jsonReporter: JsonReporterResult, options: Html
       </div>`
     : '';
 
-  let ctrlIdx = 0;
   const controlsHtml = jsonReporter.testResults
     .flatMap((suite) =>
       suite.assertionResults.map((a) => {
-        ctrlIdx += 1;
         const cls = assertionBadgeClass(a.status);
-        const ctrlId = `CI_${String(ctrlIdx).padStart(3, '0')}`;
+        const ctrlId = a.meta.requirementId ?? a.title;
         const hasDetail = a.failureMessages.length > 0;
         const detailBoxes = hasDetail
           ? `<div class="ctrl-details">
