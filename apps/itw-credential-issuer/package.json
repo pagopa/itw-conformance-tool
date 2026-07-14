@@ -44,5 +44,8 @@
     "fastify-plugin": "catalog:fastify",
     "jose": "5.2.4",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

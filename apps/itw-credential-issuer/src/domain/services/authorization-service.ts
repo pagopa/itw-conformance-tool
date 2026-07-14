@@ -27,8 +27,7 @@ export class AuthorizationRequestError extends Error {
 }
 
 export type AuthorizationResult =
-  | { readonly kind: 'redirect'; readonly location: string }
-  | { readonly kind: 'jwt'; readonly payload: string };
+  { readonly kind: 'redirect'; readonly location: string } | { readonly kind: 'jwt'; readonly payload: string };
 
 export type AuthorizeOptions = {
   readonly authFlow?: PidAuthFlow;
