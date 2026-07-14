@@ -29,7 +29,6 @@ export {
   type ReportFormat
 } from './reporters/html-pdf-generator.js';
 export { extractIssuerSessionId, extractRpSessionId } from './utils/session-extractor.js';
-export { isHttpsUrl, normalizeUrl } from './utils/url.js';
 export type { RequirementDefinition } from './utils/requirement-mapper.js';
 export { getRequirements } from './utils/requirement-mapper.js';
 export {
@@ -96,8 +95,9 @@ export {
   type ScenarioRegistryFilter
 } from './scenarios/registry.js';
 export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuance.js';
+export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
-export { wp046Scenario } from './scenarios/factories/wp-046.js';
+export { wp077Scenario } from './scenarios/factories/wp-077.js';
 export type {
   ArtifactExpectation,
   AutomationMode,

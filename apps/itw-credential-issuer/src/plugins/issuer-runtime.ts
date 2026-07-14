@@ -168,7 +168,7 @@ export function makeTokenParRepository(app: FastifyInstance): ITokenParRepositor
     // Async wrapper around a synchronous SQLite query to match the repository interface.
     // node:sqlite uses DatabaseSync intentionally; the async signature allows future DB abstraction.
     getByCode: async (code: string) => {
-      const row = app.dbClient.db
+      const row = app.dbClient.raw
         .prepare(
           `SELECT request_uri, request_object
            FROM par_entries
@@ -230,7 +230,7 @@ export function makeCodeJwtParRepository(app: FastifyInstance): ICodeJwtParRepos
 export function makeEdocParRepository(app: FastifyInstance): IEdocParRepository {
   return {
     getByMrtdAuthSession: async (mrtdAuthSessionId: string) => {
-      const row = app.dbClient.db
+      const row = app.dbClient.raw
         .prepare(
           `SELECT request_uri, request_object
            FROM par_entries
@@ -249,7 +249,7 @@ export function makeEdocParRepository(app: FastifyInstance): IEdocParRepository 
       };
     },
     atomicClaimSession: async (requestUri: string, mrtdAuthSessionId: string, updatedParRequest: ParRequest) => {
-      const result = app.dbClient.db
+      const result = app.dbClient.raw
         .prepare(
           `UPDATE par_entries
            SET request_object = ?

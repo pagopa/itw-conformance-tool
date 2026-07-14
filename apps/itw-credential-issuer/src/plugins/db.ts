@@ -26,12 +26,10 @@ declare module 'fastify' {
 
 export default fp(
   async function dbPlugin(app) {
-    const dbClient = new DatabaseClient({
-      dataDir: app.config.DATA_DIR
-    });
+    const dbClient = new DatabaseClient(app.config.DATA_DIR);
 
-    const conformanceSessionRepository = new SqliteConformanceSessionRepository(dbClient.db);
-    const scenarioEventRepository = new SqliteScenarioEventRepository(dbClient.db);
+    const conformanceSessionRepository = new SqliteConformanceSessionRepository(dbClient.raw);
+    const scenarioEventRepository = new SqliteScenarioEventRepository(dbClient.raw);
     const stopConformanceCleanup = startConformanceCleanupJob({
       logger: app.log,
       repository: conformanceSessionRepository
@@ -40,9 +38,9 @@ export default fp(
     app.decorate('conformanceSessionRepository', conformanceSessionRepository);
     app.decorate('conformanceEventSink', scenarioEventRepository);
     app.decorate('dbClient', dbClient);
-    app.decorate('nonceRepository', new SqliteNonceRepository(dbClient.db));
-    app.decorate('parRepository', new SqlitePARRepository(dbClient.db));
-    app.decorate('sessionRepository', new SqliteSessionRepository(dbClient.db));
+    app.decorate('nonceRepository', new SqliteNonceRepository(dbClient.raw));
+    app.decorate('parRepository', new SqlitePARRepository(dbClient.raw));
+    app.decorate('sessionRepository', new SqliteSessionRepository(dbClient.raw));
 
     app.addHook('onClose', async () => {
       stopConformanceCleanup();

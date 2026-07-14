@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import chalk from 'chalk';
+
 import { createObservedEvent } from '../events/event-bus.js';
 import {
   EventStoreAbortedError,
@@ -13,6 +15,7 @@ import {
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
+import { httpsRequest } from '../utils/request.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { createScenarioPromptModel } from './prompts.js';
 
@@ -74,6 +77,39 @@ function createCredentialOfferUri(credentialIssuer: string, correlationId: strin
   return `openid-credential-offer://?credential_offer=${encodeURIComponent(JSON.stringify(credentialOffer))}`;
 }
 
+function createDefaultPresentationDcqlQuery(): Record<string, unknown> {
+  return {
+    credentials: [
+      {
+        id: 'pid',
+        format: 'dc+sd-jwt',
+        meta: { vct_values: ['urn:eudi:pid:it:1'] },
+        claims: [{ path: ['given_name'] }, { path: ['family_name'] }, { path: ['birthdate'] }]
+      }
+    ]
+  };
+}
+
+async function createPresentationRequestUri(baseURL: string): Promise<string> {
+  const endpoint = new URL('/request-object', baseURL);
+
+  const response = await httpsRequest<{ url: string }>({
+    method: 'POST',
+    hostname: endpoint.hostname,
+    path: endpoint.pathname,
+    port: endpoint.port,
+    protocol: endpoint.protocol,
+    headers: { 'content-type': 'application/json' },
+    body: {
+      dcqlQuery: createDefaultPresentationDcqlQuery(),
+      flow_type: 'cross-device'
+    },
+    rejectUnauthorized: false
+  });
+
+  return response.data.url;
+}
+
 function resolveScenarioEndpoints(
   definition: ProtocolObservedScenarioDefinition,
   configuredEndpoints: LocalServiceEndpoints
@@ -89,11 +125,11 @@ function resolveScenarioEndpoints(
   return endpoints;
 }
 
-function createStimulus(
+async function createStimulus(
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
   correlationId: string
-): ScenarioStimulus {
+): Promise<ScenarioStimulus> {
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
@@ -103,6 +139,13 @@ function createStimulus(
 
   if (definition.stimulus.type === 'manual-instruction') {
     return { type: 'manual-instruction', text: definition.stimulus.text };
+  }
+
+  if (definition.stimulus.type === 'presentation-request') {
+    const relyingParty = endpoints.relyingParty;
+    if (!relyingParty) throw new Error(`Scenario ${definition.id} requires a Relying Party endpoint`);
+    const uri = await createPresentationRequestUri(relyingParty);
+    return { type: 'presentation-request', uri, qrCode: uri };
   }
 
   throw new Error(`Unsupported stimulus type for scenario ${definition.id}: ${definition.stimulus.type}`);
@@ -138,37 +181,47 @@ function showPrompt(
   write: (message: string) => void
 ): void {
   const prompt = createScenarioPromptModel(definition, stimulus);
+  const testerActionTimeoutSeconds = Math.ceil(definition.timeouts.testerActionMs / 1000);
 
   write('');
-  write(`=== ${prompt.id} - ${prompt.title} ===`);
-  write(`Goal: ${prompt.goal}`);
-  write(`Expected: ${prompt.expectedBehavior}`);
+  write(chalk.bold.cyan(`╭─ ${prompt.id} · ${prompt.title}`));
+  write(`${chalk.bold('Goal')}      ${prompt.goal}`);
+  write(`${chalk.bold('Expected')}  ${prompt.expectedBehavior}`);
+  write(chalk.bold.cyan('╰────────────────────────────────────────────────────────────'));
   write('');
-  write('Local endpoints:');
-  for (const [name, endpoint] of Object.entries(endpoints)) write(`- ${name}: ${endpoint}`);
+  write(chalk.bold.blue('Local endpoints'));
+  for (const [name, endpoint] of Object.entries(endpoints)) {
+    write(`  ${chalk.gray('•')} ${chalk.magenta(name)} ${chalk.gray('→')} ${chalk.cyan(endpoint)}`);
+  }
   if (prompt.prerequisites.length > 0) {
     write('');
-    write('Prerequisites:');
-    for (const prerequisite of prompt.prerequisites) write(`- ${prerequisite}`);
+    write(chalk.bold.blue('Prerequisites'));
+    for (const prerequisite of prompt.prerequisites) write(`  ${chalk.gray('•')} ${prerequisite}`);
   }
   if (prompt.steps.length > 0) {
     write('');
-    write('Tester actions:');
-    for (const [index, step] of prompt.steps.entries()) write(`${index + 1}. ${step}`);
+    write(chalk.bold.blue('Tester actions'));
+    for (const [index, step] of prompt.steps.entries()) write(`  ${chalk.yellow(`${index + 1}.`)} ${step}`);
   }
 
   if (prompt.stimulus.type === 'credential-offer') {
     write('');
-    write('Credential offer deep link:');
-    write(prompt.stimulus.uri);
+    write(chalk.bold.blue('Credential offer deep link'));
+    write(chalk.cyan(prompt.stimulus.uri));
     write('');
-    write('QR payload:');
-    write(prompt.stimulus.qrCode);
+    write(chalk.bold.blue('QR payload'));
+    write(chalk.dim(prompt.stimulus.qrCode));
+  }
+
+  if (prompt.stimulus.type === 'presentation-request') {
+    write('');
+    write(chalk.bold.blue('Presentation request QR payload'));
+    write(chalk.dim(decodeURIComponent(prompt.stimulus.qrCode)));
   }
 
   write('');
-  write(`Waiting for event: ${definition.entryEvent}`);
-  write(`Timeout: ${Math.ceil(definition.timeouts.testerActionMs / 1000)} seconds`);
+  write(`${chalk.bold('Waiting for event')} ${chalk.green(definition.entryEvent)}`);
+  write(`${chalk.bold('Timeout')} ${chalk.yellow(`${testerActionTimeoutSeconds} seconds`)}`);
 }
 
 export function createProtocolObservedScenarioRunner(
@@ -194,7 +247,7 @@ export function createProtocolObservedScenarioRunner(
       let eventSubscription: Disposable | undefined;
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
-      const stimulus = createStimulus(definition, endpoints, correlationId);
+      const stimulus = await createStimulus(definition, endpoints, correlationId);
       const eventBridge = await options.eventBridgeFactory?.({
         correlationId,
         definition,
@@ -205,7 +258,8 @@ export function createProtocolObservedScenarioRunner(
 
       await eventStore.emit(
         createObservedEvent({
-          name: 'credential_offer.generated',
+          name:
+            stimulus.type === 'presentation-request' ? 'presentation_request.generated' : 'credential_offer.generated',
           scenarioId,
           correlationId,
           service: 'collector',

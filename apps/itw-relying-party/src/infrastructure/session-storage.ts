@@ -1,5 +1,3 @@
-import { existsSync, mkdirSync } from 'node:fs';
-
 import {
   DatabaseClient,
   SqliteSessionRepository as DatabaseSessionRepository,
@@ -11,12 +9,8 @@ export class SqliteSessionRepository {
   readonly #repository: DatabaseSessionRepository;
 
   constructor(dataDir: string) {
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true });
-    }
-
-    this.#client = new DatabaseClient({ dataDir });
-    this.#repository = new DatabaseSessionRepository(this.#client.db);
+    this.#client = new DatabaseClient(dataDir);
+    this.#repository = new DatabaseSessionRepository(this.#client.raw);
   }
 
   async delete(id: string): Promise<void> {

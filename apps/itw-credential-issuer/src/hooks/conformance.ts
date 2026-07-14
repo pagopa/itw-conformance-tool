@@ -85,7 +85,7 @@ export default fp(
             : null;
 
         if (code) {
-          const row = app.dbClient.db
+          const row = app.dbClient.raw
             .prepare(
               `SELECT request_uri FROM par_entries
                WHERE json_extract(request_object, '$.code') = ?

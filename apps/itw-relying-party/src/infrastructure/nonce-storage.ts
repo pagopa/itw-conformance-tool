@@ -1,5 +1,3 @@
-import { existsSync, mkdirSync } from 'node:fs';
-
 import { DatabaseClient, SqliteNonceRepository as DatabaseNonceRepository } from '@itw-conformance-tool/database';
 
 export class SqliteNonceRepository {
@@ -7,12 +5,8 @@ export class SqliteNonceRepository {
   readonly #repository: DatabaseNonceRepository;
 
   constructor(dataDir: string) {
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true });
-    }
-
-    this.#client = new DatabaseClient({ dataDir });
-    this.#repository = new DatabaseNonceRepository(this.#client.db);
+    this.#client = new DatabaseClient(dataDir);
+    this.#repository = new DatabaseNonceRepository(this.#client.raw);
   }
 
   async consume(value: string): Promise<boolean> {

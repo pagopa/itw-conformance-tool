@@ -1,3 +1,5 @@
+import { createObservedEvent, extractRpSessionId } from '@itw-conformance-tool/conformance';
+
 import { registerAuthRequestConformanceHooks } from '../hooks/conformance.js';
 import { serveAuthorizationRequestUseCase } from '../use-cases/serve-authorization-request.js';
 
@@ -45,6 +47,23 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const { state } = request.params;
+      const sessionId = extractRpSessionId(state);
+
+      try {
+        await app.conformanceEventSink.emit(
+          createObservedEvent({
+            name: 'rp.request_object.requested',
+            scenarioId: null,
+            correlationId: sessionId,
+            service: 'relying-party',
+            requestId: request.id,
+            diagnostic: { state }
+          })
+        );
+      } catch (error) {
+        request.log.warn({ err: error, state }, 'Failed to emit conformance RP request object event');
+      }
+
       const jwt = await serveAuthorizationRequestUseCase({
         state,
         sessionService: app.sessionService
