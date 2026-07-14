@@ -1,7 +1,7 @@
 import type { ScenarioEventBridgeFactory } from './event-bridge.js';
 import type { ScenarioEventSink } from './event-bus.js';
 import type { ObservedEvent, ObservedEventName, ObservedServiceName } from './event-types.js';
-import type { DatabaseSync } from 'node:sqlite';
+import type { DatabaseClient } from '@itw-conformance-tool/database';
 
 interface EventRow {
   artifact_refs: string | null;
@@ -20,7 +20,7 @@ interface EventRow {
 }
 
 export interface CreateSqliteScenarioEventBridgeOptions {
-  db: DatabaseSync;
+  db: DatabaseClient;
   onError?: (error: unknown) => void;
   pollIntervalMs?: number;
 }
@@ -53,32 +53,30 @@ function rowToObservedEvent(row: EventRow): ObservedEvent {
 }
 
 export class SqliteScenarioEventRepository implements ScenarioEventSink {
-  private readonly db: DatabaseSync;
+  private readonly db: DatabaseClient;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseClient) {
     this.db = db;
   }
 
   async emit(event: ObservedEvent): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT OR IGNORE INTO conformance_events (
-          id,
-          name,
-          scenario_id,
-          correlation_id,
-          service,
-          timestamp,
-          monotonic_ms,
-          request_id,
-          artifact_refs,
-          diagnostic,
-          http,
-          error,
-          validation
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
+    this.db.run(
+      `INSERT OR IGNORE INTO conformance_events (
+        id,
+        name,
+        scenario_id,
+        correlation_id,
+        service,
+        timestamp,
+        monotonic_ms,
+        request_id,
+        artifact_refs,
+        diagnostic,
+        http,
+        error,
+        validation
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         event.id,
         event.name,
         event.scenarioId,
@@ -92,31 +90,31 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
         stringifyJsonField('http' in event ? event.http : undefined),
         stringifyJsonField('error' in event ? event.error : undefined),
         stringifyJsonField('validation' in event ? event.validation : undefined)
-      );
+      ]
+    );
   }
 
   listSince(startedAt: string): ObservedEvent[] {
-    const rows = this.db
-      .prepare(
-        `SELECT
-          id,
-          name,
-          scenario_id,
-          correlation_id,
-          service,
-          timestamp,
-          monotonic_ms,
-          request_id,
-          artifact_refs,
-          diagnostic,
-          http,
-          error,
-          validation
-        FROM conformance_events
-        WHERE timestamp >= ?
-        ORDER BY timestamp ASC, id ASC`
-      )
-      .all(startedAt) as unknown as EventRow[];
+    const rows = this.db.query<EventRow>(
+      `SELECT
+        id,
+        name,
+        scenario_id,
+        correlation_id,
+        service,
+        timestamp,
+        monotonic_ms,
+        request_id,
+        artifact_refs,
+        diagnostic,
+        http,
+        error,
+        validation
+      FROM conformance_events
+      WHERE timestamp >= ?
+      ORDER BY timestamp ASC, id ASC`,
+      [startedAt]
+    );
 
     return rows.map(rowToObservedEvent);
   }

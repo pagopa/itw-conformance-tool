@@ -15,9 +15,8 @@ export const DEFAULT_CONFIG = {
   'credential-issuer': {
     url: 'https://127.0.0.1:3000',
     auth_flow: 'direct',
-    port: 3000,
     credential_types: 'pid,mdl,badge,eaa',
-    entity_id: 'https://localhost:3000',
+    batch_issuance_by_deferred: false,
     trust_anchor_url: 'https://localhost:3001'
   },
   'relying-party': {
@@ -59,9 +58,10 @@ auth_flow = ${issuerDefaults.auth_flow}
 ; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
 ; Default: ${issuerDefaults.credential_types}
 credential_types = ${issuerDefaults.credential_types}
-; Issuer OpenID Federation Entity ID
-; Example: https://issuer.example.org
-entity_id = ${issuerDefaults.entity_id}
+; Return batch (multi-proof) credential requests through the deferred endpoint instead of issuing them immediately.
+; Only affects requests that include multiple proofs; single-proof requests are always issued immediately.
+; Default: ${issuerDefaults.batch_issuance_by_deferred}
+batch_issuance_by_deferred = ${issuerDefaults.batch_issuance_by_deferred}
 ; Trust Anchor Entity ID used in the issuer's authority_hints
 ; Default: ${issuerDefaults.trust_anchor_url}
 trust_anchor_url = ${issuerDefaults.trust_anchor_url}
@@ -100,6 +100,22 @@ function normalizeCredentialTypes(value: unknown): unknown {
     .join(',');
 }
 
+function normalizeStrictBoolean(value: unknown): unknown {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+
+  // Anything else (e.g. "yes", "1", "True ") is left untouched so z.boolean()
+  // rejects it explicitly instead of relying on JavaScript truthiness.
+  return value;
+}
+
 const allowedCredentialTypes = new Set<string>(CREDENTIAL_TYPES);
 
 function isCredentialTypesList(value: string): boolean {
@@ -133,7 +149,9 @@ const IssuerConfigSchema = z
       .preprocess(normalizeCredentialTypes, nonEmptyString)
       .refine(isCredentialTypesList)
       .default(issuerDefaults.credential_types),
-    entity_id: nonEmptyString.default(issuerDefaults.entity_id),
+    batch_issuance_by_deferred: z
+      .preprocess(normalizeStrictBoolean, z.boolean())
+      .default(issuerDefaults.batch_issuance_by_deferred),
     trust_anchor_url: nonEmptyString.default(issuerDefaults.trust_anchor_url)
   })
   .default(issuerDefaults);

@@ -240,6 +240,19 @@ When `https = true`, `itw-conformance-tool init` generates a self-signed certifi
 
 > The self-signed certificate is intended for local development and conformance testing only. Do not use it in production.
 
+## Deferred Batch Credential Issuance
+
+By default, batch (multi-proof) credential requests are issued immediately, just like single-proof requests. Deferred issuance can be enabled by setting `batch_issuance_by_deferred = true` in the `[credential-issuer]` section of `config.ini`:
+
+```ini
+[credential-issuer]
+batch_issuance_by_deferred = true
+```
+
+When `batch_issuance_by_deferred = true`, only requests carrying **multiple proofs** are affected: the Credential Endpoint responds with `202 Accepted` and a `transaction_id`/`interval` (or `lead_time`) instead of the issued credentials. Clients must then poll the Deferred Endpoint (`POST /deferred`) with that `transaction_id` to retrieve the credentials once ready.
+
+Single-proof requests are always issued immediately, regardless of this flag.
+
 ## Path Resolution
 
 This CLI treats `~` as the project root, not as the operating system home directory.

@@ -31,19 +31,12 @@ export const observedEventNames = [
 export type ObservedEventName = (typeof observedEventNames)[number];
 
 export type HttpObservedEventName =
-  | 'http.request.received'
-  | 'http.response.sent'
-  | 'http.request.failed'
-  | 'http.not_found';
+  'http.request.received' | 'http.response.sent' | 'http.request.failed' | 'http.not_found';
 
 export type SemanticObservedEventName = Exclude<ObservedEventName, HttpObservedEventName>;
 
 export type ObservedServiceName =
-  | 'collector'
-  | 'credential-issuer'
-  | 'federation'
-  | 'relying-party'
-  | 'wallet-provider';
+  'collector' | 'credential-issuer' | 'federation' | 'relying-party' | 'wallet-provider';
 
 export type RedactedHeaderValue = string | string[] | undefined;
 
@@ -106,10 +99,7 @@ export interface SemanticObservedEvent extends BaseObservedEvent {
 }
 
 export type ObservedEvent =
-  | HttpRequestFailedEvent
-  | HttpRequestReceivedEvent
-  | HttpResponseSentEvent
-  | SemanticObservedEvent;
+  HttpRequestFailedEvent | HttpRequestReceivedEvent | HttpResponseSentEvent | SemanticObservedEvent;
 
 export function isObservedEventName(value: string): value is ObservedEventName {
   return observedEventNames.includes(value as ObservedEventName);

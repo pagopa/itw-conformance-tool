@@ -1,44 +1,43 @@
+import type { DatabaseClient } from './client.js';
 import type { INonceRepository } from './interfaces.js';
-import type { DatabaseSync } from 'node:sqlite';
 
 export class SqliteNonceRepository implements INonceRepository {
-  private readonly db: DatabaseSync;
+  private readonly db: DatabaseClient;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseClient) {
     this.db = db;
   }
 
   async consume(value: string): Promise<boolean> {
-    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
-    const result = this.db.prepare('DELETE FROM nonces WHERE value = ? AND expires_at >= ?').run(value, nowMs) as {
-      changes: number;
-    };
+    const nowMs = this.db.get<{ now: number }>("SELECT unixepoch('now') * 1000 AS now")?.now ?? Date.now();
+    const result = this.db.run('DELETE FROM nonces WHERE value = ? AND expires_at >= ?', [value, nowMs]);
 
     if (result.changes > 0) {
       return true;
     }
 
     // Lazy cleanup for expired entries when consume fails.
-    this.db.prepare('DELETE FROM nonces WHERE value = ?').run(value);
+    this.db.run('DELETE FROM nonces WHERE value = ?', [value]);
     return false;
   }
 
   async delete(value: string): Promise<void> {
-    this.db.prepare('DELETE FROM nonces WHERE value = ?').run(value);
+    this.db.run('DELETE FROM nonces WHERE value = ?', [value]);
   }
 
   async get(value: string): Promise<string | undefined> {
-    const row = this.db.prepare('SELECT value, expires_at FROM nonces WHERE value = ?').get(value) as
-      | { value: string; expires_at: number }
-      | undefined;
+    const row = this.db.get<{ value: string; expires_at: number }>(
+      'SELECT value, expires_at FROM nonces WHERE value = ?',
+      [value]
+    );
 
     if (!row) {
       return undefined;
     }
 
-    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
+    const nowMs = this.db.get<{ now: number }>("SELECT unixepoch('now') * 1000 AS now")?.now ?? Date.now();
     if (row.expires_at < nowMs) {
-      this.db.prepare('DELETE FROM nonces WHERE value = ?').run(value);
+      this.db.run('DELETE FROM nonces WHERE value = ?', [value]);
       return undefined;
     }
 
@@ -46,6 +45,6 @@ export class SqliteNonceRepository implements INonceRepository {
   }
 
   async insert(value: string, expiresAtMs: number): Promise<void> {
-    this.db.prepare('INSERT OR REPLACE INTO nonces (value, expires_at, used) VALUES (?, ?, 0)').run(value, expiresAtMs);
+    this.db.run('INSERT OR REPLACE INTO nonces (value, expires_at, used) VALUES (?, ?, 0)', [value, expiresAtMs]);
   }
 }
