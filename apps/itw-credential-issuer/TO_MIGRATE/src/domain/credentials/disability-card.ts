@@ -32,7 +32,7 @@ export async function createDisabilityCardCredential(
 
   const [signer, verifier] = await createSignerVerifier({
     privateKey: jwks.private,
-    publicKey: holderPublicKey
+    publicKey: jwks.public
   });
 
   // Create SDJwt instance for use
