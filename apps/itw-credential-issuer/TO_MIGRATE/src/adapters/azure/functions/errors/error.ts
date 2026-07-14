@@ -23,7 +23,7 @@ export const createErrorLocationResponse = (
   params: ErrorResponseParams
 ): HttpResponseInit => ({
   headers: {
-    Location: `${redirect_uri}?error=${params.error}&state=${state}&error_description=${params.error_description}`
+    Location: `${redirect_uri}?error=${encodeURIComponent(params.error)}&state=${encodeURIComponent(state)}&error_description=${encodeURIComponent(params.error_description)}`
   },
   status: 302
 });
