@@ -24,17 +24,17 @@ declare module 'fastify' {
 export default fp(
   async function dbPlugin(app) {
     const db = new DatabaseClient(app.config.dataDir);
-    const sessionRepository = new SqliteSessionRepository(db.raw);
-    const nonceRepository = new SqliteNonceRepository(db.raw);
+    const sessionRepository = new SqliteSessionRepository(db);
+    const nonceRepository = new SqliteNonceRepository(db);
 
-    const conformanceSessionRepository = new SqliteConformanceSessionRepository(db.raw);
+    const conformanceSessionRepository = new SqliteConformanceSessionRepository(db);
     const stopConformanceCleanup = startConformanceCleanupJob({
       logger: app.log,
       repository: conformanceSessionRepository
     });
 
     app.decorate('dbClient', db);
-    app.decorate('conformanceEventSink', new SqliteScenarioEventRepository(db.raw));
+    app.decorate('conformanceEventSink', new SqliteScenarioEventRepository(db));
     app.decorate('conformanceSessionRepository', conformanceSessionRepository);
     app.decorate('sessionRepository', sessionRepository);
     app.decorate('nonceRepository', nonceRepository);

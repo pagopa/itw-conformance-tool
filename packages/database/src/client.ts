@@ -42,7 +42,7 @@ export class DatabaseClient {
     this.db.exec(sql);
   }
 
-  query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: SqlParams = []): T[] {
+  query<T = Record<string, unknown>>(sql: string, params: SqlParams = []): T[] {
     const stmt = this.db.prepare(sql);
 
     if (Array.isArray(params)) {
@@ -52,7 +52,7 @@ export class DatabaseClient {
     return stmt.all(params) as T[];
   }
 
-  get<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: SqlParams = []): T | undefined {
+  get<T = Record<string, unknown>>(sql: string, params: SqlParams = []): T | undefined {
     const stmt = this.db.prepare(sql);
 
     const row = Array.isArray(params) ? stmt.get(...params) : stmt.get(params);
@@ -94,9 +94,5 @@ export class DatabaseClient {
     if (this.db.isOpen) {
       this.db.close();
     }
-  }
-
-  get raw(): DatabaseSync {
-    return this.db;
   }
 }

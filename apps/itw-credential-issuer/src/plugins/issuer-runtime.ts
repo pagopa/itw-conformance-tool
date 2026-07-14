@@ -165,26 +165,23 @@ export function makeTokenParRepository(app: FastifyInstance): ITokenParRepositor
     consume: async (requestUri: string) => {
       await app.parRepository.delete(requestUri);
     },
-    // Async wrapper around a synchronous SQLite query to match the repository interface.
-    // node:sqlite uses DatabaseSync intentionally; the async signature allows future DB abstraction.
     getByCode: async (code: string) => {
-      const row = app.dbClient.raw
-        .prepare(
-          `SELECT request_uri, request_object
-           FROM par_entries
-           WHERE json_extract(request_object, '$.code') = ?
-             AND json_extract(request_object, '$.code_expires_at') >= unixepoch('now')
-             AND expires_at >= unixepoch('now') * 1000`
-        )
-        .get(code);
+      const row = app.dbClient.get<{ request_object: string; request_uri: string }>(
+        `SELECT request_uri, request_object
+         FROM par_entries
+         WHERE json_extract(request_object, '$.code') = ?
+           AND json_extract(request_object, '$.code_expires_at') >= unixepoch('now')
+           AND expires_at >= unixepoch('now') * 1000`,
+        [code]
+      );
 
       if (!row) {
         return undefined;
       }
 
       return {
-        requestUri: row.request_uri as string,
-        parRequest: JSON.parse(row.request_object as string)
+        requestUri: row.request_uri,
+        parRequest: JSON.parse(row.request_object)
       };
     }
   };
@@ -230,37 +227,35 @@ export function makeCodeJwtParRepository(app: FastifyInstance): ICodeJwtParRepos
 export function makeEdocParRepository(app: FastifyInstance): IEdocParRepository {
   return {
     getByMrtdAuthSession: async (mrtdAuthSessionId: string) => {
-      const row = app.dbClient.raw
-        .prepare(
-          `SELECT request_uri, request_object
-           FROM par_entries
-           WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?
-             AND expires_at >= unixepoch('now') * 1000`
-        )
-        .get(mrtdAuthSessionId);
+      const row = app.dbClient.get<{ request_object: string; request_uri: string }>(
+        `SELECT request_uri, request_object
+         FROM par_entries
+         WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?
+           AND expires_at >= unixepoch('now') * 1000`,
+        [mrtdAuthSessionId]
+      );
 
       if (!row) {
         return undefined;
       }
 
       return {
-        parRequest: JSON.parse(row.request_object as string) as ParRequest,
-        requestUri: row.request_uri as string
+        parRequest: JSON.parse(row.request_object) as ParRequest,
+        requestUri: row.request_uri
       };
     },
     atomicClaimSession: async (requestUri: string, mrtdAuthSessionId: string, updatedParRequest: ParRequest) => {
-      const result = app.dbClient.raw
-        .prepare(
-          `UPDATE par_entries
-           SET request_object = ?
-           WHERE request_uri = ?
-             AND json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?
-             AND json_extract(request_object, '$.mrtd_auth_session.status') = 'pending_mrtd_init'
-             AND json_extract(request_object, '$.mrtd_auth_session.mrtd_pop_jwt_nonce_consumed_at') IS NULL`
-        )
-        .run(JSON.stringify(updatedParRequest), requestUri, mrtdAuthSessionId);
+      const result = app.dbClient.run(
+        `UPDATE par_entries
+         SET request_object = ?
+         WHERE request_uri = ?
+           AND json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?
+           AND json_extract(request_object, '$.mrtd_auth_session.status') = 'pending_mrtd_init'
+           AND json_extract(request_object, '$.mrtd_auth_session.mrtd_pop_jwt_nonce_consumed_at') IS NULL`,
+        [JSON.stringify(updatedParRequest), requestUri, mrtdAuthSessionId]
+      );
 
-      return (result as { changes: number }).changes > 0;
+      return result.changes > 0;
     }
   };
 }

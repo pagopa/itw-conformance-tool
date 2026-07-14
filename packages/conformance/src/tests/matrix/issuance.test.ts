@@ -21,7 +21,7 @@ describe.sequential('Test Cases for Issuance Phase', () => {
     const credentialIssuer = config['credential-issuer'].url;
     runner = createProtocolObservedScenarioRunner({
       endpoints: { credentialIssuer },
-      eventBridgeFactory: createSqliteScenarioEventBridge({ db: db.raw }),
+      eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
       registry: issuanceScenarioRegistry
     });
   });

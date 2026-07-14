@@ -6,7 +6,7 @@ export class SqliteNonceRepository {
 
   constructor(dataDir: string) {
     this.#client = new DatabaseClient(dataDir);
-    this.#repository = new DatabaseNonceRepository(this.#client.raw);
+    this.#repository = new DatabaseNonceRepository(this.#client);
   }
 
   async consume(value: string): Promise<boolean> {

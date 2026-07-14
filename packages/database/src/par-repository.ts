@@ -1,5 +1,5 @@
+import type { DatabaseClient } from './client.js';
 import type { IPARRepository, PAREntry } from './interfaces.js';
-import type { DatabaseSync } from 'node:sqlite';
 
 type PARRow = {
   request_uri: string;
@@ -18,28 +18,26 @@ function rowToEntry(row: PARRow): PAREntry {
 }
 
 export class SqlitePARRepository implements IPARRepository {
-  private readonly db: DatabaseSync;
+  private readonly db: DatabaseClient;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseClient) {
     this.db = db;
   }
 
   async delete(requestUri: string): Promise<void> {
-    this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(requestUri);
+    this.db.run('DELETE FROM par_entries WHERE request_uri = ?', [requestUri]);
   }
 
   async get(requestUri: string): Promise<PAREntry | undefined> {
-    const row = this.db.prepare('SELECT * FROM par_entries WHERE request_uri = ?').get(requestUri) as
-      | PARRow
-      | undefined;
+    const row = this.db.get<PARRow>('SELECT * FROM par_entries WHERE request_uri = ?', [requestUri]);
 
     if (!row) {
       return undefined;
     }
 
-    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
+    const nowMs = this.db.get<{ now: number }>("SELECT unixepoch('now') * 1000 AS now")?.now ?? Date.now();
     if (row.expires_at < nowMs) {
-      this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(requestUri);
+      this.db.run('DELETE FROM par_entries WHERE request_uri = ?', [requestUri]);
       return undefined;
     }
 
@@ -47,17 +45,15 @@ export class SqlitePARRepository implements IPARRepository {
   }
 
   async getByJti(jti: string): Promise<PAREntry | undefined> {
-    const row = this.db
-      .prepare("SELECT * FROM par_entries WHERE json_extract(request_object, '$.jti') = ?")
-      .get(jti) as PARRow | undefined;
+    const row = this.db.get<PARRow>("SELECT * FROM par_entries WHERE json_extract(request_object, '$.jti') = ?", [jti]);
 
     if (!row) {
       return undefined;
     }
 
-    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
+    const nowMs = this.db.get<{ now: number }>("SELECT unixepoch('now') * 1000 AS now")?.now ?? Date.now();
     if (row.expires_at < nowMs) {
-      this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(row.request_uri);
+      this.db.run('DELETE FROM par_entries WHERE request_uri = ?', [row.request_uri]);
       return undefined;
     }
 
@@ -65,19 +61,18 @@ export class SqlitePARRepository implements IPARRepository {
   }
 
   async getByMrtdAuthSession(sessionId: string): Promise<PAREntry | undefined> {
-    const row = this.db
-      .prepare(
-        "SELECT * FROM par_entries WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?"
-      )
-      .get(sessionId) as PARRow | undefined;
+    const row = this.db.get<PARRow>(
+      "SELECT * FROM par_entries WHERE json_extract(request_object, '$.mrtd_auth_session.mrtd_auth_session') = ?",
+      [sessionId]
+    );
 
     if (!row) {
       return undefined;
     }
 
-    const nowMs = (this.db.prepare("SELECT unixepoch('now') * 1000 AS now").get() as { now: number }).now;
+    const nowMs = this.db.get<{ now: number }>("SELECT unixepoch('now') * 1000 AS now")?.now ?? Date.now();
     if (row.expires_at < nowMs) {
-      this.db.prepare('DELETE FROM par_entries WHERE request_uri = ?').run(row.request_uri);
+      this.db.run('DELETE FROM par_entries WHERE request_uri = ?', [row.request_uri]);
       return undefined;
     }
 
@@ -85,12 +80,11 @@ export class SqlitePARRepository implements IPARRepository {
   }
 
   async insert(entry: PAREntry): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT INTO par_entries (request_uri, client_id, request_object, expires_at)
-         VALUES (?, ?, ?, ?)`
-      )
-      .run(entry.requestUri, entry.clientId, entry.requestObject, entry.expiresAt);
+    this.db.run(
+      `INSERT INTO par_entries (request_uri, client_id, request_object, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      [entry.requestUri, entry.clientId, entry.requestObject, entry.expiresAt]
+    );
   }
 
   async update(requestUri: string, data: Partial<Omit<PAREntry, 'requestUri'>>): Promise<void> {
@@ -113,6 +107,6 @@ export class SqlitePARRepository implements IPARRepository {
     if (fields.length === 0) return;
 
     values.push(requestUri);
-    this.db.prepare(`UPDATE par_entries SET ${fields.join(', ')} WHERE request_uri = ?`).run(...values);
+    this.db.run(`UPDATE par_entries SET ${fields.join(', ')} WHERE request_uri = ?`, values);
   }
 }

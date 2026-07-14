@@ -10,7 +10,7 @@ export class SqliteSessionRepository {
 
   constructor(dataDir: string) {
     this.#client = new DatabaseClient(dataDir);
-    this.#repository = new DatabaseSessionRepository(this.#client.raw);
+    this.#repository = new DatabaseSessionRepository(this.#client);
   }
 
   async delete(id: string): Promise<void> {

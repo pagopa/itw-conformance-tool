@@ -134,7 +134,7 @@ export class VitestConformanceReporter implements Reporter {
   async onTestRunStart(): Promise<void> {
     const { global } = loadConfig();
     this.client = new DatabaseClient(global.data_dir);
-    this.repository = new SqliteConformanceSessionRepository(this.client.raw);
+    this.repository = new SqliteConformanceSessionRepository(this.client);
     this.sessionId = randomUUID();
     this.results.length = 0;
     this.failedPhases.clear();

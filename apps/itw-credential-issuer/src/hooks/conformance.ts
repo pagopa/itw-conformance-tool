@@ -85,14 +85,13 @@ export default fp(
             : null;
 
         if (code) {
-          const row = app.dbClient.raw
-            .prepare(
-              `SELECT request_uri FROM par_entries
-               WHERE json_extract(request_object, '$.code') = ?
-                 AND json_extract(request_object, '$.code_expires_at') >= unixepoch('now')
-                 AND expires_at >= unixepoch('now') * 1000`
-            )
-            .get(code) as { request_uri: string } | undefined;
+          const row = app.dbClient.get<{ request_uri: string }>(
+            `SELECT request_uri FROM par_entries
+             WHERE json_extract(request_object, '$.code') = ?
+               AND json_extract(request_object, '$.code_expires_at') >= unixepoch('now')
+               AND expires_at >= unixepoch('now') * 1000`,
+            [code]
+          );
 
           if (row) {
             sessionId = extractIssuerSessionId(row.request_uri);

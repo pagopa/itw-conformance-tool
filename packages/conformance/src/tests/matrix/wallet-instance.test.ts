@@ -22,7 +22,7 @@ describe.sequential('Test Cases for Issuance Phase', () => {
     const relyingParty = config['relying-party'].url;
     runner = createProtocolObservedScenarioRunner({
       endpoints: { credentialIssuer, relyingParty },
-      eventBridgeFactory: createSqliteScenarioEventBridge({ db: db.raw }),
+      eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
       registry: walletInstanceScenarioRegistry
     });
   });

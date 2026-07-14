@@ -23,7 +23,7 @@ describe.sequential('Test Cases for Presentation Phase', () => {
     const relyingParty = config['relying-party'].url;
     runner = createProtocolObservedScenarioRunner({
       endpoints: { relyingParty },
-      eventBridgeFactory: createSqliteScenarioEventBridge({ db: db.raw }),
+      eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
       registry: presentationScenarioRegistry
     });
   });

@@ -30,7 +30,7 @@ export async function reportCreate(
     const { SqliteConformanceSessionRepository, buildJsonReporterFromSession, generateRenderedReport } =
       await import('@itw-conformance-tool/conformance');
 
-    const repository = new SqliteConformanceSessionRepository(db.raw);
+    const repository = new SqliteConformanceSessionRepository(db);
     const session = await repository.get(runId);
 
     if (!session) {

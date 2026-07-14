@@ -5,7 +5,7 @@ import type {
   ConformanceSessionStatus,
   IConformanceSessionRepository
 } from './models/types.js';
-import type { DatabaseSync } from 'node:sqlite';
+import type { DatabaseClient } from '@itw-conformance-tool/database';
 
 type SessionRow = {
   session_id: string;
@@ -26,31 +26,22 @@ function rowToSession(row: SessionRow): ConformanceSession {
 }
 
 export class SqliteConformanceSessionRepository implements IConformanceSessionRepository {
-  private readonly db: DatabaseSync;
+  private readonly db: DatabaseClient;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseClient) {
     this.db = db;
   }
 
   async create(session: ConformanceSession): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT INTO conformance_sessions (session_id, started_at, closed_at, status, checks)
-         VALUES (?, ?, ?, ?, ?)`
-      )
-      .run(
-        session.sessionId,
-        session.startedAt,
-        session.closedAt ?? null,
-        session.status,
-        JSON.stringify(session.checks)
-      );
+    this.db.run(
+      `INSERT INTO conformance_sessions (session_id, started_at, closed_at, status, checks)
+       VALUES (?, ?, ?, ?, ?)`,
+      [session.sessionId, session.startedAt, session.closedAt ?? null, session.status, JSON.stringify(session.checks)]
+    );
   }
 
   async get(sessionId: string): Promise<ConformanceSession | null> {
-    const row = this.db.prepare('SELECT * FROM conformance_sessions WHERE session_id = ?').get(sessionId) as
-      | SessionRow
-      | undefined;
+    const row = this.db.get<SessionRow>('SELECT * FROM conformance_sessions WHERE session_id = ?', [sessionId]);
 
     return row ? rowToSession(row) : null;
   }
@@ -58,35 +49,32 @@ export class SqliteConformanceSessionRepository implements IConformanceSessionRe
   async appendCheck(sessionId: string, check: ConformanceCheck): Promise<void> {
     // Atomic append avoids read-modify-write races when multiple test results
     // are persisted close together.
-    this.db
-      .prepare(
-        `UPDATE conformance_sessions
-         SET checks = json_insert(checks, '$[#]', json(?))
-         WHERE session_id = ? AND status = 'OPEN'`
-      )
-      .run(JSON.stringify(check), sessionId);
+    this.db.run(
+      `UPDATE conformance_sessions
+       SET checks = json_insert(checks, '$[#]', json(?))
+       WHERE session_id = ? AND status = 'OPEN'`,
+      [JSON.stringify(check), sessionId]
+    );
   }
 
   async close(sessionId: string, status: ClosedConformanceSessionStatus): Promise<void> {
-    this.db
-      .prepare(
-        `UPDATE conformance_sessions
-         SET status = ?, closed_at = ?
-         WHERE session_id = ? AND status = 'OPEN'`
-      )
-      .run(status, new Date().toISOString(), sessionId);
+    this.db.run(
+      `UPDATE conformance_sessions
+       SET status = ?, closed_at = ?
+       WHERE session_id = ? AND status = 'OPEN'`,
+      [status, new Date().toISOString(), sessionId]
+    );
   }
 
   async markOpenSessionsIncompleteOlderThan(cutoffIso: string): Promise<number> {
-    const result = this.db
-      .prepare(
-        `UPDATE conformance_sessions
-         SET status = 'INCOMPLETE', closed_at = ?
-         WHERE status = 'OPEN'
-           AND started_at < ?`
-      )
-      .run(new Date().toISOString(), cutoffIso) as { changes?: number };
+    const result = this.db.run(
+      `UPDATE conformance_sessions
+       SET status = 'INCOMPLETE', closed_at = ?
+       WHERE status = 'OPEN'
+         AND started_at < ?`,
+      [new Date().toISOString(), cutoffIso]
+    );
 
-    return result.changes ?? 0;
+    return Number(result.changes);
   }
 }
