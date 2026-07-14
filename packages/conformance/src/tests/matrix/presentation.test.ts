@@ -1,34 +1,30 @@
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-
 import { loadConfig } from '@itw-conformance-tool/config';
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { DatabaseClient } from '@itw-conformance-tool/database';
+import { afterAll, beforeAll, describe, test } from 'vitest';
 
 import {
   assertConformanceOutcome,
   createProtocolObservedScenarioRunner,
   createSqliteScenarioEventBridge,
-  issuanceScenarioRegistry,
-  wp046Scenario
+  presentationScenarioRegistry,
+  wp077Scenario
 } from '../../index.js';
 
 import type { ScenarioRunner } from '../../index.js';
 
-describe.sequential('Issuance protocol-observed tests', () => {
+describe.sequential('Test Cases for Presentation Phase', () => {
   let runner: ScenarioRunner;
-  let db: DatabaseSync;
-  let issuerBaseUrl: string;
+  let db: DatabaseClient;
 
   beforeAll(() => {
     const config = loadConfig();
-    db = new DatabaseSync(join(config.global.data_dir, 'itw.db'));
-    db.exec('PRAGMA busy_timeout = 5000;');
-    issuerBaseUrl = config['credential-issuer'].url;
+    db = new DatabaseClient(config.global.data_dir);
 
+    const relyingParty = config['relying-party'].url;
     runner = createProtocolObservedScenarioRunner({
-      endpoints: { credentialIssuer: issuerBaseUrl },
+      endpoints: { relyingParty },
       eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
-      registry: issuanceScenarioRegistry
+      registry: presentationScenarioRegistry
     });
   });
 
@@ -37,10 +33,10 @@ describe.sequential('Issuance protocol-observed tests', () => {
     db.close();
   });
 
-  it(
-    `[ISSUANCE:FEDERATION] ${wp046Scenario.id}: ${wp046Scenario.title}`,
+  test(
+    `[${wp077Scenario.id}]: ${wp077Scenario.title}`,
     async () => {
-      const session = await runner.start(wp046Scenario.id);
+      const session = await runner.start(wp077Scenario.id);
 
       try {
         await session.showInstructions();
@@ -50,6 +46,6 @@ describe.sequential('Issuance protocol-observed tests', () => {
         await session.stop();
       }
     },
-    wp046Scenario.timeouts.vitestTestMs
+    wp077Scenario.timeouts.vitestTestMs
   );
 });

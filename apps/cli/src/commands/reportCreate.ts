@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { resolve } from 'node:path';
+
+import { DatabaseClient } from '@itw-conformance-tool/database';
 
 import type { EmitLog } from '../types/types.js';
 import type { ReportFormat } from '@itw-conformance-tool/conformance';
@@ -23,8 +24,7 @@ export async function reportCreate(
   dataDir: string,
   emitter: EmitLog
 ): Promise<void> {
-  const dbPath = join(dataDir, 'itw.db');
-  const db = new DatabaseSync(dbPath, { open: true });
+  const db = new DatabaseClient(dataDir);
 
   try {
     const { SqliteConformanceSessionRepository, buildJsonReporterFromSession, generateRenderedReport } =

@@ -1,5 +1,4 @@
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseClient } from '@itw-conformance-tool/database';
 
 import type { EmitLog } from '../types/types.js';
 
@@ -15,30 +14,23 @@ function calcPad(value: string, width: number): string {
   return value.padEnd(width + 2);
 }
 
-/** Prints a formatted table of all conformance sessions to stdout.
- *
- * @param dataDir - Absolute path to the data directory.
- * @returns void.
+/**
+ * Prints a formatted table of all conformance sessions to stdout.
  */
 export function reportList(dataDir: string, emitter: EmitLog): void {
-  const dbPath = join(dataDir, 'itw.db');
-  const db = new DatabaseSync(dbPath, { open: true });
+  const db = new DatabaseClient(dataDir);
 
   try {
-    const rows = db
-      .prepare(
-        `
-        SELECT 
-          session_id, 
-          started_at, 
-          closed_at, 
-          status, 
-          checks 
-        FROM conformance_sessions 
-          ORDER BY started_at DESC
-      `
-      )
-      .all() as SessionRow[] | [];
+    const rows = db.query<SessionRow>(`
+      SELECT
+        session_id,
+        started_at,
+        closed_at,
+        status,
+        checks
+      FROM conformance_sessions
+      ORDER BY started_at DESC
+    `);
 
     if (rows.length === 0) {
       emitter('No conformance runs found in the database.\n', 'info');

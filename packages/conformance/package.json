@@ -20,6 +20,7 @@
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
+    "chalk": "^5.6.2",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "puppeteer": "^24.0.0",
