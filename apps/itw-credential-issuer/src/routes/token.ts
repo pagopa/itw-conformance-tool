@@ -1,7 +1,19 @@
 import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 
-import { CreateAccessTokenError, InvalidGrantError, TokenService, UnsupportedGrantTypeError } from '../domain/index.js';
-import { makeJwksRepository, makeOauthCallbacks, makeTokenParRepository } from '../plugins/index.js';
+import {
+  CreateAccessTokenError,
+  InvalidClientError,
+  InvalidDpopProofError,
+  InvalidGrantError,
+  TokenService,
+  UnsupportedGrantTypeError
+} from '../domain/index.js';
+import {
+  makeJwksRepository,
+  makeOauthCallbacks,
+  makeRefreshTokenRepository,
+  makeTokenParRepository
+} from '../plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
@@ -31,7 +43,11 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
       const { baseURL, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
       try {
-        const service = new TokenService(makeTokenParRepository(app), makeJwksRepository(app));
+        const service = new TokenService(
+          makeTokenParRepository(app),
+          makeJwksRepository(app),
+          makeRefreshTokenRepository(app)
+        );
         const tokenRequestHeaders = new Headers(
           Object.entries(request.headers)
             .filter(([, value]) => typeof value === 'string' || Array.isArray(value))
@@ -71,6 +87,14 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
           return withNoCache(reply)
             .code(400)
             .send({ error: 'unsupported_grant_type', error_description: error.message });
+        }
+
+        if (error instanceof InvalidDpopProofError) {
+          return withNoCache(reply).code(400).send({ error: 'invalid_dpop_proof', error_description: error.message });
+        }
+
+        if (error instanceof InvalidClientError) {
+          return withNoCache(reply).code(401).send({ error: 'invalid_client', error_description: error.message });
         }
 
         if (error instanceof Oauth2Error) {

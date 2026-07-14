@@ -20,6 +20,21 @@ export const DDL = `
     credentials     TEXT NOT NULL CHECK(json_valid(credentials))
   );
 
+  CREATE TABLE IF NOT EXISTS refresh_tokens (
+    jti                         TEXT    PRIMARY KEY,
+    client_id                   TEXT    NOT NULL,
+    subject                     TEXT    NOT NULL,
+    dpop_jkt                    TEXT    NOT NULL,
+    authorization_details_json  TEXT    NOT NULL CHECK(json_valid(authorization_details_json)),
+    scope                       TEXT,
+    auth_flow                   TEXT,
+    expires_at                  INTEGER NOT NULL,
+    consumed_at                 INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS refresh_tokens_expires_at_idx
+    ON refresh_tokens(expires_at);
+
   CREATE TABLE IF NOT EXISTS presentation_sessions (
     id             TEXT    PRIMARY KEY,
     state          TEXT    NOT NULL CHECK(state IN ('pending', 'completed', 'failed')),

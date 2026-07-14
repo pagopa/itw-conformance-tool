@@ -8,6 +8,7 @@ import {
   SqliteDeferredCredentialRepository,
   SqliteNonceRepository,
   SqlitePARRepository,
+  SqliteRefreshTokenRepository,
   SqliteSessionRepository
 } from '@itw-conformance-tool/database';
 import fp from 'fastify-plugin';
@@ -17,6 +18,7 @@ import type {
   IDeferredCredentialRepository,
   INonceRepository,
   IPARRepository,
+  IRefreshTokenRepository,
   ISessionRepository
 } from '@itw-conformance-tool/database';
 
@@ -27,6 +29,7 @@ declare module 'fastify' {
     deferredCredentialRepository: IDeferredCredentialRepository;
     nonceRepository: INonceRepository;
     parRepository: IPARRepository;
+    refreshTokenRepository: IRefreshTokenRepository;
     sessionRepository: ISessionRepository;
   }
 }
@@ -49,6 +52,7 @@ export default fp(
     app.decorate('parRepository', new SqlitePARRepository(dbClient));
     app.decorate('sessionRepository', new SqliteSessionRepository(dbClient));
     app.decorate('deferredCredentialRepository', new SqliteDeferredCredentialRepository(dbClient));
+    app.decorate('refreshTokenRepository', new SqliteRefreshTokenRepository(dbClient));
 
     app.addHook('onClose', async () => {
       stopConformanceCleanup();

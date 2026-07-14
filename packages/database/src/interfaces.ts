@@ -70,6 +70,42 @@ export interface IDeferredCredentialRepository {
 }
 
 // ---------------------------------------------------------------------------
+// Refresh token (Credential Issuer)
+// ---------------------------------------------------------------------------
+
+export interface RefreshTokenEntry {
+  /** JWT `jti` claim of the refresh token; primary key. */
+  jti: string;
+  clientId: string;
+  /** Subject (`sub`) the refresh token was issued for. */
+  subject: string;
+  /** DPoP JWK thumbprint (`cnf.jkt`) the refresh token is bound to. */
+  dpopJkt: string;
+  /** Authorization details granted to the original access token. */
+  authorizationDetails: unknown;
+  /** Original scope, if any, so it can be re-asserted (or narrowed) on refresh. */
+  scope?: string;
+  /** Original `auth_flow` marker, if any. */
+  authFlow?: string;
+  /** Expiry of the refresh token itself (ms since epoch). */
+  expiresAt: number;
+  /** Timestamp the token was consumed (ms since epoch), or undefined while still valid. */
+  consumedAt?: number;
+}
+
+export interface IRefreshTokenRepository {
+  /** Persists a newly issued refresh token entry. */
+  insert(entry: RefreshTokenEntry): Promise<void>;
+  /**
+   * Atomically consumes `oldJti` and inserts `newEntry` in its place.
+   * Returns the previous entry's authorization context on success, or
+   * `undefined` if `oldJti` is unknown, expired, or already consumed —
+   * guaranteeing that only one concurrent caller can rotate a given `jti`.
+   */
+  rotate(oldJti: string, newEntry: RefreshTokenEntry): Promise<RefreshTokenEntry | undefined>;
+}
+
+// ---------------------------------------------------------------------------
 // Presentation session (Relying Party)
 // ---------------------------------------------------------------------------
 
