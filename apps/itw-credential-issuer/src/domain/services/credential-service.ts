@@ -1,11 +1,12 @@
-import { Oauth2Error, verifyTokenDPoP } from '@pagopa/io-wallet-oauth2';
+import { randomBytes } from 'node:crypto';
+
 import {
   createCredentialResponse,
   parseCredentialRequest,
   verifyCredentialRequestJwtProof
 } from '@pagopa/io-wallet-oid4vci';
 import { ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
-import { decodeJwt, decodeProtectedHeader } from 'jose';
+import { decodeJwt } from 'jose';
 
 import { createDisabilityCardCredential } from '../credentials/disability-card.js';
 import { createPidCredential } from '../credentials/pid.js';
@@ -13,10 +14,15 @@ import { generateFakeUser } from '../faker.js';
 import { createMdocCredential, getMdocCredentialDefinition } from '../mdoc/index.js';
 import { type JwksRepository } from '../signer.js';
 import { JwkPublicKey } from '../z-jwk.js';
+import {
+  CredentialRequestAuthClaimsError,
+  CredentialRequestAuthProofError,
+  verifyCredentialRequestAuth
+} from './credential-request-auth-service.js';
 
 import type { FakeUser } from '../faker.js';
 import type { SupportedCredentialsId } from '../z-credential.js';
-import type { INonceRepository } from '@itw-conformance-tool/database';
+import type { IDeferredCredentialRepository, INonceRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext, JwtPayload } from '@pagopa/io-wallet-oauth2';
 import type {
   CreateCredentialResponseResult,
@@ -26,6 +32,9 @@ import type {
   VerifyCredentialRequestJwtProofResult
 } from '@pagopa/io-wallet-oid4vci';
 import type { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
+
+/** Retry interval (in seconds) advertised to wallets polling `/deferred`. */
+export const DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS = 5;
 
 const TRUSTED_WALLET_PROVIDER_ISSUERS = ['https://wallet-provider.example', 'https://wallet-provider.wct.example:3002'];
 
@@ -47,12 +56,20 @@ export class InvalidProofError extends Error {
 
 export interface CreateCredentialOptions {
   baseURL: string;
+  batchIssuanceByDeferred: boolean;
   body: string;
   callbacks: Pick<CallbackContext, 'hash' | 'verifyJwt'>;
   config: IoWalletSdkConfig;
   headers: Headers;
   method: HttpMethod;
   url: string;
+}
+
+export interface CreateCredentialResult {
+  /** Raw SDK result; the actual JSON body to send is `sdkResult.credentialResponse`. */
+  sdkResult: CreateCredentialResponseResult;
+  /** Whether the request was answered immediately (`200`) or deferred (`202`). */
+  status: 'deferred' | 'immediate';
 }
 
 type ParseCredentialRequestCompatOptions = {
@@ -67,15 +84,21 @@ const parseCredentialRequestCompat = parseCredentialRequest as unknown as (
 ) => Promise<ParsedCredentialRequest>;
 
 export class CredentialService {
+  #deferredCredentialRepository: IDeferredCredentialRepository;
   #jwksRepository: JwksRepository;
   #nonceRepository: INonceRepository;
 
-  constructor(jwksRepository: JwksRepository, nonceRepository: INonceRepository) {
+  constructor(
+    jwksRepository: JwksRepository,
+    nonceRepository: INonceRepository,
+    deferredCredentialRepository: IDeferredCredentialRepository
+  ) {
     this.#jwksRepository = jwksRepository;
     this.#nonceRepository = nonceRepository;
+    this.#deferredCredentialRepository = deferredCredentialRepository;
   }
 
-  async createCredential(options: CreateCredentialOptions): Promise<CreateCredentialResponseResult> {
+  async createCredential(options: CreateCredentialOptions): Promise<CreateCredentialResult> {
     let parsedCredentialRequest: CredentialRequestV1_0 | CredentialRequestV1_3;
     try {
       parsedCredentialRequest = JSON.parse(options.body) as CredentialRequestV1_0 | CredentialRequestV1_3;
@@ -103,54 +126,28 @@ export class CredentialService {
       throw new CreateCredentialError('Invalid credential request payload');
     }
 
-    let headerDpopProof: ReturnType<typeof decodeProtectedHeader>;
-    try {
-      headerDpopProof = decodeProtectedHeader(dpopProof);
-    } catch {
-      throw new InvalidProofError('Invalid DPoP proof');
-    }
-    if (!headerDpopProof.jwk || 'd' in headerDpopProof.jwk) {
-      throw new CreateCredentialError('Private keys are not allowed in the DPoP Proof JWT!');
-    }
-
     let accessTokenPayload: JwtPayload & { auth_flow?: string };
+    let jkt: string;
+    let sub: string;
     try {
-      accessTokenPayload = decodeJwt<JwtPayload & { auth_flow?: string }>(accessToken);
-    } catch {
-      throw new CreateCredentialError('Invalid access token payload');
-    }
-    const { cnf, sub } = accessTokenPayload;
-
-    if (!cnf) {
-      throw new CreateCredentialError('Access token is missing cnf claim');
-    }
-
-    if (!cnf.jkt) {
-      throw new CreateCredentialError('Access token is missing cnf.jkt claim');
-    }
-
-    try {
-      await verifyTokenDPoP({
+      ({ accessTokenPayload, jkt, sub } = await verifyCredentialRequestAuth({
         accessToken,
         callbacks: options.callbacks,
-        dpopJwt: dpopProof,
-        expectedJwkThumbprint: cnf.jkt,
-        request: {
-          headers: options.headers,
-          method: options.method,
-          url: options.url
-        }
-      });
-    } catch (err) {
-      if (err instanceof Oauth2Error) {
-        throw new InvalidProofError(err.message);
+        dpopProof,
+        headers: options.headers,
+        method: options.method,
+        url: options.url
+      }));
+    } catch (error) {
+      if (error instanceof CredentialRequestAuthProofError) {
+        throw new InvalidProofError(error.message);
       }
-      throw err;
+      if (error instanceof CredentialRequestAuthClaimsError) {
+        throw new CreateCredentialError(error.message);
+      }
+      throw error;
     }
 
-    if (typeof sub !== 'string') {
-      throw new CreateCredentialError('Access token is missing sub claim');
-    }
     if (!proofs || proofs.length === 0) {
       throw new CreateCredentialError('Missing proofs in credential request');
     }
@@ -210,7 +207,13 @@ export class CredentialService {
       }
     }
 
-    return this.#buildCredentialResponse(options, credentials);
+    if (options.batchIssuanceByDeferred && credentials.length > 1) {
+      const sdkResult = await this.#buildDeferredCredentialResponse(options, credentials, sub, jkt);
+      return { sdkResult, status: 'deferred' };
+    }
+
+    const sdkResult = await this.#buildCredentialResponse(options, credentials);
+    return { sdkResult, status: 'immediate' };
   }
 
   async #verifyCredentialProof(
@@ -268,6 +271,41 @@ export class CredentialService {
 
     if (config.isVersion(ItWalletSpecsVersion.V1_0)) {
       return createCredentialResponse({ config, flow });
+    }
+
+    throw new CreateCredentialError('Unsupported IT Wallet specs version');
+  }
+
+  async #buildDeferredCredentialResponse(
+    options: CreateCredentialOptions,
+    credentials: string[],
+    subject: string,
+    jwkThumbprint: string
+  ): Promise<CreateCredentialResponseResult> {
+    const { config } = options;
+
+    const transactionId = randomBytes(32).toString('hex');
+    const notificationId = randomBytes(32).toString('hex');
+
+    await this.#deferredCredentialRepository.insert(transactionId, {
+      credentials,
+      jwkThumbprint,
+      notificationId,
+      subject
+    });
+
+    if (config.isVersion(ItWalletSpecsVersion.V1_3)) {
+      return createCredentialResponse({
+        config,
+        flow: { interval: DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS, transactionId }
+      });
+    }
+
+    if (config.isVersion(ItWalletSpecsVersion.V1_0)) {
+      return createCredentialResponse({
+        config,
+        flow: { leadTime: DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS, transactionId }
+      });
     }
 
     throw new CreateCredentialError('Unsupported IT Wallet specs version');
