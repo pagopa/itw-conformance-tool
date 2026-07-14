@@ -25,13 +25,14 @@ export default fp(
   async function configPlugin(app) {
     const config = loadConfig();
     const issuerConfig = config['credential-issuer'];
+    const trustAnchorConfig = config['trust-anchor'];
 
     app.decorate('config', {
       AUTH_FLOW: issuerConfig.auth_flow,
       BASE_URL: issuerConfig.url,
       BATCH_ISSUANCE_BY_DEFERRED: issuerConfig.batch_issuance_by_deferred,
       DATA_DIR: config.global.data_dir,
-      TRUST_ANCHOR_ENTITY_ID: trimTrailingSlashes(issuerConfig.trust_anchor_url.trim())
+      TRUST_ANCHOR_ENTITY_ID: trimTrailingSlashes(trustAnchorConfig.url.trim())
     });
   },
 

@@ -85,7 +85,7 @@ The generated `config.ini` also supports the Wallet Provider backend URL used by
 wallet_provider_backend_url = https://127.0.0.1:8080
 ```
 
-The issuer and relying party also trust a Trust Anchor service (`itw-trust-anchor`) by default, resolved from `trust_anchor_url` in their respective config sections (default: `https://localhost:3001`). Start it with `pnpm trust-anchor` or `itw-conformance-tool start --trust-anchor` if it isn't already running as part of `--all`.
+The issuer and relying party trust a Trust Anchor service (`itw-trust-anchor`) by default
 
 Behavior notes:
 

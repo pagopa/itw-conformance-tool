@@ -121,8 +121,6 @@ Generated structure:
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
 
-The Trust Anchor URL (`trust_anchor_url`) defaults to `https://localhost:3001` for both the issuer and the relying party, matching the trust anchor's own default entity ID. Override it in `config.ini` if the trust anchor is served from a different URL.
-
 Default locations:
 
 - config file: `<project-root>/config.ini`
