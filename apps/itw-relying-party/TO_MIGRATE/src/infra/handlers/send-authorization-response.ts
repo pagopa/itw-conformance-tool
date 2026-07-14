@@ -1,5 +1,5 @@
 import { Config } from '@/config';
-import { NonceRepository, nonceRepository } from '@/nonce';
+import type { NonceRepository } from '@/nonce';
 import { RequestObjectRepository, markRequestObjectAsRejected } from '@/request-object';
 import { ResponseBody } from '@/schemas';
 import { baz1 } from '@/use-cases/send-authorization-response';
