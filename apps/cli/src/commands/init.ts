@@ -4,14 +4,18 @@ import { join, resolve } from 'node:path';
 import { ConfigIniTemplate, loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 
 import {
+  createIntermediateCertificateFromJwk,
+  createIssuerCertificateFromJwk,
   createSelfSignedCertificateFromJwk,
   createTrustAnchorCertificateFromJwk,
-  getIACAChain
+  getIACAChain,
+  selectEs256SigningJwk
 } from '../utils/certificates.js';
 import {
   getAuthRequestKey,
   getAuthResponseKey,
   getFederationKey,
+  getIssuerIntermediateKey,
   getSigningKeys,
   getTrustAnchorFederationKey
 } from '../utils/crypto.js';
@@ -22,6 +26,7 @@ import type { CliFlags } from '../types/types.js';
 type InitConfig = {
   global: Pick<ConfigSchemaType['global'], 'data_dir' | 'log_level'>;
   'trust-anchor': Pick<ConfigSchemaType['trust-anchor'], 'entity_id'>;
+  'credential-issuer': Pick<ConfigSchemaType['credential-issuer'], 'url'>;
 };
 
 /** Initializes the configuration file.
@@ -42,7 +47,8 @@ function checkConfig(flags: CliFlags): InitConfig {
   const previousDataDir = rawConfigs.global.data_dir;
   const configs: InitConfig = {
     global: rawConfigs.global,
-    'trust-anchor': rawConfigs['trust-anchor']
+    'trust-anchor': rawConfigs['trust-anchor'],
+    'credential-issuer': rawConfigs['credential-issuer']
   };
   const dataDirExists = existsSync(configs.global.data_dir) && statSync(configs.global.data_dir).isDirectory();
   mkdirSync(configs.global.data_dir, { recursive: true });
@@ -82,13 +88,122 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     process.stdout.write(`✓ Generated mock IACA certificates → ${iacaCertPath}\n`);
   }
 
+  // The issuer certificate chain (below) is rooted at the trust-anchor federation
+  // certificate, so the trust-anchor federation key/certificate must exist first.
+  const trustAnchorFederationKeyPath = join(trustAnchorDirPath, 'federation-key.jwk.json');
+  const trustAnchorFederationKeyGenerated = !existsFileSync(trustAnchorFederationKeyPath) || flags.force;
+  if (trustAnchorFederationKeyGenerated) {
+    const trustAnchorFederationKeyContent = getTrustAnchorFederationKey();
+    writeFileSync(trustAnchorFederationKeyPath, trustAnchorFederationKeyContent, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated trust-anchor federation key → ${trustAnchorFederationKeyPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Trust-anchor federation key already exists → skipped (use --force to regenerate)\n`);
+  }
+
+  const trustAnchorFederationCertPath = join(trustAnchorDirPath, 'federation-cert.pem');
+  if (!existsFileSync(trustAnchorFederationCertPath) || flags.force || trustAnchorFederationKeyGenerated) {
+    const trustAnchorFederationKeyContent = readFileSync(trustAnchorFederationKeyPath, 'utf8');
+    const trustAnchorFederationKey = JSON.parse(trustAnchorFederationKeyContent) as Parameters<
+      typeof createTrustAnchorCertificateFromJwk
+    >[0];
+    const commonName = new URL(configs['trust-anchor'].entity_id).hostname;
+    const trustAnchorFederationCertificate = await createTrustAnchorCertificateFromJwk(
+      trustAnchorFederationKey,
+      commonName
+    );
+
+    writeFileSync(trustAnchorFederationCertPath, trustAnchorFederationCertificate, {
+      encoding: 'utf8',
+      flag: 'w'
+    });
+    process.stdout.write(`✓ Generated trust-anchor federation certificate → ${trustAnchorFederationCertPath}\n`);
+  } else {
+    process.stdout.write(
+      `⚠ Trust-anchor federation certificate already exists → skipped (use --force to regenerate)\n`
+    );
+  }
+
   const signingKeysPath = join(issuerDirPath, 'jwks.json');
-  if (!existsFileSync(signingKeysPath) || flags.force) {
+  const issuerSigningKeysGenerated = !existsFileSync(signingKeysPath) || flags.force;
+  if (issuerSigningKeysGenerated) {
     const signingKeys = getSigningKeys();
     writeFileSync(signingKeysPath, signingKeys, { encoding: 'utf8', flag: 'w' });
     process.stdout.write(`✓ Generated issuer signing keys → ${signingKeysPath}\n`);
   } else {
     process.stdout.write(`⚠ Issuer keys already exist → skipped (use --force to regenerate)\n`);
+  }
+
+  const intermediateKeysPath = join(issuerDirPath, 'jwks-intermediate.json');
+  const issuerIntermediateKeysGenerated = !existsFileSync(intermediateKeysPath) || flags.force;
+  if (issuerIntermediateKeysGenerated) {
+    const intermediateKeys = getIssuerIntermediateKey();
+    writeFileSync(intermediateKeysPath, intermediateKeys, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated issuer intermediate signing keys → ${intermediateKeysPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Issuer intermediate signing keys already exist → skipped (use --force to regenerate)\n`);
+  }
+
+  const intermediateCertPath = join(issuerDirPath, 'intermediate-cert.pem');
+  const issuerIntermediateCertGenerated =
+    !existsFileSync(intermediateCertPath) ||
+    flags.force ||
+    issuerIntermediateKeysGenerated ||
+    trustAnchorFederationKeyGenerated;
+  if (issuerIntermediateCertGenerated) {
+    const intermediateJwks = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Parameters<
+      typeof selectEs256SigningJwk
+    >[0];
+    const intermediateJwk = selectEs256SigningJwk(intermediateJwks);
+
+    const trustAnchorFederationKey = JSON.parse(readFileSync(trustAnchorFederationKeyPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    const trustAnchorFederationCertificatePem = readFileSync(trustAnchorFederationCertPath, 'utf8');
+
+    const intermediateCertificate = await createIntermediateCertificateFromJwk(
+      intermediateJwk,
+      trustAnchorFederationKey,
+      trustAnchorFederationCertificatePem
+    );
+
+    writeFileSync(intermediateCertPath, intermediateCertificate, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated issuer intermediate certificate → ${intermediateCertPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Issuer intermediate certificate already exists → skipped (use --force to regenerate)\n`);
+  }
+
+  const issuerCertPath = join(issuerDirPath, 'cert.pem');
+  if (
+    !existsFileSync(issuerCertPath) ||
+    flags.force ||
+    issuerSigningKeysGenerated ||
+    issuerIntermediateKeysGenerated ||
+    issuerIntermediateCertGenerated
+  ) {
+    const signingJwks = JSON.parse(readFileSync(signingKeysPath, 'utf8')) as Parameters<
+      typeof selectEs256SigningJwk
+    >[0];
+    const issuerSigningJwk = selectEs256SigningJwk(signingJwks);
+
+    const intermediateJwks = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Parameters<
+      typeof selectEs256SigningJwk
+    >[0];
+    const intermediateJwk = selectEs256SigningJwk(intermediateJwks);
+
+    const intermediateCertificatePem = readFileSync(intermediateCertPath, 'utf8');
+
+    const issuerCertificate = await createIssuerCertificateFromJwk(
+      issuerSigningJwk,
+      intermediateJwk,
+      intermediateCertificatePem,
+      configs['credential-issuer'].url
+    );
+
+    writeFileSync(issuerCertPath, issuerCertificate, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated issuer certificate → ${issuerCertPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Issuer certificate already exists → skipped (use --force to regenerate)\n`);
   }
 
   const rpArtifacts = [
@@ -131,39 +246,6 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     process.stdout.write(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)\n`);
   } else {
     process.stdout.write(`✓ Generated relying-party keys → ${generatedRpPaths.join(', ')}\n`);
-  }
-
-  const trustAnchorFederationKeyPath = join(trustAnchorDirPath, 'federation-key.jwk.json');
-  let trustAnchorFederationKeyContent: string | undefined;
-  if (!existsFileSync(trustAnchorFederationKeyPath) || flags.force) {
-    trustAnchorFederationKeyContent = getTrustAnchorFederationKey();
-    writeFileSync(trustAnchorFederationKeyPath, trustAnchorFederationKeyContent, { encoding: 'utf8', flag: 'w' });
-    process.stdout.write(`✓ Generated trust-anchor federation key → ${trustAnchorFederationKeyPath}\n`);
-  } else {
-    process.stdout.write(`⚠ Trust-anchor federation key already exists → skipped (use --force to regenerate)\n`);
-  }
-
-  const trustAnchorFederationCertPath = join(trustAnchorDirPath, 'federation-cert.pem');
-  if (!existsFileSync(trustAnchorFederationCertPath) || flags.force || trustAnchorFederationKeyContent) {
-    trustAnchorFederationKeyContent ??= readFileSync(trustAnchorFederationKeyPath, 'utf8');
-    const trustAnchorFederationKey = JSON.parse(trustAnchorFederationKeyContent) as Parameters<
-      typeof createTrustAnchorCertificateFromJwk
-    >[0];
-    const commonName = new URL(configs['trust-anchor'].entity_id).hostname;
-    const trustAnchorFederationCertificate = await createTrustAnchorCertificateFromJwk(
-      trustAnchorFederationKey,
-      commonName
-    );
-
-    writeFileSync(trustAnchorFederationCertPath, trustAnchorFederationCertificate, {
-      encoding: 'utf8',
-      flag: 'w'
-    });
-    process.stdout.write(`✓ Generated trust-anchor federation certificate → ${trustAnchorFederationCertPath}\n`);
-  } else {
-    process.stdout.write(
-      `⚠ Trust-anchor federation certificate already exists → skipped (use --force to regenerate)\n`
-    );
   }
 }
 

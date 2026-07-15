@@ -117,7 +117,6 @@ export const mdocContext: MdocContext = {
     random: (length) => {
       const bytes = randomBytes(length);
       if (length === 4) {
-        // eslint-disable-next-line no-bitwise
         bytes[0] &= 0x7f;
       }
       return bytes;
