@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 import { ItWalletSpecsVersion, type IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
@@ -200,6 +201,7 @@ export class AuthorizationService {
     const jarOptions = {
       expiresInSeconds: 10_000
     };
+    const iacaBase64Der = convertPemToBase64Der(this.#jwksRepository.iacaX509());
 
     const authorizationRequest = options.config.isVersion(ItWalletSpecsVersion.V1_0)
       ? await createAuthorizationRequest({
@@ -228,7 +230,7 @@ export class AuthorizationService {
               alg: 'ES256',
               kid: publicSig.kid,
               method: 'x5c',
-              x5c: [this.#jwksRepository.iacaX509()]
+              x5c: [iacaBase64Der]
             }
           }
         });
