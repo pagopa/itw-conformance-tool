@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
@@ -6,13 +6,16 @@
     <title>Sessione Scaduta - IT Wallet</title>
 
     <!-- Google Fonts - Titillium Web (IO App) + Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- Design System -->
-    <link rel="stylesheet" href="styles/design-system.css">
-    <link rel="stylesheet" href="styles/animations.css">
+    <link rel="stylesheet" href="styles/design-system.css" />
+    <link rel="stylesheet" href="styles/animations.css" />
 
     <style>
       body {
@@ -165,37 +168,52 @@
           <svg class="timeout-icon" viewBox="0 0 52 52">
             <circle class="timeout-circle" cx="26" cy="26" r="25" />
             <g class="timeout-clock">
-              <circle cx="26" cy="26" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-              <path d="M26 21 L26 26 L30 26" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="26" cy="26" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+              <path d="M26 21 L26 26 L30 26" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
             </g>
           </svg>
         </div>
 
         <!-- Title and Message -->
         <h1 class="timeout-title">Sessione Scaduta</h1>
-        <p class="timeout-message">
-          Il tempo a disposizione per completare l'operazione è terminato.
-        </p>
+        <p class="timeout-message">Il tempo a disposizione per completare l'operazione è terminato.</p>
 
         <!-- Info Box -->
         <div class="timeout-info">
           <div class="timeout-info-title">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--warning-500);">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            <svg
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              style="color: var(--warning-500)"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              ></path>
             </svg>
             Cosa è successo?
           </div>
           <p>
-            La richiesta di autenticazione ha un tempo massimo di validità per motivi di sicurezza.
-            Riprova per avviare una nuova sessione.
+            La richiesta di autenticazione ha un tempo massimo di validità per motivi di sicurezza. Riprova per avviare
+            una nuova sessione.
           </p>
         </div>
 
         <!-- Actions -->
         <div class="timeout-actions">
-          <button class="button primary" onclick="retry()" aria-label="Riprova l'autenticazione">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline;">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          <button class="button primary" id="retryButton" aria-label="Riprova l'autenticazione">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              ></path>
             </svg>
             Riprova
           </button>
@@ -205,8 +223,12 @@
 
     <script>
       function retry() {
-        window.location.href = "/";
+        window.location.href = '/';
       }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('retryButton').addEventListener('click', retry);
+      });
     </script>
   </body>
 </html>

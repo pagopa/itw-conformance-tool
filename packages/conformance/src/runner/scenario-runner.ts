@@ -110,6 +110,12 @@ async function createPresentationRequestUri(baseURL: string): Promise<string> {
   return response.data.url;
 }
 
+function extractPresentationCorrelationId(uri: string): string {
+  const state = new URL(uri).searchParams.get('state');
+  if (!state) throw new Error('Presentation request URI does not contain a state parameter');
+  return state;
+}
+
 function resolveScenarioEndpoints(
   definition: ProtocolObservedScenarioDefinition,
   configuredEndpoints: LocalServiceEndpoints
@@ -125,27 +131,35 @@ function resolveScenarioEndpoints(
   return endpoints;
 }
 
+interface CreatedStimulus {
+  correlationId: string;
+  stimulus: ScenarioStimulus;
+}
+
 async function createStimulus(
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
   correlationId: string
-): Promise<ScenarioStimulus> {
+): Promise<CreatedStimulus> {
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
     const uri = createCredentialOfferUri(credentialIssuer, correlationId);
-    return { type: 'credential-offer', uri, qrCode: uri };
+    return { correlationId, stimulus: { type: 'credential-offer', uri, qrCode: uri } };
   }
 
   if (definition.stimulus.type === 'manual-instruction') {
-    return { type: 'manual-instruction', text: definition.stimulus.text };
+    return { correlationId, stimulus: { type: 'manual-instruction', text: definition.stimulus.text } };
   }
 
   if (definition.stimulus.type === 'presentation-request') {
     const relyingParty = endpoints.relyingParty;
     if (!relyingParty) throw new Error(`Scenario ${definition.id} requires a Relying Party endpoint`);
     const uri = await createPresentationRequestUri(relyingParty);
-    return { type: 'presentation-request', uri, qrCode: uri };
+    return {
+      correlationId: extractPresentationCorrelationId(uri),
+      stimulus: { type: 'presentation-request', uri, qrCode: uri }
+    };
   }
 
   throw new Error(`Unsupported stimulus type for scenario ${definition.id}: ${definition.stimulus.type}`);
@@ -240,14 +254,14 @@ export function createProtocolObservedScenarioRunner(
 
       const startedAt = new Date().toISOString();
       const scenarioId = randomUUID();
-      const correlationId = randomUUID();
+      const initialCorrelationId = randomUUID();
       const abortController = new AbortController();
       const eventStore = options.eventStoreFactory?.() ?? createInMemoryScenarioEventStore();
       const endpoints = resolveScenarioEndpoints(definition, options.endpoints);
       let eventSubscription: Disposable | undefined;
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
-      const stimulus = await createStimulus(definition, endpoints, correlationId);
+      const { correlationId, stimulus } = await createStimulus(definition, endpoints, initialCorrelationId);
       const eventBridge = await options.eventBridgeFactory?.({
         correlationId,
         definition,
@@ -301,6 +315,8 @@ export function createProtocolObservedScenarioRunner(
           if (entryEvent) {
             let previous = entryEvent;
             for (const requiredEvent of definition.requiredEvents ?? []) {
+              if (requiredEvent === entryEvent.name) continue;
+
               try {
                 previous = await eventStore.waitFor(requiredEvent, {
                   after: previous,

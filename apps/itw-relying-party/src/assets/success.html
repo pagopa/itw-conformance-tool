@@ -6,13 +6,16 @@
     <title>Autenticazione Completata - IT Wallet</title>
 
     <!-- Google Fonts - Titillium Web (IO App) + Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- Design System -->
-    <link rel="stylesheet" href="styles/design-system.css">
-    <link rel="stylesheet" href="styles/animations.css">
+    <link rel="stylesheet" href="styles/design-system.css" />
+    <link rel="stylesheet" href="styles/animations.css" />
 
     <style>
       body {
@@ -266,12 +269,15 @@
 
         <!-- Actions -->
         <div class="success-actions">
-          <button class="button primary" onclick="logoutAndGoHome()">
-            Torna alla Home
-          </button>
-          <button class="button secondary" onclick="downloadData()">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline;">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          <button class="button primary" id="homeButton">Torna alla Home</button>
+          <button class="button secondary" id="downloadButton">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              ></path>
             </svg>
             Scarica Dati
           </button>
@@ -285,16 +291,16 @@
     <script>
       function logoutAndGoHome() {
         sessionStorage.clear();
-        window.location.href = "/";
+        window.location.href = '/';
       }
 
       function downloadData() {
         try {
-          const values = JSON.parse(sessionStorage.getItem("values"));
+          const values = JSON.parse(sessionStorage.getItem('values'));
           // Filter out portrait value if present
-          const filteredValues = values.map(obj => {
+          const filteredValues = values.map((obj) => {
             if (obj.portrait) {
-              return { ...obj, portrait: "[Portrait data - omitted from download]" };
+              return { ...obj, portrait: '[Portrait data - omitted from download]' };
             }
             return obj;
           });
@@ -325,8 +331,8 @@
           particle.classList.add('particle');
           particle.style.left = Math.random() * 100 + '%';
           particle.style.background = colors[Math.floor(Math.random() * colors.length)];
-          particle.style.animationDelay = (Math.random() * 0.5) + 's';
-          particle.style.animationDuration = (Math.random() * 1 + 2) + 's';
+          particle.style.animationDelay = Math.random() * 0.5 + 's';
+          particle.style.animationDuration = Math.random() * 1 + 2 + 's';
           container.appendChild(particle);
 
           // Remove particle after animation
@@ -337,7 +343,7 @@
       // Display credentials
       function displayCredentials() {
         try {
-          const values = JSON.parse(sessionStorage.getItem("values"));
+          const values = JSON.parse(sessionStorage.getItem('values'));
           if (!values || !Array.isArray(values)) {
             console.warn('No credentials found');
             return;
@@ -358,8 +364,8 @@
               if (credential.driving_privileges) {
                 credType = 'Patente di Guida (MDL)';
                 icon = '🚗';
-              } else if (credential.tax_id_code || credential.place_of_birth) {
-                credType = 'Carta d\'Identità (PID)';
+              } else if (credential.tax_id_code || credential.birth_place) {
+                credType = "Carta d'Identità (PID)";
                 icon = '🆔';
               }
             } else if (credential.wallet_name) {
@@ -386,30 +392,20 @@
               }
 
               // Format key
-              const formattedKey = key
-                .replace(/_/g, ' ')
-                .replace(/\b\w/g, l => l.toUpperCase());
+              const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 
               const row = document.createElement('div');
               row.classList.add('claim-row');
-
-              const keySpan = document.createElement('span');
-              keySpan.classList.add('claim-key');
-              keySpan.textContent = formattedKey;
-
-              const valueSpan = document.createElement('span');
-              valueSpan.classList.add('claim-value');
-              valueSpan.textContent = String(value);
-
-              row.appendChild(keySpan);
-              row.appendChild(valueSpan);
+              row.innerHTML = `
+                <span class="claim-key">${formattedKey}</span>
+                <span class="claim-value">${value}</span>
+              `;
               claims.appendChild(row);
             });
 
             item.appendChild(claims);
             container.appendChild(item);
           });
-
         } catch (error) {
           console.error('Error displaying credentials:', error);
           document.getElementById('credentialsCards').innerHTML = `
@@ -422,8 +418,9 @@
         }
       }
 
-      // Initialize on load
       window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('homeButton').addEventListener('click', logoutAndGoHome);
+        document.getElementById('downloadButton').addEventListener('click', downloadData);
         createCelebration();
         displayCredentials();
       });

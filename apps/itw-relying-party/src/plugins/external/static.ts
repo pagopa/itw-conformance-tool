@@ -1,22 +1,18 @@
-import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import path from 'node:path';
 
-import fastifyStatic from '@fastify/static';
-import fp from 'fastify-plugin';
+import FastifyStatic, { type FastifyStaticOptions } from '@fastify/static';
 
-export default fp(async (app) => {
-  const assetsRoot = join(import.meta.dirname, '../../assets');
+export const autoConfig = (): FastifyStaticOptions => {
+  const dirPath = path.join(import.meta.dirname, '../../..', 'public');
 
-  if (!existsSync(assetsRoot)) {
-    app.log.warn(
-      { assetsRoot },
-      'Assets directory is missing — static pages (success, error, timeout) will return 404. ' +
-        'Run the build or copy src/assets to dist/assets before serving.'
-    );
-    mkdirSync(assetsRoot, { recursive: true });
-  }
+  return {
+    root: dirPath
+  };
+};
 
-  await app.register(fastifyStatic, {
-    root: assetsRoot
-  });
-});
+/**
+ * This plugins allows to serve static files as fast as possible.
+ *
+ * @see {@link https://github.com/fastify/fastify-static}
+ */
+export default FastifyStatic;

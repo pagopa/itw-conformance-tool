@@ -1,31 +1,25 @@
-import { loadRpConfig } from '@itw-conformance-tool/rp';
+import { loadConfig } from '@itw-conformance-tool/config';
 import fp from 'fastify-plugin';
+
+import type { FastifyPluginAsync } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
     config: {
-      url: string;
-      entityId: string;
-      dataDir: string;
-      configFilePath: string;
-      trustAnchorUrl?: string;
-      x5cCertPath: string;
+      BASE_URL: string;
+      DATA_DIR: string;
     };
   }
 }
 
-export default fp(
-  async function configPlugin(app) {
-    const { config } = loadRpConfig();
+const configPlugin: FastifyPluginAsync = async (app) => {
+  const config = loadConfig();
+  const relyingPartyConfig = config['relying-party'];
 
-    app.decorate('config', {
-      url: config.url,
-      entityId: config.entityId,
-      trustAnchorUrl: config.trustAnchorUrl,
-      dataDir: config.dataDir,
-      configFilePath: config.configFilePath,
-      x5cCertPath: config.x5cCertPath
-    });
-  },
-  { name: 'config' }
-);
+  app.decorate('config', {
+    BASE_URL: relyingPartyConfig.url,
+    DATA_DIR: config.global.data_dir
+  });
+};
+
+export default fp(configPlugin, { name: 'config' });

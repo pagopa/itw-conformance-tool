@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "main": "./dist/main.js",
-  "imports": {
-    "#/*": "./dist/*"
-  },
   "scripts": {
     "clean": "rimraf dist out-tsc node_modules"
   },
