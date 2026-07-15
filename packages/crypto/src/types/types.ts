@@ -32,17 +32,6 @@ export type KeyUse = 'sig' | 'enc';
 
 // Interfaces
 
-export interface IacaChain {
-  certificate: string;
-  privateKey: string;
-}
-
-export interface IacaChainParams {
-  commonName?: string;
-  countryName?: string;
-  organizationName?: string;
-}
-
 export interface JwkDescriptor {
   kid: string;
   use: KeyUse;

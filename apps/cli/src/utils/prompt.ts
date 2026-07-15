@@ -37,9 +37,10 @@ export function printHelp(): void {
   process.stdout.write(
     '  -c, --config <path>    Path to the config file (for start and report commands, default: ~/config.ini)\n'
   );
-  process.stdout.write('  -a, --all              Start issuer and relying party (default for start)\n');
+  process.stdout.write('  -a, --all              Start trust anchor, issuer, and relying party (default for start)\n');
   process.stdout.write('  --issuer               Start only itw-credential-issuer\n');
   process.stdout.write('  --rp                   Start only itw-relying-party\n');
+  process.stdout.write('  --trust-anchor         Start only itw-trust-anchor\n');
   process.stdout.write('  -f, --force            Force overwrite for init-generated files\n');
   process.stdout.write('Examples:\n');
   process.stdout.write(`  itw-conformance-tool init  --force\n`);
@@ -48,6 +49,8 @@ export function printHelp(): void {
   process.stdout.write(`  itw-conformance-tool start --issuer --config '~/config.ini'\n`);
   process.stdout.write(`  itw-conformance-tool start --rp\n`);
   process.stdout.write(`  itw-conformance-tool start --rp --config '~/config.ini'\n`);
+  process.stdout.write(`  itw-conformance-tool start --trust-anchor\n`);
+  process.stdout.write(`  itw-conformance-tool start --trust-anchor --config '~/config.ini'\n`);
   process.stdout.write(`  itw-conformance-tool test\n`);
   process.stdout.write(`  itw-conformance-tool report:list\n`);
   process.stdout.write(`  itw-conformance-tool report:list --config '~/config.ini'\n`);

@@ -128,7 +128,7 @@ export function makeJwksRepository(app: FastifyInstance): JwksRepository {
   return {
     getEncrypt: () => encryptKey as unknown as ReturnType<JwksRepository['getEncrypt']>,
     getSign: () => signKey as unknown as ReturnType<JwksRepository['getSign']>,
-    iacaX509: () => app.issuerKeys.iacaCertPem
+    issuerCertificateChain: () => [app.issuerKeys.issuerCertPem, app.issuerKeys.issuerIntermediateCertPem]
   };
 }
 
@@ -144,7 +144,6 @@ export function makeOauthCallbacks(app: FastifyInstance, request: FastifyRequest
   const { headers, sdkConfig } = getRuntimeConfig(request);
   const jwksRepository = makeJwksRepository(app);
 
-  const { public: encryptPublic } = jwksRepository.getEncrypt();
   const { private: signPrivate } = jwksRepository.getSign();
 
   return {
@@ -153,7 +152,7 @@ export function makeOauthCallbacks(app: FastifyInstance, request: FastifyRequest
     jwksRepository,
     oauthCallbacks: {
       ...callbacks,
-      encryptJwe: getEncryptJweCallback(encryptPublic),
+      encryptJwe: getEncryptJweCallback(),
       signJwt: getSignJwtCallback([signPrivate]),
       fetch: fetch.bind(globalThis)
     },

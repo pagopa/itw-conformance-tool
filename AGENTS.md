@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a pnpm + Nx TypeScript monorepo for the IT Wallet conformance tool. Runnable services live under `apps/`: `apps/itw-credential-issuer` and `apps/itw-relying-party`. Shared libraries live under `packages/`, currently `packages/logger`. Application code is in each project’s `src/` directory, with Fastify routes under `src/routes` and external plugins under `src/plugins/external`.
+This repository is a pnpm + Nx TypeScript monorepo for the IT Wallet conformance tool. Runnable services live under `apps/`: `apps/itw-credential-issuer`, `apps/itw-relying-party`, and `apps/itw-trust-anchor`. Shared libraries live under `packages/`, currently `packages/logger`. Application code is in each project’s `src/` directory, with Fastify routes under `src/routes` and external plugins under `src/plugins/external`.
 
 ## Build, Test, and Development Commands
 
@@ -15,6 +15,7 @@ Run commands from the repository root.
 - `pnpm test`: run Vitest for projects with tests.
 - `pnpm issuer`: serve `itw-credential-issuer`.
 - `pnpm rp`: serve `itw-relying-party`.
+- `pnpm trust-anchor`: serve `itw-trust-anchor`.
 - `pnpm nx run itw-credential-issuer:test`: run one project target.
 - `pnpm format`: format JS, TS, JSON, and Markdown with Prettier.
 

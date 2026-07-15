@@ -1,0 +1,37 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "outDir": "./out-tsc/vitest",
+    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
+    "paths": {
+      "@itw-conformance-tool/crypto": ["../../packages/crypto/src/index.ts"]
+    }
+  },
+  "include": [
+    "src/app.ts",
+    "src/federation/**/*.ts",
+    "src/plugins/**/*.ts",
+    "src/routes/**/*.ts",
+    "src/tests/**/*.ts",
+    "vite.config.ts",
+    "vite.config.mts",
+    "vitest.config.ts",
+    "vitest.config.mts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/config/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/crypto/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/logger/tsconfig.lib.json"
+    }
+  ]
+}

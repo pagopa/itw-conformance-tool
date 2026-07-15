@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 import { ItWalletSpecsVersion, type IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
@@ -36,6 +37,7 @@ export type AuthorizeOptions = {
   readonly clientId: string;
   readonly config: IoWalletSdkConfig;
   readonly requestUri: string;
+  readonly trustAnchorEntityId: string;
 };
 
 export class AuthorizationService {
@@ -184,7 +186,8 @@ export class AuthorizationService {
     const federationMetadata = await getFederationMetadata({
       baseURL: options.baseURL,
       config: options.config,
-      jwksRepository: this.#jwksRepository
+      jwksRepository: this.#jwksRepository,
+      trustAnchorEntityId: options.trustAnchorEntityId
     });
 
     const baseOptions = {
@@ -198,6 +201,7 @@ export class AuthorizationService {
     const jarOptions = {
       expiresInSeconds: 10_000
     };
+    const issuerCertificateChainDer = this.#jwksRepository.issuerCertificateChain().map(convertPemToBase64Der);
 
     const authorizationRequest = options.config.isVersion(ItWalletSpecsVersion.V1_0)
       ? await createAuthorizationRequest({
@@ -226,7 +230,7 @@ export class AuthorizationService {
               alg: 'ES256',
               kid: publicSig.kid,
               method: 'x5c',
-              x5c: [this.#jwksRepository.iacaX509()]
+              x5c: issuerCertificateChainDer
             }
           }
         });

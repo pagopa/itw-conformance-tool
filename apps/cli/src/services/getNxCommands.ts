@@ -1,5 +1,10 @@
 import type { CliFlags, ServiceProcess } from '../types/types.js';
 
+const TRUST_ANCHOR: ServiceProcess = {
+  prefix: 'itw-trust-anchor',
+  nxArgs: ['run', 'itw-trust-anchor:serve']
+};
+
 const ISSUER: ServiceProcess = {
   prefix: 'itw-credential-issuer',
   nxArgs: ['run', 'itw-credential-issuer:serve']
@@ -15,9 +20,10 @@ const RP: ServiceProcess = {
  * Each entry carries the output prefix and the Nx CLI arguments for that service.
  */
 export function getNxCommands(flags: CliFlags): ServiceProcess[] {
-  if (flags.all) return [ISSUER, RP];
+  if (flags.all) return [TRUST_ANCHOR, ISSUER, RP];
   if (flags.issuer) return [ISSUER];
   if (flags.rp) return [RP];
+  if (flags.trustAnchor) return [TRUST_ANCHOR];
 
-  throw new Error('No services specified to start. Use --all, --issuer, or --rp.');
+  throw new Error('No services specified to start. Use --all, --issuer, --rp, or --trust-anchor.');
 }

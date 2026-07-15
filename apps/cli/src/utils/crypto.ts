@@ -80,10 +80,43 @@ export function getAuthResponseKey(): string {
   return JSON.stringify(jwk.keys[0], null, 2);
 }
 
+/** Generates and returns a JWKS containing a single EC P-256 private
+ * ES256 signing key for the issuer intermediate CA.
+ *
+ * The intermediate CA's private key signs `issuer/cert.pem` and its
+ * public key is embedded in `issuer/intermediate-cert.pem`.
+ *
+ * @returns A JSON string representing the intermediate CA JWKS.
+ */
+export function getIssuerIntermediateKey(): string {
+  const intermediate = generateEcPrivateJwk({
+    kid: 'issuer-intermediate-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+
+  return JSON.stringify({ keys: intermediate.keys }, null, 2);
+}
+
 /** Generates and returns an EC P-256 private key JWK for federation entity-statement signing. */
 export function getFederationKey(): string {
   const jwk = generateEcPrivateJwk({
     kid: 'federation-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+
+  return JSON.stringify(jwk.keys[0], null, 2);
+}
+
+/** Generates and returns an EC P-256 private key JWK for trust-anchor
+ * federation entity- and subordinate-statement signing.
+ */
+export function getTrustAnchorFederationKey(): string {
+  const jwk = generateEcPrivateJwk({
+    kid: 'trust-anchor-federation-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
