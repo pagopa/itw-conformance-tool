@@ -1,3 +1,4 @@
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
 import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
@@ -134,7 +135,7 @@ export const createPidCredential = async (
       header: {
         kid: jwks.private.kid,
         typ: 'dc+sd-jwt',
-        x5c: [jwksRepository.iacaX509()]
+        x5c: jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
       }
     }
   );

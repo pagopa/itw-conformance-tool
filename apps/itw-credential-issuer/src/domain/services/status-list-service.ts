@@ -1,3 +1,4 @@
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { type StatusListJWTHeaderParameters, createHeaderAndPayload } from '@sd-jwt/jwt-status-list';
 import { type JWTPayload, SignJWT, importJWK } from 'jose';
 
@@ -31,7 +32,7 @@ export class StatusListService {
     const header: StatusListJWTHeaderParameters = {
       alg: 'ES256',
       typ: 'statuslist+jwt',
-      x5c: [this.jwksRepository.iacaX509()]
+      x5c: this.jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
     };
 
     const values = createHeaderAndPayload(statusList, payload, header);

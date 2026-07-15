@@ -101,17 +101,21 @@ When executed, it:
 
 - determines the target config file path
 - creates the data directory
-- creates the `issuer` and `rp` subdirectories
-- generates issuer signing keys
+- creates the `issuer`, `rp`, and `trust-anchor` subdirectories
+- generates issuer signing keys and an issuer intermediate CA signing key
+- generates the trust-anchor federation key and self-signed federation certificate
+- generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
+- generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
 - generates relying party authentication keys
-- generates the IACA certificate and private key
 - generates a self-signed TLS certificate and private key **only if `https = true`** in the config
 - creates or overwrites the config file when needed
 
 Generated structure:
 
-- `<data_dir>/issuer/iaca-cert.pem`
-- `<data_dir>/issuer/iaca-key.pem`
+- `<data_dir>/issuer/jwks.json` — issuer signing keys (ES256 for signing, ECDH-ES for encryption); the ES256 private key is the sole key used to produce issuer signatures
+- `<data_dir>/issuer/jwks-intermediate.json` — issuer intermediate CA signing key, used only to sign `intermediate-cert.pem`
+- `<data_dir>/issuer/intermediate-cert.pem` — issuer intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
+- `<data_dir>/issuer/cert.pem` — issuer leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
 - `<data_dir>/rp/auth-request-key.jwk.json`
 - `<data_dir>/rp/auth-response-key.jwk.json`
 - `<data_dir>/rp/federation-key.jwk.json`

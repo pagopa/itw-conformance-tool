@@ -1,4 +1,4 @@
-import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '@itw-conformance-tool/crypto';
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
 import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
@@ -76,8 +76,6 @@ export async function createDisabilityCardCredential(
     throw new Error('Unable to issue disability card credential: missing subject identifier');
   }
 
-  const signingCertificatePem = await createSelfSignedCertificateFromJwk(jwks.private);
-
   const credential = await sdjwt.issue(
     {
       cnf: { jwk: holderPublicKey },
@@ -103,7 +101,7 @@ export async function createDisabilityCardCredential(
       header: {
         kid: jwks.private.kid,
         typ: 'dc+sd-jwt',
-        x5c: [convertPemToBase64Der(signingCertificatePem)]
+        x5c: jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
       }
     }
   );

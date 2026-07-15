@@ -8,7 +8,6 @@ import {
   createIssuerCertificateFromJwk,
   createSelfSignedCertificateFromJwk,
   createTrustAnchorCertificateFromJwk,
-  getIACAChain,
   selectEs256SigningJwk
 } from '../utils/certificates.js';
 import {
@@ -74,19 +73,6 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
 
   const trustAnchorDirPath = join(configs.global.data_dir, 'trust-anchor');
   mkdirSync(trustAnchorDirPath, { recursive: true });
-
-  const iacaCertPath = join(issuerDirPath, 'iaca-cert.pem');
-  const iacaKeyPath = join(issuerDirPath, 'iaca-key.pem');
-  if (!(existsFileSync(iacaCertPath) && existsFileSync(iacaKeyPath)) || flags.force) {
-    const generatedIacaChain = await getIACAChain();
-    const generatedIacaCert = generatedIacaChain.certificate;
-    const generatedIacaKey = generatedIacaChain.privateKey;
-
-    writeFileSync(iacaCertPath, generatedIacaCert, { encoding: 'utf8', flag: 'w' });
-    writeFileSync(iacaKeyPath, generatedIacaKey, { encoding: 'utf8', flag: 'w' });
-
-    process.stdout.write(`✓ Generated mock IACA certificates → ${iacaCertPath}\n`);
-  }
 
   // The issuer certificate chain (below) is rooted at the trust-anchor federation
   // certificate, so the trust-anchor federation key/certificate must exist first.

@@ -201,7 +201,7 @@ export class AuthorizationService {
     const jarOptions = {
       expiresInSeconds: 10_000
     };
-    const iacaBase64Der = convertPemToBase64Der(this.#jwksRepository.iacaX509());
+    const issuerCertificateChainDer = this.#jwksRepository.issuerCertificateChain().map(convertPemToBase64Der);
 
     const authorizationRequest = options.config.isVersion(ItWalletSpecsVersion.V1_0)
       ? await createAuthorizationRequest({
@@ -230,7 +230,7 @@ export class AuthorizationService {
               alg: 'ES256',
               kid: publicSig.kid,
               method: 'x5c',
-              x5c: [iacaBase64Der]
+              x5c: issuerCertificateChainDer
             }
           }
         });

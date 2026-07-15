@@ -128,7 +128,7 @@ export function makeJwksRepository(app: FastifyInstance): JwksRepository {
   return {
     getEncrypt: () => encryptKey as unknown as ReturnType<JwksRepository['getEncrypt']>,
     getSign: () => signKey as unknown as ReturnType<JwksRepository['getSign']>,
-    iacaX509: () => app.issuerKeys.iacaCertPem
+    issuerCertificateChain: () => [app.issuerKeys.issuerCertPem, app.issuerKeys.issuerIntermediateCertPem]
   };
 }
 
