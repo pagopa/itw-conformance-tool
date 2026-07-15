@@ -15,19 +15,19 @@ async function main() {
   const nxRootPath = findNxRoot();
   const { command, flags } = parseCliArgs(process.argv.slice(2), nxRootPath);
 
-  const config = loadConfig(flags).data;
-  const logLevel = config.global.log_level;
-  const dataDir = config.global.data_dir;
-
-  const starterLogger = createLogger({ level: logLevel });
-  const emitLog = createEmitter(starterLogger);
-
   // __ Init section
   if (command === 'init') {
     await init(flags);
     process.stdout.write('Start services with: itwct start --all');
     process.exit(0);
   }
+
+  const config = loadConfig(flags).data;
+  const logLevel = config.global.log_level;
+  const dataDir = config.global.data_dir;
+
+  const starterLogger = createLogger({ level: logLevel });
+  const emitLog = createEmitter(starterLogger);
 
   // __ Test section
   if (command === 'test') {
