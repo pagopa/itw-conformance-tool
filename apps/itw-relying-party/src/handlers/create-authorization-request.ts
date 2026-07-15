@@ -60,7 +60,7 @@ export const createAuthorizationRequestHandler = async (
   req: FastifyRequest<{ Body: CreateAuthorizationRequestPayload }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { IACA_X509, BASE_URL } = req.server.config;
+  const { IACA_X509_BASE64, BASE_URL } = req.server.config;
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
@@ -134,7 +134,7 @@ export const createAuthorizationRequestHandler = async (
         alg: 'ES256',
         kid: req.server.jwks.sig.public.kid,
         method: 'x5c',
-        x5c: [IACA_X509]
+        x5c: [IACA_X509_BASE64]
       }
     }
   });

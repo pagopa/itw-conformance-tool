@@ -38,7 +38,10 @@ export async function createPresentationRequestUri(baseURL: string): Promise<str
 }
 
 export function extractPresentationCorrelationId(uri: string): string {
-  const state = new URL(uri).searchParams.get('state');
-  if (!state) throw new Error('Presentation request URI does not contain a state parameter');
+  const requestUri = new URL(uri).searchParams.get('request_uri');
+  if (!requestUri) throw new Error('Presentation request URI does not contain a request_uri parameter');
+
+  const state = new URL(requestUri).pathname.split('/').filter(Boolean).at(-1);
+  if (!state) throw new Error('Presentation request request_uri does not contain a correlation identifier');
   return state;
 }
