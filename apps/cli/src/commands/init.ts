@@ -3,7 +3,11 @@ import { join, resolve } from 'node:path';
 
 import { ConfigIniTemplate, loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 
-import { createSelfSignedCertificateFromJwk, getIACAChain } from '../utils/certificates.js';
+import {
+  createSelfSignedCertificateFromJwk,
+  createTrustAnchorCertificateFromJwk,
+  getIACAChain
+} from '../utils/certificates.js';
 import {
   getAuthRequestKey,
   getAuthResponseKey,
@@ -17,6 +21,7 @@ import type { CliFlags } from '../types/types.js';
 
 type InitConfig = {
   global: Pick<ConfigSchemaType['global'], 'data_dir' | 'log_level'>;
+  'trust-anchor': Pick<ConfigSchemaType['trust-anchor'], 'entity_id'>;
 };
 
 /** Initializes the configuration file.
@@ -36,7 +41,8 @@ function checkConfig(flags: CliFlags): InitConfig {
   const rawConfigs = loadConfig({ configFilePath });
   const previousDataDir = rawConfigs.global.data_dir;
   const configs: InitConfig = {
-    global: rawConfigs.global
+    global: rawConfigs.global,
+    'trust-anchor': rawConfigs['trust-anchor']
   };
   const dataDirExists = existsSync(configs.global.data_dir) && statSync(configs.global.data_dir).isDirectory();
   mkdirSync(configs.global.data_dir, { recursive: true });
@@ -128,12 +134,36 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
   }
 
   const trustAnchorFederationKeyPath = join(trustAnchorDirPath, 'federation-key.jwk.json');
+  let trustAnchorFederationKeyContent: string | undefined;
   if (!existsFileSync(trustAnchorFederationKeyPath) || flags.force) {
-    const trustAnchorFederationKey = getTrustAnchorFederationKey();
-    writeFileSync(trustAnchorFederationKeyPath, trustAnchorFederationKey, { encoding: 'utf8', flag: 'w' });
+    trustAnchorFederationKeyContent = getTrustAnchorFederationKey();
+    writeFileSync(trustAnchorFederationKeyPath, trustAnchorFederationKeyContent, { encoding: 'utf8', flag: 'w' });
     process.stdout.write(`✓ Generated trust-anchor federation key → ${trustAnchorFederationKeyPath}\n`);
   } else {
     process.stdout.write(`⚠ Trust-anchor federation key already exists → skipped (use --force to regenerate)\n`);
+  }
+
+  const trustAnchorFederationCertPath = join(trustAnchorDirPath, 'federation-cert.pem');
+  if (!existsFileSync(trustAnchorFederationCertPath) || flags.force || trustAnchorFederationKeyContent) {
+    trustAnchorFederationKeyContent ??= readFileSync(trustAnchorFederationKeyPath, 'utf8');
+    const trustAnchorFederationKey = JSON.parse(trustAnchorFederationKeyContent) as Parameters<
+      typeof createTrustAnchorCertificateFromJwk
+    >[0];
+    const commonName = new URL(configs['trust-anchor'].entity_id).hostname;
+    const trustAnchorFederationCertificate = await createTrustAnchorCertificateFromJwk(
+      trustAnchorFederationKey,
+      commonName
+    );
+
+    writeFileSync(trustAnchorFederationCertPath, trustAnchorFederationCertificate, {
+      encoding: 'utf8',
+      flag: 'w'
+    });
+    process.stdout.write(`✓ Generated trust-anchor federation certificate → ${trustAnchorFederationCertPath}\n`);
+  } else {
+    process.stdout.write(
+      `⚠ Trust-anchor federation certificate already exists → skipped (use --force to regenerate)\n`
+    );
   }
 }
 

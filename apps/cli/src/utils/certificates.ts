@@ -3,6 +3,8 @@ import { isIP } from 'node:net';
 
 import {
   BasicConstraintsExtension,
+  ExtendedKeyUsage,
+  ExtendedKeyUsageExtension,
   Extension,
   KeyUsagesExtension,
   SubjectAlternativeNameExtension,
@@ -23,6 +25,13 @@ type CertificateOptions = {
 type IacaChainParams = {
   commonName?: string;
   countryName?: string;
+  organizationName?: string;
+};
+
+type SelfSignedCertificateFromJwkOptions = {
+  commonName?: string;
+  extendedKeyUsages?: string[];
+  organizationalUnitName?: string;
   organizationName?: string;
 };
 
@@ -112,7 +121,15 @@ function stripPrivateKeyMaterial(jwk: Record<string, unknown>): Record<string, u
   return publicJwk;
 }
 
-export async function createSelfSignedCertificateFromJwk(jwk: Record<string, unknown>): Promise<string> {
+export async function createSelfSignedCertificateFromJwk(
+  jwk: Record<string, unknown>,
+  {
+    commonName = 'Issuer Signing Certificate',
+    extendedKeyUsages = [],
+    organizationalUnitName,
+    organizationName = 'ITW Conformance Tool'
+  }: SelfSignedCertificateFromJwkOptions = {}
+): Promise<string> {
   const publicJwk = stripPrivateKeyMaterial(jwk);
 
   const publicKey = await webcrypto.subtle.importKey('jwk', publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, true, [
@@ -126,18 +143,36 @@ export async function createSelfSignedCertificateFromJwk(jwk: Record<string, unk
   const notAfter = new Date(now);
   notAfter.setFullYear(notAfter.getFullYear() + 1);
 
+  const extensions: Extension[] = [
+    new BasicConstraintsExtension(false, undefined, true),
+    new KeyUsagesExtension(0x0080, true),
+    await SubjectKeyIdentifierExtension.create(publicKey)
+  ];
+  if (extendedKeyUsages.length > 0) {
+    extensions.splice(2, 0, new ExtendedKeyUsageExtension(extendedKeyUsages));
+  }
+
+  const organizationalUnit = organizationalUnitName ? `, OU=${organizationalUnitName}` : '';
   const certificate = await X509CertificateGenerator.createSelfSigned({
     keys: { privateKey, publicKey },
-    name: 'C=IT, O=ITW Conformance Tool, CN=Issuer Signing Certificate',
+    name: `C=IT, O=${organizationName}${organizationalUnit}, CN=${commonName}`,
     notBefore: now,
     notAfter,
     signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
-    extensions: [
-      new BasicConstraintsExtension(false, undefined, true),
-      new KeyUsagesExtension(0x0080, true),
-      await SubjectKeyIdentifierExtension.create(publicKey)
-    ]
+    extensions
   });
 
   return certificate.toString();
+}
+
+/** Generates the Trust Anchor federation certificate from its existing signing JWK. */
+export async function createTrustAnchorCertificateFromJwk(
+  jwk: Record<string, unknown>,
+  commonName: string
+): Promise<string> {
+  return createSelfSignedCertificateFromJwk(jwk, {
+    commonName,
+    extendedKeyUsages: [ExtendedKeyUsage.serverAuth, ExtendedKeyUsage.clientAuth],
+    organizationalUnitName: 'Trust Anchor'
+  });
 }
