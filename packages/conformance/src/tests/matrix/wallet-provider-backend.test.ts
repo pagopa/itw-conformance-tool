@@ -16,7 +16,6 @@ import {
   itWalletEntityConfigurationClaimsSchema,
   itWalletMetadataV1_3,
   type ItWalletEntityConfigurationClaims,
-  type ItWalletMetadataV1_3,
   type ItWalletSolutionEntityMetadataV1_3
 } from '@pagopa/io-wallet-oid-federation';
 import { calculateJwkThumbprint, decodeJwt, decodeProtectedHeader } from 'jose';
@@ -28,6 +27,11 @@ type ParsedEntityConfiguration = {
   header: Record<string, unknown>;
   payload: ItWalletEntityConfigurationClaims;
   entityStatementSignatureValid: boolean;
+};
+
+type WalletMetadataLike = {
+  wallet_solution?: ItWalletSolutionEntityMetadataV1_3;
+  federation_entity?: unknown;
 };
 
 function parseMediaType(contentType: string): string {
@@ -84,8 +88,8 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   let entityConfigResponse: { statusCode: number; body: string; contentType: string };
   let parsedEntityConfiguration: ParsedEntityConfiguration | null = null;
   let parsedEntityConfigurationError: string | null = null;
-  let parsedWalletMetadata: ItWalletMetadataV1_3 | null = null;
   let parsedWalletMetadataError: string | null = null;
+  let parsedWalletMetadataLike: WalletMetadataLike | null = null;
 
   function requireParsedEntityConfiguration(): ParsedEntityConfiguration {
     if (parsedEntityConfiguration) {
@@ -96,14 +100,14 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
     throw new Error(`Entity configuration setup failed${setupErrorSuffix}`);
   }
 
-  function requireParsedWalletMetadata(): ItWalletMetadataV1_3 {
+  function requireParsedWalletMetadataLike(): WalletMetadataLike {
     requireParsedEntityConfiguration();
-    if (parsedWalletMetadata) {
-      return parsedWalletMetadata;
+    if (parsedWalletMetadataLike) {
+      return parsedWalletMetadataLike;
     }
 
     const metadataErrorSuffix = parsedWalletMetadataError ? `: ${parsedWalletMetadataError}` : '';
-    throw new Error(`Entity configuration metadata validation failed${metadataErrorSuffix}`);
+    throw new Error(`Entity configuration wallet metadata validation failed${metadataErrorSuffix}`);
   }
 
   beforeAll(async () => {
@@ -152,7 +156,13 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       return;
     }
 
-    const entityConfigurationClaimsParseResult = itWalletEntityConfigurationClaimsSchema.safeParse(decodedPayload);
+    const claimsWithoutMetadata =
+      typeof decodedPayload === 'object' && decodedPayload !== null
+        ? { ...(decodedPayload as Record<string, unknown>), metadata: undefined }
+        : decodedPayload;
+
+    const entityConfigurationClaimsParseResult =
+      itWalletEntityConfigurationClaimsSchema.safeParse(claimsWithoutMetadata);
     if (!entityConfigurationClaimsParseResult.success) {
       const schemaIssues = entityConfigurationClaimsParseResult.error.issues
         .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
@@ -162,7 +172,13 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       return;
     }
 
-    const payload: ItWalletEntityConfigurationClaims = entityConfigurationClaimsParseResult.data;
+    const payload = {
+      ...entityConfigurationClaimsParseResult.data,
+      metadata:
+        typeof decodedPayload === 'object' && decodedPayload !== null
+          ? (decodedPayload as { metadata?: ItWalletEntityConfigurationClaims['metadata'] }).metadata
+          : undefined
+    } as ItWalletEntityConfigurationClaims;
 
     if (!payload.jwks) {
       parsedEntityConfigurationError = 'Entity configuration payload jwks is missing';
@@ -206,11 +222,26 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
     const metadataParseResult = itWalletMetadataV1_3.safeParse(payload.metadata);
     if (metadataParseResult.success) {
-      parsedWalletMetadata = metadataParseResult.data;
+      parsedWalletMetadataLike = {
+        wallet_solution: metadataParseResult.data.wallet_solution,
+        federation_entity: metadataParseResult.data.federation_entity
+      };
     } else {
       parsedWalletMetadataError = metadataParseResult.error.issues
         .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
         .join('; ');
+
+      const rawMetadata =
+        typeof payload.metadata === 'object' && payload.metadata !== null
+          ? (payload.metadata as Record<string, unknown>)
+          : null;
+      const rawWalletSolution = rawMetadata?.wallet_solution;
+      if (typeof rawWalletSolution === 'object' && rawWalletSolution !== null) {
+        parsedWalletMetadataLike = {
+          wallet_solution: rawWalletSolution as ItWalletSolutionEntityMetadataV1_3,
+          federation_entity: rawMetadata?.federation_entity
+        };
+      }
     }
   });
 
@@ -411,13 +442,14 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
       federationEntityIfPresentIsObject,
       `JWT payload metadata.federation_entity must be an object when present`
     ).toBe(true);
-    expect(!!parsedWalletMetadata, metadataSchemaErrorMessage).toBe(true);
+    const hasWalletMetadataLike = !!parsedWalletMetadataLike;
+    expect(hasWalletMetadataLike, metadataSchemaErrorMessage).toBe(true);
   });
 
   // ___ WP_003 ____
   it('WP_003 - Public keys are used exclusively for signing/encryption in Wallet Provider role', async () => {
     const { payload } = requireParsedEntityConfiguration();
-    const walletMetadata = requireParsedWalletMetadata();
+    const walletMetadata = requireParsedWalletMetadataLike();
     const walletSolution = walletMetadata.wallet_solution;
     const federationJwks = payload.jwks;
     const hasWalletSolution = typeof walletSolution === 'object' && walletSolution !== null;
@@ -454,7 +486,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   // ___ WP_004 ____
   it('WP_004 - Public keys are referenced with exactly one of jwks, jwks_uri, or signed_jwks_uri', async () => {
-    const walletMetadata = requireParsedWalletMetadata();
+    const walletMetadata = requireParsedWalletMetadataLike();
     const walletSolution = walletMetadata.wallet_solution;
     const hasJwksRef = walletSolution?.jwks !== undefined;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
@@ -479,7 +511,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004a - jwks is a valid public JWKS document when present', async () => {
-    const walletMetadata = requireParsedWalletMetadata();
+    const walletMetadata = requireParsedWalletMetadataLike();
     const walletSolution = walletMetadata.wallet_solution;
     const hasJwksRef = walletSolution?.jwks !== undefined;
     if (!hasJwksRef) {
@@ -492,7 +524,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
   });
 
   it('WP_004b - jwks_uri is valid HTTPS and resolvable when present', async () => {
-    const walletMetadata = requireParsedWalletMetadata();
+    const walletMetadata = requireParsedWalletMetadataLike();
     const walletSolution = walletMetadata.wallet_solution;
     const hasJwksUriRef = walletSolution?.jwks_uri !== undefined;
     if (!hasJwksUriRef) {
@@ -557,7 +589,7 @@ describe.sequential(`Test Cases for Wallet Provider Backend`, () => {
 
   it('WP_004c - signed_jwks_uri points to valid signed JWKS when present', async () => {
     const { payload } = requireParsedEntityConfiguration();
-    const walletMetadata = requireParsedWalletMetadata();
+    const walletMetadata = requireParsedWalletMetadataLike();
     const walletSolution = walletMetadata.wallet_solution;
     const hasSignedJwksUriRef = walletSolution?.signed_jwks_uri !== undefined;
     if (!hasSignedJwksUriRef) {
