@@ -132,17 +132,25 @@ const retrieveJwkFromEntityConf = (entityStatementJwt: string, signerKid: string
   } as Jwk;
 };
 
-export const getEncryptJweCallback =
-  (publicKey: Jwk): EncryptJweCallback =>
-  async (_: JweEncryptor, data: string) => {
-    const josePublicKey = await importJWK(publicKey, 'ECDH-ES');
+export function getEncryptJweCallback(): EncryptJweCallback {
+  return async (jweEncryptor: JweEncryptor, data: string) => {
+    const key = await importJWK(jweEncryptor.publicJwk, jweEncryptor.alg);
 
-    const jwe = await new CompactEncrypt(new TextEncoder().encode(data))
-      .setProtectedHeader({ alg: 'ECDH-ES', enc: 'A128CBC-HS256', kid: publicKey.kid, typ: 'oauth-authz-req+jwt' })
-      .encrypt(josePublicKey);
+    const plaintext = new TextEncoder().encode(data);
+    const jwe = await new CompactEncrypt(plaintext)
+      .setProtectedHeader({
+        alg: jweEncryptor.alg,
+        enc: jweEncryptor.enc,
+        kid: jweEncryptor.publicJwk.kid
+      })
+      .encrypt(key);
 
-    return { encryptionJwk: publicKey, jwe };
+    return {
+      encryptionJwk: jweEncryptor.publicJwk,
+      jwe: jwe
+    };
   };
+}
 
 export const getDecryptJweCallback =
   (privateKey: Jwk): DecryptJweCallback =>

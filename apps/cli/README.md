@@ -3,7 +3,7 @@
 Local CLI for the `itw-conformance-tool` monorepo. It supports the following workflows:
 
 - `init`, to generate the local configuration and key material
-- `start`, to launch the issuer and relying party services through Nx
+- `start`, to launch the trust anchor, issuer, and relying party services through Nx
 - `test`, to run conformance matrix specs (`WP_*`) through Vitest
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
@@ -50,6 +50,7 @@ From the workspace root through Nx-backed scripts:
 - `pnpm itw-conformance-tool --args="start --all"`
 - `pnpm itw-conformance-tool --args="start --issuer"`
 - `pnpm itw-conformance-tool --args="start --rp"`
+- `pnpm itw-conformance-tool --args="start --trust-anchor"`
 - `pnpm itw-conformance-tool --args="test"`
 - `pnpm itw-conformance-tool --args="report:list"`
 - `pnpm itw-conformance-tool --args="report:create <uuid>"`
@@ -61,6 +62,7 @@ Root shortcuts:
 - `pnpm itw-conformance-tool:start`
 - `pnpm itw-conformance-tool:start:issuer`
 - `pnpm itw-conformance-tool:start:rp`
+- `pnpm itw-conformance-tool:start:trust-anchor`
 - `pnpm itw-conformance-tool:test` (legacy shortcut)
 
 ## Supported Commands
@@ -76,9 +78,10 @@ Root shortcuts:
 ## Supported Options
 
 - `-c, --config <path>`: path to the configuration file. Supported by `start`, `test`, `report:list`, and `report:create`
-- `--all`: start both services. This is the default for `start`
+- `--all`: start the trust anchor, issuer, and relying party services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
+- `--trust-anchor`: start only the trust anchor service
 - `-f, --force`: overwrite generated files during `init`
 - `-h, --help`: print the CLI help
 - `-v, --version`: print the CLI version
@@ -98,26 +101,29 @@ When executed, it:
 
 - determines the target config file path
 - creates the data directory
-- creates the `issuer` and `rp` subdirectories
-- generates issuer signing keys
+- creates the `issuer`, `rp`, and `trust-anchor` subdirectories
+- generates issuer signing keys and an issuer intermediate CA signing key
+- generates the trust-anchor federation key and self-signed federation certificate
+- generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
+- generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
 - generates relying party authentication keys
-- generates the IACA certificate and private key
 - generates a self-signed TLS certificate and private key **only if `https = true`** in the config
 - creates or overwrites the config file when needed
 
 Generated structure:
 
-- `<data_dir>/issuer/signing-keys.jwks.json`
-- `<data_dir>/issuer/iaca-cert.pem`
-- `<data_dir>/issuer/iaca-key.pem`
+- `<data_dir>/issuer/jwks.json` — issuer signing keys (ES256 for signing, ECDH-ES for encryption); the ES256 private key is the sole key used to produce issuer signatures
+- `<data_dir>/issuer/jwks-intermediate.json` — issuer intermediate CA signing key, used only to sign `intermediate-cert.pem`
+- `<data_dir>/issuer/intermediate-cert.pem` — issuer intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
+- `<data_dir>/issuer/cert.pem` — issuer leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
 - `<data_dir>/rp/auth-request-key.jwk.json`
 - `<data_dir>/rp/auth-response-key.jwk.json`
 - `<data_dir>/rp/federation-key.jwk.json`
 - `<data_dir>/rp/x5c-cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/trust-anchor/federation-key.jwk.json`
+- `<data_dir>/trust-anchor/federation-cert.pem` — self-signed X.509 certificate generated from the federation key
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
-
-The Trust Anchor URL (`trust_anchor_url`) must be set before starting the RP service.
 
 Default locations:
 
@@ -137,9 +143,10 @@ Wallet URL behavior during `init`:
 
 Service selection:
 
-- default or `--all`: `nx run-many -t serve -p itw-credential-issuer,itw-relying-party`
+- default or `--all`: starts `itw-trust-anchor`, `itw-credential-issuer`, and `itw-relying-party` (each spawned individually via `nx run <project>:serve`)
 - `--issuer`: `nx run itw-credential-issuer:serve`
 - `--rp`: `nx run itw-relying-party:serve`
+- `--trust-anchor`: `nx run itw-trust-anchor:serve`
 
 Before launching Nx, the CLI checks that the required files exist in the resolved data directory. If any required file is missing, the CLI throws and exits before starting the services.
 

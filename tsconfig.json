@@ -13,6 +13,9 @@
       "path": "./apps/itw-relying-party"
     },
     {
+      "path": "./apps/itw-trust-anchor"
+    },
+    {
       "path": "./packages/logger"
     },
     {

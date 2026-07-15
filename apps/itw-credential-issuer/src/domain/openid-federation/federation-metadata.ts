@@ -1,7 +1,8 @@
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { createItWalletEntityConfiguration } from '@pagopa/io-wallet-oid-federation';
 import { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
-import { signJwtCallback } from '../signer.js';
+import { signCallback } from '../signer.js';
 import { getEntityConfigurationClaimsMetadata } from './entity-configuration-metadata.js';
 
 import type { JwksRepository } from '../signer.js';
@@ -11,17 +12,17 @@ export interface GetFederationMetadataOptions {
   baseURL: string;
   config: IoWalletSdkConfig;
   jwksRepository: JwksRepository;
+  trustAnchorEntityId: string;
 }
 
 export const getFederationMetadata = async (options: GetFederationMetadataOptions): Promise<string> => {
   const jwk = options.jwksRepository.getSign();
 
-  const signCallback: SignCallback = async ({ toBeSigned }) =>
-    signJwtCallback({ jwk: jwk.private as Parameters<SignCallback>[0]['jwk'], toBeSigned });
+  const signJwtCallback: SignCallback = async ({ toBeSigned }) => signCallback({ jwk: jwk.private, toBeSigned });
 
   return await createItWalletEntityConfiguration({
     claims: {
-      authority_hints: [`${options.baseURL}/trust_anchor`],
+      authority_hints: [options.trustAnchorEntityId],
       exp: Math.floor(Date.now() / 1000) + 3600,
       iat: Math.floor(Date.now() / 1000),
       iss: options.baseURL,
@@ -29,7 +30,7 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
         keys: [
           {
             ...options.jwksRepository.getSign().public,
-            x5c: [options.jwksRepository.iacaX509()]
+            x5c: options.jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
           }
         ]
       },
@@ -37,6 +38,6 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
       sub: options.baseURL
     },
     header: { alg: 'ES256', kid: jwk.public.kid, typ: 'entity-statement+jwt' },
-    signJwtCallback: signCallback
+    signJwtCallback
   });
 };

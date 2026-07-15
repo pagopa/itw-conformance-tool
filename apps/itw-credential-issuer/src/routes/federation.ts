@@ -17,7 +17,7 @@ const federationRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const service = new FederationService(makeJwksRepository(app));
-        const statement = await service.getEntityConfiguration(baseURL, sdkConfig);
+        const statement = await service.getEntityConfiguration(baseURL, sdkConfig, app.config.TRUST_ANCHOR_ENTITY_ID);
 
         await app.conformanceEventSink?.emit(
           createObservedEvent({

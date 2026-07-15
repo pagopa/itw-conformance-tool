@@ -19,7 +19,7 @@ export const createMdocCredential = async (
 
   const issuerSigned = await issuer.sign({
     algorithm: SignatureAlgorithm.ES256,
-    certificates: [pemToDer(jwksRepository.iacaX509())],
+    certificates: jwksRepository.issuerCertificateChain().map(pemToDer),
     deviceKeyInfo: {
       deviceKey: DeviceKey.fromJwk(stripKid(holderPublicKey))
     },

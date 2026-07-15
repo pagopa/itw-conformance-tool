@@ -36,7 +36,11 @@ import type { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 /** Retry interval (in seconds) advertised to wallets polling `/deferred`. */
 export const DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS = 5;
 
-const TRUSTED_WALLET_PROVIDER_ISSUERS = ['https://wallet-provider.example', 'https://wallet-provider.wct.example:3002'];
+const TRUSTED_WALLET_PROVIDER_ISSUERS = [
+  'https://wallet-provider.example',
+  'https://wallet-provider.wct.example:3002',
+  'https://wallet-provider.wct.example.org:3002'
+];
 
 export class CreateCredentialError extends Error {
   constructor(message: string) {

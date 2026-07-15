@@ -8,20 +8,31 @@ declare module 'fastify' {
       DATA_DIR: string;
       AUTH_FLOW: IssuerAuthFlow;
       BATCH_ISSUANCE_BY_DEFERRED: boolean;
+      TRUST_ANCHOR_ENTITY_ID: string;
     };
   }
+}
+
+function trimTrailingSlashes(value: string): string {
+  let result = value;
+  while (result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+  return result;
 }
 
 export default fp(
   async function configPlugin(app) {
     const config = loadConfig();
     const issuerConfig = config['credential-issuer'];
+    const trustAnchorConfig = config['trust-anchor'];
 
     app.decorate('config', {
       AUTH_FLOW: issuerConfig.auth_flow,
       BASE_URL: issuerConfig.url,
       BATCH_ISSUANCE_BY_DEFERRED: issuerConfig.batch_issuance_by_deferred,
-      DATA_DIR: config.global.data_dir
+      DATA_DIR: config.global.data_dir,
+      TRUST_ANCHOR_ENTITY_ID: trimTrailingSlashes(trustAnchorConfig.url.trim())
     });
   },
 

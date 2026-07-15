@@ -1,4 +1,4 @@
-import { createPrivateKey, createPublicKey } from 'node:crypto';
+import { createPublicKey } from 'node:crypto';
 
 import { zJwk, zJwkSet } from '@pagopa/io-wallet-oauth2';
 import { X509Certificate } from '@peculiar/x509';
@@ -51,22 +51,6 @@ export async function validateJWKS(jwks: unknown): Promise<void> {
   }
 }
 
-/** Parses a PEM private key into a Node.js KeyObject.
- * Supports both "BEGIN PRIVATE KEY" (PKCS#8) and "BEGIN EC PRIVATE KEY" (SEC1).
- *
- * @param keyPem - The PEM-encoded private key string
- * @returns A Node.js KeyObject representing the private key
- * @throws {Error} If the key format is invalid or cannot be parsed
- */
-function parseIacaPrivateKey(keyPem: string): ReturnType<typeof createPrivateKey> {
-  try {
-    return createPrivateKey(keyPem);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid IACA private key format. Expected a valid PEM private key (PKCS#8 or SEC1). ${message}`);
-  }
-}
-
 type ExportedPublicJwk = {
   kty?: string;
   crv?: string;
@@ -107,26 +91,52 @@ function publicJwkIdentity(jwk: ExportedPublicJwk): string {
       return `OKP:${jwk.crv}:${jwk.x}`;
     }
     default:
-      throw new Error(`Unsupported IACA key type: ${String(jwk.kty)}`);
+      throw new Error(`Unsupported key type: ${String(jwk.kty)}`);
   }
 }
 
-/** Validates that an IACA X.509 certificate and private key form a valid cryptographic pair.
- * Ensures that the public key extracted from the certificate matches the public key
- * derived from the private key.
+/** Removes private key material and key_ops from a JWK to produce a public-only JWK,
+ * suitable for import as a public key.
+ *
+ * @param jwk - The input JWK, which may contain private key parameters and/or key_ops.
+ * @returns A new JWK object containing only the public key parameters and no key_ops.
+ */
+function stripPrivateKeyMaterial(jwk: JWK): JWK {
+  const { d: _d, key_ops: _keyOps, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
+  return publicJwk;
+}
+
+/** Validates that an X.509 certificate's public key corresponds to the public key
+ * of the given JWK. Used to enforce the invariant that a persisted issuer
+ * certificate binds the same key pair used to produce a signature, regardless of
+ * whether the certificate is self-signed or issued by an intermediate CA.
  *
  * @param certPem - The PEM-encoded X.509 certificate
- * @param keyPem - The PEM-encoded private key (PKCS#8 or SEC1 format)
- * @throws {Error} If the certificate and private key do not form a valid pair, or if either is invalid
+ * @param jwk - The JWK (private or public) whose public key must match the certificate's public key
+ * @throws {Error} If the certificate and JWK do not share the same public key, or if either is invalid
  */
-export async function validateIACAKeyPair(certPem: string, keyPem: string): Promise<void> {
-  const cert = new X509Certificate(certPem);
+export async function validateCertificateMatchesJwk(certPem: string, jwk: JWK): Promise<void> {
+  let cert: X509Certificate;
+  try {
+    cert = new X509Certificate(certPem);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid certificate format. Expected a valid PEM X.509 certificate. ${message}`);
+  }
 
-  const privateKey = parseIacaPrivateKey(keyPem);
-  const publicFromPrivate = createPublicKey(privateKey).export({ format: 'jwk' }) as ExportedPublicJwk;
+  let publicFromJwk: ExportedPublicJwk;
+  try {
+    publicFromJwk = createPublicKey({ format: 'jwk', key: stripPrivateKeyMaterial(jwk) }).export({
+      format: 'jwk'
+    }) as ExportedPublicJwk;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid signing JWK public key material. ${message}`);
+  }
+
   const publicFromCert = createPublicKey(cert.toString()).export({ format: 'jwk' }) as ExportedPublicJwk;
 
-  if (publicJwkIdentity(publicFromPrivate) !== publicJwkIdentity(publicFromCert)) {
-    throw new Error('IACA certificate and private key do not correspond');
+  if (publicJwkIdentity(publicFromJwk) !== publicJwkIdentity(publicFromCert)) {
+    throw new Error('Certificate public key does not correspond to the provided signing JWK');
   }
 }

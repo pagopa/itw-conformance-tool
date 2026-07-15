@@ -9,7 +9,7 @@ import {
   X509CertificateGenerator
 } from '@peculiar/x509';
 
-import type { IacaChain, IacaChainParams, X5cCertParams } from '../types/types.js';
+import type { X5cCertParams } from '../types/types.js';
 
 interface CertificateOptions {
   commonName: string;
@@ -76,31 +76,6 @@ async function generateCertificate({
   const keyPem = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
 
   return { certPem: cert.toString(), keyPem };
-}
-
-/** Generates and returns a self-signed IACA certificate chain.
- *
- * @param params - Optional parameters to customize the certificate subject.
- * @returns An object containing the certificate and private key in PEM format.
- */
-export async function getIACAChain({
-  commonName = 'IACA CA',
-  countryName = 'IT',
-  organizationName = 'Example Issuer'
-}: IacaChainParams = {}): Promise<IacaChain> {
-  const { certPem, keyPem } = await generateCertificate({
-    commonName,
-    countryName,
-    organizationName,
-    notAfterDays: 365 * 10,
-    isCA: true,
-    keyUsageBits: 0x0004 | 0x0002 | 0x0080 // keyCertSign | cRLSign | digitalSignature
-  });
-
-  return {
-    certificate: certPem,
-    privateKey: keyPem
-  };
 }
 
 /** Generates a self-signed X.509 certificate for use in JWT x5c header (Relying Party).
