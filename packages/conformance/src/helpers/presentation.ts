@@ -30,6 +30,10 @@ export async function createPresentationRequestUri(baseURL: string): Promise<str
     rejectUnauthorized: false
   });
 
+  if (response.statusCode !== 200 || typeof response.data.url !== 'string') {
+    throw new Error(`Unable to create presentation request (${response.statusCode ?? 'unknown'}): ${response.body}`);
+  }
+
   return response.data.url;
 }
 
