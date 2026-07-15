@@ -1,24 +1,20 @@
 import { generateKeyPairSync } from 'node:crypto';
 
-function generateEcPrivateJwk(descriptor: {
+function createEcPrivateJwk(descriptor: {
   alg: 'ES256' | 'ECDH-ES';
   keyOps: string[];
   kid: string;
   use: 'sig' | 'enc';
-}): { keys: Record<string, unknown>[] } {
+}) {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  const privateJwk = privateKey.export({ format: 'jwk' }) as Record<string, unknown>;
+  const privateJwk = privateKey.export({ format: 'jwk' });
 
   return {
-    keys: [
-      {
-        ...privateJwk,
-        kid: descriptor.kid,
-        alg: descriptor.alg,
-        use: descriptor.use,
-        key_ops: descriptor.keyOps
-      }
-    ]
+    ...privateJwk,
+    kid: descriptor.kid,
+    alg: descriptor.alg,
+    use: descriptor.use,
+    key_ops: descriptor.keyOps
   };
 }
 
@@ -30,54 +26,47 @@ function generateEcPrivateJwk(descriptor: {
  *
  * @returns A JSON string representing the issuer JWKS.
  */
-export function getSigningKeys(): string {
-  const signing = generateEcPrivateJwk({
+export function createIssuerPrivateKeys() {
+  const signing = createEcPrivateJwk({
     kid: 'issuer-signing-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
 
-  const encryption = generateEcPrivateJwk({
+  const encryption = createEcPrivateJwk({
     kid: 'issuer-encryption-key',
     use: 'enc',
     alg: 'ECDH-ES',
     keyOps: ['deriveKey']
   });
 
-  return JSON.stringify({ keys: [...signing.keys, ...encryption.keys] }, null, 2);
+  return { keys: [signing, encryption] };
 }
 
-/** Generates and returns an EC P-256 private key JWK for
- * authentication request signing.
- *
- * @returns A JSON string representing the EC P-256 private key JWK.
- */
-export function getAuthRequestKey(): string {
-  const jwk = generateEcPrivateJwk({
-    kid: 'auth-request-key',
+export function createRelyingPartyPrivateKeys() {
+  const signing = createEcPrivateJwk({
+    kid: 'rp-signing-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
 
-  return JSON.stringify(jwk.keys[0], null, 2);
-}
-
-/** Generates and returns an EC P-256 private key JWK for
- * authentication response decryption.
- *
- * @returns A JSON string representing the EC P-256 private key JWK.
- */
-export function getAuthResponseKey(): string {
-  const jwk = generateEcPrivateJwk({
-    kid: 'auth-response-key',
+  const encryption = createEcPrivateJwk({
+    kid: 'rp-encryption-key',
     use: 'enc',
     alg: 'ECDH-ES',
     keyOps: ['deriveKey']
   });
 
-  return JSON.stringify(jwk.keys[0], null, 2);
+  const federation = createEcPrivateJwk({
+    kid: 'rp-federation-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+
+  return { keys: [signing, encryption, federation] };
 }
 
 /** Generates and returns a JWKS containing a single EC P-256 private
@@ -88,39 +77,23 @@ export function getAuthResponseKey(): string {
  *
  * @returns A JSON string representing the intermediate CA JWKS.
  */
-export function getIssuerIntermediateKey(): string {
-  const intermediate = generateEcPrivateJwk({
+export function createIssuerIntermediateKey() {
+  return createEcPrivateJwk({
     kid: 'issuer-intermediate-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
-
-  return JSON.stringify({ keys: intermediate.keys }, null, 2);
-}
-
-/** Generates and returns an EC P-256 private key JWK for federation entity-statement signing. */
-export function getFederationKey(): string {
-  const jwk = generateEcPrivateJwk({
-    kid: 'federation-key',
-    use: 'sig',
-    alg: 'ES256',
-    keyOps: ['sign']
-  });
-
-  return JSON.stringify(jwk.keys[0], null, 2);
 }
 
 /** Generates and returns an EC P-256 private key JWK for trust-anchor
  * federation entity- and subordinate-statement signing.
  */
-export function getTrustAnchorFederationKey(): string {
-  const jwk = generateEcPrivateJwk({
+export function createTrustAnchorFederationKey() {
+  return createEcPrivateJwk({
     kid: 'trust-anchor-federation-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
-
-  return JSON.stringify(jwk.keys[0], null, 2);
 }

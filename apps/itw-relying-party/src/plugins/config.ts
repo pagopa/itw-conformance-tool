@@ -12,7 +12,7 @@ declare module 'fastify' {
     config: {
       BASE_URL: string;
       DATA_DIR: string;
-      IACA_X509_BASE64: string;
+      IACA_X509: string;
     };
   }
 }
@@ -22,12 +22,12 @@ const configPlugin: FastifyPluginAsync = async (app) => {
   const relyingPartyConfig = config['relying-party'];
 
   const dataDir = config.global.data_dir;
-  const certificatePem = await readFile(path.join(dataDir, 'rp', 'x5c-cert.pem'), 'utf8');
+  const certificatePem = await readFile(path.join(dataDir, 'rp', 'cert.pem'), 'utf8');
 
   app.decorate('config', {
     BASE_URL: relyingPartyConfig.url,
     DATA_DIR: dataDir,
-    IACA_X509_BASE64: convertPemToBase64Der(certificatePem)
+    IACA_X509: convertPemToBase64Der(certificatePem)
   });
 };
 

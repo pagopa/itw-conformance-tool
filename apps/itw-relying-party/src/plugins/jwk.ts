@@ -34,24 +34,40 @@ declare module 'fastify' {
   }
 }
 
-const parseJwk = (content: string, filePath: string): Jwk => {
-  const jwk = JSON.parse(content) as unknown;
+const parseJwks = (content: string, filePath: string): Jwk[] => {
+  const jwks = JSON.parse(content) as unknown;
 
-  if (typeof jwk !== 'object' || jwk === null || Array.isArray(jwk)) {
-    throw new TypeError(`${filePath} must contain a single private JWK object`);
+  if (
+    typeof jwks !== 'object' ||
+    jwks === null ||
+    Array.isArray(jwks) ||
+    !('keys' in jwks) ||
+    !Array.isArray(jwks.keys)
+  ) {
+    throw new TypeError(`${filePath} must contain a JWKS with a keys array`);
   }
 
-  return jwk as Jwk;
+  return jwks.keys.map((jwk) => {
+    if (typeof jwk !== 'object' || jwk === null || Array.isArray(jwk)) {
+      throw new TypeError(`${filePath} must contain only JWK objects`);
+    }
+
+    return jwk as Jwk;
+  });
 };
 
-const getKeyPair = (jwk: Jwk, use: JwkUse, filePath: string): JwkKeyPair => {
-  if (jwk.use !== use || typeof jwk.kid !== 'string') {
-    throw new Error(`${filePath} must contain a ${use} JWK with a kid`);
+const getKeyPair = (jwks: Jwk[], selector: { kid: string; use: JwkUse }, filePath: string): JwkKeyPair => {
+  const matchingKeys = jwks.filter((jwk) => jwk.kid === selector.kid);
+  const [jwk] = matchingKeys;
+
+  if (matchingKeys.length !== 1 || jwk.use !== selector.use) {
+    throw new Error(`${filePath} must contain exactly one ${selector.use} JWK with kid ${selector.kid}`);
   }
 
   const privateJwk = jwk as PrivateJwk;
-  const { d, ...publicKey } = privateJwk;
+  const { d, key_ops, ...publicKey } = privateJwk;
   void d;
+  void key_ops;
 
   return {
     private: privateJwk,
@@ -59,34 +75,32 @@ const getKeyPair = (jwk: Jwk, use: JwkUse, filePath: string): JwkKeyPair => {
   };
 };
 
-const JWK_FILES = {
-  enc: { file: 'rp/auth-response-key.jwk.json', use: 'enc' },
-  federation: { file: 'rp/federation-key.jwk.json', use: 'sig' },
-  sig: { file: 'rp/auth-request-key.jwk.json', use: 'sig' }
-} as const satisfies Record<keyof JwksByUse, { file: string; use: JwkUse }>;
+const JWK_FILE = 'rp/jwks.json';
 
-const loadKeyPair = async (dataDir: string, file: string, use: JwkUse): Promise<JwkKeyPair> => {
-  const filePath = path.join(dataDir, file);
+const JWK_SELECTORS = {
+  enc: { kid: 'rp-encryption-key', use: 'enc' },
+  federation: { kid: 'rp-federation-key', use: 'sig' },
+  sig: { kid: 'rp-signing-key', use: 'sig' }
+} as const satisfies Record<keyof JwksByUse, { kid: string; use: JwkUse }>;
+
+const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
+  const filePath = path.join(dataDir, JWK_FILE);
   const content = await readFile(filePath, 'utf8');
-  const jwk = parseJwk(content, filePath);
+  const jwks = parseJwks(content, filePath);
 
-  return getKeyPair(jwk, use, filePath);
+  return {
+    enc: getKeyPair(jwks, JWK_SELECTORS.enc, filePath),
+    federation: getKeyPair(jwks, JWK_SELECTORS.federation, filePath),
+    sig: getKeyPair(jwks, JWK_SELECTORS.sig, filePath)
+  };
 };
 
 const jwkPlugin: FastifyPluginAsync = async (app) => {
   const dataDir = app.config.DATA_DIR;
 
-  const [enc, federation, sig] = await Promise.all([
-    loadKeyPair(dataDir, JWK_FILES.enc.file, JWK_FILES.enc.use),
-    loadKeyPair(dataDir, JWK_FILES.federation.file, JWK_FILES.federation.use),
-    loadKeyPair(dataDir, JWK_FILES.sig.file, JWK_FILES.sig.use)
-  ]);
+  const jwks = await loadKeyPairs(dataDir);
 
-  app.decorate('jwks', {
-    enc,
-    federation,
-    sig
-  });
+  app.decorate('jwks', jwks);
 };
 
 export default fp(jwkPlugin, {
