@@ -1,49 +1,54 @@
+import type { DatabaseClient } from '@itw-conformance-tool/database';
+
 interface Nonce {
   expiresAt: number;
   id: string;
 }
 
 export class NonceRepository {
-  private readonly nonces: Nonce[] = [];
+  private readonly db: DatabaseClient;
 
-  public list() {
-    return this.nonces;
+  constructor(db: DatabaseClient) {
+    this.db = db;
   }
 
-  public get(nonceId: string) {
-    const nonce = this.nonces.find(({ id }) => id === nonceId);
+  public list(): Nonce[] {
+    return this.db
+      .query<{ expires_at: number; id: string }>('SELECT id, expires_at FROM relying_party_nonces')
+      .map((row) => ({
+        expiresAt: row.expires_at,
+        id: row.id
+      }));
+  }
+
+  public get(nonceId: string): Nonce {
+    const nonce = this.db.get<{ expires_at: number; id: string }>(
+      'SELECT id, expires_at FROM relying_party_nonces WHERE id = ?',
+      [nonceId]
+    );
     if (!nonce) {
       throw new Error(`Nonce ${nonceId} not found`);
     }
-    return nonce;
+
+    return { expiresAt: nonce.expires_at, id: nonce.id };
   }
 
-  public delete(nonceId: string) {
-    const nonce = this.nonces.find(({ id }) => id === nonceId);
-    if (!nonce) {
+  public delete(nonceId: string): void {
+    const result = this.db.run('DELETE FROM relying_party_nonces WHERE id = ?', [nonceId]);
+    if (result.changes === 0) {
       throw new Error(`Nonce ${nonceId} not found`);
     }
-    const index = this.nonces.findIndex((el) => el.id === nonceId);
-    if (index === -1) {
-      throw new Error(`Nonce ${nonceId} not found`);
-    }
-    this.nonces.splice(index, 1);
   }
 
-  public insert(nonceId: string) {
-    // we delete the nonce after 5 minutes (aligned with the request object TTL)
-    this.nonces.push({
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      id: nonceId
-    });
+  public insert(nonceId: string): void {
+    // We delete the nonce after 5 minutes (aligned with the request object TTL).
+    this.db.run('INSERT INTO relying_party_nonces (id, expires_at) VALUES (?, ?)', [
+      nonceId,
+      Date.now() + 5 * 60 * 1000
+    ]);
   }
 
-  public deleteExpiredNonces() {
-    const now = Date.now();
-    for (const { expiresAt, id } of this.nonces) {
-      if (expiresAt < now) {
-        this.delete(id);
-      }
-    }
+  public deleteExpiredNonces(): void {
+    this.db.run('DELETE FROM relying_party_nonces WHERE expires_at < ?', [Date.now()]);
   }
 }

@@ -1,3 +1,4 @@
+import { DatabaseClient } from '@itw-conformance-tool/database';
 import fp from 'fastify-plugin';
 
 import { NonceRepository } from '../repository/nonce.js';
@@ -17,9 +18,11 @@ export interface AppRepository {
 }
 
 const repositoryPlugin: FastifyPluginAsync = async (app) => {
+  const dbClient = new DatabaseClient(app.config.DATA_DIR);
+
   app.decorate('repository', {
-    requestObject: new RequestObjectRepository(),
-    nonce: new NonceRepository()
+    requestObject: new RequestObjectRepository(dbClient),
+    nonce: new NonceRepository(dbClient)
   });
 
   const requestObjectsInterval = setInterval(() => {
@@ -33,21 +36,17 @@ const repositoryPlugin: FastifyPluginAsync = async (app) => {
   }, 10000);
 
   const noncesInterval = setInterval(() => {
-    const now = Date.now();
-    const nonces = app.repository.nonce.list();
-    for (const { expiresAt, id } of nonces) {
-      if (expiresAt < now) {
-        app.repository.nonce.delete(id);
-      }
-    }
+    app.repository.nonce.deleteExpiredNonces();
   }, 60000);
 
   app.addHook('onClose', async () => {
     clearInterval(requestObjectsInterval);
     clearInterval(noncesInterval);
+    dbClient.close();
   });
 };
 
 export default fp(repositoryPlugin, {
-  name: 'repository-plugin'
+  name: 'repository-plugin',
+  dependencies: ['config']
 });

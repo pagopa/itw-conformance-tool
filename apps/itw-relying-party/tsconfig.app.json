@@ -24,12 +24,6 @@
   ],
   "references": [
     {
-      "path": "../../packages/config/tsconfig.lib.json"
-    },
-    {
-      "path": "../../packages/rp/tsconfig.lib.json"
-    },
-    {
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
@@ -40,6 +34,9 @@
     },
     {
       "path": "../../packages/conformance/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/config/tsconfig.lib.json"
     }
   ]
 }

@@ -1,6 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import { createSignJwtCallback } from '@itw-conformance-tool/crypto';
 import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 import { DcqlQuery, getDcqlErrorFromUnknown } from 'dcql';
 import z from 'zod';
@@ -61,7 +60,7 @@ export const createAuthorizationRequestHandler = async (
   req: FastifyRequest<{ Body: CreateAuthorizationRequestPayload }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { IACA_X509_BASE64, BASE_URL } = req.server.config;
+  const { IACA_X509, BASE_URL } = req.server.config;
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
@@ -126,7 +125,7 @@ export const createAuthorizationRequestHandler = async (
     authorizationRequestPayload: payload,
     callbacks: {
       encryptJwe: req.server.callbacks.encryptJwe,
-      signJwt: getSignJwtCallback([req.server.jwks.sig.private])
+      signJwt: req.server.callbacks.signJwt
     },
     config: req.server.sdkConfig,
     jar: {
@@ -135,7 +134,7 @@ export const createAuthorizationRequestHandler = async (
         alg: 'ES256',
         kid: req.server.jwks.sig.public.kid,
         method: 'x5c',
-        x5c: [IACA_X509_BASE64]
+        x5c: [IACA_X509]
       }
     }
   });

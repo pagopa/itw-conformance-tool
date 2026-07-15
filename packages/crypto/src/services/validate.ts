@@ -1,9 +1,8 @@
 import { createPrivateKey, createPublicKey } from 'node:crypto';
 
+import { zJwk, zJwkSet } from '@pagopa/io-wallet-oauth2';
 import { X509Certificate } from '@peculiar/x509';
 import { importJWK, type JWK } from 'jose';
-
-import { jwkSchema, jwksSchema } from '../schemas/jwk.js';
 
 /** Validates that a JWK object conforms to the required structure and can be
  * cryptographically imported. Accepts keys with `use: 'sig'`, `use: 'enc'`, or
@@ -13,7 +12,7 @@ import { jwkSchema, jwksSchema } from '../schemas/jwk.js';
  * @returns true if the key is a structurally valid and importable JWK, false otherwise
  */
 export async function isValidJwk(key: unknown): Promise<boolean> {
-  const parsed = jwkSchema.safeParse(key);
+  const parsed = zJwk.safeParse(key);
   if (!parsed.success) return false;
   if (parsed.data.use === 'enc' && parsed.data.alg === undefined) return false;
 
@@ -31,10 +30,13 @@ export async function isValidJwk(key: unknown): Promise<boolean> {
  * @param jwks - The value to validate (typically the result of `JSON.parse` on a stored JWKS file).
  */
 export async function validateJWKS(jwks: unknown): Promise<void> {
-  const parsed = jwksSchema.parse(jwks);
+  const parsed = zJwkSet.parse(jwks);
 
   const seenKids = new Set<string>();
   for (const key of parsed.keys) {
+    if (!key.kid) {
+      throw new Error('Key in JWKS is missing "kid" property');
+    }
     if (seenKids.has(key.kid)) {
       throw new Error(`Duplicate kid found in JWKS: ${key.kid}`);
     }

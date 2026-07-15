@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
 
 import { parseAuthorizationResponse, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
-import { VpTokenVerifier } from '@workspace/utils';
 import { decodeJwt } from 'jose';
 import z from 'zod';
 
 import { toResult } from '../utils/result.js';
+import { VpTokenVerifier } from '../utils/vp-token.js';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -76,7 +76,7 @@ export const getAuthorizationResponseHandler = async (
 
   const verifier = new VpTokenVerifier({
     authResponse: authResponseResult.value,
-    iacaX509: req.server.x5c,
+    iacaX509: req.server.config.IACA_X509,
     requestObject: authorizationRequestPayload,
     verifierEncryptionPublicJwk: req.server.jwks.enc.public
   });

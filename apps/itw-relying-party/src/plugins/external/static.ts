@@ -2,13 +2,9 @@ import path from 'node:path';
 
 import FastifyStatic, { type FastifyStaticOptions } from '@fastify/static';
 
-export const autoConfig = (): FastifyStaticOptions => {
-  const dirPath = path.join(import.meta.dirname, '../../..', 'public');
-
-  return {
-    root: dirPath
-  };
-};
+export const autoConfig = (): FastifyStaticOptions => ({
+  root: path.join(import.meta.dirname, '../..', 'public')
+});
 
 /**
  * This plugins allows to serve static files as fast as possible.

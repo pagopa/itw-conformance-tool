@@ -74,10 +74,12 @@ const loadKeyPair = async (dataDir: string, file: string, use: JwkUse): Promise<
 };
 
 const jwkPlugin: FastifyPluginAsync = async (app) => {
+  const dataDir = app.config.DATA_DIR;
+
   const [enc, federation, sig] = await Promise.all([
-    loadKeyPair(app.config.DATA_DIR, JWK_FILES.enc.file, JWK_FILES.enc.use),
-    loadKeyPair(app.config.DATA_DIR, JWK_FILES.federation.file, JWK_FILES.federation.use),
-    loadKeyPair(app.config.DATA_DIR, JWK_FILES.sig.file, JWK_FILES.sig.use)
+    loadKeyPair(dataDir, JWK_FILES.enc.file, JWK_FILES.enc.use),
+    loadKeyPair(dataDir, JWK_FILES.federation.file, JWK_FILES.federation.use),
+    loadKeyPair(dataDir, JWK_FILES.sig.file, JWK_FILES.sig.use)
   ]);
 
   app.decorate('jwks', {

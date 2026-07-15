@@ -25,9 +25,6 @@
       "path": "./packages/conformance"
     },
     {
-      "path": "./packages/rp"
-    },
-    {
       "path": "./packages/crypto"
     }
   ]

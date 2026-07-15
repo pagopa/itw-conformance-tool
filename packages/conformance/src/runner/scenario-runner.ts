@@ -10,12 +10,13 @@ import {
   type Disposable,
   type ScenarioEventStore
 } from '../events/event-store.js';
+import { createCredentialOfferUri } from '../helpers/issuance.js';
+import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
-import { httpsRequest } from '../utils/request.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { createScenarioPromptModel } from './prompts.js';
 
@@ -61,59 +62,6 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
 
 function defaultWrite(message: string): void {
   process.stdout.write(`${message}\n`);
-}
-
-function createCredentialOfferUri(credentialIssuer: string, correlationId: string): string {
-  const credentialOffer = {
-    credential_issuer: credentialIssuer,
-    credential_configuration_ids: ['dc_sd_jwt_PID'],
-    grants: {
-      authorization_code: {
-        issuer_state: correlationId
-      }
-    }
-  };
-
-  return `openid-credential-offer://?credential_offer=${encodeURIComponent(JSON.stringify(credentialOffer))}`;
-}
-
-function createDefaultPresentationDcqlQuery(): Record<string, unknown> {
-  return {
-    credentials: [
-      {
-        id: 'pid',
-        format: 'dc+sd-jwt',
-        meta: { vct_values: ['urn:eudi:pid:it:1'] },
-        claims: [{ path: ['given_name'] }, { path: ['family_name'] }, { path: ['birthdate'] }]
-      }
-    ]
-  };
-}
-
-async function createPresentationRequestUri(baseURL: string): Promise<string> {
-  const endpoint = new URL('/request-object', baseURL);
-
-  const response = await httpsRequest<{ url: string }>({
-    method: 'POST',
-    hostname: endpoint.hostname,
-    path: endpoint.pathname,
-    port: endpoint.port,
-    protocol: endpoint.protocol,
-    headers: { 'content-type': 'application/json' },
-    body: {
-      dcqlQuery: createDefaultPresentationDcqlQuery(),
-      flow_type: 'cross-device'
-    },
-    rejectUnauthorized: false
-  });
-
-  return response.data.url;
-}
-
-function extractPresentationCorrelationId(uri: string): string {
-  const state = new URL(uri).searchParams.get('state');
-  if (!state) throw new Error('Presentation request URI does not contain a state parameter');
-  return state;
 }
 
 function resolveScenarioEndpoints(

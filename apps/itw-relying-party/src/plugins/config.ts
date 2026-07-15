@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { loadConfig } from '@itw-conformance-tool/config';
 import fp from 'fastify-plugin';
 
@@ -8,6 +10,7 @@ declare module 'fastify' {
     config: {
       BASE_URL: string;
       DATA_DIR: string;
+      IACA_X509: string;
     };
   }
 }
@@ -16,9 +19,13 @@ const configPlugin: FastifyPluginAsync = async (app) => {
   const config = loadConfig();
   const relyingPartyConfig = config['relying-party'];
 
+  const dataDir = config.global.data_dir;
+  const certFilePath = path.join(dataDir, 'rp', 'x5c-cert.pem');
+
   app.decorate('config', {
     BASE_URL: relyingPartyConfig.url,
-    DATA_DIR: config.global.data_dir
+    DATA_DIR: dataDir,
+    IACA_X509: certFilePath
   });
 };
 
