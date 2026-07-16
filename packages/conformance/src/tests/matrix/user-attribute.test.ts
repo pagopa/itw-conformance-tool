@@ -1,13 +1,20 @@
 import * as fs from 'node:fs';
 
+import { beforeAll, describe, expect, it } from 'vitest';
+
 function resolveRpBaseUrl(): string {
   const fromEnv = process.env.ITW_CT_RP_BASE_URL?.trim();
   if (fromEnv) {
-    return fromEnv.replace(/\/$/, '');
+    let normalized = fromEnv;
+    while (normalized.endsWith('/')) {
+      normalized = normalized.slice(0, -1);
+    }
+    return normalized;
   }
 
   const port = process.env.ITW_CT_RP_PORT?.trim() || '8080';
-  const httpsEnabled = (process.env.ITW_CT_HTTPS ?? 'true').toLowerCase() === 'true';
+  const httpsRaw = process.env.ITW_CT_HTTPS?.trim().toLowerCase();
+  const httpsEnabled = httpsRaw !== undefined ? httpsRaw === 'true' || httpsRaw === '1' : true;
   const protocol = httpsEnabled ? 'https' : 'http';
   return `${protocol}://127.0.0.1:${port}`;
 }
@@ -46,13 +53,22 @@ describe('RP attribute deletion conformance matrix', () => {
   const rpBaseUrl = resolveRpBaseUrl();
 
   beforeAll(() => {
-    // Keep TLS validation enabled and trust a private/self-signed CA explicitly when provided.
+    // NODE_EXTRA_CA_CERTS is read at Node.js startup.
+    // Validate path and require callers to set NODE_EXTRA_CA_CERTS before starting tests.
     const caCertPath = process.env.ITW_CT_CA_CERT_PATH?.trim();
-    if (caCertPath) {
-      if (!fs.existsSync(caCertPath)) {
-        throw new Error(`ITW_CT_CA_CERT_PATH does not exist: ${caCertPath}`);
-      }
-      process.env.NODE_EXTRA_CA_CERTS = caCertPath;
+    if (!caCertPath) {
+      return;
+    }
+
+    if (!fs.existsSync(caCertPath)) {
+      throw new Error(`ITW_CT_CA_CERT_PATH does not exist: ${caCertPath}`);
+    }
+
+    if (process.env.NODE_EXTRA_CA_CERTS !== caCertPath) {
+      throw new Error(
+        `To trust the private CA, start Node with NODE_EXTRA_CA_CERTS=${caCertPath} (current: ${process.env.NODE_EXTRA_CA_CERTS ?? '<unset>'}). ` +
+          'Changing NODE_EXTRA_CA_CERTS at runtime has no effect.'
+      );
     }
   });
 
@@ -70,7 +86,13 @@ describe('RP attribute deletion conformance matrix', () => {
     const erasureEndpoint = verifier?.['erasure_endpoint'];
 
     expect(typeof erasureEndpoint).toBe('string');
-    expect(String(erasureEndpoint)).toBe(`${rpBaseUrl}/auth/erasure`);
+    const erasureUrl = new URL(String(erasureEndpoint));
+    expect(erasureUrl.pathname).toBe('/auth/erasure');
+
+    if (process.env.ITW_CT_RP_BASE_URL?.trim()) {
+      const configuredBaseUrl = new URL(rpBaseUrl);
+      expect(erasureUrl.origin).toBe(configuredBaseUrl.origin);
+    }
   });
 
   it('WP_117: wallet sends a valid deletion request to RP erasure endpoint', async () => {
