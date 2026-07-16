@@ -46,10 +46,6 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Write CLI config.ini for CI
-        run: |
-          cp config.example.ini config.ini
-
       - name: Initialize data directory
         run: pnpm itw-conformance-tool:init
 
