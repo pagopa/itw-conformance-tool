@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+
 function resolveRpBaseUrl(): string {
   const fromEnv = process.env.ITW_CT_RP_BASE_URL?.trim();
   if (fromEnv) {
@@ -44,8 +46,14 @@ describe('RP attribute deletion conformance matrix', () => {
   const rpBaseUrl = resolveRpBaseUrl();
 
   beforeAll(() => {
-    // Local conformance environments commonly use self-signed certs.
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    // Keep TLS validation enabled and trust a private/self-signed CA explicitly when provided.
+    const caCertPath = process.env.ITW_CT_CA_CERT_PATH?.trim();
+    if (caCertPath) {
+      if (!fs.existsSync(caCertPath)) {
+        throw new Error(`ITW_CT_CA_CERT_PATH does not exist: ${caCertPath}`);
+      }
+      process.env.NODE_EXTRA_CA_CERTS = caCertPath;
+    }
   });
 
   it('WP_116: federation metadata exposes a valid RP erasure endpoint', async () => {
