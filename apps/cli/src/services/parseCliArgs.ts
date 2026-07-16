@@ -1,31 +1,8 @@
-import { hasNoDuplicateCredentialIdentifiers, splitCredentialIdentifiers } from '@itw-conformance-tool/config';
-
 import { expandPath } from '../utils/path.js';
 import { printHelp, printVersion } from '../utils/prompt.js';
 import { searchParamValue } from '../utils/search.js';
 
 import type { CliFlags } from '../types/types.js';
-
-/** Parses and validates the `--credential-identifiers` flag value.
- *
- * @param value - The raw comma-separated identifiers string.
- * @returns The parsed, non-empty, de-duplicated list of identifiers.
- */
-function parseCredentialIdentifiersValue(value: string): string[] {
-  const identifiers = splitCredentialIdentifiers(value);
-
-  if (identifiers.length === 0) {
-    throw new Error(
-      'Invalid value for --credential-identifiers: expected a non-empty comma-separated list of credential identifiers.'
-    );
-  }
-
-  if (!hasNoDuplicateCredentialIdentifiers(identifiers)) {
-    throw new Error('Invalid value for --credential-identifiers: duplicate credential identifiers are not allowed.');
-  }
-
-  return identifiers;
-}
 
 /** Parses start command flags.
  *
@@ -39,12 +16,6 @@ function parseStartFlags(args: string[], flags: CliFlags): void {
     flags.config.value = true;
     flags.config.path = expandPath(configResult.value.trim());
     args = configResult.remainingArgs;
-  }
-
-  const credentialIdentifiersResult = searchParamValue('--credential-identifiers', args);
-  if (credentialIdentifiersResult) {
-    flags.credentialIdentifiers = parseCredentialIdentifiersValue(credentialIdentifiersResult.value.trim());
-    args = credentialIdentifiersResult.remainingArgs;
   }
 
   for (const raw of args) {
@@ -66,13 +37,9 @@ function parseStartFlags(args: string[], flags: CliFlags): void {
       default:
         throw new Error(
           `Invalid flag for start command: ${raw}. ` +
-            `Allowed flags are: --all/-a, --rp, --issuer, --trust-anchor, --config/-c, --credential-identifiers`
+            `Allowed flags are: --all/-a, --rp, --issuer, --trust-anchor, --config/-c`
         );
     }
-  }
-
-  if (flags.credentialIdentifiers && !flags.issuer && !flags.all) {
-    throw new Error('--credential-identifiers can only be used together with --issuer or --all.');
   }
 }
 
@@ -213,7 +180,6 @@ export function parseCliArgs(argv: string[], rootPath: string): { command: strin
       value: false,
       path: ''
     },
-    credentialIdentifiers: undefined,
     runId: undefined,
     format: 'html'
   };

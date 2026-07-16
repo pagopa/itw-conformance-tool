@@ -25,7 +25,6 @@ export interface CliFlags {
     value: boolean;
     path: string;
   };
-  credentialIdentifiers: string[] | undefined;
   runId: string | undefined;
   format: 'html' | 'pdf';
 }
@@ -33,5 +32,4 @@ export interface CliFlags {
 export interface ServiceProcess {
   prefix: string;
   nxArgs: string[];
-  env?: NodeJS.ProcessEnv;
 }

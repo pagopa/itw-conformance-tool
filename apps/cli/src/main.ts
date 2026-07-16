@@ -22,7 +22,7 @@ async function main() {
     process.exit(0);
   }
 
-  const { data: config, configFilePath } = loadConfig(flags);
+  const config = loadConfig(flags).data;
   const logLevel = config.global.log_level;
   const dataDir = config.global.data_dir;
 
@@ -57,7 +57,7 @@ async function main() {
     );
   }
 
-  const services = getNxCommands(flags, configFilePath);
+  const services = getNxCommands(flags);
 
   // __ Start section
   const exitCode = await runCommands(nxRootPath, services, emitLog);

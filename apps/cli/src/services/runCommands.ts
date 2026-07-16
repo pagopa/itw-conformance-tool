@@ -38,15 +38,14 @@ function pipeServiceLogs(stream: Readable, prefix: string, level: LogLevel, emit
  */
 function spawnService(
   nxCliPath: string,
-  { prefix, nxArgs, env }: ServiceProcess,
+  { prefix, nxArgs }: ServiceProcess,
   rootPath: string,
   emitLog: EmitLog,
   settle: (code: number) => void
 ): ChildProcess {
   const child = spawn(process.execPath, [nxCliPath, ...nxArgs], {
     stdio: ['inherit', 'pipe', 'pipe'],
-    cwd: rootPath,
-    env: env ? { ...process.env, ...env } : process.env
+    cwd: rootPath
   });
 
   pipeServiceLogs(child.stdout, prefix, 'info', emitLog);

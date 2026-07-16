@@ -41,19 +41,12 @@ export function printHelp(): void {
   process.stdout.write('  --issuer               Start only itw-credential-issuer\n');
   process.stdout.write('  --rp                   Start only itw-relying-party\n');
   process.stdout.write('  --trust-anchor         Start only itw-trust-anchor\n');
-  process.stdout.write(
-    '  --credential-identifiers <id[,id...]>  Override credential-issuer.credential_identifiers for the started\n' +
-      '                          issuer (comma-separated). Requires --issuer or --all.\n'
-  );
   process.stdout.write('  -f, --force            Force overwrite for init-generated files\n');
   process.stdout.write('Examples:\n');
   process.stdout.write(`  itw-conformance-tool init  --force\n`);
   process.stdout.write(`  itw-conformance-tool start --all\n`);
   process.stdout.write(`  itw-conformance-tool start --issuer\n`);
   process.stdout.write(`  itw-conformance-tool start --issuer --config '~/config.ini'\n`);
-  process.stdout.write(
-    `  itw-conformance-tool start --issuer --credential-identifiers dc_sd_jwt_PersonIdentificationData,org.iso.18013.5.1.mDL\n`
-  );
   process.stdout.write(`  itw-conformance-tool start --rp\n`);
   process.stdout.write(`  itw-conformance-tool start --rp --config '~/config.ini'\n`);
   process.stdout.write(`  itw-conformance-tool start --trust-anchor\n`);

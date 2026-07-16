@@ -1,8 +1,4 @@
-import {
-  hasNoDuplicateCredentialIdentifiers,
-  loadConfig,
-  splitCredentialIdentifiers
-} from '@itw-conformance-tool/config';
+import { loadConfig } from '@itw-conformance-tool/config';
 import fp from 'fastify-plugin';
 
 import {
@@ -36,35 +32,14 @@ function trimTrailingSlashes(value: string): string {
   return result;
 }
 
-/**
- * Resolves `credential_identifiers`, applying the `ITW_CREDENTIAL_IDENTIFIERS`
- * environment variable (set by the CLI when spawning this process with
- * `--credential-identifiers`) as an override of the config file value.
- */
-function resolveCredentialIdentifiers(configuredIdentifiers: string[]): string[] {
-  const envOverride = process.env.ITW_CREDENTIAL_IDENTIFIERS;
-  if (envOverride === undefined) {
-    return configuredIdentifiers;
-  }
-
-  const identifiers = splitCredentialIdentifiers(envOverride);
-  if (!hasNoDuplicateCredentialIdentifiers(identifiers)) {
-    throw new Error(
-      `Duplicate credential identifiers in ITW_CREDENTIAL_IDENTIFIERS environment variable: ${envOverride}`
-    );
-  }
-
-  return identifiers;
-}
-
 export default fp(
   async function configPlugin(app) {
-    const config = loadConfig({ configFilePath: process.env.ITW_CONFIG_PATH });
+    const config = loadConfig();
     const issuerConfig = config['credential-issuer'];
     const trustAnchorConfig = config['trust-anchor'];
 
     const baseURL = issuerConfig.url;
-    const credentialIdentifiers = resolveCredentialIdentifiers(issuerConfig.credential_identifiers);
+    const credentialIdentifiers = issuerConfig.credential_identifiers;
 
     let credentialOfferUri: string | undefined;
     if (credentialIdentifiers.length > 0) {
