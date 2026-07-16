@@ -1,3 +1,4 @@
+import type { TestCategory } from '../commands/testCategories.js';
 import type { Level } from '@itw-conformance-tool/logger';
 
 // Types
@@ -27,6 +28,7 @@ export interface CliFlags {
   };
   runId: string | undefined;
   format: 'html' | 'pdf';
+  testCategory: TestCategory | undefined;
 }
 
 export interface ServiceProcess {

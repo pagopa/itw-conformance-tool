@@ -36,25 +36,11 @@
       }
     },
     "run": {
-      "executor": "@nx/js:node",
-      "defaultConfiguration": "development",
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
       "options": {
-        "buildTarget": "itw-conformance-cli:build",
-        "runBuildTargetDependencies": false,
-        "watch": false,
-        "inspect": false
-      },
-      "configurations": {
-        "development": {
-          "buildTarget": "itw-conformance-cli:build:development",
-          "watch": false,
-          "inspect": false
-        },
-        "production": {
-          "buildTarget": "itw-conformance-cli:build:production",
-          "watch": false,
-          "inspect": false
-        }
+        "command": "node apps/cli/dist/main.js",
+        "forwardAllArgs": true
       }
     },
     "lint": {

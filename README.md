@@ -61,8 +61,8 @@ pnpm itw-conformance-tool:init
 # Start all three services (trust anchor, issuer, relying party)
 pnpm itw-conformance-tool:start
 
-# Run CLI-driven conformance tests
-pnpm itw-conformance-tool:test
+# Run a selected CLI-driven conformance test category
+pnpm itw-conformance-tool:test:presentation
 ```
 
 The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
@@ -127,10 +127,10 @@ The conformance suite is opt-in.
 pnpm vitest run --config vitest.conformance-test.config.mts
 ```
 
-Or via CLI command mode:
+Or via CLI command mode, selecting exactly one category (`issuance`, `presentation`, `wallet-instance`, or `wallet-provider`):
 
 ```bash
-pnpm itw-conformance-tool --args="test --config ./config.ini"
+pnpm itw-conformance-tool --args="test presentation --config ./config.ini"
 ```
 
 Once a conformance flow has completed, generate a report:
@@ -155,7 +155,7 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `pnpm build`                                                  | Build all projects with a `build` target                                                                           |
 | `pnpm start`                                                  | Serve all runnable apps with a `serve` target                                                                      |
-| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test`, `report:list`, `report:create`)                            |
+| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test <category>`, `report:list`, `report:create`)                 |
 | `pnpm itw-conformance-tool:init`                              | Initialize local data directory and config template                                                                |
 | `pnpm itw-conformance-tool:start`                             | Start all three services via CLI (`start --all`), fails if `global.wallet_provider_backend_url` is missing/invalid |
 | `pnpm itw-conformance-tool:start:issuer`                      | Start only the issuer service via CLI                                                                              |
