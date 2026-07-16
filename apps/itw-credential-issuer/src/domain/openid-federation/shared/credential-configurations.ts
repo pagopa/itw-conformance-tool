@@ -4,6 +4,20 @@ import { DISABILITY_CARD_SCOPE, DISABILITY_CARD_VCT } from '../../z-credential.j
 
 export const pidIdentification = 'PersonIdentificationData';
 
+/**
+ * The `credential_configurations_supported` keys exposed by the issuer,
+ * identical across the v1.0 and v1.3 metadata factories (only the content of
+ * each configuration differs between spec versions, not the key set). Used
+ * to validate `credential-issuer.credential_identifiers` at startup without
+ * duplicating this list a third time.
+ */
+export const SUPPORTED_CREDENTIAL_CONFIGURATION_IDS = [
+  'dc_sd_jwt_EuropeanDisabilityCard',
+  'dc_sd_jwt_PersonIdentificationData',
+  'mso_mdoc_PersonIdentificationData',
+  'org.iso.18013.5.1.mDL'
+] as const;
+
 const PID_MDOC_DOCTYPE = 'eu.europa.ec.eudi.pid.1';
 const PID_MDOC_NAMESPACE = 'eu.europa.ec.eudi.pid.1';
 const PID_MDOC_IT_NAMESPACE = 'eu.europa.ec.eudi.pid.it.1';

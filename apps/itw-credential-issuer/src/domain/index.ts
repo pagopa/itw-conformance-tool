@@ -11,6 +11,7 @@ export * from './faker.js';
 export * from './signer.js';
 export * from './sd-jwt.js';
 export * from './crypto.js';
+export * from './credential-offer.js';
 
 // Utils
 export * from './utils/status-list.js';
