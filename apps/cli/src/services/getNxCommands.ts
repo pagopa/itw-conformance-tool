@@ -18,6 +18,8 @@ const RP: ServiceProcess = {
 /**
  * Builds the list of service processes to start based on the provided flags.
  * Each entry carries the output prefix and the Nx CLI arguments for that service.
+ *
+ * @param flags - The parsed CLI flags.
  */
 export function getNxCommands(flags: CliFlags): ServiceProcess[] {
   if (flags.all) return [TRUST_ANCHOR, ISSUER, RP];

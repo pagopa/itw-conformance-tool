@@ -155,6 +155,23 @@ If the field is missing, empty, or invalid, startup fails before launching Nx.
 
 When `https = true` in the `[global]` config section, the CLI additionally verifies that `<data_dir>/tls-cert.pem` and `<data_dir>/tls-key.pem` exist. If either is missing, startup fails with an explicit error message.
 
+#### Credential Offer QR code
+
+When `credential-issuer.credential_identifiers` is set in `config.ini`, starting the issuer additionally:
+
+- builds an OpenID4VCI Credential Offer URI referencing those credential configuration IDs
+- serves it at `GET /credential-offer` on the issuer, as an HTML page with a scannable QR code and a "Copy URI" button
+- opens that page in the default browser once the issuer is listening
+
+`credential-issuer.credential_identifiers` must be comma-separated, non-empty, without duplicates, and each ID must match a key of the issuer's `credential_configurations_supported` metadata — otherwise startup fails with an explicit error. If it is not set, startup behaves as before (no QR page, no browser opened).
+
+Example (`config.ini`):
+
+```ini
+[credential-issuer]
+credential_identifiers = dc_sd_jwt_PersonIdentificationData,mso_mdoc_PersonIdentificationData
+```
+
 ### `report:list`
 
 `report:list` prints a formatted table of all conformance sessions stored in the configured data directory, sorted by start date (most recent first).

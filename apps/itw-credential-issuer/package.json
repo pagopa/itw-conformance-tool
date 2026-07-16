@@ -40,9 +40,12 @@
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "jose": "5.2.4",
+    "open": "^11.0.0",
+    "qrcode": "^1.5.4",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "esbuild": "^0.28.1"
   }
 }
