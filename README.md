@@ -207,8 +207,6 @@ Current workspace projects include:
 | `itw-conformance-cli`            | `apps/cli`                   | `build`, `run`, `test`, `typecheck`, `lint`   |
 | `@itw-conformance-tool/config`   | `packages/config`            | `build`, `test`, `typecheck`, `lint`          |
 | `@itw-conformance-tool/database` | `packages/database`          | `build`, `test`, `typecheck`, `lint`          |
-| `@itw-conformance-tool/issuer`   | `packages/issuer`            | `build`, `typecheck`, `lint`                  |
-| `@itw-conformance-tool/rp`       | `packages/rp`                | `build`, `test`, `typecheck`, `lint`          |
 | `@itw-conformance-tool/logger`   | `packages/logger`            | `build`, `typecheck`, `lint`                  |
 
 ### Nx cache

@@ -4,16 +4,7 @@
     "outDir": "dist",
     "types": ["node"],
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
-    "paths": {
-      "#/*": ["./src/*"],
-      "@itw-conformance-tool/config": ["../../packages/config/dist/index.d.ts"],
-      "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"],
-      "@itw-conformance-tool/crypto": ["../../packages/crypto/dist/index.d.ts"],
-      "@itw-conformance-tool/database": ["../../packages/database/dist/index.d.ts"],
-      "@itw-conformance-tool/issuer": ["../../packages/issuer/dist/index.d.ts"],
-      "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"]
-    }
+    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
   "exclude": [

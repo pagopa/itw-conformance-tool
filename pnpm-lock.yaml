@@ -22,12 +22,18 @@ catalogs:
     '@fastify/env':
       specifier: ^6.0.0
       version: 6.0.0
+    '@fastify/formbody':
+      specifier: ^8.0.2
+      version: 8.0.2
     '@fastify/helmet':
       specifier: ^13.0.2
       version: 13.1.0
     '@fastify/sensible':
       specifier: ^6.0.3
       version: 6.0.4
+    '@fastify/static':
+      specifier: ^10.1.0
+      version: 10.1.0
     '@fastify/swagger':
       specifier: ^9.5.2
       version: 9.8.1
@@ -308,7 +314,7 @@ importers:
         specifier: catalog:fastify
         version: 11.3.0
       '@fastify/formbody':
-        specifier: ^8.0.2
+        specifier: catalog:fastify
         version: 8.0.2
       '@fastify/helmet':
         specifier: catalog:fastify
@@ -317,8 +323,8 @@ importers:
         specifier: catalog:fastify
         version: 6.0.4
       '@fastify/static':
-        specifier: ^9.1.1
-        version: 9.3.0
+        specifier: catalog:fastify
+        version: 10.1.0
       '@fastify/swagger':
         specifier: catalog:fastify
         version: 9.8.1
@@ -340,9 +346,6 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
-      '@itw-conformance-tool/rp':
-        specifier: 'workspace:'
-        version: link:../../packages/rp
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
         version: 1.5.4-alpha-20260714095946
@@ -358,9 +361,24 @@ importers:
       '@peculiar/x509':
         specifier: ^1.12.4
         version: 1.14.3
+      '@sd-jwt/crypto-nodejs':
+        specifier: ^0.19.0
+        version: 0.19.0
+      '@sd-jwt/decode':
+        specifier: ^0.19.0
+        version: 0.19.0
+      '@sd-jwt/sd-jwt-vc':
+        specifier: ^0.19.0
+        version: 0.19.0
+      '@sd-jwt/types':
+        specifier: ^0.19.0
+        version: 0.19.0
       close-with-grace:
         specifier: ^2.5.0
         version: 2.5.0
+      dcql:
+        specifier: ^1.0.0
+        version: 1.0.1(typescript@5.9.3)
       fastify:
         specifier: catalog:fastify
         version: 5.10.0
@@ -540,28 +558,6 @@ importers:
       pino-pretty:
         specifier: catalog:node
         version: 13.1.3
-
-  packages/rp:
-    dependencies:
-      '@itw-conformance-tool/config':
-        specifier: workspace:*
-        version: link:../config
-      '@itw-conformance-tool/database':
-        specifier: workspace:*
-        version: link:../database
-      tslib:
-        specifier: ^2.3.0
-        version: 2.8.1
-      zod:
-        specifier: ^4.3.6
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^22.19.9
-        version: 22.20.1
-      vitest:
-        specifier: ~4.1.0
-        version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
 
 packages:
 
@@ -1490,6 +1486,9 @@ packages:
 
   '@fastify/sensible@6.0.4':
     resolution: {integrity: sha512-1vxcCUlPMew6WroK8fq+LVOwbsLtX+lmuRuqpcp6eYqu6vmkLwbKTdBWAZwbeaSgCfW4tzUpTIHLLvTiQQ1BwQ==}
+
+  '@fastify/static@10.1.0':
+    resolution: {integrity: sha512-iK/8TvRM/EgNOyQL+EpWu+x3aR6o4GWt+UI+27zmE7w6t/6d80mXqOtWLdEKQ13vL/g1Jry0ae2icj6GP7tGzA==}
 
   '@fastify/static@9.3.0':
     resolution: {integrity: sha512-9YMYRpCOtMBrqKYWcqiw7ykOrn4D0jogHpJrFS0KGeSuOwzKMM5/mjj7B0CFLVoQ6htqKYw//Zs7APn9DBq05w==}
@@ -2872,6 +2871,10 @@ packages:
 
   content-disposition@1.1.0:
     resolution: {integrity: sha512-5jRCH9Z/+DRP7rkvY83B+yGIGX96OYdJmzngqnw2SBSxqCFPd0w2km3s5iawpGX8krnwSGmF0FW5Nhr0Hfai3g==}
+    engines: {node: '>=18'}
+
+  content-disposition@2.0.1:
+    resolution: {integrity: sha512-e+H0ZXHSWYrENhQzw1LPuP4oF5MzVKmDU6d3hxlvaPEYLLg62MxtQNPRx4SYSuYJSBUgnQIG4HIN2tEtNv7Dog==}
     engines: {node: '>=18'}
 
   content-type@2.0.0:
@@ -5929,6 +5932,16 @@ snapshots:
       type-is: 2.1.0
       vary: 1.1.2
 
+  '@fastify/static@10.1.0':
+    dependencies:
+      '@fastify/accept-negotiator': 2.0.1
+      '@fastify/error': 4.2.0
+      '@fastify/send': 4.1.0
+      content-disposition: 2.0.1
+      fastify-plugin: 6.0.0
+      fastq: 1.20.1
+      glob: 13.0.6
+
   '@fastify/static@9.3.0':
     dependencies:
       '@fastify/accept-negotiator': 2.0.1
@@ -7588,6 +7601,8 @@ snapshots:
   confusing-browser-globals@1.0.11: {}
 
   content-disposition@1.1.0: {}
+
+  content-disposition@2.0.1: {}
 
   content-type@2.0.0: {}
 

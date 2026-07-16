@@ -28,7 +28,20 @@ declare module 'fastify' {
   }
 }
 
-function isEcPrivateJwk(jwk: JwkKey): boolean {
+function isEcPrivateJwk(jwk: unknown): jwk is JwkKey {
+  if (
+    !jwk ||
+    typeof jwk !== 'object' ||
+    Array.isArray(jwk) ||
+    !('kty' in jwk) ||
+    !('d' in jwk) ||
+    !('crv' in jwk) ||
+    !('x' in jwk) ||
+    !('y' in jwk)
+  ) {
+    return false;
+  }
+
   return (
     jwk.kty === 'EC' &&
     typeof jwk.d === 'string' &&
@@ -61,6 +74,17 @@ function pickSigningKey(keys: JwkKey[]): JwkKey {
 function parseJwkFileContent(content: string): unknown {
   const firstPass = JSON.parse(content) as unknown;
   return typeof firstPass === 'string' ? (JSON.parse(firstPass) as unknown) : firstPass;
+}
+
+function hasJwkKeys(value: unknown): value is { keys: JwkKey[] } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'keys' in value &&
+    Array.isArray(value.keys) &&
+    value.keys.every((key) => !!key && typeof key === 'object' && !Array.isArray(key))
+  );
 }
 
 /** Reads and validates a single private-key JWK file (e.g. a federation signing key).
@@ -99,12 +123,15 @@ async function loadFederationJwk(dataDir: string, relativeFile: string): Promise
   }
 }
 
-/** Reads the issuer's JWKS file and selects its federation-capable signing key,
- * using the same selection logic the issuer runtime itself uses, so the Trust Anchor
- * always references the exact key the issuer advertises for itself.
+/** Reads a service JWKS file and selects the federation-capable signing key.
+ * The RP keeps this key in `rp/jwks.json`, alongside its authorization-request
+ * signing and encryption keys.
  */
-async function loadIssuerFederationJwk(dataDir: string): Promise<JwkKey> {
-  const relativeFile = join('issuer', 'jwks.json');
+async function loadFederationJwkFromJwks(
+  dataDir: string,
+  relativeFile: string,
+  federationKeyId?: string
+): Promise<JwkKey> {
   const jwksPath = resolve(dataDir, relativeFile);
   let content: string;
 
@@ -113,20 +140,28 @@ async function loadIssuerFederationJwk(dataDir: string): Promise<JwkKey> {
   } catch {
     throw new Error(
       `Missing required key: ${relativeFile} not found in ${dataDir}. ` +
-        `Please ensure the issuer key material exists before starting the server (run the CLI's init command).`
+        `Please ensure the key material exists before starting the server (run the CLI's init command).`
     );
   }
 
   try {
     const parsedJwks = JSON.parse(content) as unknown;
     await validateJWKS(parsedJwks);
-
-    const keys = (parsedJwks as { keys?: JwkKey[] }).keys;
-    if (!Array.isArray(keys) || keys.length === 0) {
+    if (!hasJwkKeys(parsedJwks) || parsedJwks.keys.length === 0) {
       throw new Error('JWKS does not contain any keys');
     }
 
-    return pickSigningKey(keys);
+    if (federationKeyId) {
+      const federationKey = parsedJwks.keys.find(
+        (key) => key.kid === federationKeyId && key.use === 'sig' && isEcPrivateJwk(key)
+      );
+      if (!federationKey) {
+        throw new Error(`JWKS does not contain the federation signing key ${federationKeyId}`);
+      }
+      return federationKey;
+    }
+
+    return pickSigningKey(parsedJwks.keys);
   } catch (err) {
     throw new Error(
       `Invalid key format in ${relativeFile}: ${err instanceof Error ? err.message : String(err)}. ` +
@@ -141,8 +176,8 @@ export default fp(
 
     const [federationPrivateJwk, issuerFederationJwk, rpFederationJwk] = await Promise.all([
       loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
-      loadIssuerFederationJwk(dataDir),
-      loadFederationJwk(dataDir, join('rp', 'federation-key.jwk.json'))
+      loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
+      loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 'rp-federation-key')
     ]);
 
     app.decorate('trustAnchorKeys', {

@@ -76,9 +76,10 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         };
       }
 
-      const missingRequiredEvents = (input.definition.requiredEvents ?? []).filter(
-        (name) => !input.events.some((event) => event.name === name && event.monotonicMs > entry.monotonicMs)
-      );
+      const missingRequiredEvents = (input.definition.requiredEvents ?? []).filter((name) => {
+        if (name === entry.name) return false;
+        return !input.events.some((event) => event.name === name && event.monotonicMs > entry.monotonicMs);
+      });
       if (missingRequiredEvents.length > 0) {
         const verdict = input.definition.missingRequiredEventPolicy === 'fail' ? 'FAIL' : 'INCONCLUSIVE';
         return {
@@ -98,14 +99,26 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         };
       }
 
+      const evidenceEvents = [
+        entry,
+        ...(input.definition.requiredEvents ?? [])
+          .filter((name) => name !== entry.name)
+          .map((name) => input.events.find((event) => event.name === name && event.monotonicMs > entry.monotonicMs))
+          .filter((event): event is ObservedEvent => event !== undefined)
+      ];
+
       return {
         scenarioId: input.scenarioId,
         testCaseId: input.definition.id,
         verdict: 'PASS',
-        reason: 'Entry event observed and no forbidden continuation was observed.',
-        evidence: [
-          { eventId: entry.id, eventName: entry.name, message: 'Entry event observed.', timestamp: entry.timestamp }
-        ],
+        reason: 'Entry event observed, required events were observed, and no forbidden continuation was observed.',
+        evidence: evidenceEvents.map((event) => ({
+          artifactRefs: event.artifactRefs,
+          eventId: event.id,
+          eventName: event.name,
+          message: event.id === entry.id ? 'Entry event observed.' : `Required event observed: ${event.name}`,
+          timestamp: event.timestamp
+        })),
         missingEvidence: [],
         forbiddenEvidence: [],
         timings: input.timings

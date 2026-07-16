@@ -119,7 +119,7 @@ Generated structure:
 - `<data_dir>/rp/auth-request-key.jwk.json`
 - `<data_dir>/rp/auth-response-key.jwk.json`
 - `<data_dir>/rp/federation-key.jwk.json`
-- `<data_dir>/rp/x5c-cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/rp/cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
 - `<data_dir>/trust-anchor/federation-key.jwk.json`
 - `<data_dir>/trust-anchor/federation-cert.pem` — self-signed X.509 certificate generated from the federation key
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)

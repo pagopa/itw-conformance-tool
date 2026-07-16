@@ -1,38 +1,19 @@
 import path from 'node:path';
 
 import FastifyAutoLoad from '@fastify/autoload';
-import { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import Fastify, { type FastifyPluginAsync } from 'fastify';
+import fp from 'fastify-plugin';
 
-import configPlugin from './plugins/config.js';
-import dbPlugin from './plugins/db.js';
-import ephemeralKeysPlugin from './plugins/ephemeral-keys.js';
-import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
-import formbodyPlugin from './plugins/external/formbody.js';
-import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
-import sensiblePlugin from './plugins/external/sensible.js';
-import staticPlugin from './plugins/external/static.js';
-import swaggerPlugin from './plugins/external/swagger.js';
-import keysPlugin from './plugins/keys.js';
-import sdkConfigPlugin from './plugins/sdk-config.js';
-import trustChainPlugin from './plugins/trust-chain.js';
-
-export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
-  await app.register(configPlugin);
-  await app.register(sdkConfigPlugin);
-  await app.register(keysPlugin);
-  await app.register(trustChainPlugin);
-  await app.register(dbPlugin);
-  await app.register(ephemeralKeysPlugin);
-
-  await app.register(corsPlugin, corsConfig);
-  await app.register(formbodyPlugin);
-  await app.register(helmetPlugin, helmetConfig);
-  await app.register(sensiblePlugin);
-  await app.register(staticPlugin);
-  await app.register(swaggerPlugin);
+const bootstrap: FastifyPluginAsync = async (app, opts) => {
+  // Auto-load plugins
+  await app.register(FastifyAutoLoad, {
+    dir: path.join(import.meta.dirname, 'plugins'),
+    dirNameRoutePrefix: false,
+    options: { ...opts }
+  });
 
   // Auto-load routes
-  app.register(FastifyAutoLoad, {
+  await app.register(FastifyAutoLoad, {
     dir: path.join(import.meta.dirname, 'routes'),
     autoHooks: true,
     autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
@@ -42,11 +23,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
 
   // Set error handler
   app.setErrorHandler(function (err, request, reply) {
-    const isKnownError = err instanceof Error && 'statusCode' in err && typeof err.statusCode === 'number';
-    const statusCode = isKnownError ? (err as Error & { statusCode: number }).statusCode : 500;
-    const isClientError = isKnownError && statusCode < 500;
-
-    if (!isClientError) {
+    if (err instanceof Fastify.errorCodes.FST_ERR_BAD_STATUS_CODE) {
       this.log.error(
         {
           err,
@@ -57,12 +34,20 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
             params: request.params
           }
         },
-        isKnownError ? 'Server error' : 'Unexpected error'
+        'Unhandled error occurred'
       );
-    }
 
-    reply.code(statusCode);
-    reply.send({ message: isClientError ? err.message : 'Internal Server Error' });
+      reply.code(err.statusCode ?? 500);
+
+      let message = 'Internal Server Error';
+      if (err.statusCode && err.statusCode < 500) {
+        message = err.message;
+      }
+
+      reply.send({ message });
+    } else {
+      reply.send(err);
+    }
   });
 
   // This is used to avoid attacks to find valid routes
@@ -83,4 +68,6 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
 
     return { message: 'Not Found' };
   });
-}
+};
+
+export default fp(bootstrap);

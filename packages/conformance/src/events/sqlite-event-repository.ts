@@ -123,16 +123,22 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
 export function createSqliteScenarioEventBridge(
   options: CreateSqliteScenarioEventBridgeOptions
 ): ScenarioEventBridgeFactory {
-  return ({ eventStore, startedAt }) => {
+  return ({ correlationId, eventStore, scenarioId, startedAt }) => {
     const repository = new SqliteScenarioEventRepository(options.db);
     const seenEventIds = new Set(eventStore.all().map((event) => event.id));
+
+    function belongsToScenario(event: ObservedEvent): boolean {
+      return event.scenarioId === scenarioId || event.correlationId === correlationId;
+    }
 
     function poll(): void {
       try {
         for (const event of repository.listSince(startedAt)) {
           if (seenEventIds.has(event.id)) continue;
           seenEventIds.add(event.id);
-          void eventStore.emit(event);
+          if (!belongsToScenario(event)) continue;
+
+          void eventStore.emit({ ...event, scenarioId });
         }
       } catch (error) {
         options.onError?.(error);

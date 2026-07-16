@@ -2,7 +2,6 @@ import { createHttpsOptions } from '@itw-conformance-tool/crypto';
 import { logger } from '@itw-conformance-tool/logger';
 import closeWithGrace from 'close-with-grace';
 import Fastify from 'fastify';
-import fp from 'fastify-plugin';
 
 import bootstrap from './app.js';
 
@@ -26,7 +25,7 @@ async function startServer() {
   // 15 seconds: prevents slow clients from holding connections too long
   app.server.headersTimeout = 15_000;
 
-  app.register(fp(bootstrap));
+  await app.register(bootstrap);
 
   closeWithGrace(async ({ signal, err }) => {
     if (err) {
@@ -37,18 +36,12 @@ async function startServer() {
     await app.close();
   });
 
-  await app.ready();
-
-  // Apply headersTimeout on the underlying server regardless of HTTP/HTTPS
-  app.server.headersTimeout = 15_000;
-
-  // Start server
-  const url = new URL(app.config.url);
+  const url = new URL(app.config.BASE_URL);
 
   try {
     await app.listen({
       host: url.hostname,
-      port: parseInt(url.port, 10),
+      port: Number(url.port),
       listenTextResolver: (address) => `IT Wallet Relying Party listening on ${address}`
     });
   } catch (err) {

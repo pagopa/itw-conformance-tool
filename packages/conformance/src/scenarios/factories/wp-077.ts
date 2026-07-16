@@ -11,13 +11,19 @@ export const wp077Scenario: ProtocolObservedScenarioDefinition = {
     delivery: ['qr']
   },
   entryEvent: 'rp.request_object.requested',
+  requiredEvents: ['rp.request_object.requested', 'rp.presentation_response.received'],
+  forbiddenEvents: ['vp_token.validation.failed'],
   timeouts: {
     testerActionMs: 300_000,
     protocolStepMs: 60_000,
     forbiddenObservationMs: 5_000,
     vitestTestMs: 330_000
   },
-  verdictRules: [{ type: 'entry-event-required' }],
+  verdictRules: [
+    { type: 'entry-event-required' },
+    { type: 'required-events-in-order' },
+    { type: 'no-forbidden-events-after-entry' }
+  ],
   instructions: {
     goal: 'Verify that the Wallet Instance scans a cross-device presentation QR Code and extracts client_id, request_uri, state, and request_uri_method.',
     expectedBehavior:

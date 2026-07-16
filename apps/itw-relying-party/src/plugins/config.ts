@@ -1,31 +1,34 @@
-import { loadRpConfig } from '@itw-conformance-tool/rp';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import { loadConfig } from '@itw-conformance-tool/config';
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
+
+import type { FastifyPluginAsync } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
     config: {
-      url: string;
-      entityId: string;
-      dataDir: string;
-      configFilePath: string;
-      trustAnchorUrl?: string;
-      x5cCertPath: string;
+      BASE_URL: string;
+      DATA_DIR: string;
+      IACA_X509: string;
     };
   }
 }
 
-export default fp(
-  async function configPlugin(app) {
-    const { config } = loadRpConfig();
+const configPlugin: FastifyPluginAsync = async (app) => {
+  const config = loadConfig();
+  const relyingPartyConfig = config['relying-party'];
 
-    app.decorate('config', {
-      url: config.url,
-      entityId: config.entityId,
-      trustAnchorUrl: config.trustAnchorUrl,
-      dataDir: config.dataDir,
-      configFilePath: config.configFilePath,
-      x5cCertPath: config.x5cCertPath
-    });
-  },
-  { name: 'config' }
-);
+  const dataDir = config.global.data_dir;
+  const certificatePem = await readFile(path.join(dataDir, 'rp', 'cert.pem'), 'utf8');
+
+  app.decorate('config', {
+    BASE_URL: relyingPartyConfig.url,
+    DATA_DIR: dataDir,
+    IACA_X509: convertPemToBase64Der(certificatePem)
+  });
+};
+
+export default fp(configPlugin, { name: 'config' });

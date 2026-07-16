@@ -21,8 +21,8 @@ export const DEFAULT_CONFIG = {
     trust_anchor_url: 'https://localhost:3001'
   },
   'relying-party': {
-    url: 'https://127.0.0.1:8080',
-    entity_id: 'https://127.0.0.1:3000',
+    url: 'https://127.0.0.1:3002',
+    entity_id: 'https://127.0.0.1:3002',
     trust_anchor_url: 'https://localhost:3001'
   },
   'trust-anchor': {

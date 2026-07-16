@@ -5,6 +5,25 @@ export const DDL = `
     used       INTEGER NOT NULL DEFAULT 0
   );
 
+  CREATE TABLE IF NOT EXISTS relying_party_nonces (
+    id         TEXT    PRIMARY KEY,
+    expires_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS relying_party_request_objects (
+    id           TEXT    PRIMARY KEY,
+    expires_at   INTEGER NOT NULL,
+    flow_type    TEXT    NOT NULL CHECK(flow_type IN ('same-device', 'cross-device')),
+    jwt          TEXT    NOT NULL,
+    session_id   TEXT    NOT NULL UNIQUE,
+    redirect_uri TEXT,
+    status       TEXT    NOT NULL CHECK(status IN ('checking', 'denied', 'expired', 'pending', 'rejected', 'verified')),
+    values_json  TEXT CHECK(values_json IS NULL OR json_valid(values_json))
+  );
+
+  CREATE INDEX IF NOT EXISTS relying_party_request_objects_expires_at_idx
+    ON relying_party_request_objects(expires_at);
+
   CREATE TABLE IF NOT EXISTS par_entries (
     request_uri    TEXT    PRIMARY KEY,
     client_id      TEXT    NOT NULL,
