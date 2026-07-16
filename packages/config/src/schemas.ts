@@ -16,6 +16,7 @@ export const DEFAULT_CONFIG = {
     url: 'https://127.0.0.1:3000',
     auth_flow: 'direct',
     credential_types: 'pid,mdl,badge,eaa',
+    credential_identifiers: '',
     batch_issuance_by_deferred: false,
     trust_anchor_url: 'https://localhost:3001'
   },
@@ -58,6 +59,11 @@ auth_flow = ${issuerDefaults.auth_flow}
 ; Enabled credential types: pid | mdl | badge | eaa (comma-separated)
 ; Default: ${issuerDefaults.credential_types}
 credential_types = ${issuerDefaults.credential_types}
+; Credential configuration IDs to expose as a scannable Credential Offer QR code on startup (comma-separated).
+; Each ID must match a key of the issuer's credential_configurations_supported metadata.
+; Leave empty to keep startup unchanged (no QR page, no browser opened).
+; Default: (empty)
+credential_identifiers = ${issuerDefaults.credential_identifiers}
 ; Return batch (multi-proof) credential requests through the deferred endpoint instead of issuing them immediately.
 ; Only affects requests that include multiple proofs; single-proof requests are always issued immediately.
 ; Default: ${issuerDefaults.batch_issuance_by_deferred}
@@ -116,6 +122,30 @@ function normalizeStrictBoolean(value: unknown): unknown {
   return value;
 }
 
+/**
+ * Splits a comma-separated credential identifiers string into a trimmed,
+ * non-empty list. Shared by the config schema, the CLI `--credential-identifiers`
+ * flag, and the issuer's env override so all three follow the same rules.
+ */
+export function splitCredentialIdentifiers(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+/**
+ * Checks that a list of credential identifiers has no duplicates. Identifiers
+ * are case-sensitive because they are keys of `credential_configurations_supported`.
+ */
+export function hasNoDuplicateCredentialIdentifiers(identifiers: string[]): boolean {
+  return new Set(identifiers).size === identifiers.length;
+}
+
+function normalizeCredentialIdentifiers(value: unknown): unknown {
+  return typeof value === 'string' ? splitCredentialIdentifiers(value) : value;
+}
+
 const allowedCredentialTypes = new Set<string>(CREDENTIAL_TYPES);
 
 function isCredentialTypesList(value: string): boolean {
@@ -149,12 +179,18 @@ const IssuerConfigSchema = z
       .preprocess(normalizeCredentialTypes, nonEmptyString)
       .refine(isCredentialTypesList)
       .default(issuerDefaults.credential_types),
+    credential_identifiers: z
+      .preprocess(normalizeCredentialIdentifiers, z.array(nonEmptyString))
+      .refine(hasNoDuplicateCredentialIdentifiers, { message: 'Duplicate credential identifiers are not allowed' })
+      .default([]),
     batch_issuance_by_deferred: z
       .preprocess(normalizeStrictBoolean, z.boolean())
       .default(issuerDefaults.batch_issuance_by_deferred),
     trust_anchor_url: nonEmptyString.default(issuerDefaults.trust_anchor_url)
   })
-  .default(issuerDefaults);
+  // credential_identifiers defaults to [] (post-preprocess output type), not
+  // issuerDefaults.credential_identifiers ('', the raw ini-string default).
+  .default({ ...issuerDefaults, credential_identifiers: [] });
 
 const RpConfigSchema = z
   .object({

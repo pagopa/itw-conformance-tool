@@ -82,6 +82,7 @@ Root shortcuts:
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
 - `--trust-anchor`: start only the trust anchor service
+- `--credential-identifiers <id[,id...]>`: override `credential-issuer.credential_identifiers` for the launched issuer process. Requires `--issuer` or `--all`; rejects duplicate IDs and IDs not present in the issuer's `credential_configurations_supported`
 - `-f, --force`: overwrite generated files during `init`
 - `-h, --help`: print the CLI help
 - `-v, --version`: print the CLI version
@@ -154,6 +155,22 @@ In addition, `start` requires `global.wallet_provider_backend_url` to be present
 If the field is missing, empty, or invalid, startup fails before launching Nx.
 
 When `https = true` in the `[global]` config section, the CLI additionally verifies that `<data_dir>/tls-cert.pem` and `<data_dir>/tls-key.pem` exist. If either is missing, startup fails with an explicit error message.
+
+#### Credential Offer QR code
+
+When `credential-issuer.credential_identifiers` is set (via `config.ini` or the `--credential-identifiers` CLI option), starting the issuer additionally:
+
+- builds an OpenID4VCI Credential Offer URI referencing those credential configuration IDs
+- serves it at `GET /credential-offer` on the issuer, as an HTML page with a scannable QR code and a "Copy URI" button
+- opens that page in the default browser once the issuer is listening
+
+`--credential-identifiers` requires `--issuer` or `--all`; using it with `--rp` or `--trust-anchor` only, or with no service flag, is rejected. IDs must be comma-separated, non-empty, without duplicates, and each must match a key of the issuer's `credential_configurations_supported` metadata — otherwise startup fails with an explicit error. If the option is not passed, the value configured in `config.ini` is used unchanged; if neither is set, startup behaves as before (no QR page, no browser opened).
+
+Example:
+
+```sh
+itwct start --issuer --credential-identifiers dc_sd_jwt_PersonIdentificationData,mso_mdoc_PersonIdentificationData
+```
 
 ### `report:list`
 
