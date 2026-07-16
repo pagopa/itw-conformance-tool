@@ -374,12 +374,26 @@
             document.getElementById('walletButtonContainer').style.display = 'block';
           }
 
-          const state = new URL(url).searchParams.get('state');
+          const state = getStateFromAuthorizationUrl(url);
           console.log(state);
           startPolling(state);
         } catch (err) {
           output.textContent = 'Errore durante la richiesta: ' + err.message;
         }
+      }
+
+      function getStateFromAuthorizationUrl(url) {
+        const requestUri = new URL(url).searchParams.get('request_uri');
+        if (!requestUri) {
+          throw new Error('request_uri mancante');
+        }
+
+        const state = new URL(requestUri).pathname.split('/').pop();
+        if (!state) {
+          throw new Error('state mancante nel request_uri');
+        }
+
+        return state;
       }
 
       function startPolling(state) {
@@ -391,7 +405,11 @@
               const [path] = data.redirect_uri.split('?');
               if (path && path !== 'undefined') {
                 clearInterval(pollingInterval);
-                sessionStorage.setItem('values', JSON.stringify(data.values));
+                if (Array.isArray(data.values)) {
+                  sessionStorage.setItem('values', JSON.stringify(data.values));
+                } else {
+                  sessionStorage.removeItem('values');
+                }
                 window.location.href = path;
               }
             }
@@ -490,8 +508,8 @@
         <div class="examples-section">
           <div class="examples-title">💡 Esempio Base:</div>
           <div class="example-code">
-            { "credentials": [ { "id": "PID", "format": "dc+sd-jwt", "meta": { "vct_values": [ "urn:eudi:pid:1" ] },
-            "claims": [ { "path": [ "given_name" ] }, { "path": [ "family_name" ] } ] } ] }
+            { "credentials": [ { "id": "pid", "format": "dc+sd-jwt", "meta": { "vct_values": [ "urn:eudi:pid:it:1" ] },
+            "claims": [ { "path": [ "given_name" ] }, { "path": [ "family_name" ] }, { "path": [ "birthdate" ] } ] } ] }
           </div>
 
           <div class="toggle-example" id="toggleSecondExample">
@@ -501,12 +519,12 @@
           <div id="secondExample">
             <div class="example-code">
               { "credentials": [ { "id": "e156382b-5a8b-46a5-af9f-403329f55fa6", "format": "dc+sd-jwt", "meta": {
-              "vct_values": ["urn:eudi:pid:1"] }, "claims": [ { "path": ["given_name"] }, { "path": ["family_name"] } ]
-              }, { "id": "779ef07a-cc96-419a-9487-14950fd24b08", "format": "dc+sd-jwt", "meta": { "vct_values":
-              ["https://pre.ta.wallet.ipzs.it/vct/v1.0.0/mdl"] }, "claims": [ { "path": ["birth_date"] } ] } ],
-              "credential_sets": [ { "purpose": "Authentication services", "required": true, "options":
-              [["e156382b-5a8b-46a5-af9f-403329f55fa6"]] }, { "options": [["779ef07a-cc96-419a-9487-14950fd24b08"]],
-              "purpose": "Extra services", "required": false } ] }
+              "vct_values": ["urn:eudi:pid:it:1"] }, "claims": [ { "path": ["given_name"] }, { "path": ["family_name"]
+              }, { "path": ["birthdate"] } ] }, { "id": "779ef07a-cc96-419a-9487-14950fd24b08", "format": "mso_mdoc",
+              "meta": { "doctype_value": "org.iso.18013.5.1.mDL" }, "claims": [ { "path": ["org.iso.18013.5.1",
+              "birth_date"] } ] } ], "credential_sets": [ { "purpose": "Authentication services", "required": true,
+              "options": [["e156382b-5a8b-46a5-af9f-403329f55fa6"]] }, { "options":
+              [["779ef07a-cc96-419a-9487-14950fd24b08"]], "purpose": "Extra services", "required": false } ] }
             </div>
           </div>
         </div>

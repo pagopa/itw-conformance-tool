@@ -110,7 +110,7 @@ export class VpTokenVerifier {
    * 3. Extracts the issuer's public key from the header (trust_chain or x5c)
    * 4. Verifies both the issuer's signature and the key binding
    */
-  private async verifySdJwtToken(token: string) {
+  private async verifySdJwtToken(token: string): Promise<Record<string, unknown>> {
     const { jwt, kbJwt } = await decodeSdJwt(token, digest);
     const payload = jwt.payload as JwtPayload;
     const header = jwt.header;
@@ -152,10 +152,33 @@ export class VpTokenVerifier {
       verifier: issuerSignatureVerifier
     });
 
-    await sdJwtVc.verify(token, {
+    const verificationResult = await sdJwtVc.verify(token, {
       keyBindingNonce: this.authResponse.expectedNonce,
       verifyStatusList: false
     });
+
+    return verificationResult.payload;
+  }
+
+  private getDisclosedClaims(
+    claims: ReadonlyArray<{ path: ReadonlyArray<string | number | null> }>,
+    payload: Record<string, unknown>
+  ): Record<string, null | string> {
+    return Object.fromEntries(
+      claims.flatMap(({ path }) => {
+        if (path.length !== 1 || typeof path[0] !== 'string') {
+          return [];
+        }
+
+        const [claimName] = path;
+        const value = payload[claimName];
+        if (value === undefined) {
+          return [];
+        }
+
+        return [[claimName, value === null ? null : typeof value === 'string' ? value : JSON.stringify(value)]];
+      })
+    );
   }
 
   private async getIssuerPublicKey(header: Record<string, unknown>, kid: string) {
@@ -175,11 +198,11 @@ export class VpTokenVerifier {
 
   /**
    * Verifies all credentials in the vp_token according to their specified formats
-   * in the DCQL query. Supports "mso_mdoc" and "dc+sd-jwt" formats.
+   * in the DCQL query and returns only the selectively disclosed requested claims.
    */
-  public async verifyCredentials() {
+  public async verifyCredentials(): Promise<Record<string, null | string>[]> {
     const { dcqlQuery, vpToken } = this.validateVpTokenStruct();
-    const verifications: Promise<void>[] = [];
+    const verifications: Promise<Record<string, null | string>>[] = [];
 
     for (const [credentialId, token] of Object.entries(vpToken)) {
       const credentialQuery = dcqlQuery.credentials.find((c) => c.id === credentialId);
@@ -192,7 +215,9 @@ export class VpTokenVerifier {
 
       for (const credentialToken of credentialTokens) {
         if (credentialQuery.format === 'dc+sd-jwt') {
-          const verification = this.verifySdJwtToken(credentialToken);
+          const verification = this.verifySdJwtToken(credentialToken).then((payload) =>
+            this.getDisclosedClaims(credentialQuery.claims ?? [], payload)
+          );
           verifications.push(verification);
         } else {
           throw new Error(`Unsupported credential format: ${credentialQuery.format}`);
@@ -200,6 +225,6 @@ export class VpTokenVerifier {
       }
     }
 
-    await Promise.all(verifications);
+    return await Promise.all(verifications);
   }
 }

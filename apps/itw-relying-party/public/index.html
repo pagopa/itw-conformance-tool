@@ -93,7 +93,7 @@
 
       @media (min-width: 1024px) {
         .credential-selector-grid {
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(2, 1fr);
         }
       }
 
@@ -203,9 +203,14 @@
       .select-all-item {
         background-color: var(--gray-50);
         padding: var(--space-3);
-        margin: 0 var(--space-6) var(--space-2);
+        margin: 0 0 var(--space-2);
         border-radius: var(--radius-md);
         border: none;
+      }
+
+      .select-all-item:hover {
+        padding: var(--space-3);
+        margin: 0 0 var(--space-2);
       }
 
       .select-all-item .claim-label {
@@ -604,20 +609,21 @@
 
         let selections = [];
 
-        // Get selected PID VCT value
-        const selectedPidVct =
-          document.querySelector('input[name="pidVctType"]:checked')?.value ||
-          'https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata';
-
-        // Map of parent IDs to VCT values
-        const vctMap = {
-          PersonIdentificationData: selectedPidVct,
-          MDL: 'https://pre.ta.wallet.ipzs.it/vct/v1.0.0/mdl',
-          WalletAttestation: 'https://pre.ta.wallet.ipzs.it/vct/v1.0.0/WalletAttestation'
+        const credentialDefinitions = {
+          PersonIdentificationData: {
+            format: 'dc+sd-jwt',
+            meta: { vct_values: ['urn:eudi:pid:it:1'] },
+            path: (claim) => [claim]
+          },
+          MDL: {
+            format: 'mso_mdoc',
+            meta: { doctype_value: 'org.iso.18013.5.1.mDL' },
+            path: (claim) => ['org.iso.18013.5.1', claim]
+          }
         };
 
-        // Group selected claims by parent credential type
-        Object.keys(vctMap).forEach((parentId) => {
+        // Group selected claims by credential type.
+        Object.keys(credentialDefinitions).forEach((parentId) => {
           const claims = [];
           const checkboxes = document.querySelectorAll(`.option[data-parent="${parentId}"]:checked`);
 
@@ -629,17 +635,17 @@
 
           if (claims.length > 0) {
             selections.push({
-              vct: vctMap[parentId],
-              claims
+              claims,
+              ...credentialDefinitions[parentId]
             });
           }
         });
 
-        const credentials = selections.map(({ claims, vct }) => ({
+        const credentials = selections.map(({ claims, format, meta, path }) => ({
           id: generateUUID(),
-          format: 'dc+sd-jwt',
-          meta: { vct_values: [vct] },
-          claims: claims.map((claim) => ({ path: [claim] }))
+          format,
+          meta,
+          claims: claims.map((claim) => ({ path: path(claim) }))
         }));
 
         const walletAuthBaseUriInput = document.getElementById('walletAuthBaseUri').value.trim();
@@ -702,11 +708,25 @@
               }, 100);
             }
 
-            return new URL(url).searchParams.get('state');
+            return getStateFromAuthorizationUrl(url);
           });
 
         console.log(state);
         startPolling(state);
+      }
+
+      function getStateFromAuthorizationUrl(url) {
+        const requestUri = new URL(url).searchParams.get('request_uri');
+        if (!requestUri) {
+          throw new Error('request_uri mancante');
+        }
+
+        const state = new URL(requestUri).pathname.split('/').pop();
+        if (!state) {
+          throw new Error('state mancante nel request_uri');
+        }
+
+        return state;
       }
 
       function startPolling(state) {
@@ -718,7 +738,11 @@
               const [path, responseCode] = data.redirect_uri.split('?');
               if (path && path !== 'undefined') {
                 clearInterval(pollingInterval);
-                sessionStorage.setItem('values', JSON.stringify(data.values));
+                if (Array.isArray(data.values)) {
+                  sessionStorage.setItem('values', JSON.stringify(data.values));
+                } else {
+                  sessionStorage.removeItem('values');
+                }
                 window.location.href = path;
               } else {
                 if (responseCode.includes('checking')) {
@@ -827,47 +851,6 @@
           </div>
           <div class="card-body">
             <div class="claims-checklist">
-              <div
-                style="
-                  padding: var(--space-4) var(--space-6);
-                  background: var(--gray-50);
-                  border-bottom: 1px solid var(--gray-200);
-                  margin-bottom: var(--space-2);
-                "
-              >
-                <label
-                  style="
-                    font-size: var(--text-sm);
-                    font-weight: var(--font-semibold);
-                    color: var(--gray-700);
-                    display: block;
-                    margin-bottom: var(--space-2);
-                  "
-                  >Formato VCT:</label
-                >
-                <label
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: var(--space-2);
-                    margin-bottom: var(--space-2);
-                    cursor: pointer;
-                  "
-                >
-                  <input
-                    type="radio"
-                    name="pidVctType"
-                    value="https://pre.ta.wallet.ipzs.it/vct/v1.0.0/personidentificationdata"
-                    checked
-                    style="cursor: pointer"
-                  />
-                  <span style="font-size: var(--text-sm); color: var(--gray-700)">IPZS Format (default)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer">
-                  <input type="radio" name="pidVctType" value="urn:eudi:pid:1" style="cursor: pointer" />
-                  <span style="font-size: var(--text-sm); color: var(--gray-700)">EUDI URN Format</span>
-                </label>
-              </div>
               <label class="claim-item select-all-item">
                 <input type="checkbox" data-parent="PersonIdentificationData" value="" />
                 <span class="claim-label">Seleziona tutto</span>
@@ -881,20 +864,29 @@
                 <span class="claim-label">Cognome (Family Name)</span>
               </label>
               <label class="claim-item">
-                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="birth_date" />
-                <span class="claim-label">Data di Nascita (Birth Date)</span>
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="birthdate" />
+                <span class="claim-label">Data di nascita (birthdate)</span>
               </label>
               <label class="claim-item">
-                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="birth_place" />
-                <span class="claim-label">Luogo di Nascita (Birth Place)</span>
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="place_of_birth" />
+                <span class="claim-label">Luogo di nascita (place_of_birth)</span>
+              </label>
+              <label class="claim-item">
+                <input
+                  type="checkbox"
+                  class="option"
+                  data-parent="PersonIdentificationData"
+                  value="personal_administrative_number"
+                />
+                <span class="claim-label">Numero amministrativo personale</span>
               </label>
               <label class="claim-item">
                 <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="tax_id_code" />
-                <span class="claim-label">Codice Fiscale (Tax Code)</span>
+                <span class="claim-label">Codice fiscale (tax_id_code)</span>
               </label>
               <label class="claim-item">
                 <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="nationalities" />
-                <span class="claim-label">Nazionalità (Nationalities)</span>
+                <span class="claim-label">Nazionalità (nationalities)</span>
               </label>
             </div>
           </div>
@@ -938,8 +930,8 @@
                 <span class="claim-label">Data di Rilascio (Issue Date)</span>
               </label>
               <label class="claim-item">
-                <input type="checkbox" class="option" data-parent="MDL" value="document_iss_country" />
-                <span class="claim-label">Paese di Rilascio (Document Issuing Country)</span>
+                <input type="checkbox" class="option" data-parent="MDL" value="issuing_country" />
+                <span class="claim-label">Paese di rilascio (issuing_country)</span>
               </label>
               <label class="claim-item">
                 <input type="checkbox" class="option" data-parent="MDL" value="driving_privileges" />
@@ -954,37 +946,12 @@
                 <span class="claim-label">Numero Documento (Document Number)</span>
               </label>
               <label class="claim-item">
-                <input type="checkbox" class="option" data-parent="MDL" value="document_iss_authority" />
-                <span class="claim-label">Autorità di Rilascio (Document Issuing Authority)</span>
+                <input type="checkbox" class="option" data-parent="MDL" value="issuing_authority" />
+                <span class="claim-label">Autorità di rilascio (issuing_authority)</span>
               </label>
               <label class="claim-item">
                 <input type="checkbox" class="option" data-parent="MDL" value="un_distinguishing_sign" />
                 <span class="claim-label">Segno Distintivo (UN Distinguishing Sign)</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Wallet Attestation Card -->
-        <div class="credential-card" data-credential="wallet">
-          <div class="card-header">
-            <span class="credential-icon">📱</span>
-            <h3>Wallet Attestation</h3>
-            <span class="expand-icon">▼</span>
-          </div>
-          <div class="card-body">
-            <div class="claims-checklist">
-              <label class="claim-item select-all-item">
-                <input type="checkbox" data-parent="WalletAttestation" value="" />
-                <span class="claim-label">Seleziona tutto</span>
-              </label>
-              <label class="claim-item">
-                <input type="checkbox" class="option" data-parent="WalletAttestation" value="wallet_name" />
-                <span class="claim-label">Nome Wallet (Name)</span>
-              </label>
-              <label class="claim-item">
-                <input type="checkbox" class="option" data-parent="WalletAttestation" value="wallet_link" />
-                <span class="claim-label">Link Wallet (Link)</span>
               </label>
             </div>
           </div>

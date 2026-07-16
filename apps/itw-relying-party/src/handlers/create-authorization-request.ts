@@ -19,23 +19,47 @@ export const createAuthorizationRequestPayloadSchema = z.object({
         )
         .optional(),
       credentials: z.array(
-        z.object({
-          claim_sets: z.array(z.array(z.string())).optional(),
-          claims: z
-            .array(
-              z.object({
-                id: z.string().optional(),
-                path: z.array(z.string()).describe('Claim path within the credential.'),
-                values: z.array(z.union([z.string(), z.number(), z.boolean()])).optional()
-              })
-            )
-            .optional(),
-          format: z.enum(['dc+sd-jwt', 'mso_mdoc']).describe('Credential format requested from the wallet.'),
-          id: z.string().describe('Credential query identifier.'),
-          meta: z
-            .object({ vct_values: z.array(z.string()).optional(), doctype_value: z.string().optional() })
-            .optional()
-        })
+        z.discriminatedUnion('format', [
+          z.object({
+            claim_sets: z.array(z.array(z.string())).optional(),
+            claims: z
+              .array(
+                z.object({
+                  id: z.string().optional(),
+                  path: z.array(z.union([z.string(), z.number(), z.null()])),
+                  values: z.array(z.union([z.string(), z.number(), z.boolean()])).optional()
+                })
+              )
+              .optional(),
+            format: z.literal('dc+sd-jwt').describe('Credential format requested from the wallet.'),
+            id: z.string().describe('Credential query identifier.'),
+            meta: z.object({ vct_values: z.array(z.string()).optional() }).optional()
+          }),
+          z.object({
+            claim_sets: z.array(z.array(z.string())).optional(),
+            claims: z
+              .array(
+                z.union([
+                  z.object({
+                    claim_name: z.string(),
+                    id: z.string().optional(),
+                    namespace: z.string(),
+                    values: z.array(z.union([z.string(), z.number(), z.boolean()])).optional()
+                  }),
+                  z.object({
+                    id: z.string().optional(),
+                    intent_to_retain: z.boolean().optional(),
+                    path: z.tuple([z.string(), z.string()]),
+                    values: z.array(z.union([z.string(), z.number(), z.boolean()])).optional()
+                  })
+                ])
+              )
+              .optional(),
+            format: z.literal('mso_mdoc').describe('Credential format requested from the wallet.'),
+            id: z.string().describe('Credential query identifier.'),
+            meta: z.object({ doctype_value: z.string().optional() }).optional()
+          })
+        ])
       )
     })
     .describe('DCQL query describing the verifiable presentations required by the relying party.'),

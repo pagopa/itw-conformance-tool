@@ -343,13 +343,24 @@
       // Display credentials
       function displayCredentials() {
         try {
-          const values = JSON.parse(sessionStorage.getItem('values'));
-          if (!values || !Array.isArray(values)) {
-            console.warn('No credentials found');
+          const container = document.getElementById('credentialsCards');
+          const storedValues = sessionStorage.getItem('values');
+
+          if (!storedValues || storedValues === 'undefined') {
+            container.innerHTML = `
+              <div class="credential-item">
+                <p style="text-align: center; color: var(--gray-600);">
+                  Nessun attributo da visualizzare
+                </p>
+              </div>
+            `;
             return;
           }
 
-          const container = document.getElementById('credentialsCards');
+          const values = JSON.parse(storedValues);
+          if (!Array.isArray(values)) {
+            throw new Error('Credential values are not an array');
+          }
 
           // Group credentials by type
           values.forEach((credential, index) => {
@@ -360,17 +371,17 @@
             let credType = 'Credenziale';
             let icon = '📄';
 
-            if (credential.given_name || credential.family_name) {
-              if (credential.driving_privileges) {
-                credType = 'Patente di Guida (MDL)';
-                icon = '🚗';
-              } else if (credential.tax_id_code || credential.birth_place) {
-                credType = "Carta d'Identità (PID)";
-                icon = '🆔';
-              }
-            } else if (credential.wallet_name) {
-              credType = 'Wallet Attestation';
-              icon = '📱';
+            if (credential.driving_privileges) {
+              credType = 'Patente di Guida (MDL)';
+              icon = '🚗';
+            } else if (
+              credential.tax_id_code ||
+              credential.personal_administrative_number ||
+              credential.place_of_birth ||
+              credential.nationalities
+            ) {
+              credType = "Carta d'Identità (PID)";
+              icon = '🆔';
             }
 
             // Create header
