@@ -4,7 +4,7 @@ Local CLI for the `itw-conformance-tool` monorepo. It supports the following wor
 
 - `init`, to generate the local configuration and key material
 - `start`, to launch the trust anchor, issuer, and relying party services through Nx
-- `test`, to run conformance matrix specs (`WP_*`) through Vitest
+- `test <category>`, to run one conformance matrix category (`WP_*`) through Vitest
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
 
@@ -34,12 +34,12 @@ Direct CLI usage:
 
 - `itw-conformance-tool init`
 - `itw-conformance-tool start`
-- `itw-conformance-tool test`
+- `itw-conformance-tool test <category>`
 - `itw-conformance-tool report:list`
 - `itw-conformance-tool report:create <uuid> [format]`
 - `itwct init`
 - `itwct start`
-- `itwct test`
+- `itwct test <category>`
 - `itwct report:list`
 - `itwct report:create <uuid> [format]`
 
@@ -51,7 +51,7 @@ From the workspace root through Nx-backed scripts:
 - `pnpm itw-conformance-tool --args="start --issuer"`
 - `pnpm itw-conformance-tool --args="start --rp"`
 - `pnpm itw-conformance-tool --args="start --trust-anchor"`
-- `pnpm itw-conformance-tool --args="test"`
+- `pnpm itw-conformance-tool --args="test presentation"`
 - `pnpm itw-conformance-tool --args="report:list"`
 - `pnpm itw-conformance-tool --args="report:create <uuid>"`
 - `pnpm itw-conformance-tool --args="report:create <uuid> pdf"`
@@ -63,7 +63,12 @@ Root shortcuts:
 - `pnpm itw-conformance-tool:start:issuer`
 - `pnpm itw-conformance-tool:start:rp`
 - `pnpm itw-conformance-tool:start:trust-anchor`
-- `pnpm itw-conformance-tool:test` (legacy shortcut)
+- `pnpm itw-conformance-tool:test:issuance`
+- `pnpm itw-conformance-tool:test:presentation`
+- `pnpm itw-conformance-tool:test:wallet-instance`
+- `pnpm itw-conformance-tool:test:wallet-provider`
+
+`pnpm itw-conformance-tool:test` now fails with usage information because a category is required.
 
 ## Supported Commands
 
@@ -191,11 +196,11 @@ itwct report:list --config ./ci/config.ini
 
 ### `test`
 
-`test` launches Vitest on the conformance test matrix profile.
+`test <category>` launches Vitest on one conformance test matrix category. A category is required: `issuance`, `presentation`, `wallet-instance`, or `wallet-provider`.
 
 The command:
 
-- spawns a child process running `pnpm vitest run --config vitest.conformance-test.config.mts`
+- validates exactly one category and spawns a child process running `pnpm vitest run --config vitest.conformance-test.config.mts <selected-matrix-file>`
 - reads runtime configuration from `config.ini`
 - stores conformance sessions in `<data_dir>/itw.db`, so they can later be listed by `report:list` and rendered by `report:create`
 
@@ -204,9 +209,9 @@ The command:
 Examples:
 
 ```sh
-itwct test
-itwct test --config ./ci/config.ini
-pnpm itw-conformance-tool --args="test"
+itwct test presentation
+itwct test presentation --config ./ci/config.ini
+pnpm itw-conformance-tool --args="test presentation"
 ```
 
 ### `report:create`
@@ -292,7 +297,7 @@ Examples:
 - `pnpm itw-conformance-tool --args="init"`
 - `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
 - `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
-- `pnpm itw-conformance-tool --args="test --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="test presentation --config ./ci/config.ini"`
 - `pnpm itw-conformance-tool --args="report:list --config ./ci/config.ini"`
 - `pnpm itw-conformance-tool --args="report:create <uuid> html --config ./ci/config.ini"`
 

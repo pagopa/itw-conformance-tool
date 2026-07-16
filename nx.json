@@ -3,6 +3,7 @@
   "analytics": false,
   "neverConnectToCloud": true,
   "tui": {
+    "enabled": false,
     "autoExit": true
   },
   "namedInputs": {
