@@ -22,8 +22,7 @@ export function createTestConfig() {
     cacheDir: './node_modules/.vite/packages/conformance-test',
     resolve: {
       alias: {
-        '@itw-conformance-tool/database': resolve(packageRoot, './packages/database/src/index.ts'),
-        '@itw-conformance-tool/issuer': resolve(packageRoot, './packages/issuer/src/index.ts')
+        '@itw-conformance-tool/database': resolve(packageRoot, './packages/database/src/index.ts')
       }
     },
     test: {

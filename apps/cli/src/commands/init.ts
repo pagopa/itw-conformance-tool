@@ -11,12 +11,10 @@ import {
   selectEs256SigningJwk
 } from '../utils/certificates.js';
 import {
-  getAuthRequestKey,
-  getAuthResponseKey,
-  getFederationKey,
-  getIssuerIntermediateKey,
-  getSigningKeys,
-  getTrustAnchorFederationKey
+  createRelyingPartyPrivateKeys,
+  createIssuerIntermediateKey,
+  createIssuerPrivateKeys,
+  createTrustAnchorFederationKey
 } from '../utils/crypto.js';
 import { existsFileSync } from '../utils/search.js';
 
@@ -24,6 +22,7 @@ import type { CliFlags } from '../types/types.js';
 
 type InitConfig = {
   global: Pick<ConfigSchemaType['global'], 'data_dir' | 'log_level'>;
+  'relying-party': Pick<ConfigSchemaType['relying-party'], 'url'>;
   'trust-anchor': Pick<ConfigSchemaType['trust-anchor'], 'entity_id'>;
   'credential-issuer': Pick<ConfigSchemaType['credential-issuer'], 'url'>;
 };
@@ -46,6 +45,7 @@ function checkConfig(flags: CliFlags): InitConfig {
   const previousDataDir = rawConfigs.global.data_dir;
   const configs: InitConfig = {
     global: rawConfigs.global,
+    'relying-party': rawConfigs['relying-party'],
     'trust-anchor': rawConfigs['trust-anchor'],
     'credential-issuer': rawConfigs['credential-issuer']
   };
@@ -79,8 +79,11 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
   const trustAnchorFederationKeyPath = join(trustAnchorDirPath, 'federation-key.jwk.json');
   const trustAnchorFederationKeyGenerated = !existsFileSync(trustAnchorFederationKeyPath) || flags.force;
   if (trustAnchorFederationKeyGenerated) {
-    const trustAnchorFederationKeyContent = getTrustAnchorFederationKey();
-    writeFileSync(trustAnchorFederationKeyPath, trustAnchorFederationKeyContent, { encoding: 'utf8', flag: 'w' });
+    const trustAnchorFederationKeyContent = createTrustAnchorFederationKey();
+    writeFileSync(trustAnchorFederationKeyPath, JSON.stringify(trustAnchorFederationKeyContent, null, 2), {
+      encoding: 'utf8',
+      flag: 'w'
+    });
     process.stdout.write(`✓ Generated trust-anchor federation key → ${trustAnchorFederationKeyPath}\n`);
   } else {
     process.stdout.write(`⚠ Trust-anchor federation key already exists → skipped (use --force to regenerate)\n`);
@@ -109,12 +112,12 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     );
   }
 
-  const signingKeysPath = join(issuerDirPath, 'jwks.json');
-  const issuerSigningKeysGenerated = !existsFileSync(signingKeysPath) || flags.force;
+  const issuerKeysPath = join(issuerDirPath, 'jwks.json');
+  const issuerSigningKeysGenerated = !existsFileSync(issuerKeysPath) || flags.force;
   if (issuerSigningKeysGenerated) {
-    const signingKeys = getSigningKeys();
-    writeFileSync(signingKeysPath, signingKeys, { encoding: 'utf8', flag: 'w' });
-    process.stdout.write(`✓ Generated issuer signing keys → ${signingKeysPath}\n`);
+    const issuerKeys = createIssuerPrivateKeys();
+    writeFileSync(issuerKeysPath, JSON.stringify(issuerKeys, null, 2), { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated issuer signing keys → ${issuerKeysPath}\n`);
   } else {
     process.stdout.write(`⚠ Issuer keys already exist → skipped (use --force to regenerate)\n`);
   }
@@ -122,8 +125,8 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
   const intermediateKeysPath = join(issuerDirPath, 'jwks-intermediate.json');
   const issuerIntermediateKeysGenerated = !existsFileSync(intermediateKeysPath) || flags.force;
   if (issuerIntermediateKeysGenerated) {
-    const intermediateKeys = getIssuerIntermediateKey();
-    writeFileSync(intermediateKeysPath, intermediateKeys, { encoding: 'utf8', flag: 'w' });
+    const intermediateKeys = createIssuerIntermediateKey();
+    writeFileSync(intermediateKeysPath, JSON.stringify(intermediateKeys, null, 2), { encoding: 'utf8', flag: 'w' });
     process.stdout.write(`✓ Generated issuer intermediate signing keys → ${intermediateKeysPath}\n`);
   } else {
     process.stdout.write(`⚠ Issuer intermediate signing keys already exist → skipped (use --force to regenerate)\n`);
@@ -136,10 +139,7 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     issuerIntermediateKeysGenerated ||
     trustAnchorFederationKeyGenerated;
   if (issuerIntermediateCertGenerated) {
-    const intermediateJwks = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Parameters<
-      typeof selectEs256SigningJwk
-    >[0];
-    const intermediateJwk = selectEs256SigningJwk(intermediateJwks);
+    const intermediateJwk = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Record<string, unknown>;
 
     const trustAnchorFederationKey = JSON.parse(readFileSync(trustAnchorFederationKeyPath, 'utf8')) as Record<
       string,
@@ -167,15 +167,10 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     issuerIntermediateKeysGenerated ||
     issuerIntermediateCertGenerated
   ) {
-    const signingJwks = JSON.parse(readFileSync(signingKeysPath, 'utf8')) as Parameters<
-      typeof selectEs256SigningJwk
-    >[0];
+    const signingJwks = JSON.parse(readFileSync(issuerKeysPath, 'utf8')) as Parameters<typeof selectEs256SigningJwk>[0];
     const issuerSigningJwk = selectEs256SigningJwk(signingJwks);
 
-    const intermediateJwks = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Parameters<
-      typeof selectEs256SigningJwk
-    >[0];
-    const intermediateJwk = selectEs256SigningJwk(intermediateJwks);
+    const intermediateJwk = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Record<string, unknown>;
 
     const intermediateCertificatePem = readFileSync(intermediateCertPath, 'utf8');
 
@@ -192,46 +187,30 @@ async function createFilesAndDirs(configs: InitConfig, flags: CliFlags): Promise
     process.stdout.write(`⚠ Issuer certificate already exists → skipped (use --force to regenerate)\n`);
   }
 
-  const rpArtifacts = [
-    ['auth-request-key.jwk.json', getAuthRequestKey],
-    ['auth-response-key.jwk.json', getAuthResponseKey],
-    ['federation-key.jwk.json', getFederationKey]
-  ] as const;
-
-  const generatedRpPaths: string[] = [];
-  let authRequestKeyContent: string | undefined;
-
-  for (const [fileName, factory] of rpArtifacts) {
-    const filePath = join(rpDirPath, fileName);
-    if (!existsFileSync(filePath) || flags.force) {
-      const content = factory();
-      writeFileSync(filePath, content, { encoding: 'utf8', flag: 'w' });
-      if (fileName === 'auth-request-key.jwk.json') {
-        authRequestKeyContent = content;
-      }
-      generatedRpPaths.push(filePath);
-    }
-  }
-
-  const x5cCertPath = join(rpDirPath, 'x5c-cert.pem');
-  if (!existsFileSync(x5cCertPath) || flags.force) {
-    if (!authRequestKeyContent) {
-      const authRequestKeyPath = join(rpDirPath, 'auth-request-key.jwk.json');
-      authRequestKeyContent = readFileSync(authRequestKeyPath, 'utf8');
-    }
-
-    const authRequestKey = JSON.parse(authRequestKeyContent) as Parameters<
-      typeof createSelfSignedCertificateFromJwk
-    >[0];
-    const x5cCertificate = await createSelfSignedCertificateFromJwk(authRequestKey);
-    writeFileSync(x5cCertPath, x5cCertificate, { encoding: 'utf8', flag: 'w' });
-    generatedRpPaths.push(x5cCertPath);
-  }
-
-  if (generatedRpPaths.length === 0) {
-    process.stdout.write(`⚠ Relying-party keys already exist → skipped (use --force to regenerate)\n`);
+  const rpKeysPath = join(rpDirPath, 'jwks.json');
+  const rpSigningKeysGenerated = !existsFileSync(rpKeysPath) || flags.force;
+  if (rpSigningKeysGenerated) {
+    const rpPrivateKeys = createRelyingPartyPrivateKeys();
+    writeFileSync(rpKeysPath, JSON.stringify(rpPrivateKeys, null, 2), { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated relying-party signing keys → ${rpKeysPath}\n`);
   } else {
-    process.stdout.write(`✓ Generated relying-party keys → ${generatedRpPaths.join(', ')}\n`);
+    process.stdout.write(`⚠ Relying-party signing keys already exist → skipped (use --force to regenerate)\n`);
+  }
+
+  const rpCertPath = join(rpDirPath, 'cert.pem');
+  if (!existsFileSync(rpCertPath) || flags.force || rpSigningKeysGenerated) {
+    const rpJwks = JSON.parse(readFileSync(rpKeysPath, 'utf8')) as Parameters<typeof selectEs256SigningJwk>[0];
+    const rpSigningJwk = selectEs256SigningJwk(rpJwks, 'rp-signing-key');
+    const commonName = new URL(configs['relying-party'].url).hostname;
+    const rpCertificate = await createSelfSignedCertificateFromJwk(rpSigningJwk, {
+      commonName,
+      organizationalUnitName: 'Relying Party'
+    });
+
+    writeFileSync(rpCertPath, rpCertificate, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated relying-party certificate → ${rpCertPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Relying-party certificate already exists → skipped (use --force to regenerate)\n`);
   }
 }
 

@@ -10,12 +10,13 @@ import {
   type Disposable,
   type ScenarioEventStore
 } from '../events/event-store.js';
+import { createCredentialOfferUri } from '../helpers/issuance.js';
+import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
-import { httpsRequest } from '../utils/request.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { createScenarioPromptModel } from './prompts.js';
 
@@ -63,53 +64,6 @@ function defaultWrite(message: string): void {
   process.stdout.write(`${message}\n`);
 }
 
-function createCredentialOfferUri(credentialIssuer: string, correlationId: string): string {
-  const credentialOffer = {
-    credential_issuer: credentialIssuer,
-    credential_configuration_ids: ['dc_sd_jwt_PID'],
-    grants: {
-      authorization_code: {
-        issuer_state: correlationId
-      }
-    }
-  };
-
-  return `openid-credential-offer://?credential_offer=${encodeURIComponent(JSON.stringify(credentialOffer))}`;
-}
-
-function createDefaultPresentationDcqlQuery(): Record<string, unknown> {
-  return {
-    credentials: [
-      {
-        id: 'pid',
-        format: 'dc+sd-jwt',
-        meta: { vct_values: ['urn:eudi:pid:it:1'] },
-        claims: [{ path: ['given_name'] }, { path: ['family_name'] }, { path: ['birthdate'] }]
-      }
-    ]
-  };
-}
-
-async function createPresentationRequestUri(baseURL: string): Promise<string> {
-  const endpoint = new URL('/request-object', baseURL);
-
-  const response = await httpsRequest<{ url: string }>({
-    method: 'POST',
-    hostname: endpoint.hostname,
-    path: endpoint.pathname,
-    port: endpoint.port,
-    protocol: endpoint.protocol,
-    headers: { 'content-type': 'application/json' },
-    body: {
-      dcqlQuery: createDefaultPresentationDcqlQuery(),
-      flow_type: 'cross-device'
-    },
-    rejectUnauthorized: false
-  });
-
-  return response.data.url;
-}
-
 function resolveScenarioEndpoints(
   definition: ProtocolObservedScenarioDefinition,
   configuredEndpoints: LocalServiceEndpoints
@@ -125,27 +79,35 @@ function resolveScenarioEndpoints(
   return endpoints;
 }
 
+interface CreatedStimulus {
+  correlationId: string;
+  stimulus: ScenarioStimulus;
+}
+
 async function createStimulus(
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
   correlationId: string
-): Promise<ScenarioStimulus> {
+): Promise<CreatedStimulus> {
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
     const uri = createCredentialOfferUri(credentialIssuer, correlationId);
-    return { type: 'credential-offer', uri, qrCode: uri };
+    return { correlationId, stimulus: { type: 'credential-offer', uri, qrCode: uri } };
   }
 
   if (definition.stimulus.type === 'manual-instruction') {
-    return { type: 'manual-instruction', text: definition.stimulus.text };
+    return { correlationId, stimulus: { type: 'manual-instruction', text: definition.stimulus.text } };
   }
 
   if (definition.stimulus.type === 'presentation-request') {
     const relyingParty = endpoints.relyingParty;
     if (!relyingParty) throw new Error(`Scenario ${definition.id} requires a Relying Party endpoint`);
     const uri = await createPresentationRequestUri(relyingParty);
-    return { type: 'presentation-request', uri, qrCode: uri };
+    return {
+      correlationId: extractPresentationCorrelationId(uri),
+      stimulus: { type: 'presentation-request', uri, qrCode: uri }
+    };
   }
 
   throw new Error(`Unsupported stimulus type for scenario ${definition.id}: ${definition.stimulus.type}`);
@@ -240,14 +202,14 @@ export function createProtocolObservedScenarioRunner(
 
       const startedAt = new Date().toISOString();
       const scenarioId = randomUUID();
-      const correlationId = randomUUID();
+      const initialCorrelationId = randomUUID();
       const abortController = new AbortController();
       const eventStore = options.eventStoreFactory?.() ?? createInMemoryScenarioEventStore();
       const endpoints = resolveScenarioEndpoints(definition, options.endpoints);
       let eventSubscription: Disposable | undefined;
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
-      const stimulus = await createStimulus(definition, endpoints, correlationId);
+      const { correlationId, stimulus } = await createStimulus(definition, endpoints, initialCorrelationId);
       const eventBridge = await options.eventBridgeFactory?.({
         correlationId,
         definition,
@@ -301,6 +263,8 @@ export function createProtocolObservedScenarioRunner(
           if (entryEvent) {
             let previous = entryEvent;
             for (const requiredEvent of definition.requiredEvents ?? []) {
+              if (requiredEvent === entryEvent.name) continue;
+
               try {
                 previous = await eventStore.waitFor(requiredEvent, {
                   after: previous,

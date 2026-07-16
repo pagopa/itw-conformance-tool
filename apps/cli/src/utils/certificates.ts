@@ -69,25 +69,36 @@ async function importEcKeyPairFromJwk(
   return { privateKey, publicKey };
 }
 
-/** Selects the sole private ES256 signing key (`kty=EC`, `alg=ES256`, `use=sig`)
- * from a JWKS, failing clearly when it is absent or ambiguous.
+/** Selects a private ES256 signing key (`kty=EC`, `alg=ES256`, `use=sig`)
+ * from a JWKS, optionally by key ID.
  *
- * `issuer/jwks.json` also contains an ECDH-ES encryption key, so certificate
- * generation must not silently pick the wrong key.
+ * `issuer/jwks.json` also contains an ECDH-ES encryption key, while the RP
+ * JWKS contains multiple signing keys. Certificate generation must select the
+ * key that signs the corresponding JWT.
  *
  * @param jwks - The JWKS to search.
+ * @param kid - The optional key ID to select.
  * @returns The private ES256 signing JWK.
  */
-export function selectEs256SigningJwk(jwks: Jwks): Jwk {
+export function selectEs256SigningJwk(jwks: Jwks, kid?: string): Jwk {
   const candidates = jwks.keys.filter(
-    (key) => key.kty === 'EC' && key.alg === 'ES256' && key.use === 'sig' && typeof key.d === 'string'
+    (key) =>
+      key.kty === 'EC' &&
+      key.alg === 'ES256' &&
+      key.use === 'sig' &&
+      typeof key.d === 'string' &&
+      (kid === undefined || key.kid === kid)
   );
 
   if (candidates.length === 0) {
-    throw new Error('No private ES256 signing key (kty=EC, alg=ES256, use=sig) found in JWKS');
+    throw new Error(
+      `No private ES256 signing key (kty=EC, alg=ES256, use=sig) found${kid ? ` with kid "${kid}"` : ''} in JWKS`
+    );
   }
   if (candidates.length > 1) {
-    throw new Error('Multiple private ES256 signing keys found in JWKS; expected exactly one');
+    throw new Error(
+      `Multiple private ES256 signing keys found${kid ? ` with kid "${kid}"` : ''} in JWKS; expected exactly one`
+    );
   }
 
   return candidates[0];

@@ -1,13 +1,5 @@
 {
   "targets": {
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "dependsOn": ["^build"],
-      "options": {
-        "cwd": "apps/itw-relying-party",
-        "command": "tsc --noEmit -p tsconfig.app.json"
-      }
-    },
     "build": {
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],
@@ -21,9 +13,9 @@
         "tsConfig": "apps/itw-relying-party/tsconfig.app.json",
         "assets": [
           {
-            "input": "apps/itw-relying-party/src/assets",
+            "input": "apps/itw-relying-party/public",
             "glob": "**/*",
-            "output": "assets"
+            "output": "public"
           }
         ],
         "esbuildOptions": {
@@ -68,19 +60,19 @@
       "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
       "executor": "nx:noop"
     },
-    "copy-assets": {
+    "typecheck": {
       "executor": "nx:run-commands",
-      "inputs": ["{projectRoot}/src/assets"],
-      "outputs": ["{projectRoot}/dist/assets"],
+      "dependsOn": ["^build"],
       "options": {
-        "command": "cp -r apps/itw-relying-party/src/assets apps/itw-relying-party/dist/"
+        "cwd": "apps/itw-relying-party",
+        "command": "tsc --noEmit -p tsconfig.app.json"
       }
     },
     "serve": {
       "continuous": true,
       "executor": "@nx/js:node",
       "defaultConfiguration": "development",
-      "dependsOn": ["build", "copy-assets"],
+      "dependsOn": ["build"],
       "options": {
         "buildTarget": "itw-relying-party:build",
         "runBuildTargetDependencies": false,
