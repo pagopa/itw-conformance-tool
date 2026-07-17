@@ -235,9 +235,9 @@ Response:
 
 ### Credential Status List
 
-**GET /statuslist**
+**GET /statuslist/1**
 
-Serves StatusList2021Entry credential status information.
+Serves the Status List JWT (`Content-Type: application/statuslist+jwt`).
 
 ## Credential Types
 
