@@ -151,26 +151,7 @@ Response:
 
 **POST /batch_credential**
 
-Requests the issuance of multiple credentials in a single request.
-
-Request body:
-
-```json
-{
-  "credential_requests": [
-    {
-      "credential_type": "urn:pid:it",
-      "proof": { "proof_type": "jwt", "jwt": "eyJ..." }
-    },
-    {
-      "credential_type": "urn:mdl:it",
-      "proof": { "proof_type": "jwt", "jwt": "eyJ..." }
-    }
-  ]
-}
-```
-
-Response: Array of issued credentials
+This endpoint is not implemented in this service; use `POST /credential` instead.
 
 ### Deferred Credential Endpoint
 
