@@ -45,7 +45,7 @@ jobs:
         run: pnpm build
 
       - name: Initialize data directory
-        run: pnpm itw-conformance-tool:init
+        run: pnpm run init
 
       - name: Patch /etc/hosts for wct federation servers
         run: |
