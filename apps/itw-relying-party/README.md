@@ -173,7 +173,7 @@ Response:
 
 ### Data Erasure
 
-**POST /erasure**
+**GET /auth/erasure**
 
 Initiates erasure of presentation data for compliance purposes.
 
