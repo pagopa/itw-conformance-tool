@@ -24,6 +24,18 @@
   ],
   "references": [
     {
+      "path": "../itw-trust-anchor/tsconfig.app.json"
+    },
+    {
+      "path": "../itw-relying-party/tsconfig.app.json"
+    },
+    {
+      "path": "../itw-credential-issuer/tsconfig.app.json"
+    },
+    {
+      "path": "../../packages/ipc/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
@@ -37,9 +49,6 @@
     },
     {
       "path": "../../packages/config/tsconfig.lib.json"
-    },
-    {
-      "path": "../../packages/ipc/tsconfig.lib.json"
     }
   ]
 }

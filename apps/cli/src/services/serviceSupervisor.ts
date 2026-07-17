@@ -1,7 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { createRequire } from 'node:module';
 
 import {
   parseIpcMessage,
@@ -25,11 +25,17 @@ interface ManagedService {
   service: SupervisedService;
 }
 
-const entrypoints: Record<SupervisedService, string> = {
-  'credential-issuer': 'apps/itw-credential-issuer/dist/main.js',
-  'relying-party': 'apps/itw-relying-party/dist/main.js',
-  'trust-anchor': 'apps/itw-trust-anchor/dist/main.js'
-};
+const require = createRequire(import.meta.url);
+
+function resolveServiceEntrypoint(service: SupervisedService): string {
+  const packageName = `itw-${service}`;
+
+  try {
+    return require.resolve(packageName);
+  } catch {
+    throw new Error(`Cannot resolve the ${service} package (${packageName}). Run \`pnpm install\` first.`);
+  }
+}
 
 function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
@@ -72,7 +78,7 @@ export class ServiceSupervisor {
 
   private async startOne(service: SupervisedService): Promise<void> {
     if (this.managed.has(service)) return;
-    const entrypoint = join(this.options.cwd, entrypoints[service]);
+    const entrypoint = resolveServiceEntrypoint(service);
     if (!existsSync(entrypoint)) {
       throw new Error(`Missing compiled ${service} entrypoint: ${entrypoint}. Run \`pnpm build\` first.`);
     }

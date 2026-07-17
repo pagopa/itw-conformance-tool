@@ -18,6 +18,9 @@
     "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "@itw-conformance-tool/ipc": "workspace:*",
+    "itw-credential-issuer": "workspace:*",
+    "itw-relying-party": "workspace:*",
+    "itw-trust-anchor": "workspace:*",
     "@peculiar/x509": "^1.12.4",
     "commander": "^15.0.0"
   }
