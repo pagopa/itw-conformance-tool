@@ -1,7 +1,7 @@
 import { extractRpSessionId } from '@itw-conformance-tool/conformance';
-import type { ClosedConformanceSessionStatus } from '@itw-conformance-tool/conformance';
 import { compactDecrypt, importPKCS8 } from 'jose';
 
+import type { ClosedConformanceSessionStatus } from '@itw-conformance-tool/conformance';
 import type { FastifyInstance } from 'fastify';
 
 /** Extracts the `state` claim from the decrypted JWE payload.
