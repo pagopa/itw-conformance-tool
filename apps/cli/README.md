@@ -172,6 +172,23 @@ Example (`config.ini`):
 credential_identifiers = dc_sd_jwt_PersonIdentificationData,mso_mdoc_PersonIdentificationData
 ```
 
+#### Trusted Wallet Provider issuers
+
+The issuer verifies credential request proof key attestations for IT-Wallet specification versions that use them.
+Configure the accepted Wallet Provider issuer Entity IDs with `credential-issuer.trusted_wallet_provider_issuers`:
+
+```ini
+[credential-issuer]
+trusted_wallet_provider_issuers = https://wallet-provider.example,https://wallet-provider.wct.example:3002
+```
+
+The value is a comma-separated allowlist. Each entry must be an absolute HTTPS URL, the list must contain at least
+one entry, and duplicate entries fail startup. Whitespace around entries is ignored.
+
+The Credential Issuer passes this list to the proof verification SDK, which compares the key-attestation `iss` claim
+with exact string matching. Paths, trailing slashes, and explicit ports are significant. Replace the defaults with the
+Wallet Provider issuer identifiers trusted by your environment, then restart the issuer for changes to take effect.
+
 ### `report:list`
 
 `report:list` prints a formatted table of all conformance sessions stored in the configured data directory, sorted by start date (most recent first).

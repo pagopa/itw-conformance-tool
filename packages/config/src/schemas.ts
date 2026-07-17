@@ -3,6 +3,11 @@ import { z } from 'zod';
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export const ISSUER_AUTH_FLOWS = ['direct', 'l2plus', 'l3'] as const;
 export const CREDENTIAL_TYPES = ['pid', 'mdl', 'badge', 'eaa'] as const;
+const DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS = [
+  'https://wallet-provider.example',
+  'https://wallet-provider.wct.example:3002',
+  'https://wallet-provider.wct.example.org:3002'
+] as const;
 
 export const DEFAULT_CONFIG = {
   global: {
@@ -18,6 +23,7 @@ export const DEFAULT_CONFIG = {
     credential_types: 'pid,mdl,badge,eaa',
     credential_identifiers: '',
     batch_issuance_by_deferred: false,
+    trusted_wallet_provider_issuers: DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS.join(','),
     trust_anchor_url: 'https://localhost:3001'
   },
   'relying-party': {
@@ -68,6 +74,10 @@ credential_identifiers = ${issuerDefaults.credential_identifiers}
 ; Only affects requests that include multiple proofs; single-proof requests are always issued immediately.
 ; Default: ${issuerDefaults.batch_issuance_by_deferred}
 batch_issuance_by_deferred = ${issuerDefaults.batch_issuance_by_deferred}
+; Trusted Wallet Provider issuer Entity IDs allowed in credential proof key attestations (comma-separated).
+; Each issuer must be an absolute HTTPS URL and is matched exactly by the Credential Issuer.
+; Default: ${issuerDefaults.trusted_wallet_provider_issuers}
+trusted_wallet_provider_issuers = ${issuerDefaults.trusted_wallet_provider_issuers}
 ; Trust Anchor Entity ID used in the issuer's authority_hints
 ; Default: ${issuerDefaults.trust_anchor_url}
 trust_anchor_url = ${issuerDefaults.trust_anchor_url}
@@ -146,6 +156,21 @@ function normalizeCredentialIdentifiers(value: unknown): unknown {
   return typeof value === 'string' ? splitCredentialIdentifiers(value) : value;
 }
 
+function splitCommaSeparatedList(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function normalizeTrustedWalletProviderIssuers(value: unknown): unknown {
+  return typeof value === 'string' ? splitCommaSeparatedList(value) : value;
+}
+
+function hasNoDuplicateItems(items: string[]): boolean {
+  return new Set(items).size === items.length;
+}
+
 const allowedCredentialTypes = new Set<string>(CREDENTIAL_TYPES);
 
 function isCredentialTypesList(value: string): boolean {
@@ -186,11 +211,22 @@ const IssuerConfigSchema = z
     batch_issuance_by_deferred: z
       .preprocess(normalizeStrictBoolean, z.boolean())
       .default(issuerDefaults.batch_issuance_by_deferred),
+    trusted_wallet_provider_issuers: z
+      .preprocess(
+        normalizeTrustedWalletProviderIssuers,
+        z.array(z.url({ protocol: /^https$/ })).min(1, 'At least one trusted Wallet Provider issuer is required')
+      )
+      .refine(hasNoDuplicateItems, { message: 'Duplicate trusted Wallet Provider issuers are not allowed' })
+      .default([...DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS]),
     trust_anchor_url: nonEmptyString.default(issuerDefaults.trust_anchor_url)
   })
   // credential_identifiers defaults to [] (post-preprocess output type), not
   // issuerDefaults.credential_identifiers ('', the raw ini-string default).
-  .default({ ...issuerDefaults, credential_identifiers: [] });
+  .default({
+    ...issuerDefaults,
+    credential_identifiers: [],
+    trusted_wallet_provider_issuers: [...DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS]
+  });
 
 const RpConfigSchema = z
   .object({

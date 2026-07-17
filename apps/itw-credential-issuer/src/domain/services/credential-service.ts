@@ -36,12 +36,6 @@ import type { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 /** Retry interval (in seconds) advertised to wallets polling `/deferred`. */
 export const DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS = 5;
 
-const TRUSTED_WALLET_PROVIDER_ISSUERS = [
-  'https://wallet-provider.example',
-  'https://wallet-provider.wct.example:3002',
-  'https://wallet-provider.wct.example.org:3002'
-];
-
 export class CreateCredentialError extends Error {
   constructor(message: string) {
     super(message);
@@ -66,6 +60,7 @@ export interface CreateCredentialOptions {
   config: IoWalletSdkConfig;
   headers: Headers;
   method: HttpMethod;
+  trustedWalletProviderIssuers: readonly string[];
   url: string;
 }
 
@@ -179,7 +174,18 @@ export class CredentialService {
         throw new CreateCredentialError('Missing nonce in credential request');
       }
 
-      const proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
+      let proofResult: VerifyCredentialRequestJwtProofResult;
+      try {
+        proofResult = await this.#verifyCredentialProof(options, nonce, jwt);
+      } catch (error) {
+        if (error instanceof CreateCredentialError) {
+          throw error;
+        }
+        if (error instanceof Error) {
+          throw new InvalidProofError(error.message);
+        }
+        throw new InvalidProofError('Invalid credential proof');
+      }
 
       noncesToConsume.add(nonce);
 
@@ -237,7 +243,15 @@ export class CredentialService {
       return verifyCredentialRequestJwtProof({
         ...verifyOptions,
         config,
-        trustedWalletProviderIssuers: TRUSTED_WALLET_PROVIDER_ISSUERS
+        trustedWalletProviderIssuers: options.trustedWalletProviderIssuers
+      });
+    }
+
+    if (config.isVersion(ItWalletSpecsVersion.V1_4)) {
+      return verifyCredentialRequestJwtProof({
+        ...verifyOptions,
+        config,
+        trustedWalletProviderIssuers: options.trustedWalletProviderIssuers
       });
     }
 
@@ -273,6 +287,10 @@ export class CredentialService {
       return createCredentialResponse({ config, flow });
     }
 
+    if (config.isVersion(ItWalletSpecsVersion.V1_4)) {
+      return createCredentialResponse({ config, flow });
+    }
+
     if (config.isVersion(ItWalletSpecsVersion.V1_0)) {
       return createCredentialResponse({ config, flow });
     }
@@ -299,6 +317,13 @@ export class CredentialService {
     });
 
     if (config.isVersion(ItWalletSpecsVersion.V1_3)) {
+      return createCredentialResponse({
+        config,
+        flow: { interval: DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS, transactionId }
+      });
+    }
+
+    if (config.isVersion(ItWalletSpecsVersion.V1_4)) {
       return createCredentialResponse({
         config,
         flow: { interval: DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS, transactionId }
