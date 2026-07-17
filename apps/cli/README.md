@@ -3,8 +3,8 @@
 Local CLI for the `itw-conformance-tool` monorepo. It supports the following workflows:
 
 - `init`, to generate the local configuration and key material
-- `start`, to launch the trust anchor, issuer, and relying party services through Nx
-- `test <category>`, to run one conformance matrix category (`WP_*`) through Vitest
+- `start`, to launch the trust anchor, issuer, and relying party services manually through Nx
+- `test <category>`, to run one conformance matrix category (`WP_*`) through Vitest with CLI-managed local services
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
 
@@ -197,6 +197,10 @@ itwct report:list --config ./ci/config.ini
 ### `test`
 
 `test <category>` launches Vitest on one conformance test matrix category. A category is required: `issuance`, `presentation`, `wallet-instance`, or `wallet-provider`.
+
+The CLI is the lifecycle supervisor in test mode: it directly forks the already compiled service entrypoints (not `nx serve`), waits for their IPC `service.ready` messages, passes their actual endpoints to Vitest, and always requests graceful shutdown afterwards. The selected local stack is minimal: issuance starts Trust Anchor + Issuer, presentation starts Trust Anchor + RP, wallet-instance starts all three, and wallet-provider starts none. On test failure, timeout, SIGINT, SIGTERM, or child crash the CLI cleans up children, escalating from IPC shutdown to termination if necessary. Do not start these services manually for `itwct test`.
+
+`start` remains the manual-development mode and retains its Nx-based behaviour. Its services are not owned by a later `test` command.
 
 The command:
 

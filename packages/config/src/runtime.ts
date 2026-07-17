@@ -27,8 +27,21 @@ export function expandPath(pathValue: string, cwd = process.cwd()): string {
   return isAbsolute(normalizedPath) ? resolve(normalizedPath) : resolve(cwd, normalizedPath);
 }
 
+/** Reads the service-local `--itw-config <path>` launch argument without using environment variables. */
+export function getConfigFilePathFromArgv(argv: readonly string[] = process.argv): string | undefined {
+  for (const [index, argument] of argv.entries()) {
+    if (argument === '--itw-config') return argv[index + 1];
+    if (argument.startsWith('--itw-config=')) return argument.slice('--itw-config='.length);
+  }
+
+  return undefined;
+}
+
 export function resolveConfigFilePath(input: LoadConfigInput = {}): string {
-  return expandPath(input.configFilePath ?? DEFAULT_CONFIG_FILE, input.cwd ?? process.cwd());
+  return expandPath(
+    input.configFilePath ?? getConfigFilePathFromArgv() ?? DEFAULT_CONFIG_FILE,
+    input.cwd ?? process.cwd()
+  );
 }
 
 export function expandConfigDataDir(config: ConfigSchemaType, cwd = process.cwd()): ConfigSchemaType {

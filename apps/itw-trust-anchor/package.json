@@ -19,6 +19,7 @@
     "@itw-conformance-tool/config": "workspace:",
     "@itw-conformance-tool/crypto": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
+    "@itw-conformance-tool/ipc": "workspace:*",
     "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
     "@pagopa/io-wallet-utils": "catalog:pagopa",
     "close-with-grace": "^2.5.0",

@@ -9,7 +9,8 @@
       "#/*": ["./src/*"],
       "@itw-conformance-tool/config": ["../../packages/config/dist/index.d.ts"],
       "@itw-conformance-tool/crypto": ["../../packages/crypto/dist/index.d.ts"],
-      "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"]
+      "@itw-conformance-tool/logger": ["../../packages/logger/dist/index.d.ts"],
+      "@itw-conformance-tool/ipc": ["../../packages/ipc/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts"],
@@ -37,6 +38,9 @@
     },
     {
       "path": "../../packages/logger/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/ipc/tsconfig.lib.json"
     }
   ]
 }

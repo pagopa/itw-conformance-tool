@@ -83,9 +83,9 @@ async function start(flags: CliFlags): Promise<void> {
   process.exitCode = exitCode;
 }
 
-function test(category: TestCategory, flags: CliFlags): void {
-  loadConfig(flags);
-  process.exitCode = runConformanceTests(category);
+async function test(category: TestCategory, flags: CliFlags): Promise<void> {
+  const { configFilePath } = loadConfig(flags);
+  process.exitCode = await runConformanceTests(category, configFilePath);
 }
 
 async function listReports(flags: CliFlags): Promise<void> {
@@ -142,8 +142,8 @@ function createProgram(): Command {
     .description('Run a selected conformance test category')
     .addArgument(new Argument('<category>', `one of: ${testCategories.join(', ')}`).argParser(parseTestCategory))
     .option('-c, --config <path>', 'path to the config file', parseConfigPath)
-    .action((category: TestCategory, options: CommonOptions) => {
-      test(category, createFlags(options));
+    .action(async (category: TestCategory, options: CommonOptions) => {
+      await test(category, createFlags(options));
     });
 
   program

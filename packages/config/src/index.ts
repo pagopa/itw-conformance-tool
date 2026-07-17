@@ -2,6 +2,7 @@ export {
   DEFAULT_CONFIG_FILE,
   expandConfigDataDir,
   expandPath,
+  getConfigFilePathFromArgv,
   loadConfig,
   resolveConfigFilePath,
   type LoadConfigInput

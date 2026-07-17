@@ -58,10 +58,10 @@ Start the full conformance stack via CLI (recommended):
 # First run: initialize data directory, keys, and config template
 pnpm itw-conformance-tool:init
 
-# Start all three services (trust anchor, issuer, relying party)
+# Optional manual-development mode: start all three services
 pnpm itw-conformance-tool:start
 
-# Run a selected CLI-driven conformance test category
+# Test mode is self-contained: it starts and stops only the required services
 pnpm itw-conformance-tool:test:presentation
 ```
 
@@ -106,15 +106,6 @@ pnpm vitest run --config vitest.conformance-test.config.mts
 ```
 
 The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
-
-### Runtime Environment Overrides (Conformance)
-
-For conformance runs, the following environment variables are supported:
-
-- `ITW_CT_DATA_DIR`: SQLite/report data directory used by the Vitest conformance reporter
-- `ITW_CT_WALLET_PROVIDER_BACKEND_URL`: overrides `global.wallet_provider_backend_url` for conformance matrix tests (required unless you run via the CLI, which exports it from `config.ini`)
-
-`ITW_CT_CONFIG_FILE` is used by the runnable apps (issuer/RP) to choose the config file, but the conformance matrix test does not currently read it.
 
 ### External Conformance Tests
 
