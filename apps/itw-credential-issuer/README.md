@@ -255,8 +255,7 @@ Response:
 
 ```json
 {
-  "nonce": "nonce_12345",
-  "expires_in": 300
+  "c_nonce": "nonce_12345"
 }
 ```
 
