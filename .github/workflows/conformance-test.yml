@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pnpm --dir "$GITHUB_WORKSPACE" nx run itw-conformance-cli:run --args="start --issuer" > /tmp/issuer.log 2>&1 &
+          pnpm --dir "$GITHUB_WORKSPACE" exec nx run itw-conformance-cli:run --args="start --issuer" > /tmp/issuer.log 2>&1 &
           ISSUER_PID=$!
 
           cleanup() {
