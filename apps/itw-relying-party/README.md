@@ -45,7 +45,7 @@ port = 8080
 ; Example: https://rp.example.org
 entity_id = https://rp.example.org
 
-; Trust Anchor URL for OpenID Federation validation (mandatory)
+; Trust Anchor URL for OpenID Federation validation (optional)
 ; Example: https://trust-anchor.example.com/.well-known/openid-federation
 ; Default: /.well-known/openid-federation
 trust_anchor_url = https://trust-anchor.example.com/.well-known/openid-federation
