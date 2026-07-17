@@ -121,7 +121,7 @@ Generated structure:
 
 #### Trust Anchor URL Configuration
 
-The **Trust Anchor URL** (`trust_anchor_url` in `config.ini` or `ITW_CT_RP_TRUST_ANCHOR_URL` environment variable) is **mandatory** and must be set in the `[rp]` section of `config.ini` before starting the RP service:
+The **Trust Anchor URL** (`trust_anchor_url` in `config.ini` or `ITW_CT_RP_TRUST_ANCHOR_URL` environment variable) is optional; if omitted, the default `/.well-known/openid-federation` is used.
 
 ```ini
 [rp]
