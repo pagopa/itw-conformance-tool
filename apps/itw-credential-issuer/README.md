@@ -241,7 +241,7 @@ Serves StatusList2021Entry credential status information.
 
 ## Credential Types
 
-The issuer can issue the following credential types (controlled by `CREDENTIAL_TYPES`):
+The issuer can issue the following credential types:
 
 | Type  | Identifier     | Description                        |
 | ----- | -------------- | ---------------------------------- |
