@@ -498,17 +498,11 @@ importers:
         version: 2.8.1
     devDependencies:
       '@types/node':
-        specifier: ^22.19.9
+        specifier: catalog:node
         version: 22.20.1
-      jose:
-        specifier: 5.2.4
-        version: 5.2.4
       vitest:
         specifier: ~4.1.0
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
   packages/crypto:
     dependencies:
@@ -530,9 +524,6 @@ importers:
       jose:
         specifier: 5.2.4
         version: 5.2.4
-      node-forge:
-        specifier: ^1.3.0
-        version: 1.4.0
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -540,9 +531,6 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@types/node-forge':
-        specifier: 1.3.14
-        version: 1.3.14
       vitest:
         specifier: ~4.1.0
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
@@ -554,13 +542,17 @@ importers:
         version: 2.8.1
     devDependencies:
       '@types/node':
-        specifier: ^22.19.9
+        specifier: catalog:node
         version: 22.20.1
       vitest:
         specifier: ~4.1.0
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
 
-  packages/ipc: {}
+  packages/ipc:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
 
   packages/logger:
     dependencies:
@@ -2263,9 +2255,6 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
-
-  '@types/node-forge@1.3.14':
-    resolution: {integrity: sha512-mhVF2BnD4BO+jtOp7z1CdzaK4mbuK0LLQYAvdOLqHTavxFNq4zA1EmYkpnFjP8HOUzedfQkRnp0E2ulSAYSzAw==}
 
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
@@ -3984,10 +3973,6 @@ packages:
   netmask@2.1.1:
     resolution: {integrity: sha512-eonl3sLUha+S1GzTPxychyhnUzKyeQkZ7jLjKrBagJgPla13F+uQ71HgpFefyHgqrjEbCPkDArxYsjY8/+gLKA==}
     engines: {node: '>= 0.4.0'}
-
-  node-forge@1.4.0:
-    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
-    engines: {node: '>= 6.13.0'}
 
   node-gyp-build-optional-packages@5.1.1:
     resolution: {integrity: sha512-+P72GAjVAbTxjjwUmwjVrqrdZROD4nf8KgpBoDxqXXTiYZZt/ud60dE5yvCSr9lRO8e8yv6kgJIC0K0PfZFVQw==}
@@ -6973,10 +6958,6 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
-  '@types/node-forge@1.3.14':
-    dependencies:
-      '@types/node': 22.20.1
-
   '@types/node@22.20.1':
     dependencies:
       undici-types: 6.21.0
@@ -8818,8 +8799,6 @@ snapshots:
   natural-orderby@5.0.0: {}
 
   netmask@2.1.1: {}
-
-  node-forge@1.4.0: {}
 
   node-gyp-build-optional-packages@5.1.1:
     dependencies:
