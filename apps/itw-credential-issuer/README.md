@@ -49,10 +49,10 @@ port = 3000
 ; Default: pid,mdl,badge,eaa
 credential_types = pid,mdl,badge,eaa
 
-; Authorization flow type
-; Options: code, pre-authorized_code
-; Default: code
-auth_flow = code
+; Authentication flow
+; Options: direct, l2plus, l3
+; Default: direct
+auth_flow = direct
 ```
 
 ### Standalone Usage (Without CLI)
