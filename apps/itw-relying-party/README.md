@@ -32,7 +32,7 @@ data_dir = ~/.itw-conformance-tool
 log_level = info
 
 ; Enable HTTPS mode
-; Default: false
+; Default: true
 https = false
 
 [rp]
