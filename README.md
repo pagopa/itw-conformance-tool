@@ -56,13 +56,13 @@ Start the full conformance stack via CLI (recommended):
 ### Conformance Test Profile
 
 # First run: initialize data directory, keys, and config template
-pnpm itw-conformance-tool:init
+pnpm run init
 
 # Optional manual-development mode: start all three services
-pnpm itw-conformance-tool:start
+pnpm start
 
 # Test mode is self-contained: it starts and stops only the required services
-pnpm itw-conformance-tool:test:presentation
+pnpm test:presentation
 ```
 
 The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
@@ -118,10 +118,10 @@ The conformance suite is opt-in.
 pnpm vitest run --config vitest.conformance-test.config.mts
 ```
 
-Or via CLI command mode, selecting exactly one category (`issuance`, `presentation`, `wallet-instance`, or `wallet-provider`):
+Or via the globally linked CLI, selecting exactly one category (`issuance`, `presentation`, `wallet-instance`, or `wallet-provider`):
 
 ```bash
-pnpm itw-conformance-tool --args="test presentation"
+itwct test presentation
 ```
 
 Once a conformance flow has completed, generate a report:
@@ -145,16 +145,9 @@ All commands are run from the workspace root. Root-level scripts delegate to **N
 | Command                                                       | Description                                                                                                        |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `pnpm build`                                                  | Build all projects with a `build` target                                                                           |
-| `pnpm start`                                                  | Serve all runnable apps with a `serve` target                                                                      |
-| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test <category>`, `report:list`, `report:create`)                 |
-| `pnpm itw-conformance-tool:init`                              | Initialize local data directory and config template                                                                |
-| `pnpm itw-conformance-tool:start`                             | Start all three services via CLI (`start --all`), fails if `global.wallet_provider_backend_url` is missing/invalid |
-| `pnpm itw-conformance-tool:start:issuer`                      | Start only the issuer service via CLI                                                                              |
-| `pnpm itw-conformance-tool:start:rp`                          | Start only the relying-party service via CLI                                                                       |
-| `pnpm itw-conformance-tool:start:trust-anchor`                | Start only the trust-anchor service via CLI                                                                        |
-| `pnpm issuer`                                                 | Serve `itw-credential-issuer`                                                                                      |
-| `pnpm rp`                                                     | Serve `itw-relying-party`                                                                                          |
-| `pnpm trust-anchor`                                           | Serve `itw-trust-anchor`                                                                                           |
+| `pnpm run init`                                               | Initialize local data directory and config template                                                                |
+| `pnpm start`                                                  | Start all three services via CLI (`start --all`), fails if `global.wallet_provider_backend_url` is missing/invalid |
+| `pnpm test:<category>`                                        | Run a conformance category: `issuance`, `presentation`, `wallet-instance`, or `wallet-provider`                    |
 | `pnpm test`                                                   | Run Vitest for projects with a `test` target                                                                       |
 | `pnpm vitest run --config vitest.conformance-test.config.mts` | Run conformance test matrix profile (`vitest.conformance-test.config.mts`)                                         |
 | `pnpm typecheck`                                              | Type-check projects with a `typecheck` target                                                                      |

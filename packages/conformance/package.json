@@ -28,6 +28,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:node",
-    "vitest": "~4.1.0"
+    "vitest": "catalog:"
   }
 }

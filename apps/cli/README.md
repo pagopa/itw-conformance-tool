@@ -28,9 +28,7 @@ pnpm unlink --global itw-conformance-cli
 
 ## Entry Points
 
-You can run the CLI either through the exported binary (after `pnpm link --global`) or through the root workspace scripts without installing globally.
-
-Direct CLI usage:
+After linking the package globally, use either exported binary:
 
 - `itw-conformance-tool init`
 - `itw-conformance-tool start`
@@ -43,32 +41,14 @@ Direct CLI usage:
 - `itwct report:list`
 - `itwct report:create <uuid> [format]`
 
-From the workspace root through Nx-backed scripts:
+The root workspace provides these shortcuts:
 
-- `pnpm itw-conformance-tool --args="init"`
-- `pnpm itw-conformance-tool --args="init --force"`
-- `pnpm itw-conformance-tool --args="start --all"`
-- `pnpm itw-conformance-tool --args="start --issuer"`
-- `pnpm itw-conformance-tool --args="start --rp"`
-- `pnpm itw-conformance-tool --args="start --trust-anchor"`
-- `pnpm itw-conformance-tool --args="test presentation"`
-- `pnpm itw-conformance-tool --args="report:list"`
-- `pnpm itw-conformance-tool --args="report:create <uuid>"`
-- `pnpm itw-conformance-tool --args="report:create <uuid> pdf"`
-
-Root shortcuts:
-
-- `pnpm itw-conformance-tool:init`
-- `pnpm itw-conformance-tool:start`
-- `pnpm itw-conformance-tool:start:issuer`
-- `pnpm itw-conformance-tool:start:rp`
-- `pnpm itw-conformance-tool:start:trust-anchor`
-- `pnpm itw-conformance-tool:test:issuance`
-- `pnpm itw-conformance-tool:test:presentation`
-- `pnpm itw-conformance-tool:test:wallet-instance`
-- `pnpm itw-conformance-tool:test:wallet-provider`
-
-`pnpm itw-conformance-tool:test` now fails with usage information because a category is required.
+- `pnpm run init`
+- `pnpm start`
+- `pnpm test:issuance`
+- `pnpm test:presentation`
+- `pnpm test:wallet-instance`
+- `pnpm test:wallet-provider`
 
 ## Supported Commands
 
@@ -222,7 +202,6 @@ Examples:
 
 ```sh
 itwct test presentation
-pnpm itw-conformance-tool --args="test presentation"
 ```
 
 ### `report:create`
@@ -287,18 +266,3 @@ Examples, assuming the current working directory is `/workspace/itw-conformance-
 - `./.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
 - `./data` resolves to `/workspace/itw-conformance-tool/data`
 - `~/.itw-conformance-tool` resolves to your home directory
-
-## Passing Arguments Through the Root Script
-
-The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `--args="..."` form.
-
-Examples:
-
-- `pnpm itw-conformance-tool --args="init"`
-- `pnpm itw-conformance-tool --args="start --all"`
-- `pnpm itw-conformance-tool --args="start --issuer"`
-- `pnpm itw-conformance-tool --args="test presentation"`
-- `pnpm itw-conformance-tool --args="report:list"`
-- `pnpm itw-conformance-tool --args="report:create <uuid> html"`
-
-This format is required because Nx forwards the CLI payload through its own `--args` option.
