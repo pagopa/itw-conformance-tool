@@ -215,7 +215,7 @@ Response:
 
 ### Mock IDP Callback
 
-**GET /idp-callback**
+**GET /idp/callback**
 
 Mock Identity Provider callback for testing authorization flows (non-production).
 
