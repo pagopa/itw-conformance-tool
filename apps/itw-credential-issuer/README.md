@@ -169,7 +169,7 @@ Response: JWT entity configuration
 
 ### Credential Offer
 
-**POST /offers**
+*(No `POST /offers` endpoint is currently exposed by this service.)*
 
 This endpoint is not implemented in this service.
 
