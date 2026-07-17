@@ -1,12 +1,4 @@
-export {
-  DEFAULT_CONFIG_FILE,
-  expandConfigDataDir,
-  expandPath,
-  getConfigFilePathFromArgv,
-  loadConfig,
-  resolveConfigFilePath,
-  type LoadConfigInput
-} from './runtime.js';
+export { DEFAULT_CONFIG_FILE, expandConfigDataDir, expandPath, loadConfig } from './runtime.js';
 
 export {
   ConfigIniTemplate,

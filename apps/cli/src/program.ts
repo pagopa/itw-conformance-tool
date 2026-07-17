@@ -1,3 +1,4 @@
+import { loadConfig } from '@itw-conformance-tool/config';
 import { createLogger } from '@itw-conformance-tool/logger';
 import { Argument, Command, InvalidArgumentError } from 'commander';
 
@@ -7,44 +8,30 @@ import { reportList } from './commands/reportList.js';
 import { runConformanceTests } from './commands/runTests.js';
 import { isTestCategory, testCategories, type TestCategory } from './commands/testCategories.js';
 import { getNxCommands } from './services/getNxCommands.js';
-import { loadConfig } from './services/loadConfig.js';
 import { runCommands } from './services/runCommands.js';
-import { expandPath } from './utils/path.js';
 import { createEmitter } from './utils/prompt.js';
 import { existsFileSync, filesToSearch, findNxRoot } from './utils/search.js';
 
 import type { CliFlags } from './types/types.js';
 
-type CommonOptions = {
-  config?: string;
-};
-
-type StartOptions = CommonOptions & {
+type StartOptions = {
   all?: boolean;
   issuer?: boolean;
   rp?: boolean;
   trustAnchor?: boolean;
 };
 
-function createFlags({ config }: CommonOptions = {}): CliFlags {
+function createFlags(): CliFlags {
   return {
     issuer: false,
     rp: false,
     trustAnchor: false,
     all: false,
     force: false,
-    config: {
-      value: config !== undefined,
-      path: config ?? ''
-    },
     runId: undefined,
     format: 'html',
     testCategory: undefined
   };
-}
-
-function parseConfigPath(value: string): string {
-  return expandPath(value.trim());
 }
 
 function parseTestCategory(value: string): TestCategory {
@@ -69,7 +56,7 @@ function parseReportFormat(value: string): 'html' | 'pdf' {
 
 async function start(flags: CliFlags): Promise<void> {
   const nxRootPath = findNxRoot();
-  const config = loadConfig(flags).data;
+  const config = loadConfig();
   const emitLog = createEmitter(createLogger({ level: config.global.log_level }));
   const missingFiles = filesToSearch(config.global.data_dir).filter((file) => !existsFileSync(file));
 
@@ -79,22 +66,21 @@ async function start(flags: CliFlags): Promise<void> {
     );
   }
 
-  const exitCode = await runCommands(nxRootPath, getNxCommands(flags), emitLog);
-  process.exitCode = exitCode;
+  process.exitCode = await runCommands(nxRootPath, getNxCommands(flags), emitLog);
 }
 
-async function test(category: TestCategory, flags: CliFlags): Promise<void> {
-  const { configFilePath } = loadConfig(flags);
-  process.exitCode = await runConformanceTests(category, configFilePath);
+async function test(category: TestCategory): Promise<void> {
+  loadConfig();
+  process.exitCode = await runConformanceTests(category);
 }
 
-async function listReports(flags: CliFlags): Promise<void> {
-  const config = loadConfig(flags).data;
+async function listReports(): Promise<void> {
+  const config = loadConfig();
   reportList(config.global.data_dir, createEmitter(createLogger({ level: config.global.log_level })));
 }
 
-async function createReport(runId: string, format: 'html' | 'pdf', flags: CliFlags): Promise<void> {
-  const config = loadConfig(flags).data;
+async function createReport(runId: string, format: 'html' | 'pdf'): Promise<void> {
+  const config = loadConfig();
   await reportCreate(
     runId,
     format,
@@ -117,7 +103,6 @@ function createProgram(): Command {
       const flags = createFlags();
       flags.force = options.force ?? false;
       await init(flags);
-      process.stdout.write('Start services with: itwct start --all\n');
     });
 
   program
@@ -127,9 +112,8 @@ function createProgram(): Command {
     .option('--issuer', 'start only itw-credential-issuer')
     .option('--rp', 'start only itw-relying-party')
     .option('--trust-anchor', 'start only itw-trust-anchor')
-    .option('-c, --config <path>', 'path to the config file', parseConfigPath)
     .action(async (options: StartOptions) => {
-      const flags = createFlags(options);
+      const flags = createFlags();
       flags.all = options.all ?? false;
       flags.issuer = options.issuer ?? false;
       flags.rp = options.rp ?? false;
@@ -141,17 +125,15 @@ function createProgram(): Command {
     .command('test')
     .description('Run a selected conformance test category')
     .addArgument(new Argument('<category>', `one of: ${testCategories.join(', ')}`).argParser(parseTestCategory))
-    .option('-c, --config <path>', 'path to the config file', parseConfigPath)
-    .action(async (category: TestCategory, options: CommonOptions) => {
-      await test(category, createFlags(options));
+    .action(async (category: TestCategory) => {
+      await test(category);
     });
 
   program
     .command('report:list')
     .description('List all conformance runs stored in the database')
-    .option('-c, --config <path>', 'path to the config file', parseConfigPath)
-    .action(async (options: CommonOptions) => {
-      await listReports(createFlags(options));
+    .action(async () => {
+      await listReports();
     });
 
   program
@@ -159,9 +141,8 @@ function createProgram(): Command {
     .description('Generate a conformance report file for a given run')
     .argument('<uuid>', 'run identifier')
     .addArgument(new Argument('[format]', 'report format').argParser(parseReportFormat).default('html'))
-    .option('-c, --config <path>', 'path to the config file', parseConfigPath)
-    .action(async (runId: string, format: 'html' | 'pdf', options: CommonOptions) => {
-      await createReport(runId, format, createFlags(options));
+    .action(async (runId: string, format: 'html' | 'pdf') => {
+      await createReport(runId, format);
     });
 
   program

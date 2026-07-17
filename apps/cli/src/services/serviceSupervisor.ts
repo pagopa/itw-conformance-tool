@@ -14,7 +14,6 @@ export type SupervisedService = LocalServiceName;
 export type SupervisedEndpoints = Partial<Record<SupervisedService, string>>;
 
 export interface ServiceSupervisorOptions {
-  configFilePath: string;
   cwd: string;
   readinessTimeoutMs?: number;
   shutdownTimeoutMs?: number;
@@ -78,7 +77,7 @@ export class ServiceSupervisor {
       throw new Error(`Missing compiled ${service} entrypoint: ${entrypoint}. Run \`pnpm build\` first.`);
     }
 
-    const child = fork(entrypoint, ['--itw-config', this.options.configFilePath], {
+    const child = fork(entrypoint, [], {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
       env: process.env,

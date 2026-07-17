@@ -121,7 +121,7 @@ pnpm vitest run --config vitest.conformance-test.config.mts
 Or via CLI command mode, selecting exactly one category (`issuance`, `presentation`, `wallet-instance`, or `wallet-provider`):
 
 ```bash
-pnpm itw-conformance-tool --args="test presentation --config ./config.ini"
+pnpm itw-conformance-tool --args="test presentation"
 ```
 
 Once a conformance flow has completed, generate a report:

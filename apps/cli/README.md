@@ -82,7 +82,6 @@ Root shortcuts:
 
 ## Supported Options
 
-- `-c, --config <path>`: path to the configuration file. Supported by `start`, `test`, `report:list`, and `report:create`
 - `--all`: start the trust anchor, issuer, and relying party services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
@@ -91,10 +90,7 @@ Root shortcuts:
 - `-h, --help`: print the CLI help
 - `-v, --version`: print the CLI version
 
-The parser also supports inline config assignment:
-
-- `--config=/absolute/path/config.ini`
-- `-c=./config.ini`
+All commands use the workspace-root `config.ini`. Its path cannot be overridden.
 
 ## Current Behavior
 
@@ -104,7 +100,7 @@ The parser also supports inline config assignment:
 
 When executed, it:
 
-- determines the target config file path
+- creates or reads the workspace-root `config.ini`
 - creates the data directory
 - creates the `issuer`, `rp`, and `trust-anchor` subdirectories
 - generates issuer signing keys and an issuer intermediate CA signing key
@@ -183,15 +179,10 @@ credential_identifiers = dc_sd_jwt_PersonIdentificationData,mso_mdoc_PersonIdent
 
 Columns printed: `RUN ID`, `STARTED AT`, `CLOSED AT`, `STATUS`, `CHECKS`.
 
-Optional flag:
-
-- `-c, --config <path>`: load configuration from the given file to resolve the data directory
-
 Example:
 
 ```sh
 itwct report:list
-itwct report:list --config ./ci/config.ini
 ```
 
 ### `test`
@@ -214,7 +205,6 @@ Examples:
 
 ```sh
 itwct test presentation
-itwct test presentation --config ./ci/config.ini
 pnpm itw-conformance-tool --args="test presentation"
 ```
 
@@ -231,26 +221,16 @@ itwct report:create <uuid> [format]
 
 The report is saved as `conformance-report-<uuid>.<format>` in the **current working directory**.
 
-Optional flag:
-
-- `-c, --config <path>`: load configuration from the given file to resolve the data directory
-
 Examples:
 
 ```sh
 itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c
 itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c pdf
-itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c html --config ./ci/config.ini
 ```
 
-## Configuration Resolution
+## Configuration Location
 
-The CLI resolves configuration in this order:
-
-1. If `--config` is provided and the file exists, it loads that file.
-2. If `--config` is provided but the file does not exist, it falls back to the default runtime configuration.
-3. If `--config` is not provided, it looks for `<project-root>/config.ini`.
-4. If no config file exists, it falls back to built-in defaults.
+The CLI always reads and `init` always creates `<workspace-root>/config.ini`. The file path is not configurable.
 
 ## HTTPS Configuration
 
@@ -290,8 +270,6 @@ Examples, assuming the workspace root is `/workspace/itw-conformance-tool`:
 - `~/.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
 - `~/custom-config.ini` resolves to `/workspace/itw-conformance-tool/custom-config.ini`
 
-Quoted paths are also supported for config arguments.
-
 ## Passing Arguments Through the Root Script
 
 The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `--args="..."` form.
@@ -299,10 +277,10 @@ The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for
 Examples:
 
 - `pnpm itw-conformance-tool --args="init"`
-- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
-- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
-- `pnpm itw-conformance-tool --args="test presentation --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool --args="report:list --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool --args="report:create <uuid> html --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="start --all"`
+- `pnpm itw-conformance-tool --args="start --issuer"`
+- `pnpm itw-conformance-tool --args="test presentation"`
+- `pnpm itw-conformance-tool --args="report:list"`
+- `pnpm itw-conformance-tool --args="report:create <uuid> html"`
 
 This format is required because Nx forwards the CLI payload through its own `--args` option.

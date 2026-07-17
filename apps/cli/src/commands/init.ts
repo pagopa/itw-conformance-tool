@@ -41,7 +41,7 @@ function checkConfig(flags: CliFlags): InitConfig {
     process.stdout.write(`✓ config.ini already exists → skipped (use --force to overwrite)\n`);
   }
 
-  const rawConfigs = loadConfig({ configFilePath });
+  const rawConfigs = loadConfig();
   const previousDataDir = rawConfigs.global.data_dir;
   const configs: InitConfig = {
     global: rawConfigs.global,

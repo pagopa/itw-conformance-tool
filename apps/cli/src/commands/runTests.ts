@@ -41,9 +41,9 @@ function runVitest(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise
 }
 
 /** Runs a category with the CLI as the sole owner of required local services. */
-export async function runConformanceTests(category: TestCategory, configFilePath: string): Promise<number> {
+export async function runConformanceTests(category: TestCategory): Promise<number> {
   const nxRootPath = findNxRoot();
-  const supervisor = new ServiceSupervisor({ configFilePath, cwd: nxRootPath });
+  const supervisor = new ServiceSupervisor({ cwd: nxRootPath });
   const stop = (): void => {
     void supervisor.stopAll();
   };

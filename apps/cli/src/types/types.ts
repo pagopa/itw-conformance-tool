@@ -22,10 +22,6 @@ export interface CliFlags {
   trustAnchor: boolean;
   all: boolean;
   force: boolean;
-  config: {
-    value: boolean;
-    path: string;
-  };
   runId: string | undefined;
   format: 'html' | 'pdf';
   testCategory: TestCategory | undefined;
