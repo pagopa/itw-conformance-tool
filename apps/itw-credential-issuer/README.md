@@ -157,17 +157,7 @@ This endpoint is not implemented in this service; use `POST /credential` instead
 
 **POST /deferred_credential**
 
-Retrieves a previously deferred credential using an acceptance token.
-
-Request body:
-
-```json
-{
-  "acceptance_token": "token_123..."
-}
-```
-
-Response: Credential if ready, or deferred status if not yet available
+This endpoint is not implemented in this service.
 
 ### OpenID Federation Metadata
 
