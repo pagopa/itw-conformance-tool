@@ -1,4 +1,5 @@
 import { extractRpSessionId } from '@itw-conformance-tool/conformance';
+import type { ClosedConformanceSessionStatus } from '@itw-conformance-tool/conformance';
 import { compactDecrypt, importPKCS8 } from 'jose';
 
 import type { FastifyInstance } from 'fastify';
@@ -51,8 +52,11 @@ export function registerAuthRequestConformanceHooks(app: FastifyInstance): void 
 }
 
 /** Registers a hook that automatically closes the conformance session
- * as PASSED when the route returns a successful response containing
- * a verified presentation.
+ * when the route receives a presentation response.
+ *
+ * Closes as PASSED on 2xx (JWE or OAuth error correctly sent by the Wallet)
+ * and as FAILED on non-2xx (RP rejected the request), so the session is
+ * never left permanently OPEN on failures or timeouts.
  *
  * @param app Fastify instance to register the hook on
  * @returns void
@@ -60,19 +64,30 @@ export function registerAuthRequestConformanceHooks(app: FastifyInstance): void 
 export function registerAuthResponseConformanceHooks(app: FastifyInstance): void {
   app.addHook('onSend', async (request, reply, payload) => {
     if (!app.hasDecorator('conformanceSessionRepository')) return payload;
-    if (reply.statusCode < 200 || reply.statusCode >= 300) return payload;
 
     const body = request.body as Record<string, unknown>;
-    if (!body || typeof body.response !== 'string') return payload;
+    if (!body) return payload;
 
-    const state = await extractStateFromJwe(body.response, app.rpKeys.authResponsePrivateKeyPem);
-    if (!state) return payload;
+    let sessionId: string | null = null;
+    let closeStatus: ClosedConformanceSessionStatus;
 
-    const sessionId = extractRpSessionId(state);
+    if (typeof body.response === 'string') {
+      // JARM JWE: { response: "<JWE>" } — result depends on RP HTTP status
+      const state = await extractStateFromJwe(body.response, app.rpKeys.authResponsePrivateKeyPem);
+      sessionId = state ? extractRpSessionId(state) : null;
+      closeStatus = reply.statusCode >= 200 && reply.statusCode < 300 ? 'PASSED' : 'FAILED';
+    } else if (typeof body.state === 'string') {
+      // OAuth error from Wallet: { error: "...", state: "<uuid>" } — always FAILED
+      sessionId = extractRpSessionId(body.state);
+      closeStatus = 'FAILED';
+    } else {
+      return payload;
+    }
+
     if (!sessionId) return payload;
 
     try {
-      await app.conformanceSessionRepository.close(sessionId, 'PASSED');
+      await app.conformanceSessionRepository.close(sessionId, closeStatus);
     } catch (err) {
       app.log.warn({ err, sessionId }, 'conformance: failed to close session');
     }

@@ -168,7 +168,7 @@ describe('registerAuthResponseConformanceHooks', () => {
     expect(ctx.repo.closed[0].status).toBe('PASSED');
   });
 
-  it('does not close session on non-2xx response', async () => {
+  it('closes session as FAILED on non-2xx response', async () => {
     const state = randomUUID();
     const nonce = randomBytes(32).toString('hex');
     const jwe = await createAuthResponseJwe({ nonce, state });
@@ -179,10 +179,12 @@ describe('registerAuthResponseConformanceHooks', () => {
       payload: { response: jwe }
     });
 
-    expect(ctx.repo.closed).toHaveLength(0);
+    expect(ctx.repo.closed).toHaveLength(1);
+    expect(ctx.repo.closed[0].sessionId).toBe(state);
+    expect(ctx.repo.closed[0].status).toBe('FAILED');
   });
 
-  it('does not close session when body has no response field', async () => {
+  it('closes session as FAILED when body has an OAuth error state', async () => {
     const state = randomUUID();
     await ctx.app.inject({
       method: 'POST',
@@ -190,7 +192,9 @@ describe('registerAuthResponseConformanceHooks', () => {
       payload: { error: 'access_denied', state }
     });
 
-    expect(ctx.repo.closed).toHaveLength(0);
+    expect(ctx.repo.closed).toHaveLength(1);
+    expect(ctx.repo.closed[0].sessionId).toBe(state);
+    expect(ctx.repo.closed[0].status).toBe('FAILED');
   });
 
   it('does not throw when conformanceSessionRepository is not decorated', async () => {

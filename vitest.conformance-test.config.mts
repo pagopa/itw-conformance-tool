@@ -1,20 +1,10 @@
-import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
 
-const packageRoot = import.meta.dirname;
+import { VitestConformanceReporter } from './packages/conformance/src/reporters/vitest-conformance-reporter.js';
 
-const builtReporterPath = resolve(packageRoot, 'packages/conformance/dist/reporters/vitest-conformance-reporter.js');
-const sourceReporterPath = './packages/conformance/src/reporters/vitest-conformance-reporter.ts';
-const reporterModule = await import(sourceReporterPath).catch(async () => {
-  if (!existsSync(builtReporterPath)) {
-    throw new Error('Unable to load VitestConformanceReporter from source or dist');
-  }
-  return import(pathToFileURL(builtReporterPath).href);
-});
-const { VitestConformanceReporter } = reporterModule;
+const packageRoot = import.meta.dirname;
 
 export default defineConfig(() => ({
   root: packageRoot,

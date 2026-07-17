@@ -21,13 +21,23 @@ export function loadConfigs(flags: CLIFlags): ConfigType {
     const alreadyExists = existsFileSync(configFilePath);
 
     if (alreadyExists) {
-      configs = parseINI(configFilePath).data;
+      const result = parseINI(configFilePath);
+      if (!result.ok) {
+        process.stderr.write(
+          `WARN: config.ini at ${configFilePath} is invalid or malformed. Starting with default values.\n`
+        );
+      }
+      configs = result.data;
       configFileExists = true;
     }
   } else {
     const defaultConfigPath = resolve(process.cwd(), 'config.ini');
     if (existsFileSync(defaultConfigPath)) {
-      configs = parseINI(defaultConfigPath).data;
+      const result = parseINI(defaultConfigPath);
+      if (!result.ok) {
+        process.stderr.write(`WARN: config.ini is invalid or malformed. Starting with default values.\n`);
+      }
+      configs = result.data;
       configFileExists = true;
     }
   }
