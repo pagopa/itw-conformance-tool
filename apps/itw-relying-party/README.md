@@ -26,9 +26,6 @@ Relying Party service for IT Wallet conformance flows (OID4VP side).
 
 ## Note
 
-The `TO_MIGRATE` folder is intentionally kept for an additional verification phase.
-It is not part of the active runtime path for the current relying party flow.
-
 From repository root:
 
 ```bash
