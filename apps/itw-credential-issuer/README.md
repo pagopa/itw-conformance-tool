@@ -175,7 +175,7 @@ This endpoint is not implemented in this service.
 
 ### Pushed Authorization Requests (PAR)
 
-**POST /par**
+**POST /as/par**
 
 OpenID4VCI PAR endpoint for pushing authorization request parameters (RFC 9126).
 
