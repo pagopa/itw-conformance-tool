@@ -1,4 +1,3 @@
-import type { TestCategory } from '../commands/testCategories.js';
 import type { Level } from '@itw-conformance-tool/logger';
 
 // Types
@@ -16,19 +15,15 @@ export type Service = 'issuer' | 'rp' | 'trust-anchor';
 export type ServiceCommand = 'init' | 'start';
 
 // Interfaces
-export interface CliFlags {
+export interface InitFlags {
+  force: boolean;
+}
+
+export interface StartFlags {
+  all: boolean;
   issuer: boolean;
   rp: boolean;
   trustAnchor: boolean;
-  all: boolean;
-  force: boolean;
-  config: {
-    value: boolean;
-    path: string;
-  };
-  runId: string | undefined;
-  format: 'html' | 'pdf';
-  testCategory: TestCategory | undefined;
 }
 
 export interface ServiceProcess {

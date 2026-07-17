@@ -1,4 +1,5 @@
 import { createHttpsOptions } from '@itw-conformance-tool/crypto';
+import { attachServiceIpcAdapter } from '@itw-conformance-tool/ipc';
 import { logger } from '@itw-conformance-tool/logger';
 import closeWithGrace from 'close-with-grace';
 import Fastify from 'fastify';
@@ -31,7 +32,7 @@ async function startServer() {
   closeWithGrace(async ({ signal, err }) => {
     if (err) {
       app.log.error({ err }, 'server closing with error');
-    } else {
+    } else if (signal) {
       app.log.info(`${signal} received, server closing`);
     }
     await app.close();
@@ -55,6 +56,12 @@ async function startServer() {
     app.log.error(err);
     process.exit(1);
   }
+
+  attachServiceIpcAdapter({
+    endpoint: app.config.baseUrl,
+    service: 'trust-anchor',
+    stop: () => app.close()
+  });
 }
 
 startServer();

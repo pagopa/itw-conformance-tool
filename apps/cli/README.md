@@ -3,8 +3,8 @@
 Local CLI for the `itw-conformance-tool` monorepo. It supports the following workflows:
 
 - `init`, to generate the local configuration and key material
-- `start`, to launch the trust anchor, issuer, and relying party services through Nx
-- `test <category>`, to run one conformance matrix category (`WP_*`) through Vitest
+- `start`, to launch the trust anchor, issuer, and relying party services manually through Nx
+- `test <category>`, to run one conformance matrix category (`WP_*`) through Vitest with CLI-managed local services
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
 
@@ -82,7 +82,6 @@ Root shortcuts:
 
 ## Supported Options
 
-- `-c, --config <path>`: path to the configuration file. Supported by `start`, `test`, `report:list`, and `report:create`
 - `--all`: start the trust anchor, issuer, and relying party services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
@@ -91,10 +90,7 @@ Root shortcuts:
 - `-h, --help`: print the CLI help
 - `-v, --version`: print the CLI version
 
-The parser also supports inline config assignment:
-
-- `--config=/absolute/path/config.ini`
-- `-c=./config.ini`
+All commands use the workspace-root `config.ini`. Its path cannot be overridden.
 
 ## Current Behavior
 
@@ -104,7 +100,7 @@ The parser also supports inline config assignment:
 
 When executed, it:
 
-- determines the target config file path
+- creates or reads the workspace-root `config.ini`
 - creates the data directory
 - creates the `issuer`, `rp`, and `trust-anchor` subdirectories
 - generates issuer signing keys and an issuer intermediate CA signing key
@@ -200,20 +196,19 @@ Wallet Provider issuer identifiers trusted by your environment, then restart the
 
 Columns printed: `RUN ID`, `STARTED AT`, `CLOSED AT`, `STATUS`, `CHECKS`.
 
-Optional flag:
-
-- `-c, --config <path>`: load configuration from the given file to resolve the data directory
-
 Example:
 
 ```sh
 itwct report:list
-itwct report:list --config ./ci/config.ini
 ```
 
 ### `test`
 
 `test <category>` launches Vitest on one conformance test matrix category. A category is required: `issuance`, `presentation`, `wallet-instance`, or `wallet-provider`.
+
+The CLI is the lifecycle supervisor in test mode: it directly forks the already compiled service entrypoints (not `nx serve`), waits for their IPC `service.ready` messages, passes their actual endpoints to Vitest, and always requests graceful shutdown afterwards. The selected local stack is minimal: issuance starts Trust Anchor + Issuer, presentation starts Trust Anchor + RP, wallet-instance starts all three, and wallet-provider starts none. On test failure, timeout, SIGINT, SIGTERM, or child crash the CLI cleans up children, escalating from IPC shutdown to termination if necessary. Do not start these services manually for `itwct test`.
+
+`start` remains the manual-development mode and retains its Nx-based behaviour. Its services are not owned by a later `test` command.
 
 The command:
 
@@ -227,7 +222,6 @@ Examples:
 
 ```sh
 itwct test presentation
-itwct test presentation --config ./ci/config.ini
 pnpm itw-conformance-tool --args="test presentation"
 ```
 
@@ -244,26 +238,16 @@ itwct report:create <uuid> [format]
 
 The report is saved as `conformance-report-<uuid>.<format>` in the **current working directory**.
 
-Optional flag:
-
-- `-c, --config <path>`: load configuration from the given file to resolve the data directory
-
 Examples:
 
 ```sh
 itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c
 itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c pdf
-itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c html --config ./ci/config.ini
 ```
 
-## Configuration Resolution
+## Configuration Location
 
-The CLI resolves configuration in this order:
-
-1. If `--config` is provided and the file exists, it loads that file.
-2. If `--config` is provided but the file does not exist, it falls back to the default runtime configuration.
-3. If `--config` is not provided, it looks for `<project-root>/config.ini`.
-4. If no config file exists, it falls back to built-in defaults.
+The CLI always reads and `init` always creates `<workspace-root>/config.ini`. The file path is not configurable.
 
 ## HTTPS Configuration
 
@@ -296,14 +280,13 @@ Single-proof requests are always issued immediately, regardless of this flag.
 
 ## Path Resolution
 
-This CLI treats `~` as the project root, not as the operating system home directory.
+The default `data_dir` is `./.itw-conformance-tool`, which resolves to a `.itw-conformance-tool` folder in the current working directory. Relative paths are resolved from the current working directory, while `~` and `~/…` resolve to the operating system home directory.
 
-Examples, assuming the workspace root is `/workspace/itw-conformance-tool`:
+Examples, assuming the current working directory is `/workspace/itw-conformance-tool`:
 
-- `~/.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
-- `~/custom-config.ini` resolves to `/workspace/itw-conformance-tool/custom-config.ini`
-
-Quoted paths are also supported for config arguments.
+- `./.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
+- `./data` resolves to `/workspace/itw-conformance-tool/data`
+- `~/.itw-conformance-tool` resolves to your home directory
 
 ## Passing Arguments Through the Root Script
 
@@ -312,10 +295,10 @@ The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for
 Examples:
 
 - `pnpm itw-conformance-tool --args="init"`
-- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
-- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
-- `pnpm itw-conformance-tool --args="test presentation --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool --args="report:list --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool --args="report:create <uuid> html --config ./ci/config.ini"`
+- `pnpm itw-conformance-tool --args="start --all"`
+- `pnpm itw-conformance-tool --args="start --issuer"`
+- `pnpm itw-conformance-tool --args="test presentation"`
+- `pnpm itw-conformance-tool --args="report:list"`
+- `pnpm itw-conformance-tool --args="report:create <uuid> html"`
 
 This format is required because Nx forwards the CLI payload through its own `--args` option.

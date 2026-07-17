@@ -11,7 +11,7 @@ const DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS = [
 
 export const DEFAULT_CONFIG = {
   global: {
-    data_dir: '~/.itw-conformance-tool',
+    data_dir: '.itw-conformance-tool',
     log_level: 'info'
   },
   'wallet-provider': {

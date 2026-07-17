@@ -30,11 +30,11 @@ export const wp077Scenario: ProtocolObservedScenarioDefinition = {
       'After scanning the QR payload, the wallet must parse the authorization request parameters and dereference the request_uri using the advertised request_uri_method.',
     prerequisites: [
       'The wallet app under test is installed and can scan QR payloads for presentation requests.',
-      'The local Relying Party service is already running before launching the test matrix.',
+      'Run the test from the workspace root, where config.ini and the compiled local services are available.',
       'The device running the wallet can reach the local Relying Party base URL printed by this test.'
     ],
     steps: [
-      'Start this scenario through the conformance test matrix command after the local services are already running: nx run itw-conformance-cli:run --args="test".',
+      'Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services and waits for their readiness.',
       'Scan the printed presentation request QR payload with the Wallet Instance.',
       'Keep the test process running while the wallet interacts with the local Relying Party.',
       'The runner will continue automatically when the wallet requests the request_uri from the Relying Party.'

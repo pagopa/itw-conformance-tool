@@ -8,11 +8,6 @@ import type { ConfigSchemaType } from './schemas.js';
 
 export const DEFAULT_CONFIG_FILE = 'config.ini';
 
-export interface LoadConfigInput {
-  configFilePath?: string;
-  cwd?: string;
-}
-
 export function expandPath(pathValue: string, cwd = process.cwd()): string {
   const normalizedPath = pathValue.replace(/["'`]+/g, '').trim();
 
@@ -27,10 +22,6 @@ export function expandPath(pathValue: string, cwd = process.cwd()): string {
   return isAbsolute(normalizedPath) ? resolve(normalizedPath) : resolve(cwd, normalizedPath);
 }
 
-export function resolveConfigFilePath(input: LoadConfigInput = {}): string {
-  return expandPath(input.configFilePath ?? DEFAULT_CONFIG_FILE, input.cwd ?? process.cwd());
-}
-
 export function expandConfigDataDir(config: ConfigSchemaType, cwd = process.cwd()): ConfigSchemaType {
   return {
     ...config,
@@ -41,9 +32,9 @@ export function expandConfigDataDir(config: ConfigSchemaType, cwd = process.cwd(
   };
 }
 
-export function loadConfig(input: LoadConfigInput = {}): ConfigSchemaType {
-  const cwd = input.cwd ?? process.cwd();
-  const configFilePath = resolveConfigFilePath({ configFilePath: input.configFilePath, cwd });
+export function loadConfig(): ConfigSchemaType {
+  const cwd = process.cwd();
+  const configFilePath = expandPath(DEFAULT_CONFIG_FILE);
 
   if (!existsSync(configFilePath)) {
     throw new Error(`Config file not found at path: ${configFilePath}`);

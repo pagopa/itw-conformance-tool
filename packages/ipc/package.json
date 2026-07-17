@@ -1,13 +1,11 @@
 {
-  "name": "@itw-conformance-tool/database",
+  "name": "@itw-conformance-tool/ipc",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
@@ -18,10 +16,6 @@
     "clean": "rimraf dist out-tsc"
   },
   "dependencies": {
-    "tslib": "^2.3.0"
-  },
-  "devDependencies": {
-    "@types/node": "catalog:node",
-    "vitest": "~4.1.0"
+    "zod": "catalog:"
   }
 }
