@@ -10,31 +10,25 @@ Local CLI for the `itw-conformance-tool` monorepo. It supports the following wor
 
 ## Installation (global binary)
 
-To make `itw-conformance-tool` and `itwct` available as global commands in the terminal:
+To make `itwct` available as a global command in the terminal:
 
 ```sh
 # From the project root
 pnpm i
 pnpm nx build itw-conformance-cli   # compiles the CLI and generates dist/main.js
-cd apps/cli
-pnpm link --global                  # registers the bin entries in the global PATH
+pnpm add --global ./apps/cli        # registers `itwct` in the global PATH
 ```
 
 To uninstall:
 
 ```sh
-pnpm unlink --global itw-conformance-cli
+pnpm remove --global itw-conformance-cli
 ```
 
 ## Entry Points
 
-After linking the package globally, use either exported binary:
+After linking the package globally, use the exported binary:
 
-- `itw-conformance-tool init`
-- `itw-conformance-tool start`
-- `itw-conformance-tool test <category>`
-- `itw-conformance-tool report:list`
-- `itw-conformance-tool report:create <uuid> [format]`
 - `itwct init`
 - `itwct start`
 - `itwct test <category>`
