@@ -10,14 +10,14 @@ The Credential Issuer service is primarily configured via the CLI, which reads f
 
 When **launched via CLI** (`itwct start`), the following environment variables are automatically set from `config.ini`:
 
-| Environment Variable                 | Source (config.ini)                        | Purpose                              |
-| ------------------------------------ | ------------------------------------------ | ------------------------------------ |
-| `ITW_CT_DATA_DIR`                    | `[global] data_dir`                        | Data directory for keys/certs        |
-| `ITW_CT_LOG_LEVEL`                   | `[global] log_level`                       | Log level (debug, info, warn, error) |
-| `ITW_CT_HTTPS`                       | `[global] https`                           | Enable HTTPS mode                    |
-| `ITW_CT_ISSUER_PORT`                 | `[itw-credential-issuer] port`             | HTTP listen port                     |
-| `ITW_CT_ISSUER_CREDENTIAL_TYPES`     | `[itw-credential-issuer] credential_types` | Exported by CLI (not currently consumed by the issuer app) |
-| `ITW_CT_ISSUER_AUTH_FLOW`            | `[itw-credential-issuer] auth_flow`        | Authorization flow type                                    |
+| Environment Variable                 | Source (config.ini)                        | Purpose                                                                |
+| ------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------- |
+| `ITW_CT_DATA_DIR`                    | `[global] data_dir`                        | Data directory for keys/certs                                          |
+| `ITW_CT_LOG_LEVEL`                   | `[global] log_level`                       | Log level (debug, info, warn, error)                                   |
+| `ITW_CT_HTTPS`                       | `[global] https`                           | Enable HTTPS mode                                                      |
+| `ITW_CT_ISSUER_PORT`                 | `[itw-credential-issuer] port`             | HTTP listen port                                                       |
+| `ITW_CT_ISSUER_CREDENTIAL_TYPES`     | `[itw-credential-issuer] credential_types` | Exported by CLI (not currently consumed by the issuer app)             |
+| `ITW_CT_ISSUER_AUTH_FLOW`            | `[itw-credential-issuer] auth_flow`        | Authorization flow type                                                |
 | `ITW_CT_WALLET_PROVIDER_BACKEND_URL` | `[global] wallet_provider_backend_url`     | Exported by CLI for conformance tests (not consumed by the issuer app) |
 
 ### config.ini Example
@@ -149,13 +149,13 @@ Response:
 
 ### Batch Credential Endpoint
 
-**POST /batch_credential** *(not implemented in this service — use `POST /credential`)*
+**POST /batch_credential** _(not implemented in this service — use `POST /credential`)_
 
 This endpoint is not implemented in this service; use `POST /credential` instead.
 
 ### Deferred Credential Endpoint
 
-**POST /deferred_credential** *(not implemented in this service)*
+**POST /deferred_credential** _(not implemented in this service)_
 
 This endpoint is not implemented in this service.
 
@@ -169,7 +169,7 @@ Response: JWT entity configuration
 
 ### Credential Offer
 
-*(No `POST /offers` endpoint is currently exposed by this service.)*
+_(No `POST /offers` endpoint is currently exposed by this service.)_
 
 This endpoint is not implemented in this service.
 

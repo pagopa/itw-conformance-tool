@@ -61,7 +61,7 @@ If you run the service directly (not through `itwct start`), you can override TL
 | Environment Variable | Purpose                 | Default                   |
 | -------------------- | ----------------------- | ------------------------- |
 | `ITW_CT_DATA_DIR`    | Data directory for keys | `./.itw-conformance-tool` |
-| `ITW_CT_HTTPS`       | Enable HTTPS mode       | `false`                   |
+| `ITW_CT_HTTPS`       | Enable HTTPS mode       | `true`                    |
 
 ## Endpoints
 
