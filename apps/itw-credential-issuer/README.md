@@ -181,24 +181,7 @@ Response: JWT entity configuration
 
 **POST /offers**
 
-Generates a credential offer for out-of-band issuance flows.
-
-Request body:
-
-```json
-{
-  "credential_types": ["urn:pid:it", "urn:mdl:it"]
-}
-```
-
-Response:
-
-```json
-{
-  "credential_offer": "openid-credential-offer://...",
-  "credential_offer_uri": "https://issuer.example.com/offer?code=..."
-}
-```
+This endpoint is not implemented in this service.
 
 ### Pushed Authorization Requests (PAR)
 
