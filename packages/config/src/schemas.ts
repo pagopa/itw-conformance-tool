@@ -6,7 +6,7 @@ export const CREDENTIAL_TYPES = ['pid', 'mdl', 'badge', 'eaa'] as const;
 
 export const DEFAULT_CONFIG = {
   global: {
-    data_dir: '~/.itw-conformance-tool',
+    data_dir: '.itw-conformance-tool',
     log_level: 'info'
   },
   'wallet-provider': {

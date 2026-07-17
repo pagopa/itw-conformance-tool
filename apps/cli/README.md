@@ -263,12 +263,13 @@ Single-proof requests are always issued immediately, regardless of this flag.
 
 ## Path Resolution
 
-This CLI treats `~` as the project root, not as the operating system home directory.
+The default `data_dir` is `./.itw-conformance-tool`, which resolves to a `.itw-conformance-tool` folder in the current working directory. Relative paths are resolved from the current working directory, while `~` and `~/…` resolve to the operating system home directory.
 
-Examples, assuming the workspace root is `/workspace/itw-conformance-tool`:
+Examples, assuming the current working directory is `/workspace/itw-conformance-tool`:
 
-- `~/.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
-- `~/custom-config.ini` resolves to `/workspace/itw-conformance-tool/custom-config.ini`
+- `./.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
+- `./data` resolves to `/workspace/itw-conformance-tool/data`
+- `~/.itw-conformance-tool` resolves to your home directory
 
 ## Passing Arguments Through the Root Script
 
