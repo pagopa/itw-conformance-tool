@@ -31,8 +31,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda #v4.1.0
-        with:
-          version: 9.5.0
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -47,7 +45,7 @@ jobs:
         run: pnpm build
 
       - name: Initialize data directory
-        run: pnpm itw-conformance-tool:init
+        run: pnpm run init
 
       - name: Patch /etc/hosts for wct federation servers
         run: |
@@ -56,21 +54,20 @@ jobs:
       - name: Clone wallet-conformance-test
         run: git clone --depth 1 https://github.com/pagopa/wallet-conformance-test.git /tmp/wct
 
-      - name: Install wct dependencies and link globally
+      - name: Install wct dependencies
         working-directory: /tmp/wct
         run: |
           cp config.example.ini config.ini
           pnpm install
           pnpm build
           chmod +x ./bin/wct
-          pnpm link --global
 
       - name: Run issuance conformance tests
         working-directory: /tmp/wct
         run: |
           set -euo pipefail
 
-          pnpm --dir "$GITHUB_WORKSPACE" itw-conformance-tool:start:issuer > /tmp/issuer.log 2>&1 &
+          pnpm --dir "$GITHUB_WORKSPACE" exec nx run itw-conformance-cli:run --args="start --issuer" > /tmp/issuer.log 2>&1 &
           ISSUER_PID=$!
 
           cleanup() {
@@ -97,7 +94,7 @@ jobs:
             exit 1
           fi
 
-          wct test:issuance \
+          ./bin/wct test:issuance \
             --unsafe-tls \
             --tests happy \
             --credential-issuer-uri https://127.0.0.1:3000

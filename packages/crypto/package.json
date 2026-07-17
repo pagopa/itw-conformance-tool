@@ -25,6 +25,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "vitest": "~4.1.0"
+    "vitest": "catalog:"
   }
 }

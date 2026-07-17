@@ -77,10 +77,7 @@ async function createReport(runId: string, format: 'html' | 'pdf'): Promise<void
 }
 
 function createProgram(): Command {
-  const program = new Command()
-    .name('itw-conformance-tool')
-    .description('Local CLI for ITW Conformance flows')
-    .showHelpAfterError();
+  const program = new Command().name('itwct').description('Local CLI for ITW Conformance flows').showHelpAfterError();
 
   program
     .command('init')

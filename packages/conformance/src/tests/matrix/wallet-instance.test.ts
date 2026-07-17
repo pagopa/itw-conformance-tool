@@ -10,7 +10,7 @@ import {
 
 import type { ScenarioRunner } from '../../index.js';
 
-describe.sequential('Test Cases for Issuance Phase', () => {
+describe('Test Cases for Issuance Phase', () => {
   let runner: ScenarioRunner;
   let db: DatabaseClient;
 

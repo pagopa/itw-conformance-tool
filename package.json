@@ -2,30 +2,23 @@
   "name": "itw-conformance-tool",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.13.1+sha512.b2fc7683b8a6525414e7d13e1ba28caaddde96bf66ec540bfaeb7e702b81f3e0be4d1f295edf7f9fe0396740a8dce4509c582ddf79891f4543fea32d37645f25",
   "scripts": {
-    "start": "nx run-many -t serve",
     "build": "nx run-many -t build",
     "lint": "nx run-many -t lint",
     "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test",
-    "itw-conformance-tool": "nx run itw-conformance-cli:run",
-    "itw-conformance-tool:init": "nx run itw-conformance-cli:run --args=\"init\"",
-    "itw-conformance-tool:start": "nx run itw-conformance-cli:run --args=\"start --all\"",
-    "itw-conformance-tool:start:issuer": "nx run itw-conformance-cli:run --args=\"start --issuer\"",
-    "itw-conformance-tool:start:rp": "nx run itw-conformance-cli:run --args=\"start --rp\"",
-    "itw-conformance-tool:start:trust-anchor": "nx run itw-conformance-cli:run --args=\"start --trust-anchor\"",
-    "itw-conformance-tool:test:issuance": "nx run itw-conformance-cli:run --args=\"test issuance\"",
-    "itw-conformance-tool:test:presentation": "nx run itw-conformance-cli:run --args=\"test presentation\"",
-    "itw-conformance-tool:test:wallet-instance": "nx run itw-conformance-cli:run --args=\"test wallet-instance\"",
-    "itw-conformance-tool:test:wallet-provider": "nx run itw-conformance-cli:run --args=\"test wallet-provider\"",
+    "init": "nx run itw-conformance-cli:run --args=\"init\"",
+    "start": "nx run itw-conformance-cli:run --args=\"start --all\"",
+    "test:issuance": "nx run itw-conformance-cli:run --args=\"test issuance\"",
+    "test:presentation": "nx run itw-conformance-cli:run --args=\"test presentation\"",
+    "test:wallet-instance": "nx run itw-conformance-cli:run --args=\"test wallet-instance\"",
+    "test:wallet-provider": "nx run itw-conformance-cli:run --args=\"test wallet-provider\"",
     "format": "prettier --write '**/*.{js,mjs,json,ts,mts,md}'",
     "format:check": "prettier --check '**/*.{js,mjs,json,ts,mts,md}'",
     "clean": "nx run-many -t clean && rimraf node_modules .nx",
     "pre-commit": "pnpm format:check && nx affected -t lint typecheck",
-    "prepare": "husky",
-    "issuer": "nx serve itw-credential-issuer",
-    "rp": "nx serve itw-relying-party",
-    "trust-anchor": "nx serve itw-trust-anchor"
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.8.0",
@@ -53,8 +46,6 @@
     "typescript": "catalog:",
     "typescript-eslint": "^8.40.0",
     "vite": "^8.0.0",
-    "vitest": "~4.1.0"
-  },
-  "packageManager": "pnpm@9.5.0",
-  "//": "When upgrading to pnpm v10+, add back: \"pnpm\": { \"onlyBuiltDependencies\": [\"puppeteer\"] }. pnpm 10 blocks lifecycle scripts by default, so puppeteer needs this whitelist entry to download Chromium during install."
+    "vitest": "catalog:"
+  }
 }
