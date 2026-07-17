@@ -155,7 +155,7 @@ This endpoint is not implemented in this service; use `POST /credential` instead
 
 ### Deferred Credential Endpoint
 
-**POST /deferred_credential**
+**POST /deferred_credential** *(not implemented in this service)*
 
 This endpoint is not implemented in this service.
 
