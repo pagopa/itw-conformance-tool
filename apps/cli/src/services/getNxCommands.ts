@@ -1,4 +1,4 @@
-import type { CliFlags, ServiceProcess } from '../types/types.js';
+import type { ServiceProcess, StartFlags } from '../types/types.js';
 
 const TRUST_ANCHOR: ServiceProcess = {
   prefix: 'itw-trust-anchor',
@@ -21,7 +21,7 @@ const RP: ServiceProcess = {
  *
  * @param flags - The parsed CLI flags.
  */
-export function getNxCommands(flags: CliFlags): ServiceProcess[] {
+export function getNxCommands(flags: StartFlags): ServiceProcess[] {
   if (flags.all) return [TRUST_ANCHOR, ISSUER, RP];
   if (flags.issuer) return [ISSUER];
   if (flags.rp) return [RP];

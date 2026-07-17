@@ -12,7 +12,7 @@ import { runCommands } from './services/runCommands.js';
 import { createEmitter } from './utils/prompt.js';
 import { existsFileSync, filesToSearch, findNxRoot } from './utils/search.js';
 
-import type { CliFlags } from './types/types.js';
+import type { InitFlags, StartFlags } from './types/types.js';
 
 type StartOptions = {
   all?: boolean;
@@ -20,19 +20,6 @@ type StartOptions = {
   rp?: boolean;
   trustAnchor?: boolean;
 };
-
-function createFlags(): CliFlags {
-  return {
-    issuer: false,
-    rp: false,
-    trustAnchor: false,
-    all: false,
-    force: false,
-    runId: undefined,
-    format: 'html',
-    testCategory: undefined
-  };
-}
 
 function parseTestCategory(value: string): TestCategory {
   const category = value.toLowerCase();
@@ -54,7 +41,7 @@ function parseReportFormat(value: string): 'html' | 'pdf' {
   return format;
 }
 
-async function start(flags: CliFlags): Promise<void> {
+async function start(flags: StartFlags): Promise<void> {
   const nxRootPath = findNxRoot();
   const config = loadConfig();
   const emitLog = createEmitter(createLogger({ level: config.global.log_level }));
@@ -100,8 +87,7 @@ function createProgram(): Command {
     .description('Initialize local workspace assets (data directory and config.ini template)')
     .option('-f, --force', 'overwrite init-generated files')
     .action(async (options: { force?: boolean }) => {
-      const flags = createFlags();
-      flags.force = options.force ?? false;
+      const flags: InitFlags = { force: options.force ?? false };
       await init(flags);
     });
 
@@ -113,11 +99,12 @@ function createProgram(): Command {
     .option('--rp', 'start only itw-relying-party')
     .option('--trust-anchor', 'start only itw-trust-anchor')
     .action(async (options: StartOptions) => {
-      const flags = createFlags();
-      flags.all = options.all ?? false;
-      flags.issuer = options.issuer ?? false;
-      flags.rp = options.rp ?? false;
-      flags.trustAnchor = options.trustAnchor ?? false;
+      const flags: StartFlags = {
+        all: options.all ?? false,
+        issuer: options.issuer ?? false,
+        rp: options.rp ?? false,
+        trustAnchor: options.trustAnchor ?? false
+      };
       await start(flags);
     });
 
