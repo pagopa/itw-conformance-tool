@@ -34,6 +34,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
           config: sdkConfig,
           headers,
           method: request.method as HttpMethod,
+          trustedWalletProviderIssuers: app.config.TRUSTED_WALLET_PROVIDER_ISSUERS,
           url: `${baseURL}${request.url}`
         });
 

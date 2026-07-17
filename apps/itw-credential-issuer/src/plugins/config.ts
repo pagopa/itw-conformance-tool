@@ -18,6 +18,7 @@ declare module 'fastify' {
       AUTH_FLOW: IssuerAuthFlow;
       BATCH_ISSUANCE_BY_DEFERRED: boolean;
       TRUST_ANCHOR_ENTITY_ID: string;
+      TRUSTED_WALLET_PROVIDER_ISSUERS: readonly string[];
       CREDENTIAL_IDENTIFIERS: string[];
       CREDENTIAL_OFFER_URI: string | undefined;
     };
@@ -54,7 +55,8 @@ export default fp(
       CREDENTIAL_IDENTIFIERS: credentialIdentifiers,
       CREDENTIAL_OFFER_URI: credentialOfferUri,
       DATA_DIR: config.global.data_dir,
-      TRUST_ANCHOR_ENTITY_ID: trimTrailingSlashes(trustAnchorConfig.url.trim())
+      TRUST_ANCHOR_ENTITY_ID: trimTrailingSlashes(trustAnchorConfig.url.trim()),
+      TRUSTED_WALLET_PROVIDER_ISSUERS: issuerConfig.trusted_wallet_provider_issuers
     });
   },
 
