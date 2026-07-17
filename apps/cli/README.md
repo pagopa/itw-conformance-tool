@@ -15,7 +15,8 @@ To make `itw-conformance-tool` and `itwct` available as global commands in the t
 ```sh
 # From the project root
 pnpm i
-pnpm nx build itw-conformance-cli   # compiles the CLI and generates dist/main.js
+pnpm build
+
 cd apps/cli
 pnpm link --global                  # registers the bin entries in the global PATH
 ```
@@ -23,7 +24,8 @@ pnpm link --global                  # registers the bin entries in the global PA
 To uninstall:
 
 ```sh
-pnpm unlink --global itw-conformance-cli
+cd apps/cli
+pnpm unlink --global
 ```
 
 ## Entry Points
@@ -117,7 +119,23 @@ Generated structure:
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
 
-The Trust Anchor URL (`trust_anchor_url` / `ITW_CT_RP_TRUST_ANCHOR_URL`) must be set before starting the RP service.
+#### Trust Anchor URL Configuration
+
+The **Trust Anchor URL** (`trust_anchor_url` in `config.ini` or `ITW_CT_RP_TRUST_ANCHOR_URL` environment variable) is **mandatory** and must be set in the `[rp]` section of `config.ini` before starting the RP service:
+
+```ini
+[rp]
+; Trust Anchor URL for OpenID Federation validation
+; Default: /.well-known/openid-federation (relative path)
+; Examples:
+;   - https://trust-anchor.example.com/.well-known/openid-federation (absolute URL)
+;   - /.well-known/openid-federation (relative path for local testing)
+trust_anchor_url = https://trust-anchor.example.com/.well-known/openid-federation
+```
+
+This URL is used by the RP service to validate the trust chain during OpenID Federation flows. The environment variable `ITW_CT_RP_TRUST_ANCHOR_URL` can override the value from the config file.
+
+If not provided, the service uses the default value `/.well-known/openid-federation`. If you need to point to a different trust anchor (e.g., in a conformance scenario), update this value before running `start` or `test`.
 
 Default locations:
 

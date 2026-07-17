@@ -2,15 +2,21 @@
 
 An open-source conformance testing suite to verify that Wallet Solution implementations comply with the [Italian IT Wallet ecosystem](https://italia.github.io/eid-wallet-it-docs/versione-corrente/en).
 
+---
+
 ## Overview
 
 The tool operates by running a Credential Issuer or Relying Party instance that executes complete **OpenID4VCI** and **OpenID4VP** flows against a Wallet Solution. It observes the protocol exchange, produces **pass/fail verdicts** for each requirement defined in the Technical Rules, and generates both machine-readable and human-readable reports — each verdict traceable back to the specific section of the reference specification.
+
+---
 
 ## Key Goals
 
 - ✅ **Automate Conformance Testing**: Run tests defined by the official Italian technical rules to ensure compliance.
 - ✅ **Improve Development Cycles**: Increase implementation quality and efficiency by catching errors early.
 - ✅ **Support the Ecosystem**: Provide a reliable tool for both developers integrating with the IT Wallet and regulatory bodies certifying the solutions.
+
+---
 
 ## Key Features
 
@@ -21,12 +27,16 @@ The tool operates by running a Credential Issuer or Relying Party instance that 
 - 👥 **For Integrators & Certifiers**: Built to serve both entities building solutions and those who verify them.
 - 🔒 **Optional HTTPS (CLI)**: `init` can generate a self-signed TLS certificate/key and `start` can validate their presence when HTTPS is enabled.
 
+---
+
 ## Prerequisites
 
 | Tool    | Version                |
 | ------- | ---------------------- |
 | Node.js | see [`.nvmrc`](.nvmrc) |
 | pnpm    | `10.30.3`              |
+
+---
 
 ## Getting Started
 
@@ -36,137 +46,196 @@ Install dependencies:
 pnpm install
 ```
 
-Build all packages:
+Build all the packages:
 
 ```bash
 pnpm build
 ```
 
-Run type-checking, linting, and tests:
+If you want to run the CLI from any directory, link the CLI package globally:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm test
+# From /apps/cli
+pnpm link --global
 ```
 
-Start the full conformance stack via CLI (recommended):
+After that, you can use `itwct` or `itw-conformance-tool` from anywhere. If you prefer to stay inside the workspace, run:
 
 ```bash
-### Conformance Test Profile
+pnpm itw-conformance-tool
+```
 
-# First run: initialize data directory, keys, and config template
+Initialize the local environment, start the services, and run the tests:
+
+```bash
+# First run: create the data directory, keys, and config template
 pnpm itw-conformance-tool:init
+# or, if you link the CLI globally
+itwct init
+```
 
+`itwct init` is idempotent by default: if `config.ini` or any key/certificate file already exists, it is left untouched. Pass `--force` to overwrite everything:
+
+```bash
+itwct init --force
+```
+
+With `--force`, `init`:
+
+- Overwrites `config.ini` with a fresh template
+- Re-creates the data directory
+- Regenerates all keys and certificates (IACA, issuer signing keys, RP keys, x5c certificate, and, if HTTPS is enabled, the TLS certificate/key)
+
+> ⚠ Using `--force` is destructive: existing keys will be permanently replaced. Only use it when you deliberately want a clean environment.
+
+```bash
 # Start both services
 pnpm itw-conformance-tool:start
-
-# Run CLI-driven conformance tests
-pnpm itw-conformance-tool:test
+# or, if you link the CLI globally
+itwct start
 ```
 
-The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
+---
 
-```bash
-pnpm nx build itw-conformance-cli
-cd apps/cli && pnpm link --global
+## Configuration
 
-itw-conformance-tool init
-itw-conformance-tool start --all
-```
+### config.ini Structure
 
-### Configuration
-
-The generated `config.ini` also supports the Wallet Provider backend URL used by conformance tests:
+The `config.ini` file contains global settings for the conformance tool. Below is the structure with available options:
 
 ```ini
-; Wallet provider backend URL (used for conformance tests)
-; Default: https://127.0.0.1:8080
-wallet_provider_backend_url = https://127.0.0.1:8080
+[global]
+; Local directory for keys, certificates, and generated data
+; Default: ~/.itw-conformance-tool
+data_dir = ~/.itw-conformance-tool
+
+; Logging level: debug | info | warn | error
+; Default: info
+log_level = info
+
+; Enable HTTPS mode (CLI generates/checks local TLS cert/key and forwards ITW_CT_HTTPS) (true | false)
+; Default: true
+https = true
+
+; Mandatory Wallet Provider Backend URL (used for conformance tests)
+wallet_provider_backend_url =
 ```
 
 Behavior notes:
 
-- `wallet_provider_backend_url` is mandatory for `start` and `test` commands.
-- If the value is missing, empty, or not a valid URL, `itwct start` and `itwct test` fail fast with an explicit configuration error.
-- `itwct init` can still create/overwrite `config.ini` from scratch (including the template with an empty wallet field), so you can bootstrap first and fill the value before running services/tests.
+- All values in `[global]` are optional except `wallet_provider_backend_url`, which is **mandatory** for `start` and `test` commands.
+- If `wallet_provider_backend_url` is missing, empty, or not a valid URL, both `itwct start` and `itwct test` fail with an explicit configuration error.
+- `itwct init` generates a fresh `config.ini` from a template, so you can bootstrap first and fill in values before running services/tests.
 
-### Conformance Test Profile
+### Data Directory Structure
 
-The conformance suite currently uses a single root-level Vitest profile:
+When you run `itwct init`, the tool creates the following directory structure under `data_dir`:
 
-- `vitest.conformance-test.config.mts` -> conformance test matrix (`WP_*`)
-
-Run it from the workspace root:
-
-```bash
-pnpm vitest run --config vitest.conformance-test.config.mts
+```
+data/
+├── itw.db                    # SQLite database (conformance runs, checksums, session data)
+├── issuer/
+│   ├── iaca-cert.pem         # Mock IACA certificate
+│   ├── iaca-key.pem          # Mock IACA private key
+│   └── signing-keys.jwks.json # Issuer signing keys (JWKS format)
+├── rp/
+│   ├── auth-request-key.jwk.json  # RP authentication request key
+│   ├── auth-response-key.jwk.json # RP authentication response key
+│   ├── federation-key.jwk.json    # RP OpenID Federation key
+│   └── x5c-cert.pem               # RP x5c certificate (self-signed)
+├── tls-cert.pem              # TLS certificate (if https=true)
+├── tls-key.pem               # TLS private key (if https=true)
+└── logs/
+    └── *.log                 # Application logs
 ```
 
-The conformance test suite executes the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`.
+**Key files explained:**
 
-### Runtime Environment Overrides (Conformance)
+| File                            | Purpose                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| `itw.db`                        | SQLite database that stores conformance run results, check outcomes, and audit logs |
+| `issuer/iaca-cert.pem`          | Mock Italian Authorities Certification Authority (IACA) certificate for testing     |
+| `issuer/signing-keys.jwks.json` | JSON Web Key Set used by the Credential Issuer to sign credentials                  |
+| `rp/*.jwk.json`                 | RP keys for authorization requests, responses, and OpenID Federation trust chain    |
+| `rp/x5c-cert.pem`               | X.509 certificate included in the RP's authentication proofs                        |
+| `tls-cert.pem` / `tls-key.pem`  | TLS certificates for HTTPS communication (created only if `https=true`)             |
 
-For conformance runs, the following environment variables are supported:
+All keys and certificates are generated during `itwct init`. Use `itwct init --force` to regenerate them.
 
-- `ITW_CT_DATA_DIR`: SQLite/report data directory used by the Vitest conformance reporter
-- `ITW_CT_WALLET_PROVIDER_BACKEND_URL`: overrides `global.wallet_provider_backend_url` for conformance matrix tests (required unless you run via the CLI, which exports it from `config.ini`)
+---
 
-`ITW_CT_CONFIG_FILE` is used by the runnable apps (issuer/RP) to choose the config file, but the conformance matrix test does not currently read it.
+## Conformance Tests
 
-### External Conformance Tests
+The conformance test suite runs the matrix spec in `packages/conformance/src/tests/matrix/**/*.test.ts`. Before running tests, ensure the services are initialized and started.
 
-The conformance suite is opt-in.
+### Running Conformance Tests
 
-- Default run (`pnpm test`): standard project tests via Nx targets.
-- Explicit run (conformance profile):
+You can run conformance tests with:
 
 ```bash
-pnpm vitest run --config vitest.conformance-test.config.mts
+# Run the conformance matrix
+pnpm itw-conformance-tool:test
+# or, if the CLI is linked globally
+itwct test
 ```
 
-Or via CLI command mode:
+> Execute the conformance test matrix and record results to the database.
+>
+> Note: `wallet_provider_backend_url` must be set in `config.ini` before running tests. See [Configuration](#configuration) for details.
+
+### Generating Reports
+
+When a conformance flow completes, you can list and generate reports:
+
+**List all recorded runs:**
 
 ```bash
-pnpm itw-conformance-tool --args="test --config ./config.ini"
-```
-
-Once a conformance flow has completed, generate a report:
-
-```bash
-# List all recorded runs
 itwct report:list
-
-# Generate a report (html or pdf)
-itwct report:create <run_id> [html|pdf]
 ```
 
-> See [apps/cli/README.md](apps/cli/README.md) for full CLI usage.
+The command prints a formatted table of all recorded conformance runs:
+
+```
+RUN ID                                    STARTED AT                  CLOSED AT                   STATUS      CHECKS
+03a6aa68-2bf5-439a-b3e9-5c257e88bc89      2026-07-17T10:00:00.000Z    2026-07-17T10:05:32.000Z    closed      42
+```
+
+Each row contains:
+
+| Column       | Description                                                 |
+| ------------ | ----------------------------------------------------------- |
+| `RUN ID`     | UUID of the conformance run (use for `report:create`)       |
+| `STARTED AT` | ISO timestamp when the run started                          |
+| `CLOSED AT`  | ISO timestamp when the run ended (`-` if still in progress) |
+| `STATUS`     | Current run state (e.g. `closed`)                           |
+| `CHECKS`     | Total number of checks recorded in that run                 |
+
+**Generate an HTML or PDF report:**
+
+```bash
+itwct report:create <run-id> [html|pdf]
+
+# Example
+itwct report:create 03a6aa68-2bf5-439a-b3e9-5c257e88bc89 html
+```
+
+The report is written to the current working directory as `conformance-report-<run-id>.<format>`.
+
+---
+
+### Unit Tests
+
+Running `pnpm test` executes the **unit tests** of all workspace projects via `nx run-many -t test`. This does not run conformance tests.
+
+```bash
+pnpm test
+```
+
+---
 
 ## Commands
 
 All commands are run from the workspace root. Root-level scripts delegate to **Nx** where applicable and operate on projects that expose the requested target.
-
-### Root-level `pnpm` scripts
-
-| Command                                                       | Description                                                                                                   |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `pnpm build`                                                  | Build all projects with a `build` target                                                                      |
-| `pnpm start`                                                  | Serve all runnable apps with a `serve` target                                                                 |
-| `pnpm itw-conformance-tool`                                   | Run the local conformance CLI (`init`, `start`, `test`, `report:list`, `report:create`)                       |
-| `pnpm itw-conformance-tool:init`                              | Initialize local data directory and config template                                                           |
-| `pnpm itw-conformance-tool:start`                             | Start both services via CLI (`start --all`), fails if `global.wallet_provider_backend_url` is missing/invalid |
-| `pnpm itw-conformance-tool:start:issuer`                      | Start only the issuer service via CLI                                                                         |
-| `pnpm itw-conformance-tool:start:rp`                          | Start only the relying-party service via CLI                                                                  |
-| `pnpm issuer`                                                 | Serve `itw-credential-issuer`                                                                                 |
-| `pnpm rp`                                                     | Serve `itw-relying-party`                                                                                     |
-| `pnpm test`                                                   | Run Vitest for projects with a `test` target                                                                  |
-| `pnpm vitest run --config vitest.conformance-test.config.mts` | Run conformance test matrix profile (`vitest.conformance-test.config.mts`)                                    |
-| `pnpm typecheck`                                              | Type-check projects with a `typecheck` target                                                                 |
-| `pnpm lint`                                                   | Lint projects with a `lint` target                                                                            |
-| `pnpm format`                                                 | Format JavaScript, TypeScript, JSON, and Markdown files with Prettier                                         |
-| `pnpm clean`                                                  | Run project clean targets, then remove root `node_modules` and `.nx`                                          |
-| `pnpm pre-commit`                                             | Run lint and type-check on affected projects                                                                  |
 
 ### Targeting a single project with Nx
 
@@ -186,23 +255,6 @@ pnpm nx run itw-credential-issuer:serve
 pnpm nx run itw-relying-party:serve
 ```
 
-### Headless Conformance CLI
-
-All CLI details are documented in [apps/cli/README.md](apps/cli/README.md).
-
-Current workspace projects include:
-
-| Project                          | Path                         | Common targets                                |
-| -------------------------------- | ---------------------------- | --------------------------------------------- |
-| `itw-credential-issuer`          | `apps/itw-credential-issuer` | `build`, `serve`, `test`, `typecheck`, `lint` |
-| `itw-relying-party`              | `apps/itw-relying-party`     | `build`, `serve`, `test`, `typecheck`, `lint` |
-| `itw-conformance-cli`            | `apps/cli`                   | `build`, `run`, `test`, `typecheck`, `lint`   |
-| `@itw-conformance-tool/config`   | `packages/config`            | `build`, `test`, `typecheck`, `lint`          |
-| `@itw-conformance-tool/database` | `packages/database`          | `build`, `test`, `typecheck`, `lint`          |
-| `@itw-conformance-tool/issuer`   | `packages/issuer`            | `build`, `typecheck`, `lint`                  |
-| `@itw-conformance-tool/rp`       | `packages/rp`                | `build`, `test`, `typecheck`, `lint`          |
-| `@itw-conformance-tool/logger`   | `packages/logger`            | `build`, `typecheck`, `lint`                  |
-
 ### Nx cache
 
 Nx caches build and test outputs automatically. To force a clean run without cache, append `--skip-nx-cache`:
@@ -216,6 +268,25 @@ To wipe the full Nx cache:
 ```bash
 pnpm clean
 ```
+
+### Headless Conformance CLI
+
+All CLI details are documented in [apps/cli/README.md](apps/cli/README.md).
+
+#### Workspace projects
+
+Current workspace projects include:
+
+| Project                          | Path                         | Common targets                                |
+| -------------------------------- | ---------------------------- | --------------------------------------------- |
+| `itw-credential-issuer`          | `apps/itw-credential-issuer` | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `itw-relying-party`              | `apps/itw-relying-party`     | `build`, `serve`, `test`, `typecheck`, `lint` |
+| `itw-conformance-cli`            | `apps/cli`                   | `build`, `run`, `test`, `typecheck`, `lint`   |
+| `@itw-conformance-tool/config`   | `packages/config`            | `build`, `test`, `typecheck`, `lint`          |
+| `@itw-conformance-tool/database` | `packages/database`          | `build`, `test`, `typecheck`, `lint`          |
+| `@itw-conformance-tool/issuer`   | `packages/issuer`            | `build`, `typecheck`, `lint`                  |
+| `@itw-conformance-tool/rp`       | `packages/rp`                | `build`, `test`, `typecheck`, `lint`          |
+| `@itw-conformance-tool/logger`   | `packages/logger`            | `build`, `typecheck`, `lint`                  |
 
 ## Repository Structure
 
