@@ -149,7 +149,7 @@ Response:
 
 ### Batch Credential Endpoint
 
-**POST /batch_credential**
+**POST /batch_credential** *(not implemented in this service — use `POST /credential`)*
 
 This endpoint is not implemented in this service; use `POST /credential` instead.
 
