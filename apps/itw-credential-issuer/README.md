@@ -33,7 +33,7 @@ data_dir = ~/.itw-conformance-tool
 log_level = info
 
 ; Enable HTTPS mode
-; Default: false
+; Default: true
 https = false
 
 ; Wallet provider backend URL (mandatory for conformance tests)
