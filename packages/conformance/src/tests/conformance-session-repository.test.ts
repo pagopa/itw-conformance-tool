@@ -141,6 +141,19 @@ describe('SqliteConformanceSessionRepository', () => {
       await expect(repo.appendCheck('nonexistent-id', makeCheck())).resolves.not.toThrow();
     });
 
+    it('does not append to a session that is already closed', async () => {
+      const sessionId = 'closed-session-guard';
+      await repo.create(makeSession({ sessionId }));
+      await repo.appendCheck(sessionId, makeCheck({ step: 'PAR' }));
+      await repo.close(sessionId, 'PASSED');
+
+      await repo.appendCheck(sessionId, makeCheck({ step: 'AUTHORIZE' }));
+
+      const result = await repo.get(sessionId);
+      expect(result?.checks).toHaveLength(1);
+      expect(result?.status).toBe('PASSED');
+    });
+
     it('correctly persists optional fields on ConformanceCheck', async () => {
       const sessionId = 'cccccccc-0000-1111-2222-333344445555';
       await repo.create(makeSession({ sessionId }));
