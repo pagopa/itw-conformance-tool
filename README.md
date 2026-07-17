@@ -132,7 +132,7 @@ Behavior notes:
 When you run `itwct init`, the tool creates the following directory structure under `data_dir`:
 
 ```
-data/
+<data_dir>/
 ├── itw.db                    # SQLite database (conformance runs, checksums, session data)
 ├── issuer/
 │   ├── iaca-cert.pem         # Mock IACA certificate
