@@ -182,7 +182,7 @@ export function renderHtmlReport(jsonReporter: JsonReporterResult, options: Html
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wallet Conformance Tool Report</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:#f0f1f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111827}

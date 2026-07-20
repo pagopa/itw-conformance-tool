@@ -189,4 +189,33 @@ describe('json-reporter', () => {
       true
     );
   });
+
+  it('correctly infers WALLET_PROVIDER_BACKEND phase for wallet-backend-only sessions', () => {
+    const session: ConformanceSession = {
+      checks: [
+        {
+          description: 'Wallet Attestation is valid',
+          phase: 'WALLET_PROVIDER_BACKEND',
+          requirementId: 'WP_001',
+          result: 'PASS',
+          step: 'WALLET_PROVIDER_BACKEND',
+          timestamp: '2026-06-12T12:00:05.000Z'
+        }
+      ],
+      sessionId: 'aaaabbbb-0000-1111-2222-ccccddddeeee',
+      startedAt: '2026-06-12T12:00:00.000Z',
+      status: 'PASSED'
+    };
+
+    const jsonReporter = buildJsonReporterFromSession(session);
+
+    expect(jsonReporter.numTotalTestSuites).toBe(1);
+    expect(jsonReporter.numPassedTests).toBe(1);
+    expect(jsonReporter.numPendingTests).toBe(0);
+
+    const suite = jsonReporter.testResults[0];
+    expect(suite?.name).toBe('WALLET_PROVIDER_BACKEND');
+    expect(suite?.assertionResults[0]?.meta.phase).toBe('WALLET_PROVIDER_BACKEND');
+    expect(suite?.assertionResults[0]?.ancestorTitles[0]).toBe('Wallet Provider Backend');
+  });
 });

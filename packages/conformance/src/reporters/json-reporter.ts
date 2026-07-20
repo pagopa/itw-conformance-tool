@@ -21,6 +21,8 @@ const ISSUANCE_FLOW_STEPS: ConformanceStep[] = [
 
 const PRESENTATION_FLOW_STEPS: ConformanceStep[] = ['AUTHORIZE', 'PRESENTATION_RESPONSE'];
 
+const WALLET_PROVIDER_BACKEND_FLOW_STEPS: ConformanceStep[] = ['WALLET_PROVIDER_BACKEND'];
+
 type VitestAssertionStatus = 'passed' | 'failed' | 'pending';
 
 export interface JsonReporterAssertionResult {
@@ -104,11 +106,17 @@ function inferPhase(session: ConformanceSession): ConformancePhase {
     return 'PRESENTATION';
   }
 
+  if (session.checks.some((check) => check.phase === 'WALLET_PROVIDER_BACKEND')) {
+    return 'WALLET_PROVIDER_BACKEND';
+  }
+
   return 'ISSUANCE';
 }
 
 function getExpectedSteps(phase: ConformancePhase): ConformanceStep[] {
-  return phase === 'PRESENTATION' ? PRESENTATION_FLOW_STEPS : ISSUANCE_FLOW_STEPS;
+  if (phase === 'PRESENTATION') return PRESENTATION_FLOW_STEPS;
+  if (phase === 'WALLET_PROVIDER_BACKEND') return WALLET_PROVIDER_BACKEND_FLOW_STEPS;
+  return ISSUANCE_FLOW_STEPS;
 }
 
 function toAssertionStatus(result: ConformanceCheckResult): VitestAssertionStatus {
@@ -149,8 +157,14 @@ function toSuiteStatus(assertions: JsonReporterAssertionResult[]): VitestAsserti
   return 'passed';
 }
 
+function flowNameForPhase(phase: ConformancePhase): string {
+  if (phase === 'PRESENTATION') return 'Presentation Flow';
+  if (phase === 'WALLET_PROVIDER_BACKEND') return 'Wallet Provider Backend';
+  return 'Issuance Flow';
+}
+
 function toPlaceholderAssertion(phase: ConformancePhase, step: ConformanceStep): JsonReporterAssertionResult {
-  const flowName = phase === 'PRESENTATION' ? 'Presentation Flow' : 'Issuance Flow';
+  const flowName = flowNameForPhase(phase);
 
   return {
     ancestorTitles: [flowName, step],
@@ -180,7 +194,9 @@ function buildSuite(
   const sortedChecks = checks.slice().sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
 
   const assertions = sortedChecks.map((check, index) => {
-    const flowName = phase === 'PRESENTATION' ? 'Presentation Flow' : 'Issuance Flow';
+    // Use check.phase (not the inferred session phase) so that multi-phase sessions
+    // produce consistent ancestorTitles / fullName matching the actual check data.
+    const flowName = flowNameForPhase(check.phase);
 
     return {
       ancestorTitles: [flowName, step],
