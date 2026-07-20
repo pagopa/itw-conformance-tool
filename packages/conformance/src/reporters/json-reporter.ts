@@ -20,7 +20,6 @@ const ISSUANCE_FLOW_STEPS: ConformanceStep[] = [
 ];
 
 const PRESENTATION_FLOW_STEPS: ConformanceStep[] = ['AUTHORIZE', 'PRESENTATION_RESPONSE'];
-const WALLET_PROVIDER_BACKEND_FLOW_STEPS: ConformanceStep[] = ['WALLET_PROVIDER_BACKEND'];
 
 type VitestAssertionStatus = 'passed' | 'failed' | 'pending';
 
@@ -96,33 +95,20 @@ function parseIsoTimestamp(value: string | undefined, fallback: number): number 
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-function getSessionPhases(session: ConformanceSession): ConformancePhase[] {
-  const allPhases: ConformancePhase[] = ['ISSUANCE', 'PRESENTATION', 'WALLET_PROVIDER_BACKEND'];
-  return allPhases;
+function inferPhase(session: ConformanceSession): ConformancePhase {
+  if (session.checks.some((check) => check.phase === 'ISSUANCE')) {
+    return 'ISSUANCE';
+  }
+
+  if (session.checks.some((check) => check.phase === 'PRESENTATION')) {
+    return 'PRESENTATION';
+  }
+
+  return 'ISSUANCE';
 }
 
 function getExpectedSteps(phase: ConformancePhase): ConformanceStep[] {
-  if (phase === 'PRESENTATION') {
-    return PRESENTATION_FLOW_STEPS;
-  }
-
-  if (phase === 'WALLET_PROVIDER_BACKEND') {
-    return WALLET_PROVIDER_BACKEND_FLOW_STEPS;
-  }
-
-  return ISSUANCE_FLOW_STEPS;
-}
-
-function getFlowName(phase: ConformancePhase): string {
-  if (phase === 'PRESENTATION') {
-    return 'Presentation Flow';
-  }
-
-  if (phase === 'WALLET_PROVIDER_BACKEND') {
-    return 'Wallet Provider Backend';
-  }
-
-  return 'Issuance Flow';
+  return phase === 'PRESENTATION' ? PRESENTATION_FLOW_STEPS : ISSUANCE_FLOW_STEPS;
 }
 
 function toAssertionStatus(result: ConformanceCheckResult): VitestAssertionStatus {
@@ -164,7 +150,7 @@ function toSuiteStatus(assertions: JsonReporterAssertionResult[]): VitestAsserti
 }
 
 function toPlaceholderAssertion(phase: ConformancePhase, step: ConformanceStep): JsonReporterAssertionResult {
-  const flowName = getFlowName(phase);
+  const flowName = phase === 'PRESENTATION' ? 'Presentation Flow' : 'Issuance Flow';
 
   return {
     ancestorTitles: [flowName, step],
@@ -194,9 +180,9 @@ function buildSuite(
   const sortedChecks = checks.slice().sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
 
   const assertions = sortedChecks.map((check, index) => {
-    const flowName = getFlowName(phase);
+    const flowName = phase === 'PRESENTATION' ? 'Presentation Flow' : 'Issuance Flow';
 
-    const assertion: JsonReporterAssertionResult & { _time: number } = {
+    return {
       ancestorTitles: [flowName, step],
       duration: 0,
       failureMessages: toFailureMessages(check),
@@ -213,9 +199,7 @@ function buildSuite(
       status: toAssertionStatus(check.result),
       title: check.description,
       _time: parseIsoTimestamp(check.timestamp, fallbackStart)
-    };
-
-    return assertion;
+    } as JsonReporterAssertionResult & { _time: number };
   });
 
   const normalizedAssertions = assertions.length > 0 ? assertions : [toPlaceholderAssertion(phase, step)];
@@ -317,40 +301,33 @@ export async function loadSessionForReport(
 }
 
 export function buildJsonReporterFromSession(session: ConformanceSession): JsonReporterResult {
+  const phase = inferPhase(session);
+  const expectedSteps = getExpectedSteps(phase);
+
+  const checksByStep = new Map<ConformanceStep, ConformanceCheck[]>();
+  for (const step of expectedSteps) {
+    checksByStep.set(step, []);
+  }
+
+  for (const check of session.checks) {
+    if (!checksByStep.has(check.step)) {
+      checksByStep.set(check.step, []);
+    }
+
+    checksByStep.get(check.step)?.push(check);
+  }
+
   const startTime = parseIsoTimestamp(session.startedAt, Date.now());
   const endTime = parseIsoTimestamp(session.closedAt, Date.now());
-  const phases = getSessionPhases(session);
-  const testResults: JsonReporterTestResult[] = [];
 
-  for (const phase of phases) {
-    const expectedSteps = getExpectedSteps(phase);
-    const checksByStep = new Map<ConformanceStep, ConformanceCheck[]>();
+  const orderedSteps = [
+    ...expectedSteps,
+    ...Array.from(checksByStep.keys()).filter((step) => !expectedSteps.includes(step))
+  ];
 
-    for (const step of expectedSteps) {
-      checksByStep.set(step, []);
-    }
-
-    for (const check of session.checks) {
-      if (check.phase !== phase) {
-        continue;
-      }
-
-      if (!checksByStep.has(check.step)) {
-        checksByStep.set(check.step, []);
-      }
-
-      checksByStep.get(check.step)?.push(check);
-    }
-
-    const orderedSteps = [
-      ...expectedSteps,
-      ...Array.from(checksByStep.keys()).filter((step) => !expectedSteps.includes(step))
-    ];
-
-    for (const step of orderedSteps) {
-      testResults.push(buildSuite(phase, step, checksByStep.get(step) ?? [], startTime, endTime));
-    }
-  }
+  const testResults = orderedSteps.map((step) =>
+    buildSuite(phase, step, checksByStep.get(step) ?? [], startTime, endTime)
+  );
 
   const counts = aggregateCounts(testResults);
 
