@@ -13,6 +13,7 @@ const federationRoute: FastifyPluginAsync = async (app) => {
       try {
         const entityConfiguration = await createTrustAnchorEntityConfiguration({
           federationPrivateJwk: app.trustAnchorKeys.federationPrivateJwk,
+          relyingPartyEntityId: app.config.rpEntityId,
           trustAnchorBaseUrl: app.config.baseUrl
         });
 

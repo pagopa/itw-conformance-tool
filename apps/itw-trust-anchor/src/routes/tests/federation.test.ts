@@ -54,6 +54,9 @@ describe('GET /.well-known/openid-federation', () => {
     const payload = decodeJwt(response.body);
     expect(payload.iss).toBe(TRUST_ANCHOR_BASE_URL);
     expect(payload.sub).toBe(TRUST_ANCHOR_BASE_URL);
+    expect(payload.trust_mark_issuers).toEqual({
+      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/presentation/relying_party`]: ['https://rp.example.org']
+    });
 
     await app.close();
   });

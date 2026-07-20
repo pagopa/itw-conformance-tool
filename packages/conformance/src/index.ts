@@ -98,6 +98,7 @@ export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuanc
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wp077Scenario } from './scenarios/factories/wp-077.js';
+export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export type {
   ArtifactExpectation,
   AutomationMode,

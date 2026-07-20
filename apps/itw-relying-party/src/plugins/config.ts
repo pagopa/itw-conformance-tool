@@ -13,6 +13,7 @@ declare module 'fastify' {
       BASE_URL: string;
       DATA_DIR: string;
       IACA_X509: string;
+      TRUST_ANCHOR_URL: string;
     };
   }
 }
@@ -27,7 +28,8 @@ const configPlugin: FastifyPluginAsync = async (app) => {
   app.decorate('config', {
     BASE_URL: relyingPartyConfig.url,
     DATA_DIR: dataDir,
-    IACA_X509: convertPemToBase64Der(certificatePem)
+    IACA_X509: convertPemToBase64Der(certificatePem),
+    TRUST_ANCHOR_URL: relyingPartyConfig.trust_anchor_url
   });
 };
 

@@ -5,13 +5,41 @@ import {
   type SignCallback
 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
-import { CompactSign, importJWK } from 'jose';
+import { CompactSign, importJWK, SignJWT, type JWK } from 'jose';
 import z from 'zod';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const ENTITY_STATEMENT_TTL_SECONDS = 3600;
 const ENTITY_STATEMENT_SIGNING_ALG = 'ES256';
+const RELYING_PARTY_TRUST_MARK_PURPOSE = 'presentation';
+const RELYING_PARTY_TRUST_MARK_ENTITY_TYPE = 'relying_party';
+
+function getTrustMarkType(entityId: string): string {
+  return `${entityId}/trust_marks/${RELYING_PARTY_TRUST_MARK_PURPOSE}/${RELYING_PARTY_TRUST_MARK_ENTITY_TYPE}`;
+}
+
+async function createRelyingPartyTrustMark(options: {
+  entityId: string;
+  issuedAt: number;
+  signingJwk: JWK;
+  trustMarkType: string;
+}): Promise<string> {
+  const { entityId, issuedAt, signingJwk, trustMarkType } = options;
+  const alg = signingJwk.alg ?? ENTITY_STATEMENT_SIGNING_ALG;
+  const key = await importJWK(signingJwk, alg);
+
+  return new SignJWT({
+    ref: `${trustMarkType}/compliance`,
+    trust_mark_type: trustMarkType
+  })
+    .setProtectedHeader({ alg, kid: signingJwk.kid, typ: 'trust-mark+jwt' })
+    .setIssuedAt(issuedAt)
+    .setIssuer(entityId)
+    .setSubject(entityId)
+    .setExpirationTime(issuedAt + ENTITY_STATEMENT_TTL_SECONDS)
+    .sign(key);
+}
 
 export const entityConfigurationResponseSchema = z.string().describe('Signed OpenID Federation entity statement JWT.');
 
@@ -34,12 +62,19 @@ export const createEntityConfigurationHandler = async (
   req: FastifyRequest,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { BASE_URL } = req.server.config;
+  const { BASE_URL, TRUST_ANCHOR_URL } = req.server.config;
   const federationPublicKey = req.server.jwks.federation.public;
   const federationPrivateJwk = req.server.jwks.federation.private;
   const signingPublicKey = req.server.jwks.sig.public;
   const encryptionPublicKey = req.server.jwks.enc.public;
   const issuedAt = Math.floor(Date.now() / 1000);
+
+  const trustMark = await createRelyingPartyTrustMark({
+    entityId: BASE_URL,
+    issuedAt,
+    signingJwk: federationPrivateJwk,
+    trustMarkType: getTrustMarkType(TRUST_ANCHOR_URL)
+  });
 
   const metadata = {
     federation_entity: {
@@ -84,7 +119,12 @@ export const createEntityConfigurationHandler = async (
       },
       metadata,
       sub: BASE_URL,
-      trust_marks: []
+      trust_marks: [
+        {
+          trust_mark: trustMark,
+          trust_mark_type: getTrustMarkType(TRUST_ANCHOR_URL)
+        }
+      ]
     },
     header: {
       alg: ENTITY_STATEMENT_SIGNING_ALG,

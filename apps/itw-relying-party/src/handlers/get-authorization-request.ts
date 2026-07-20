@@ -1,3 +1,4 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -17,6 +18,18 @@ export const getAuthorizationRequestHandler = async (
   const requestObjectRepository = req.server.repository.requestObject;
   const state = req.params.state;
   const requestObject = requestObjectRepository.get(state);
+
+  await req.server.conformanceEventSink.emit(
+    createObservedEvent({
+      name: 'rp.request_object.requested',
+      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
+      correlationId: state,
+      service: 'relying-party',
+      requestId: req.id,
+      diagnostic: { endpoint: '/auth/request/:state' }
+    })
+  );
+
   requestObjectRepository.update(state, 'checking');
   return reply.code(200).header('content-type', 'application/oauth-authz-req+jwt').send(requestObject.jwt);
 };
