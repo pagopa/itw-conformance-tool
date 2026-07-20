@@ -34,7 +34,7 @@
     "dcql": "^1.0.0",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
-    "jose": "^5.10.0",
+    "jose": "catalog:",
     "zod": "catalog:"
   }
 }

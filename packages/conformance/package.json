@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@types/node": "catalog:node",
+    "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
+    "jose": "catalog:",
     "vitest": "catalog:"
   }
 }
