@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { parseAuthorizationResponse, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt } from 'jose';
 import z from 'zod';
@@ -52,6 +53,18 @@ export const getAuthorizationResponseHandler = async (
 ): Promise<FastifyReply> => {
   const requestObjectRepository = req.server.repository.requestObject;
   const authorizationRequest = requestObjectRepository.getBySessionId(req.query.session_id);
+  const correlationId = authorizationRequest.id;
+
+  await req.server.conformanceEventSink.emit(
+    createObservedEvent({
+      name: 'rp.presentation_response.received',
+      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
+      correlationId,
+      service: 'relying-party',
+      requestId: req.id,
+      diagnostic: { endpoint: '/auth/response' }
+    })
+  );
 
   if ('error' in req.body) {
     requestObjectRepository.update(authorizationRequest.id, 'rejected');
@@ -83,10 +96,31 @@ export const getAuthorizationResponseHandler = async (
 
   const verificationResult = await toResult(verifier.verifyCredentials());
   if (!verificationResult.ok) {
+    await req.server.conformanceEventSink.emit(
+      createObservedEvent({
+        name: 'vp_token.validation.failed',
+        scenarioId: req.conformance?.correlation?.scenarioId ?? null,
+        correlationId,
+        service: 'relying-party',
+        requestId: req.id,
+        validation: { reason: verificationResult.error.message }
+      })
+    );
+
     requestObjectRepository.update(authorizationRequest.id, 'rejected');
     req.log.error({ error: verificationResult.error }, 'Error verifying credentials');
     return reply.status(403).send({ error: 'invalid_request', error_description: verificationResult.error.message });
   }
+
+  await req.server.conformanceEventSink.emit(
+    createObservedEvent({
+      name: 'vp_token.validation.succeeded',
+      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
+      correlationId,
+      service: 'relying-party',
+      requestId: req.id
+    })
+  );
 
   const redirectUri = new URL(`${req.server.config.BASE_URL}/success.html`);
   const responseCode = randomBytes(32).toString('hex');

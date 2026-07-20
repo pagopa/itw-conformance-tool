@@ -18,6 +18,7 @@ import {
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
+import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
 
 import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
@@ -136,6 +137,17 @@ function writeOutcome(outcome: ScenarioOutcome, write: (message: string) => void
   }
 }
 
+async function copyQrPayloadToClipboard(stimulus: ScenarioStimulus, write: (message: string) => void): Promise<void> {
+  if (stimulus.type !== 'credential-offer' && stimulus.type !== 'presentation-request') return;
+
+  if (await copyTextToClipboard(stimulus.qrCode)) {
+    write(chalk.green('QR payload copied to your clipboard.'));
+    write('');
+  } else {
+    write(chalk.dim('Could not access the system clipboard; copy the QR payload shown above manually.'));
+  }
+}
+
 function showPrompt(
   definition: ProtocolObservedScenarioDefinition,
   stimulus: ScenarioStimulus,
@@ -239,6 +251,7 @@ export function createProtocolObservedScenarioRunner(
         abortSignal: abortController.signal,
         async showInstructions() {
           showPrompt(definition, stimulus, endpoints, write);
+          await copyQrPayloadToClipboard(stimulus, write);
           eventSubscription?.dispose();
           eventSubscription = eventStore.subscribe((event) => {
             write(`[event] ${event.name} service=${event.service} scenario=${event.scenarioId ?? 'unmatched'}`);

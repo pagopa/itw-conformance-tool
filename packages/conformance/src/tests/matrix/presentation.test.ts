@@ -7,7 +7,8 @@ import {
   createProtocolObservedScenarioRunner,
   createSqliteScenarioEventBridge,
   presentationScenarioRegistry,
-  wp077Scenario
+  wp077Scenario,
+  wp080Scenario
 } from '../../index.js';
 
 import type { ScenarioRunner } from '../../index.js';
@@ -20,9 +21,10 @@ describe('Test Cases for Presentation Phase', () => {
     const config = loadConfig();
     db = new DatabaseClient(config.global.data_dir);
 
+    const federation = config['trust-anchor'].url;
     const relyingParty = config['relying-party'].url;
     runner = createProtocolObservedScenarioRunner({
-      endpoints: { relyingParty },
+      endpoints: { federation, relyingParty },
       eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
       registry: presentationScenarioRegistry
     });
@@ -47,5 +49,21 @@ describe('Test Cases for Presentation Phase', () => {
       }
     },
     wp077Scenario.timeouts.vitestTestMs
+  );
+
+  test(
+    `[${wp080Scenario.id}]: ${wp080Scenario.title}`,
+    async () => {
+      const session = await runner.start(wp080Scenario.id);
+
+      try {
+        await session.showInstructions();
+        const outcome = await session.awaitVerdict();
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+      } finally {
+        await session.stop();
+      }
+    },
+    wp080Scenario.timeouts.vitestTestMs
   );
 });
