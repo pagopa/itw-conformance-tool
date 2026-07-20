@@ -1,4 +1,4 @@
-import type { ObservedEventName } from '../events/event-types.js';
+import type { ObservedEventName, ObservedServiceName } from '../events/event-types.js';
 
 export type ProtocolObservedPhase = 'ISSUANCE' | 'PRESENTATION' | 'WALLET_INSTANCE';
 
@@ -45,6 +45,24 @@ export interface ScenarioInstructions {
   steps?: string[];
 }
 
+export type PreCorrelationDiagnosticExpectationValue =
+  | string
+  | {
+      endpoint: LocalServiceName;
+      match: 'normalized-url';
+    };
+
+export interface PreCorrelationEvidenceExpectation {
+  event: ObservedEventName;
+  service: ObservedServiceName;
+  diagnostics?: Record<string, PreCorrelationDiagnosticExpectationValue>;
+}
+
+export interface PreCorrelationEvidenceOptions {
+  expectedEvents: PreCorrelationEvidenceExpectation[];
+  sequentialInteractiveOnly: true;
+}
+
 export interface ProtocolObservedScenarioDefinition {
   id: string;
   title: string;
@@ -60,5 +78,6 @@ export interface ProtocolObservedScenarioDefinition {
   verdictRules: VerdictRule[];
   instructions: ScenarioInstructions;
   missingRequiredEventPolicy?: 'fail' | 'inconclusive';
+  preCorrelationEvidence?: PreCorrelationEvidenceOptions;
   setup?: Record<string, unknown>;
 }

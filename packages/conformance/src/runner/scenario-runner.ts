@@ -225,6 +225,7 @@ export function createProtocolObservedScenarioRunner(
       const eventBridge = await options.eventBridgeFactory?.({
         correlationId,
         definition,
+        endpoints,
         eventStore,
         scenarioId,
         startedAt

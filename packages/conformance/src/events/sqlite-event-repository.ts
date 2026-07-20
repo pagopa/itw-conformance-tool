@@ -1,3 +1,9 @@
+import type {
+  LocalServiceEndpoints,
+  PreCorrelationDiagnosticExpectationValue,
+  PreCorrelationEvidenceExpectation,
+  ProtocolObservedScenarioDefinition
+} from '../scenarios/definitions.js';
 import type { ScenarioEventBridgeFactory } from './event-bridge.js';
 import type { ScenarioEventSink } from './event-bus.js';
 import type { ObservedEvent, ObservedEventName, ObservedServiceName } from './event-types.js';
@@ -34,6 +40,32 @@ function stringifyJsonField(value: unknown): string | null {
   return value === undefined ? null : JSON.stringify(value);
 }
 
+/**
+ * Removes trailing slashes from configured endpoints and diagnostics so equivalent
+ * federation entity IDs compare cleanly.
+ */
+function trimTrailingSlashes(value: string): string {
+  let result = value;
+  while (result.endsWith('/')) result = result.slice(0, -1);
+  return result;
+}
+
+/**
+ * Normalizes a federation subject URL for matching by trimming whitespace,
+ * dropping fragments, and removing trailing slashes.
+ */
+function normalizeUrl(value: string): string {
+  const trimmed = value.trim();
+
+  try {
+    const url = new URL(trimmed);
+    url.hash = '';
+    return trimTrailingSlashes(url.toString());
+  } catch {
+    return trimTrailingSlashes(trimmed);
+  }
+}
+
 function rowToObservedEvent(row: EventRow): ObservedEvent {
   return {
     id: row.id,
@@ -50,6 +82,90 @@ function rowToObservedEvent(row: EventRow): ObservedEvent {
     error: parseJsonField(row.error),
     validation: parseJsonField(row.validation)
   } as ObservedEvent;
+}
+
+/**
+ * Lists the event names that are allowed to satisfy a scenario's declared entry
+ * and required evidence.
+ */
+function scenarioDeclaredEventNames(definition: ProtocolObservedScenarioDefinition): ObservedEventName[] {
+  return [definition.entryEvent, ...(definition.requiredEvents ?? [])];
+}
+
+/**
+ * Checks that a SQLite event was emitted after the current interactive scenario
+ * session started.
+ */
+function isPostStartEvent(event: ObservedEvent, startedAt: string): boolean {
+  return Date.parse(event.timestamp) >= Date.parse(startedAt);
+}
+
+/**
+ * Ensures pre-correlation evidence is not already bound to a different scenario
+ * ID or protocol correlation ID.
+ */
+function isUncorrelatedEvent(event: ObservedEvent): boolean {
+  return event.scenarioId === null && event.correlationId === null;
+}
+
+/**
+ * Compares one diagnostic value against either an exact string expectation or a
+ * normalized configured endpoint URL.
+ */
+function diagnosticValueMatches(
+  actual: unknown,
+  expected: PreCorrelationDiagnosticExpectationValue,
+  endpoints: LocalServiceEndpoints
+): boolean {
+  if (typeof expected === 'string') return actual === expected;
+  if (expected.match !== 'normalized-url') return false;
+  if (typeof actual !== 'string') return false;
+
+  const endpoint = endpoints[expected.endpoint];
+  if (!endpoint) return false;
+
+  return normalizeUrl(actual) === normalizeUrl(endpoint);
+}
+
+/**
+ * Verifies that every diagnostic matcher configured for an expected evidence
+ * event matches the observed event diagnostics.
+ */
+function diagnosticsMatch(
+  event: ObservedEvent,
+  expectation: PreCorrelationEvidenceExpectation,
+  endpoints: LocalServiceEndpoints
+): boolean {
+  const diagnostics = expectation.diagnostics;
+  if (!diagnostics) return true;
+
+  return Object.entries(diagnostics).every(([key, expected]) =>
+    diagnosticValueMatches(event.diagnostic?.[key], expected, endpoints)
+  );
+}
+
+/**
+ * Allows a scenario to opt in to narrowly matched, post-start, uncorrelated
+ * federation evidence for sequential interactive runs.
+ */
+function matchesPreCorrelationEvidence(
+  event: ObservedEvent,
+  definition: ProtocolObservedScenarioDefinition,
+  endpoints: LocalServiceEndpoints,
+  startedAt: string
+): boolean {
+  const options = definition.preCorrelationEvidence;
+  if (!options?.sequentialInteractiveOnly) return false;
+  if (!isUncorrelatedEvent(event)) return false;
+  if (!isPostStartEvent(event, startedAt)) return false;
+  if (!scenarioDeclaredEventNames(definition).includes(event.name)) return false;
+
+  return options.expectedEvents.some(
+    (expectation) =>
+      expectation.event === event.name &&
+      expectation.service === event.service &&
+      diagnosticsMatch(event, expectation, endpoints)
+  );
 }
 
 export class SqliteScenarioEventRepository implements ScenarioEventSink {
@@ -123,12 +239,16 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
 export function createSqliteScenarioEventBridge(
   options: CreateSqliteScenarioEventBridgeOptions
 ): ScenarioEventBridgeFactory {
-  return ({ correlationId, eventStore, scenarioId, startedAt }) => {
+  return ({ correlationId, definition, endpoints, eventStore, scenarioId, startedAt }) => {
     const repository = new SqliteScenarioEventRepository(options.db);
     const seenEventIds = new Set(eventStore.all().map((event) => event.id));
 
     function belongsToScenario(event: ObservedEvent): boolean {
-      return event.scenarioId === scenarioId || event.correlationId === correlationId;
+      return (
+        event.scenarioId === scenarioId ||
+        event.correlationId === correlationId ||
+        matchesPreCorrelationEvidence(event, definition, endpoints, startedAt)
+      );
     }
 
     function poll(): void {
