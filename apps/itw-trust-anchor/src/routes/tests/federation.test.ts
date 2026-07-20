@@ -55,6 +55,7 @@ describe('GET /.well-known/openid-federation', () => {
     expect(payload.iss).toBe(TRUST_ANCHOR_BASE_URL);
     expect(payload.sub).toBe(TRUST_ANCHOR_BASE_URL);
     expect(payload.trust_mark_issuers).toEqual({
+      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/issuance/credential_issuer`]: ['https://issuer.example.org'],
       [`${TRUST_ANCHOR_BASE_URL}/trust_marks/presentation/relying_party`]: ['https://rp.example.org']
     });
 

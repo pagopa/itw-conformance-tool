@@ -15,6 +15,7 @@ const ENTITY_STATEMENT_TTL_SECONDS = 3600;
 const ENTITY_STATEMENT_SIGNING_ALG = 'ES256';
 const ENTITY_STATEMENT_TYP = 'entity-statement+jwt';
 const RELYING_PARTY_TRUST_MARK_TYPE = 'trust_marks/presentation/relying_party';
+const CREDENTIAL_ISSUER_TRUST_MARK_TYPE = 'trust_marks/issuance/credential_issuer';
 
 /** Identifies which leaf entity a subordinate statement is being produced for, so the
  * correct public-JWK derivation (see {@link toRpPublicJwk}) can be selected. */
@@ -91,10 +92,11 @@ function toSigningJwk(privateJwk: JwkKey, publicJwk: JsonWebKey): JsonWebKey {
  */
 export async function createTrustAnchorEntityConfiguration(options: {
   federationPrivateJwk: JwkKey;
+  issuerEntityId: string;
   relyingPartyEntityId: string;
   trustAnchorBaseUrl: string;
 }): Promise<string> {
-  const { federationPrivateJwk, relyingPartyEntityId, trustAnchorBaseUrl } = options;
+  const { federationPrivateJwk, issuerEntityId, relyingPartyEntityId, trustAnchorBaseUrl } = options;
   const publicJwk = stripPrivateParams(federationPrivateJwk);
   const issuedAt = Math.floor(Date.now() / 1000);
 
@@ -123,6 +125,7 @@ export async function createTrustAnchorEntityConfiguration(options: {
       metadata: parsedMetadata.data as ItWalletEntityConfigurationClaimsOptions['metadata'],
       sub: trustAnchorBaseUrl,
       trust_mark_issuers: {
+        [`${trustAnchorBaseUrl}/${CREDENTIAL_ISSUER_TRUST_MARK_TYPE}`]: [issuerEntityId],
         [`${trustAnchorBaseUrl}/${RELYING_PARTY_TRUST_MARK_TYPE}`]: [relyingPartyEntityId]
       }
     },
