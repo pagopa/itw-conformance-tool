@@ -68,6 +68,19 @@ const requestObjectRoute: FastifyPluginAsync = async (app) => {
         walletAuthBaseUri: parsed.data.walletAuthBaseUri
       });
 
+      if (app.hasDecorator('conformanceSessionRepository')) {
+        try {
+          await app.conformanceSessionRepository.create({
+            sessionId: result.state,
+            startedAt: new Date().toISOString(),
+            status: 'OPEN',
+            checks: []
+          });
+        } catch (err) {
+          app.log.warn({ err, sessionId: result.state }, 'conformance: failed to open session at request-object');
+        }
+      }
+
       return reply.code(200).send({ url: result.walletUrl });
     }
   });

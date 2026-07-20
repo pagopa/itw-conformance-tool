@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { createLogger } from '@itw-conformance-tool/logger';
 
 import { init } from './commands/init.js';
@@ -72,7 +74,8 @@ async function main(): Promise<void> {
     }
 
     const services = getNxCommands(flags);
-    const env = buildEnv(runtimeConfigs, emitLog);
+    const configFilePath = flags.config.value ? flags.config.path : resolve(process.cwd(), 'config.ini');
+    const env = buildEnv(runtimeConfigs, emitLog, configFilePath);
 
     // __ Test section
     if (command === 'test') {

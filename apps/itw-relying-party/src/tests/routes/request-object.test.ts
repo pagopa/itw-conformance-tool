@@ -3,11 +3,32 @@ import { describe, it, expect, afterEach } from 'vitest';
 import requestObjectRoute from '../../routes/request-object.js';
 import { buildRpRouteApp } from '../helpers/rp-route-app.js';
 
+import type { ConformanceSession, IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
+
 function requireValue<T>(value: T | null | undefined, message: string): T {
   if (value === null || value === undefined || (typeof value === 'string' && value.length === 0)) {
     throw new Error(message);
   }
   return value;
+}
+
+function makeTrackingConformanceRepo(): IConformanceSessionRepository & { created: ConformanceSession[] } {
+  const created: ConformanceSession[] = [];
+  return {
+    created,
+    async create(session) {
+      created.push(session);
+    },
+    async get(sessionId) {
+      return created.find((s) => s.sessionId === sessionId) ?? null;
+    },
+    async appendCheck() {
+      /* empty */
+    },
+    async close() {
+      /* empty */
+    }
+  };
 }
 
 const VALID_DCQL_BODY = {
@@ -174,5 +195,37 @@ describe('POST /request-object', () => {
     };
 
     expect(payload.dcql_query.credentials[0]?.meta?.vct_values).toEqual(['urn:eudi:pid:it:1']);
+  });
+
+  it('opens a conformance session when conformanceSessionRepository is decorated', async () => {
+    const repo = makeTrackingConformanceRepo();
+    ctx = await buildRpRouteApp(requestObjectRoute, { conformanceSessionRepository: repo });
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/request-object',
+      payload: VALID_DCQL_BODY
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { url } = res.json<{ url: string }>();
+    const state = requireValue(new URL(url).searchParams.get('state'), 'Missing state in wallet URL');
+
+    expect(repo.created).toHaveLength(1);
+    expect(repo.created[0]?.sessionId).toBe(state);
+    expect(repo.created[0]?.status).toBe('OPEN');
+    expect(repo.created[0]?.checks).toEqual([]);
+  });
+
+  it('does not fail when conformanceSessionRepository is not decorated', async () => {
+    ctx = await buildRpRouteApp(requestObjectRoute);
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/request-object',
+      payload: VALID_DCQL_BODY
+    });
+
+    expect(res.statusCode).toBe(200);
   });
 });
