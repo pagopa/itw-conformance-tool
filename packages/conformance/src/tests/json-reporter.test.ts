@@ -99,10 +99,10 @@ describe('json-reporter', () => {
 
     expectVitestShape(jsonReporter);
     expect(jsonReporter.meta.runId).toBe('550e8400-e29b-41d4-a716-446655440000');
-    expect(jsonReporter.numTotalTestSuites).toBe(10);
+    expect(jsonReporter.numTotalTestSuites).toBe(7);
     expect(jsonReporter.numPassedTests).toBe(1);
     expect(jsonReporter.numFailedTests).toBe(1);
-    expect(jsonReporter.numPendingTests).toBe(8);
+    expect(jsonReporter.numPendingTests).toBe(5);
     expect(jsonReporter.success).toBe(false);
 
     const tokenSuite = jsonReporter.testResults.find((suite) => suite.name === 'TOKEN');
@@ -174,11 +174,11 @@ describe('json-reporter', () => {
       (suite) => suite.name === 'AUTHORIZE' && suite.assertionResults[0]?.meta.phase === 'PRESENTATION'
     );
 
-    const issuanceParSuite = jsonReporter.testResults.find(
-      (suite) => suite.name === 'PAR' && suite.assertionResults[0]?.meta.phase === 'ISSUANCE'
+    const pendingPresentationSuite = jsonReporter.testResults.find(
+      (suite) => suite.name === 'PRESENTATION_RESPONSE' && suite.assertionResults[0]?.meta.phase === 'PRESENTATION'
     );
-    expect(issuanceParSuite?.status).toBe('pending');
-    expect(issuanceParSuite?.assertionResults[0]?.meta.result).toBe('NOT_REACHED');
+    expect(pendingPresentationSuite?.status).toBe('pending');
+    expect(pendingPresentationSuite?.assertionResults[0]?.meta.result).toBe('NOT_REACHED');
 
     expect(walletSuite).toBeDefined();
     expect(presentationSuite).toBeDefined();

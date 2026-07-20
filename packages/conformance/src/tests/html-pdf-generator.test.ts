@@ -97,7 +97,8 @@ describe('html-pdf-generator', () => {
     const html = renderHtmlReport(makeJsonReporter(), { generatedAt: new Date('2026-06-12T12:10:00.000Z') });
 
     expect(html).toContain('<!doctype html>');
-    expect(html).toContain('Conformance Report - 550e8400-e29b-41d4-a716-446655440000');
+    expect(html).toContain('IT-Wallet Conformance Report');
+    expect(html).toContain('550e8400-e29b-41d4-a716-446655440000');
     expect(html).toContain('IT-WALLET-1.4-§4.3.2');
     expect(html).toContain('invalid dpop');
   });
