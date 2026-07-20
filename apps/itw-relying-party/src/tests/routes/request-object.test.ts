@@ -22,11 +22,14 @@ function makeTrackingConformanceRepo(): IConformanceSessionRepository & { create
     async get(sessionId) {
       return created.find((s) => s.sessionId === sessionId) ?? null;
     },
-    async appendCheck() {
+    async appendCheck(_sessionId: string, _check: unknown) {
       /* empty */
     },
-    async close() {
+    async close(_sessionId: string, _status: unknown) {
       /* empty */
+    },
+    async markOpenSessionsIncompleteOlderThan(_cutoffIso: string): Promise<number> {
+      return 0;
     }
   };
 }
