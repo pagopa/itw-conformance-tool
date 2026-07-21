@@ -1,3 +1,5 @@
+import { normalizeUrl } from '@itw-conformance-tool/utils';
+
 import { getRequiredEventName } from '../scenarios/definitions.js';
 
 import type {
@@ -41,32 +43,6 @@ function parseJsonField<T>(value: string | null): T | undefined {
 
 function stringifyJsonField(value: unknown): string | null {
   return value === undefined ? null : JSON.stringify(value);
-}
-
-/**
- * Removes trailing slashes from configured endpoints and diagnostics so equivalent
- * federation entity IDs compare cleanly.
- */
-function trimTrailingSlashes(value: string): string {
-  let result = value;
-  while (result.endsWith('/')) result = result.slice(0, -1);
-  return result;
-}
-
-/**
- * Normalizes a federation subject URL for matching by trimming whitespace,
- * dropping fragments, and removing trailing slashes.
- */
-function normalizeUrl(value: string): string {
-  const trimmed = value.trim();
-
-  try {
-    const url = new URL(trimmed);
-    url.hash = '';
-    return trimTrailingSlashes(url.toString());
-  } catch {
-    return trimTrailingSlashes(trimmed);
-  }
 }
 
 function rowToObservedEvent(row: EventRow): ObservedEvent {

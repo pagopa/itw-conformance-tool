@@ -245,6 +245,9 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      '@itw-conformance-tool/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       '@noble/curves':
         specifier: ^1.9.2
         version: 1.9.7
@@ -447,6 +450,9 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      '@itw-conformance-tool/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
         version: 1.5.4-alpha-20260717125503
@@ -493,6 +499,9 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database
+      '@itw-conformance-tool/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
         version: 1.5.4-alpha-20260717125503
@@ -584,6 +593,16 @@ importers:
       pino-pretty:
         specifier: catalog:node
         version: 13.1.3
+
+  packages/utils:
+    dependencies:
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(yaml@2.9.0))
 
 packages:
 
