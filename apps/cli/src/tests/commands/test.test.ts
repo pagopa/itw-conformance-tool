@@ -16,8 +16,7 @@ describe('test command', () => {
   });
 
   afterEach(() => {
-    process.removeAllListeners('SIGINT');
-    process.removeAllListeners('SIGTERM');
+    // No explicit signal listener cleanup needed: runTestCommand registers `once` handlers and each test emits the signal.
   });
 
   it('resolves cleanly when SIGINT is received', async () => {
