@@ -9,6 +9,7 @@ import ephemeralKeysPlugin from './plugins/ephemeral-keys.js';
 import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
 import formbodyPlugin from './plugins/external/formbody.js';
 import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
+import rateLimitPlugin, { autoConfig as rateLimitConfig } from './plugins/external/rate-limit.js';
 import sensiblePlugin from './plugins/external/sensible.js';
 import staticPlugin from './plugins/external/static.js';
 import swaggerPlugin from './plugins/external/swagger.js';
@@ -27,6 +28,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
   await app.register(corsPlugin, corsConfig);
   await app.register(formbodyPlugin);
   await app.register(helmetPlugin, helmetConfig);
+  await app.register(rateLimitPlugin, rateLimitConfig);
   await app.register(sensiblePlugin);
   await app.register(staticPlugin);
   await app.register(swaggerPlugin);
