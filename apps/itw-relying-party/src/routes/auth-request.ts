@@ -46,7 +46,17 @@ const authRequestRoute: FastifyPluginAsync = async (app) => {
   app.route<{ Params: AuthRequestParams; Body: PostAuthRequestBody }>({
     url: '/auth/request/:state',
     method: 'POST',
-    schema: routeSchema,
+    schema: {
+      ...routeSchema,
+      consumes: ['application/x-www-form-urlencoded'],
+      body: {
+        type: 'object',
+        properties: {
+          wallet_metadata: { type: 'string' },
+          wallet_nonce: { type: 'string' }
+        }
+      }
+    },
     handler: async (request, reply) => {
       const { state } = request.params;
       const jwt = await serveAuthorizationRequestUseCase({ state, sessionService: app.sessionService });
