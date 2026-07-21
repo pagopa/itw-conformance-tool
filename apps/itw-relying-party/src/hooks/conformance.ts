@@ -148,7 +148,7 @@ export function registerAuthRequestConformanceHooks(app: FastifyInstance): void 
 
 /**
  * Registers a hook that closes the conformance session and records
- * WP_091–WP_093c checks when the auth-response route processes a JWE.
+ * the PRESENTATION_RESPONSE:PRESENTATION requirement (IT-WALLET-1.4-§5.2.2) when the auth-response route processes a JWE.
  */
 export function registerAuthResponseConformanceHooks(app: FastifyInstance): void {
   app.addHook('onSend', async (request, reply, payload) => {
