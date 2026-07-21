@@ -3,7 +3,7 @@ import {
   type ItWalletEntityConfigurationClaims,
   type ItWalletMetadataV1_3
 } from '@pagopa/io-wallet-oid-federation';
-import { createLocalJWKSet, decodeJwt, jwtVerify, type JWK } from 'jose';
+import { createLocalJWKSet, decodeJwt, decodeProtectedHeader, jwtVerify, type JWK } from 'jose';
 import { expect } from 'vitest';
 
 import { isHttpsUrl, isObject } from './general.js';
@@ -83,7 +83,22 @@ export async function resolveWalletSolutionJwks(
     expect(signedJwks, 'wallet_solution signed_jwks_uri response must be a compact JWT').toMatch(
       /^[^.]+\.[^.]+\.[^.]+$/
     );
-    await jwtVerify(signedJwks, createLocalJWKSet(entityConfigurationClaims.jwks));
+
+    const { kid, typ } = decodeProtectedHeader(signedJwks);
+    expect(typ, 'wallet_solution signed_jwks_uri JWT type must be jwk-set+jwt').toBe('jwk-set+jwt');
+    expect(kid, 'wallet_solution signed_jwks_uri JWT header must contain a string kid').toEqual(expect.any(String));
+
+    const entityIdentifier = entityConfigurationClaims.sub;
+    expect(
+      entityIdentifier,
+      'Entity Configuration subject must identify the entity that publishes the signed JWKS'
+    ).toEqual(expect.any(String));
+
+    await jwtVerify(signedJwks, createLocalJWKSet(entityConfigurationClaims.jwks), {
+      issuer: entityIdentifier,
+      requiredClaims: ['iss', 'sub'],
+      subject: entityIdentifier
+    });
 
     const jwksDocument = decodeJwt<{ keys?: JWK[] }>(signedJwks);
     expect(jwksDocument, 'wallet_solution signed_jwks_uri JWT payload must be a JWKS object').toSatisfy(isObject);
