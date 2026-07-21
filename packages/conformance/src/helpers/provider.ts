@@ -1,7 +1,7 @@
 import {
-  itWalletMetadataV1_3,
+  itWalletMetadataV1_4,
   type ItWalletEntityConfigurationClaims,
-  type ItWalletMetadataV1_3
+  type ItWalletMetadataV1_4
 } from '@pagopa/io-wallet-oid-federation';
 import { createLocalJWKSet, decodeJwt, decodeProtectedHeader, jwtVerify, type JWK } from 'jose';
 import { expect } from 'vitest';
@@ -12,8 +12,8 @@ export function decodeEntityConfiguration(entityConfiguration: string): ItWallet
   return decodeJwt<ItWalletEntityConfigurationClaims>(entityConfiguration);
 }
 
-export function expectWalletMetadata(metadata: unknown): ItWalletMetadataV1_3 {
-  const metadataResult = itWalletMetadataV1_3.safeParse(metadata);
+export function expectWalletMetadata(metadata: unknown): ItWalletMetadataV1_4 {
+  const metadataResult = itWalletMetadataV1_4.safeParse(metadata);
 
   if (!metadataResult.success) {
     const validationErrors = metadataResult.error.issues.map(
@@ -35,7 +35,7 @@ export function expectPublicJwk(key: JWK, location: string): void {
 
 export async function resolveWalletSolutionJwks(
   entityConfigurationClaims: ItWalletEntityConfigurationClaims,
-  walletSolution: NonNullable<ItWalletMetadataV1_3['wallet_solution']>
+  walletSolution: NonNullable<ItWalletMetadataV1_4['wallet_solution']>
 ): Promise<JWK[]> {
   const keyReferences = [walletSolution.jwks, walletSolution.jwks_uri, walletSolution.signed_jwks_uri].filter(
     (reference) => reference !== undefined
