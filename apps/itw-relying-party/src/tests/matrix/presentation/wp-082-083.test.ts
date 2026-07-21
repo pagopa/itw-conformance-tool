@@ -94,9 +94,8 @@ describe('Presentation - Request Object retrieval (WP_082 / WP_083)', () => {
       payload: `wallet_nonce=test-nonce-${randomUUID()}&wallet_metadata=${encodeURIComponent(JSON.stringify(VALID_WALLET_METADATA))}`
     });
 
-    const piiInMetadata = PII_FIELDS.filter((f) => f in VALID_WALLET_METADATA);
     expect(res.statusCode).toBe(200);
-    expect(piiInMetadata).toHaveLength(0);
+    expect(res.headers['content-type']).toContain('application/oauth-authz-req+jwt');
   });
 
   it('[PRESENTATION:AUTHORIZE] WP_083c: Generate replay nonce — wallet_nonce is present in the POST request payload to mitigate replay attacks', async () => {
