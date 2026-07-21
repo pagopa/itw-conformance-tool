@@ -15,7 +15,9 @@ export async function test(_env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<v
   await new Promise<void>((resolve) => {
     // A referenced timer is required to keep the Node.js event loop alive.
     // Signal listeners alone are not sufficient to prevent the process from exiting.
-    const keepAlive = setInterval(() => {}, 1 << 30);
+    const keepAlive = setInterval(() => {
+      // keep the Node.js event loop alive while waiting for a signal
+    }, 1 << 30);
 
     const stop = (): void => {
       clearInterval(keepAlive);

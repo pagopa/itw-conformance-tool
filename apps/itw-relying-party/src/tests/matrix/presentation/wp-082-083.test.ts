@@ -79,6 +79,7 @@ describe('Presentation - Request Object retrieval (WP_082 / WP_083)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('application/oauth-authz-req+jwt');
+  });
 
   it('[PRESENTATION:AUTHORIZE] WP_083b: Exclude PII in wallet_metadata — wallet_metadata contains no user-identifiable or device-specific fields', async () => {
     const state = await createState();
