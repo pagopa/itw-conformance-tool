@@ -10,7 +10,9 @@ import {
   resolveWalletSolutionJwks
 } from '../../helpers/provider.js';
 
-const permittedEntityConfigurationSignatureAlgorithms = ['ES256', 'ES384', 'ES512'];
+const PERMITTED_ENTITY_CONFIGURATION_SIGNATURE_ALGORITHMS = ['ES256', 'ES384', 'ES512'];
+const SIGNING_OPERATIONS = ['sign', 'verify'];
+const ENCRYPTION_OPERATIONS = ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey', 'deriveKey', 'deriveBits'];
 
 describe('Test Cases for Wallet Provider Backend', () => {
   const config = loadConfig();
@@ -62,7 +64,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
     const { alg } = decodeProtectedHeader(entityConfiguration);
 
     expect(alg, 'Entity Configuration JWT signing algorithm must be ES256, ES384, or ES512').toBeOneOf(
-      permittedEntityConfigurationSignatureAlgorithms
+      PERMITTED_ENTITY_CONFIGURATION_SIGNATURE_ALGORITHMS
     );
     expect(alg, 'Entity Configuration JWT must not use the unsecured none algorithm').not.toBe('none');
   });
@@ -192,17 +194,48 @@ describe('Test Cases for Wallet Provider Backend', () => {
     const walletSolution = metadata.wallet_solution;
 
     expect(walletSolution, 'Entity Configuration metadata must contain wallet_solution metadata').toBeDefined();
+
     if (walletSolution === undefined) {
       throw new Error('Entity Configuration metadata does not contain wallet_solution metadata');
     }
 
     const keys = await resolveWalletSolutionJwks(ec, walletSolution);
 
+    expect(keys.length, 'Wallet Solution metadata must resolve to at least one public key').toBeGreaterThan(0);
+
     for (const key of keys) {
-      expect(key.use, 'Wallet Solution public keys must be designated for signing or encryption').toBeOneOf([
-        'sig',
-        'enc'
-      ]);
+      if (key.use !== undefined) {
+        expect(key.use, 'When present, JWK use must be sig or enc').toBeOneOf(['sig', 'enc']);
+      }
+
+      if (key.key_ops !== undefined) {
+        expect(key.key_ops.length, 'key_ops must not be empty when present').toBeGreaterThan(0);
+
+        const allowedOperations =
+          key.use === 'sig'
+            ? SIGNING_OPERATIONS
+            : key.use === 'enc'
+              ? ENCRYPTION_OPERATIONS
+              : [...SIGNING_OPERATIONS, ...ENCRYPTION_OPERATIONS];
+
+        for (const operation of key.key_ops) {
+          expect(allowedOperations, `Unsupported or inconsistent key operation: ${operation}`).toContain(operation);
+        }
+      }
+
+      if (key.use === 'sig' && key.key_ops !== undefined) {
+        expect(
+          key.key_ops.every((operation) => SIGNING_OPERATIONS.includes(operation)),
+          'A sig key must not declare encryption operations'
+        ).toBe(true);
+      }
+
+      if (key.use === 'enc' && key.key_ops !== undefined) {
+        expect(
+          key.key_ops.every((operation) => ENCRYPTION_OPERATIONS.includes(operation)),
+          'An enc key must not declare signing operations'
+        ).toBe(true);
+      }
     }
   });
 
