@@ -38,7 +38,7 @@ export function createIssuerPrivateKeys() {
     kid: 'issuer-encryption-key',
     use: 'enc',
     alg: 'ECDH-ES',
-    keyOps: ['deriveKey']
+    keyOps: ['deriveBits']
   });
 
   return { keys: [signing, encryption] };
@@ -56,7 +56,7 @@ export function createRelyingPartyPrivateKeys() {
     kid: 'rp-encryption-key',
     use: 'enc',
     alg: 'ECDH-ES',
-    keyOps: ['deriveKey']
+    keyOps: ['deriveBits']
   });
 
   const federation = createEcPrivateJwk({

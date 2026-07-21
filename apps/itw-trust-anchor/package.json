@@ -25,6 +25,6 @@
     "close-with-grace": "^2.5.0",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
-    "jose": "^5.10.0"
+    "jose": "catalog:"
   }
 }
