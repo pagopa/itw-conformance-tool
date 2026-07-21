@@ -110,6 +110,6 @@ describe('Presentation - Request Object retrieval (WP_082 / WP_083)', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(walletNonce.length).toBeGreaterThan(0);
+    expect(res.headers['content-type']).toContain('application/oauth-authz-req+jwt');
   });
 });
