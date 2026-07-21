@@ -1,4 +1,4 @@
-import { createPublicKey } from 'node:crypto';
+import { createPublicKey, type JsonWebKey } from 'node:crypto';
 
 import { zJwk, zJwkSet } from '@pagopa/io-wallet-oauth2';
 import { X509Certificate } from '@peculiar/x509';
@@ -101,9 +101,9 @@ function publicJwkIdentity(jwk: ExportedPublicJwk): string {
  * @param jwk - The input JWK, which may contain private key parameters and/or key_ops.
  * @returns A new JWK object containing only the public key parameters and no key_ops.
  */
-function stripPrivateKeyMaterial(jwk: JWK): JWK {
-  const { d: _d, key_ops: _keyOps, ...publicJwk } = jwk as JWK & { d?: string; key_ops?: string[] };
-  return publicJwk;
+function stripPrivateKeyMaterial(jwk: JWK): JsonWebKey {
+  const { d: _d, key_ops: _keyOps, ...publicJwk } = jwk;
+  return { ...publicJwk };
 }
 
 /** Validates that an X.509 certificate's public key corresponds to the public key
