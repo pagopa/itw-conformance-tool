@@ -1,4 +1,5 @@
 import { isObservedEventName } from '../events/event-types.js';
+import { getRequiredEventName, getRequiredEventNames } from './definitions.js';
 
 import type { ObservedEventName } from '../events/event-types.js';
 import type { ProtocolObservedPhase, ProtocolObservedScenarioDefinition } from './definitions.js';
@@ -23,7 +24,7 @@ export function validateProtocolObservedScenarioDefinition(definition: ProtocolO
   assertCatalogEvent(definition.entryEvent, 'entryEvent', definition.id);
 
   for (const [index, event] of (definition.requiredEvents ?? []).entries()) {
-    assertCatalogEvent(event, `requiredEvents[${index}]`, definition.id);
+    assertCatalogEvent(getRequiredEventName(event), `requiredEvents[${index}]`, definition.id);
   }
 
   for (const [index, event] of (definition.forbiddenEvents ?? []).entries()) {
@@ -34,7 +35,7 @@ export function validateProtocolObservedScenarioDefinition(definition: ProtocolO
     assertCatalogEvent(expectation.event, `artifactExpectations[${index}].event`, definition.id);
   }
 
-  const required = new Set(definition.requiredEvents ?? []);
+  const required = new Set(getRequiredEventNames(definition.requiredEvents));
   const duplicated = (definition.forbiddenEvents ?? []).find((event) => required.has(event));
   if (duplicated) {
     throw new Error(`Scenario ${definition.id} declares ${duplicated} as both required and forbidden`);

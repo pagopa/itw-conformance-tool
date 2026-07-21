@@ -1,3 +1,5 @@
+import { getRequiredEventNames } from '../scenarios/definitions.js';
+
 import type { ObservedEvent } from '../events/event-types.js';
 import type { ProtocolObservedScenarioDefinition } from '../scenarios/definitions.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from './outcome.js';
@@ -18,6 +20,7 @@ export interface VerdictEngine {
 export function createProtocolObservedVerdictEngine(): VerdictEngine {
   return {
     evaluate(input) {
+      const requiredEventNames = getRequiredEventNames(input.definition.requiredEvents);
       const entry = input.events.find((event) => event.name === input.definition.entryEvent);
       if (!entry) {
         return {
@@ -76,7 +79,7 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         };
       }
 
-      const missingRequiredEvents = (input.definition.requiredEvents ?? []).filter((name) => {
+      const missingRequiredEvents = requiredEventNames.filter((name) => {
         if (name === entry.name) return false;
         return !input.events.some((event) => event.name === name && event.monotonicMs > entry.monotonicMs);
       });
@@ -101,7 +104,7 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
 
       const evidenceEvents = [
         entry,
-        ...(input.definition.requiredEvents ?? [])
+        ...requiredEventNames
           .filter((name) => name !== entry.name)
           .map((name) => input.events.find((event) => event.name === name && event.monotonicMs > entry.monotonicMs))
           .filter((event): event is ObservedEvent => event !== undefined)

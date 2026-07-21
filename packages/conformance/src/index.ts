@@ -105,17 +105,18 @@ export type {
   AutomationMode,
   LocalServiceName,
   LocalServiceEndpoints,
-  PreCorrelationDiagnosticExpectationValue,
-  PreCorrelationEvidenceExpectation,
-  PreCorrelationEvidenceOptions,
   ProtocolObservedPhase,
   ProtocolObservedScenarioDefinition,
+  RequiredEventEvidenceExpectation,
+  RequiredEventExpectation,
+  RequiredEventMatchValue,
   ScenarioInstructions,
   ScenarioStimulus,
   StimulusDefinition,
   TimeoutProfile,
   VerdictRule
 } from './scenarios/definitions.js';
+export { getRequiredEventName, getRequiredEventNames } from './scenarios/definitions.js';
 export {
   createConformanceInstrumentationPlugin,
   type InstrumentationOptions

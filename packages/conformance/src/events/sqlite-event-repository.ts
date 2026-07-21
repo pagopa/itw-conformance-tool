@@ -1,8 +1,11 @@
+import { getRequiredEventName } from '../scenarios/definitions.js';
+
 import type {
   LocalServiceEndpoints,
-  PreCorrelationDiagnosticExpectationValue,
-  PreCorrelationEvidenceExpectation,
-  ProtocolObservedScenarioDefinition
+  ProtocolObservedScenarioDefinition,
+  RequiredEventEvidenceExpectation,
+  RequiredEventExpectation,
+  RequiredEventMatchValue
 } from '../scenarios/definitions.js';
 import type { ScenarioEventBridgeFactory } from './event-bridge.js';
 import type { ScenarioEventSink } from './event-bus.js';
@@ -89,7 +92,7 @@ function rowToObservedEvent(row: EventRow): ObservedEvent {
  * and required evidence.
  */
 function scenarioDeclaredEventNames(definition: ProtocolObservedScenarioDefinition): ObservedEventName[] {
-  return [definition.entryEvent, ...(definition.requiredEvents ?? [])];
+  return [definition.entryEvent, ...(definition.requiredEvents ?? []).map(getRequiredEventName)];
 }
 
 /**
@@ -112,9 +115,9 @@ function isUncorrelatedEvent(event: ObservedEvent): boolean {
  * Compares one diagnostic value against either an exact string expectation or a
  * normalized configured endpoint URL.
  */
-function diagnosticValueMatches(
+function matchValueMatches(
   actual: unknown,
-  expected: PreCorrelationDiagnosticExpectationValue,
+  expected: RequiredEventMatchValue,
   endpoints: LocalServiceEndpoints
 ): boolean {
   if (typeof expected === 'string') return actual === expected;
@@ -128,44 +131,50 @@ function diagnosticValueMatches(
 }
 
 /**
- * Verifies that every diagnostic matcher configured for an expected evidence
- * event matches the observed event diagnostics.
+ * Verifies that every matcher configured for an expected required event matches
+ * the observed event diagnostics.
  */
-function diagnosticsMatch(
+function requiredEventMatch(
   event: ObservedEvent,
-  expectation: PreCorrelationEvidenceExpectation,
+  expectation: RequiredEventEvidenceExpectation,
   endpoints: LocalServiceEndpoints
 ): boolean {
-  const diagnostics = expectation.diagnostics;
-  if (!diagnostics) return true;
+  const match = expectation.match;
+  if (!match) return true;
 
-  return Object.entries(diagnostics).every(([key, expected]) =>
-    diagnosticValueMatches(event.diagnostic?.[key], expected, endpoints)
+  return Object.entries(match).every(([key, expected]) =>
+    matchValueMatches(event.diagnostic?.[key], expected, endpoints)
   );
+}
+
+function canAdoptUncorrelatedPostStartEvent(
+  expectation: RequiredEventExpectation
+): expectation is RequiredEventEvidenceExpectation {
+  return typeof expectation !== 'string' && expectation.correlation === 'allow-uncorrelated-post-start';
 }
 
 /**
  * Allows a scenario to opt in to narrowly matched, post-start, uncorrelated
- * federation evidence for sequential interactive runs.
+ * evidence from the same required events used for verdict/order checks.
  */
-function matchesPreCorrelationEvidence(
+function matchesRequiredEventEvidence(
   event: ObservedEvent,
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
   startedAt: string
 ): boolean {
-  const options = definition.preCorrelationEvidence;
-  if (!options?.sequentialInteractiveOnly) return false;
   if (!isUncorrelatedEvent(event)) return false;
   if (!isPostStartEvent(event, startedAt)) return false;
   if (!scenarioDeclaredEventNames(definition).includes(event.name)) return false;
 
-  return options.expectedEvents.some(
-    (expectation) =>
-      expectation.event === event.name &&
-      expectation.service === event.service &&
-      diagnosticsMatch(event, expectation, endpoints)
-  );
+  return (definition.requiredEvents ?? [])
+    .filter(canAdoptUncorrelatedPostStartEvent)
+    .some(
+      (expectation) =>
+        expectation.event === event.name &&
+        expectation.service === event.service &&
+        requiredEventMatch(event, expectation, endpoints)
+    );
 }
 
 export class SqliteScenarioEventRepository implements ScenarioEventSink {
@@ -247,7 +256,7 @@ export function createSqliteScenarioEventBridge(
       return (
         event.scenarioId === scenarioId ||
         event.correlationId === correlationId ||
-        matchesPreCorrelationEvidence(event, definition, endpoints, startedAt)
+        matchesRequiredEventEvidence(event, definition, endpoints, startedAt)
       );
     }
 

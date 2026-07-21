@@ -11,7 +11,27 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
     delivery: ['deep-link', 'qr']
   },
   entryEvent: 'issuer.entity_configuration.requested',
-  requiredEvents: ['issuer.entity_configuration.requested', 'federation.fetch.requested'],
+  requiredEvents: [
+    {
+      event: 'issuer.entity_configuration.requested',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/.well-known/openid-federation' }
+    },
+    {
+      event: 'federation.fetch.requested',
+      service: 'federation',
+      correlation: 'allow-uncorrelated-post-start',
+      match: {
+        endpoint: '/fetch',
+        sub: { endpoint: 'credentialIssuer', match: 'normalized-url' }
+      }
+    },
+    {
+      event: 'issuer.par.requested',
+      service: 'credential-issuer'
+    }
+  ],
   timeouts: {
     testerActionMs: 300_000,
     protocolStepMs: 60_000,
@@ -34,23 +54,5 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
       'The runner will continue automatically after the wallet requests the Issuer Entity Configuration and the Trust Anchor subordinate statement.'
     ]
   },
-  missingRequiredEventPolicy: 'inconclusive',
-  preCorrelationEvidence: {
-    sequentialInteractiveOnly: true,
-    expectedEvents: [
-      {
-        event: 'issuer.entity_configuration.requested',
-        service: 'credential-issuer',
-        diagnostics: { endpoint: '/.well-known/openid-federation' }
-      },
-      {
-        event: 'federation.fetch.requested',
-        service: 'federation',
-        diagnostics: {
-          endpoint: '/fetch',
-          sub: { endpoint: 'credentialIssuer', match: 'normalized-url' }
-        }
-      }
-    ]
-  }
+  missingRequiredEventPolicy: 'inconclusive'
 };

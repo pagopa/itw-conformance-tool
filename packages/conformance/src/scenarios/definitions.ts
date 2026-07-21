@@ -45,22 +45,28 @@ export interface ScenarioInstructions {
   steps?: string[];
 }
 
-export type PreCorrelationDiagnosticExpectationValue =
+export type RequiredEventMatchValue =
   | string
   | {
       endpoint: LocalServiceName;
       match: 'normalized-url';
     };
 
-export interface PreCorrelationEvidenceExpectation {
+export interface RequiredEventEvidenceExpectation {
   event: ObservedEventName;
   service: ObservedServiceName;
-  diagnostics?: Record<string, PreCorrelationDiagnosticExpectationValue>;
+  correlation?: 'allow-uncorrelated-post-start';
+  match?: Record<string, RequiredEventMatchValue>;
 }
 
-export interface PreCorrelationEvidenceOptions {
-  expectedEvents: PreCorrelationEvidenceExpectation[];
-  sequentialInteractiveOnly: true;
+export type RequiredEventExpectation = ObservedEventName | RequiredEventEvidenceExpectation;
+
+export function getRequiredEventName(expectation: RequiredEventExpectation): ObservedEventName {
+  return typeof expectation === 'string' ? expectation : expectation.event;
+}
+
+export function getRequiredEventNames(requiredEvents: RequiredEventExpectation[] | undefined): ObservedEventName[] {
+  return (requiredEvents ?? []).map(getRequiredEventName);
 }
 
 export interface ProtocolObservedScenarioDefinition {
@@ -71,13 +77,12 @@ export interface ProtocolObservedScenarioDefinition {
   services: LocalServiceName[];
   stimulus: StimulusDefinition;
   entryEvent: ObservedEventName;
-  requiredEvents?: ObservedEventName[];
+  requiredEvents?: RequiredEventExpectation[];
   forbiddenEvents?: ObservedEventName[];
   artifactExpectations?: ArtifactExpectation[];
   timeouts: TimeoutProfile;
   verdictRules: VerdictRule[];
   instructions: ScenarioInstructions;
   missingRequiredEventPolicy?: 'fail' | 'inconclusive';
-  preCorrelationEvidence?: PreCorrelationEvidenceOptions;
   setup?: Record<string, unknown>;
 }
