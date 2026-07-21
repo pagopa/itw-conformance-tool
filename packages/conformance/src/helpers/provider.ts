@@ -28,6 +28,11 @@ export function expectWalletMetadata(metadata: unknown): ItWalletMetadataV1_3 {
   return metadataResult.data;
 }
 
+export function expectPublicJwk(key: JWK, location: string): void {
+  expect(key.d, `${location} must not contain private key material`).toBeUndefined();
+  expect(key.k, `${location} must not contain symmetric keys`).toBeUndefined();
+}
+
 export async function resolveWalletSolutionJwks(
   entityConfigurationClaims: ItWalletEntityConfigurationClaims,
   walletSolution: NonNullable<ItWalletMetadataV1_3['wallet_solution']>

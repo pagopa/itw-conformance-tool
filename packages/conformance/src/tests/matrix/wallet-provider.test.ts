@@ -3,7 +3,12 @@ import { calculateJwkThumbprint, createLocalJWKSet, decodeProtectedHeader, impor
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { isHttpsUrl, isObject } from '../../helpers/general.js';
-import { decodeEntityConfiguration, expectWalletMetadata, resolveWalletSolutionJwks } from '../../helpers/provider.js';
+import {
+  decodeEntityConfiguration,
+  expectPublicJwk,
+  expectWalletMetadata,
+  resolveWalletSolutionJwks
+} from '../../helpers/provider.js';
 
 const permittedEntityConfigurationSignatureAlgorithms = ['ES256', 'ES384', 'ES512'];
 
@@ -134,8 +139,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
     expect(publicKeys, 'Entity Configuration JWKS must contain at least one public key').not.toHaveLength(0);
 
     for (const key of publicKeys) {
-      expect(key.d, 'Entity Configuration JWKS must not contain private key material').toBeUndefined();
-      expect(key.k, 'Entity Configuration JWKS must not contain symmetric keys').toBeUndefined();
+      expectPublicJwk(key, 'Entity Configuration JWKS');
       await expect(
         importJWK(key, key.alg ?? alg),
         'Each Entity Configuration key must be a valid public JWK'
@@ -229,6 +233,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
 
     expect(keys, 'wallet_solution jwks claim must contain at least one public key').not.toHaveLength(0);
     for (const key of keys) {
+      expectPublicJwk(key, 'wallet_solution jwks claim');
       await expect(
         importJWK(key, key.alg ?? alg),
         'Each wallet_solution jwks claim key must be a valid public JWK'
@@ -251,6 +256,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
 
     expect(keys, 'wallet_solution jwks_uri JWKS must contain at least one public key').not.toHaveLength(0);
     for (const key of keys) {
+      expectPublicJwk(key, 'wallet_solution jwks_uri JWKS');
       await expect(
         importJWK(key, key.alg ?? alg),
         'Each wallet_solution jwks_uri JWKS key must be a valid public JWK'
@@ -274,6 +280,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
       0
     );
     for (const key of keys) {
+      expectPublicJwk(key, 'wallet_solution signed_jwks_uri JWT payload');
       await expect(
         importJWK(key, key.alg ?? alg),
         'Each signed_jwks_uri JWKS key must be a valid public JWK'
