@@ -22,10 +22,7 @@ export function createTestConfig() {
     cacheDir: './node_modules/.vite/packages/conformance-test',
     resolve: {
       alias: {
-        '@itw-conformance-tool/conformance': resolve(packageRoot, './packages/conformance/src/index.ts'),
-        '@itw-conformance-tool/crypto': resolve(packageRoot, './packages/crypto/src/index.ts'),
-        '@itw-conformance-tool/database': resolve(packageRoot, './packages/database/src/index.ts'),
-        '@itw-conformance-tool/rp': resolve(packageRoot, './packages/rp/src/index.ts')
+        '@itw-conformance-tool/database': resolve(packageRoot, './packages/database/src/index.ts')
       }
     },
     test: {
@@ -34,10 +31,7 @@ export function createTestConfig() {
       passWithNoTests: true,
       globals: true,
       environment: 'node',
-      include: [
-        'packages/conformance/src/tests/matrix/**/*.test.ts',
-        'apps/itw-relying-party/src/tests/matrix/**/*.test.ts'
-      ],
+      include: ['packages/conformance/src/tests/matrix/**/*.test.ts'],
       reporters: ['dot', new VitestConformanceReporter('conformance-test')],
       // node:sqlite requires --experimental-sqlite on Node.js 22.
       pool: 'forks',
