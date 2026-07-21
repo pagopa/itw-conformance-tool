@@ -4,6 +4,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import formbody from '@fastify/formbody';
 import { DatabaseClient, SqliteNonceRepository, SqliteSessionRepository } from '@itw-conformance-tool/database';
 import { SessionService } from '@itw-conformance-tool/rp';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
@@ -230,6 +231,7 @@ export async function buildRpRouteApp(route: FastifyPluginAsync, options: RpRout
     await rm(dataDir, { recursive: true, force: true });
   });
 
+  await app.register(formbody);
   await app.register(route);
 
   if (options.setup) {

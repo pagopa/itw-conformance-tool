@@ -1,36 +1,30 @@
-import { spawn } from 'node:child_process';
-import { join } from 'node:path';
-
-import { findNxRoot } from '../utils/search.js';
-
 import type { EmitLog } from '../types/types.js';
 
-/** Test command to orchestrate and execute conformance tests.
+/** Blocks until SIGINT or SIGTERM is received.
+ * Services must already be running via `itwct start --all`.
+ * Conformance hooks on the RP record WP checks to SQLite on every real wallet request.
+ * After stopping, use `itwct report:list` / `itwct report:create <uuid>`.
  *
- * @param env - Environment variables forwarded to the Vitest process
+ * @param _env - Unused; kept for signature consistency with other commands.
  * @param emitLog - Logger function for console output
- * @returns Promise<void>
  */
-export async function test(env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<void> {
-  const nxRootPath = findNxRoot();
-  const configFile = 'vitest.conformance-test.config.mts';
+export async function test(_env: NodeJS.ProcessEnv, emitLog: EmitLog): Promise<void> {
+  emitLog('Conformance test mode active. Make sure services are running via `itwct start --all`.', 'info');
+  emitLog('Run wallet flows against the RP. Press Ctrl+C to stop.', 'info');
 
-  const vitestArgs = ['vitest', 'run', '--config', join(nxRootPath, configFile)];
+  await new Promise<void>((resolve) => {
+    // A referenced timer is required to keep the Node.js event loop alive.
+    // Signal listeners alone are not sufficient to prevent the process from exiting.
+    const keepAlive = setInterval(() => {}, 1 << 30);
 
-  const exitCode = await new Promise<number>((resolve, reject) => {
-    const child = spawn('pnpm', vitestArgs, {
-      cwd: nxRootPath,
-      env,
-      stdio: 'inherit'
-    });
+    const stop = (): void => {
+      clearInterval(keepAlive);
+      resolve();
+    };
 
-    child.on('error', reject);
-    child.on('close', (code) => resolve(code ?? 1));
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
   });
 
-  if (exitCode !== 0) {
-    throw new Error(`Conformance tests failed with exit code ${exitCode}`);
-  }
-
-  emitLog('Conformance tests completed', 'info');
+  emitLog('Test session ended. Run `itwct report:list` to view captured sessions.', 'info');
 }

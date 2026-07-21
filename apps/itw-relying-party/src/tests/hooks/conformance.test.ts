@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
+import formbody from '@fastify/formbody';
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,12 +57,18 @@ async function buildRequestHookApp(withRepo = true): Promise<{ app: FastifyInsta
 
   registerAuthRequestConformanceHooks(app);
 
+  await app.register(formbody);
+
   app.get<{ Params: { state: string } }>('/auth/request/:state', async (_req, reply) => {
     return reply.code(200).send('ok');
   });
 
   app.get<{ Params: { state: string } }>('/auth/request-fail/:state', async (_req, reply) => {
     return reply.code(404).send({ message: 'not found' });
+  });
+
+  app.post<{ Params: { state: string } }>('/auth/request/:state', async (_req, reply) => {
+    return reply.code(200).send('ok');
   });
 
   await app.ready();
@@ -113,7 +120,7 @@ describe('registerAuthRequestConformanceHooks', () => {
     await ctx.app.close();
   });
 
-  it('opens a conformance session on 2xx when state is a valid UUID', async () => {
+  it('opens a conformance session on GET 2xx when state is a valid UUID', async () => {
     const state = randomUUID();
     await ctx.app.inject({ method: 'GET', url: `/auth/request/${state}` });
 
@@ -122,7 +129,7 @@ describe('registerAuthRequestConformanceHooks', () => {
     expect(ctx.repo.created[0].status).toBe('OPEN');
   });
 
-  it('appends AUTHORIZE:PRESENTATION PASS check on 2xx', async () => {
+  it('records WP_082 PASS on GET 2xx', async () => {
     const state = randomUUID();
     await ctx.app.inject({ method: 'GET', url: `/auth/request/${state}` });
 
@@ -131,10 +138,108 @@ describe('registerAuthRequestConformanceHooks', () => {
       state,
       expect.objectContaining({
         phase: 'PRESENTATION',
-        requirementId: 'IT-WALLET-1.4-§5.2.1',
+        requirementId: 'WP_082',
         result: 'PASS',
         step: 'AUTHORIZE'
       })
+    );
+  });
+
+  it('opens a conformance session on POST 2xx when state is a valid UUID', async () => {
+    const state = randomUUID();
+    const walletMetadata = JSON.stringify({
+      vp_formats_supported: {},
+      client_id_schemes_supported: ['x509_hash'],
+      authorization_endpoint: 'eudi-openid4vp://'
+    });
+    await ctx.app.inject({
+      method: 'POST',
+      url: `/auth/request/${state}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `wallet_nonce=abc&wallet_metadata=${encodeURIComponent(walletMetadata)}`
+    });
+
+    expect(ctx.repo.created).toHaveLength(1);
+    expect(ctx.repo.created[0].sessionId).toBe(state);
+    expect(ctx.repo.created[0].status).toBe('OPEN');
+  });
+
+  it('records WP_083/083a/083b/083c PASS on POST 2xx with valid body', async () => {
+    const state = randomUUID();
+    const walletMetadata = JSON.stringify({
+      vp_formats_supported: {},
+      client_id_schemes_supported: ['x509_hash'],
+      authorization_endpoint: 'eudi-openid4vp://'
+    });
+    await ctx.app.inject({
+      method: 'POST',
+      url: `/auth/request/${state}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `wallet_nonce=abc&wallet_metadata=${encodeURIComponent(walletMetadata)}`
+    });
+
+    expect(ctx.repo.appendCheck).toHaveBeenCalledTimes(4);
+    for (const reqId of ['WP_083', 'WP_083a', 'WP_083b', 'WP_083c']) {
+      expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+        state,
+        expect.objectContaining({ requirementId: reqId, result: 'PASS', step: 'AUTHORIZE' })
+      );
+    }
+  });
+
+  it('records WP_083c FAIL when wallet_nonce is absent from POST body', async () => {
+    const state = randomUUID();
+    const walletMetadata = JSON.stringify({
+      vp_formats_supported: {},
+      client_id_schemes_supported: ['x509_hash'],
+      authorization_endpoint: 'eudi-openid4vp://'
+    });
+    await ctx.app.inject({
+      method: 'POST',
+      url: `/auth/request/${state}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `wallet_metadata=${encodeURIComponent(walletMetadata)}`
+    });
+
+    expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({ requirementId: 'WP_083c', result: 'FAIL' })
+    );
+  });
+
+  it('records WP_083a FAIL when required wallet_metadata fields are missing', async () => {
+    const state = randomUUID();
+    await ctx.app.inject({
+      method: 'POST',
+      url: `/auth/request/${state}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `wallet_nonce=abc&wallet_metadata=${encodeURIComponent(JSON.stringify({ other: 'field' }))}`
+    });
+
+    expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({ requirementId: 'WP_083a', result: 'FAIL' })
+    );
+  });
+
+  it('records WP_083b FAIL when wallet_metadata contains PII fields', async () => {
+    const state = randomUUID();
+    const walletMetadata = JSON.stringify({
+      vp_formats_supported: {},
+      client_id_schemes_supported: ['x509_hash'],
+      authorization_endpoint: 'eudi-openid4vp://',
+      email: 'user@example.com'
+    });
+    await ctx.app.inject({
+      method: 'POST',
+      url: `/auth/request/${state}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `wallet_nonce=abc&wallet_metadata=${encodeURIComponent(walletMetadata)}`
+    });
+
+    expect(ctx.repo.appendCheck).toHaveBeenCalledWith(
+      state,
+      expect.objectContaining({ requirementId: 'WP_083b', result: 'FAIL' })
     );
   });
 
@@ -191,7 +296,7 @@ describe('registerAuthResponseConformanceHooks', () => {
     expect(ctx.repo.closed[0].status).toBe('PASSED');
   });
 
-  it('appends PRESENTATION_RESPONSE:PRESENTATION PASS check on 2xx', async () => {
+  it('appends IT-WALLET-1.4-§5.2.2 PASS check on 2xx', async () => {
     const state = randomUUID();
     const nonce = randomBytes(32).toString('hex');
     const jwe = await createAuthResponseJwe({ nonce, state });
