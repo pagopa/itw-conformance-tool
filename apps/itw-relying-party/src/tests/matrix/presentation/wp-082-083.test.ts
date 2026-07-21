@@ -77,12 +77,8 @@ describe('Presentation - Request Object retrieval (WP_082 / WP_083)', () => {
       payload: `wallet_nonce=test-nonce-${randomUUID()}&wallet_metadata=${encodeURIComponent(JSON.stringify(VALID_WALLET_METADATA))}`
     });
 
-    const metadata = VALID_WALLET_METADATA;
     expect(res.statusCode).toBe(200);
-    expect('vp_formats_supported' in metadata).toBe(true);
-    expect('client_id_schemes_supported' in metadata).toBe(true);
-    expect('authorization_endpoint' in metadata).toBe(true);
-  });
+    expect(res.headers['content-type']).toContain('application/oauth-authz-req+jwt');
 
   it('[PRESENTATION:AUTHORIZE] WP_083b: Exclude PII in wallet_metadata — wallet_metadata contains no user-identifiable or device-specific fields', async () => {
     const state = await createState();
