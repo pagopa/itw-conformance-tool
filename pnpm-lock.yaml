@@ -487,6 +487,9 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database
+      '@pagopa/io-wallet-oid-federation':
+        specifier: catalog:pagopa
+        version: 1.5.4-alpha-20260714095946
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -496,6 +499,9 @@ importers:
       fastify-plugin:
         specifier: catalog:fastify
         version: 5.1.0
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.3
       puppeteer:
         specifier: ^24.0.0
         version: 24.43.1(typescript@5.9.3)
@@ -503,15 +509,9 @@ importers:
         specifier: ^2.3.0
         version: 2.8.1
     devDependencies:
-      '@pagopa/io-wallet-oid-federation':
-        specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260714095946
       '@types/node':
         specifier: catalog:node
         version: 22.20.1
-      jose:
-        specifier: 'catalog:'
-        version: 6.2.3
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
