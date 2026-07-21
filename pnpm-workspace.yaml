@@ -11,6 +11,7 @@ allowBuilds:
   unrs-resolver: true
 
 catalog:
+  jose: ^6.2.3
   typescript: ^5.9.3
   vitest: ~4.1.10
   zod: ^4.3.6
@@ -35,11 +36,11 @@ catalogs:
     fastify-plugin: ^5.0.1
 
   pagopa:
-    '@pagopa/io-wallet-oauth2': 1.5.4-alpha-20260714095946
-    '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260714095946
-    '@pagopa/io-wallet-oid4vci': 1.5.4-alpha-20260714095946
-    '@pagopa/io-wallet-oid4vp': 1.5.4-alpha-20260714095946
-    '@pagopa/io-wallet-utils': 1.5.4-alpha-20260714095946
+    '@pagopa/io-wallet-oauth2': 1.5.4-alpha-20260717125503
+    '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260717125503
+    '@pagopa/io-wallet-oid4vci': 1.5.4-alpha-20260717125503
+    '@pagopa/io-wallet-oid4vp': 1.5.4-alpha-20260717125503
+    '@pagopa/io-wallet-utils': 1.5.4-alpha-20260717125503
 
 cleanupUnusedCatalogs: true
 linkWorkspacePackages: true

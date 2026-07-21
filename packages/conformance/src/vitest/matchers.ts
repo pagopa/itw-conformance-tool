@@ -9,9 +9,11 @@ export interface AssertConformanceOutcomeOptions {
 
 export function assertConformanceOutcome(outcome: ScenarioOutcome, options: AssertConformanceOutcomeOptions): void {
   if (options.assertionMode === 'report-only') {
-    expect(outcome.verdict).toBeDefined();
+    expect(outcome.verdict, 'Conformance scenario must produce a verdict in report-only mode').toBeDefined();
     return;
   }
 
-  expect(outcome.verdict, outcome.reason).toBe(options.expected);
+  expect(outcome.verdict, outcome.reason ?? 'Conformance scenario verdict must match the expected outcome').toBe(
+    options.expected
+  );
 }
