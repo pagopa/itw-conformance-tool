@@ -10,6 +10,8 @@ import type { JwkKey } from '../../plugins/keys.js';
 import type { FastifyInstance } from 'fastify';
 
 const TRUST_ANCHOR_BASE_URL = 'https://ta.example.org';
+const ISSUER_ENTITY_ID = 'https://issuer.example.org';
+const RP_ENTITY_ID = 'https://rp.example.org';
 
 function generateFederationJwk(kid: string): JwkKey {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -26,8 +28,8 @@ async function buildApp(federationPrivateJwk: JwkKey): Promise<FastifyInstance> 
   app.decorate('config', {
     baseUrl: TRUST_ANCHOR_BASE_URL,
     dataDir: '/tmp/unused',
-    issuerEntityId: 'https://issuer.example.org',
-    rpEntityId: 'https://rp.example.org'
+    issuerEntityId: ISSUER_ENTITY_ID,
+    rpEntityId: RP_ENTITY_ID
   });
 
   app.decorate('trustAnchorKeys', {
@@ -55,8 +57,8 @@ describe('GET /.well-known/openid-federation', () => {
     expect(payload.iss).toBe(TRUST_ANCHOR_BASE_URL);
     expect(payload.sub).toBe(TRUST_ANCHOR_BASE_URL);
     expect(payload.trust_mark_issuers).toEqual({
-      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/issuance/credential_issuer`]: ['https://issuer.example.org'],
-      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/presentation/relying_party`]: ['https://rp.example.org']
+      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/issuance/credential_issuer`]: [ISSUER_ENTITY_ID],
+      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/presentation/relying_party`]: [RP_ENTITY_ID]
     });
 
     await app.close();
