@@ -19,3 +19,7 @@ export const isHttpsUrl = (value: unknown, allowQuery = true): boolean => {
 export const isObject = (value: unknown): boolean => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
+
+export const trimTrailingSlash = (url: string): string => {
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+};

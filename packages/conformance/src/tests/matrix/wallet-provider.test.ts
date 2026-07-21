@@ -2,7 +2,7 @@ import { loadConfig } from '@itw-conformance-tool/config';
 import { calculateJwkThumbprint, createLocalJWKSet, decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { isHttpsUrl, isObject } from '../../helpers/general.js';
+import { isHttpsUrl, isObject, trimTrailingSlash } from '../../helpers/general.js';
 import {
   decodeEntityConfiguration,
   expectPublicJwk,
@@ -20,7 +20,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
   let entityConfigurationResponse: Response;
 
   beforeAll(async () => {
-    const discoveryUrl = walletProviderUrl + '/.well-known/openid-federation';
+    const discoveryUrl = trimTrailingSlash(walletProviderUrl) + '/.well-known/openid-federation';
     entityConfigurationResponse = await fetch(discoveryUrl, {
       signal: AbortSignal.timeout(10_000)
     });
