@@ -55,7 +55,7 @@ function makeSession(): ConformanceSession {
       {
         description: 'PAR request contains a valid Wallet Attestation JWT',
         phase: 'ISSUANCE',
-        requirementId: 'IT-WALLET-1.4-§4.2.1',
+        requirementId: 'WP_PAR_001',
         result: 'PASS',
         step: 'PAR',
         timestamp: '2026-06-12T12:00:05.000Z'
@@ -65,7 +65,7 @@ function makeSession(): ConformanceSession {
         errorMessage: 'invalid dpop',
         httpStatus: 400,
         phase: 'ISSUANCE',
-        requirementId: 'IT-WALLET-1.4-§4.3.2',
+        requirementId: 'WP_TOKEN_001',
         result: 'FAIL',
         step: 'TOKEN',
         timestamp: '2026-06-12T12:00:15.000Z'
@@ -117,7 +117,7 @@ describe('json-reporter', () => {
         {
           description: 'PAR request contains a valid Wallet Attestation JWT',
           phase: 'ISSUANCE',
-          requirementId: 'IT-WALLET-1.4-§4.2.1',
+          requirementId: 'WP_PAR_001',
           result: 'PASS',
           step: 'PAR',
           timestamp: '2026-06-12T09:00:05.000Z'
@@ -153,7 +153,7 @@ describe('json-reporter', () => {
         {
           description: 'Presentation authorize check',
           phase: 'PRESENTATION',
-          requirementId: 'PR_001',
+          requirementId: 'WP_AUTHORIZE_001',
           result: 'PASS',
           step: 'AUTHORIZE',
           timestamp: '2026-06-12T12:00:06.000Z'

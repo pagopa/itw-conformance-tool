@@ -317,7 +317,10 @@ export async function loadSessionForReport(
 }
 
 export function buildJsonReporterFromSession(session: ConformanceSession): JsonReporterResult {
-  const phase = inferPhase(session);
+  // Only include WP-coded checks in the report; internal IT-WALLET spec checks are excluded.
+  const wpChecks = session.checks.filter((check) => check.requirementId.startsWith('WP_'));
+
+  const phase = inferPhase({ ...session, checks: wpChecks });
   const expectedSteps = getExpectedSteps(phase);
 
   const checksByStep = new Map<ConformanceStep, ConformanceCheck[]>();
@@ -325,7 +328,7 @@ export function buildJsonReporterFromSession(session: ConformanceSession): JsonR
     checksByStep.set(step, []);
   }
 
-  for (const check of session.checks) {
+  for (const check of wpChecks) {
     if (!checksByStep.has(check.step)) {
       checksByStep.set(check.step, []);
     }
