@@ -97,6 +97,7 @@ export {
 export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuance.js';
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
+export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
 export { wp077Scenario } from './scenarios/factories/wp-077.js';
 export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export type {
@@ -106,12 +107,16 @@ export type {
   LocalServiceEndpoints,
   ProtocolObservedPhase,
   ProtocolObservedScenarioDefinition,
+  RequiredEventEvidenceExpectation,
+  RequiredEventExpectation,
+  RequiredEventMatchValue,
   ScenarioInstructions,
   ScenarioStimulus,
   StimulusDefinition,
   TimeoutProfile,
   VerdictRule
 } from './scenarios/definitions.js';
+export { getRequiredEventName, getRequiredEventNames } from './scenarios/definitions.js';
 export {
   createConformanceInstrumentationPlugin,
   type InstrumentationOptions

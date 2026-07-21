@@ -12,6 +12,7 @@ import {
 } from '../events/event-store.js';
 import { createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
+import { getRequiredEventName } from '../scenarios/definitions.js';
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
@@ -225,6 +226,7 @@ export function createProtocolObservedScenarioRunner(
       const eventBridge = await options.eventBridgeFactory?.({
         correlationId,
         definition,
+        endpoints,
         eventStore,
         scenarioId,
         startedAt
@@ -276,14 +278,15 @@ export function createProtocolObservedScenarioRunner(
           if (entryEvent) {
             let previous = entryEvent;
             for (const requiredEvent of definition.requiredEvents ?? []) {
-              if (requiredEvent === entryEvent.name) continue;
+              const requiredEventName = getRequiredEventName(requiredEvent);
+              if (requiredEventName === entryEvent.name) continue;
 
               try {
-                previous = await eventStore.waitFor(requiredEvent, {
+                previous = await eventStore.waitFor(requiredEventName, {
                   after: previous,
                   timeoutMs: definition.timeouts.protocolStepMs,
                   signal,
-                  inconclusiveMessage: `The wallet did not send required event ${requiredEvent}.`
+                  inconclusiveMessage: `The wallet did not send required event ${requiredEventName}.`
                 });
               } catch (error) {
                 if (!isControlledWaitError(error)) throw error;

@@ -24,16 +24,25 @@
   ],
   "references": [
     {
-      "path": "../../packages/config/tsconfig.lib.json"
+      "path": "../../packages/utils/tsconfig.lib.json"
     },
     {
-      "path": "../../packages/crypto/tsconfig.lib.json"
+      "path": "../../packages/ipc/tsconfig.lib.json"
     },
     {
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
-      "path": "../../packages/ipc/tsconfig.lib.json"
+      "path": "../../packages/database/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/crypto/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/conformance/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/config/tsconfig.lib.json"
     }
   ]
 }

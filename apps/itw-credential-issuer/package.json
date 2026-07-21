@@ -22,6 +22,7 @@
     "@itw-conformance-tool/database": "workspace:*",
     "@itw-conformance-tool/logger": "workspace:",
     "@itw-conformance-tool/ipc": "workspace:*",
+    "@itw-conformance-tool/utils": "workspace:*",
     "@noble/curves": "^1.9.2",
     "@owf/mdoc": "^0.6.0",
     "@pagopa/io-wallet-oauth2": "catalog:pagopa",

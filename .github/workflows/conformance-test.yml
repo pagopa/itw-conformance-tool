@@ -97,7 +97,8 @@ jobs:
           ./bin/wct test:issuance \
             --unsafe-tls \
             --tests happy \
-            --credential-issuer-uri https://127.0.0.1:3000
+            --credential-issuer-uri https://127.0.0.1:3000 \
+            --wallet-version V1_3
 
       - name: Upload conformance report
         if: always()

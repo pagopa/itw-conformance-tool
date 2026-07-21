@@ -49,7 +49,7 @@ export const callbacks = {
       throw new Error('Verifier method not supported');
     }
 
-    const publicKey = await importJWK(jwk);
+    const publicKey = await importJWK(jwk, signer.alg);
 
     try {
       await jwtVerify(compact, publicKey, { clockTolerance: 300 });

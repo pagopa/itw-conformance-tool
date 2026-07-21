@@ -22,7 +22,7 @@ export const resolveSpecVersionFromHeaders = (headers: Headers): ItWalletSpecsVe
   const version = headers.get(SPEC_VERSION_HEADER);
 
   if (!version) {
-    return ItWalletSpecsVersion.V1_0;
+    return ItWalletSpecsVersion.V1_3;
   }
 
   const normalizedVersion = version.trim() as SupportedSpecVersionHeader;

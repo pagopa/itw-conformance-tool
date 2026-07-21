@@ -1,3 +1,5 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
 import { createSubordinate } from '../federation/statements.js';
 
 import type { SubordinateEntityKind } from '../federation/statements.js';
@@ -48,6 +50,22 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           subjectPrivateJwk,
           trustAnchorBaseUrl: baseUrl
         });
+
+        if (subjectKind === 'issuer') {
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'federation.fetch.requested',
+              scenarioId: request.conformance?.correlation?.scenarioId ?? null,
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'federation',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/fetch',
+                sub
+              }
+            })
+          );
+        }
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(subordinateStatement);
       } catch (error) {

@@ -1,4 +1,4 @@
-import type { ObservedEventName } from '../events/event-types.js';
+import type { ObservedEventName, ObservedServiceName } from '../events/event-types.js';
 
 export type ProtocolObservedPhase = 'ISSUANCE' | 'PRESENTATION' | 'WALLET_INSTANCE';
 
@@ -45,6 +45,30 @@ export interface ScenarioInstructions {
   steps?: string[];
 }
 
+export type RequiredEventMatchValue =
+  | string
+  | {
+      endpoint: LocalServiceName;
+      match: 'normalized-url';
+    };
+
+export interface RequiredEventEvidenceExpectation {
+  event: ObservedEventName;
+  service: ObservedServiceName;
+  correlation?: 'allow-uncorrelated-post-start';
+  match?: Record<string, RequiredEventMatchValue>;
+}
+
+export type RequiredEventExpectation = ObservedEventName | RequiredEventEvidenceExpectation;
+
+export function getRequiredEventName(expectation: RequiredEventExpectation): ObservedEventName {
+  return typeof expectation === 'string' ? expectation : expectation.event;
+}
+
+export function getRequiredEventNames(requiredEvents: RequiredEventExpectation[] | undefined): ObservedEventName[] {
+  return (requiredEvents ?? []).map(getRequiredEventName);
+}
+
 export interface ProtocolObservedScenarioDefinition {
   id: string;
   title: string;
@@ -53,7 +77,7 @@ export interface ProtocolObservedScenarioDefinition {
   services: LocalServiceName[];
   stimulus: StimulusDefinition;
   entryEvent: ObservedEventName;
-  requiredEvents?: ObservedEventName[];
+  requiredEvents?: RequiredEventExpectation[];
   forbiddenEvents?: ObservedEventName[];
   artifactExpectations?: ArtifactExpectation[];
   timeouts: TimeoutProfile;

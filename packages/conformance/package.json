@@ -20,6 +20,7 @@
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/utils": "workspace:*",
     "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
     "chalk": "^5.6.2",
     "fastify": "catalog:fastify",

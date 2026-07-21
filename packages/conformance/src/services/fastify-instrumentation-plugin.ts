@@ -60,7 +60,9 @@ async function maybeStoreHttpExchange(
 
 export function createConformanceInstrumentationPlugin(options: InstrumentationOptions) {
   return fp(async function conformanceInstrumentation(app: FastifyInstance) {
-    app.decorate('conformanceEventSink', options.eventSink);
+    if (!app.hasDecorator('conformanceEventSink')) {
+      app.decorate('conformanceEventSink', options.eventSink);
+    }
 
     app.addHook('onRequest', async (request) => {
       let correlation: ScenarioCorrelation | null = null;

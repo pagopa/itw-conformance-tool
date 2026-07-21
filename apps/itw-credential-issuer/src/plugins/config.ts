@@ -1,4 +1,5 @@
 import { loadConfig } from '@itw-conformance-tool/config';
+import { trimTrailingSlashes } from '@itw-conformance-tool/utils';
 import fp from 'fastify-plugin';
 
 import {
@@ -23,14 +24,6 @@ declare module 'fastify' {
       CREDENTIAL_OFFER_URI: string | undefined;
     };
   }
-}
-
-function trimTrailingSlashes(value: string): string {
-  let result = value;
-  while (result.endsWith('/')) {
-    result = result.slice(0, -1);
-  }
-  return result;
 }
 
 export default fp(
