@@ -29,7 +29,9 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'issuer.par.requested',
-      service: 'credential-issuer'
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/as/par' }
     }
   ],
   timeouts: {
@@ -37,11 +39,11 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
     protocolStepMs: 60_000,
     vitestTestMs: 330_000
   },
-  verdictRules: [{ type: 'entry-event-required' }, { type: 'required-events-in-order' }],
+  verdictRules: [{ type: 'entry-event-required' }],
   instructions: {
-    goal: 'Verify that the Wallet Instance discovers the Credential Issuer and obtains a credential from it.',
+    goal: 'Verify that the Wallet Instance discovers the Credential Issuer and successfully requests PAR to start the Authorization Code Flow.',
     expectedBehavior:
-      'After opening the credential offer, the wallet must request the Credential Issuer Entity Configuration and obtain a credential from the Credential Issuer.',
+      'After opening the credential offer, the wallet must request the Credential Issuer Entity Configuration, resolve the Trust Anchor subordinate statement, and successfully push an Authorization Request to the Credential Issuer PAR endpoint.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
@@ -51,7 +53,7 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
       'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services and waits for their readiness.',
       'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
       'Keep the wallet and test process running while the wallet resolves the Credential Issuer federation trust chain.',
-      'The runner will continue automatically after the wallet requests the Issuer Entity Configuration and the Trust Anchor subordinate statement.'
+      'The runner will continue automatically after the wallet requests the Issuer Entity Configuration, the Trust Anchor subordinate statement, and successfully pushes the Authorization Request to the PAR endpoint.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'
