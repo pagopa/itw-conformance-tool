@@ -33,6 +33,16 @@ export interface ParseAndStoreOptions {
   };
 }
 
+export interface ParseAndStoreResult {
+  /**
+   * The `issuer_state` claim echoed back by the wallet in the Request Object, when present.
+   * It carries the conformance scenario correlation seeded in the credential offer's
+   * `grants.authorization_code.issuer_state`.
+   */
+  readonly issuerState: string | null;
+  readonly requestUri: string;
+}
+
 export class PARService {
   readonly #parRepository: IPARRepository;
 
@@ -40,7 +50,7 @@ export class PARService {
     this.#parRepository = parRepository;
   }
 
-  async parseAndStore(options: ParseAndStoreOptions): Promise<string> {
+  async parseAndStore(options: ParseAndStoreOptions): Promise<ParseAndStoreResult> {
     const parRequestFormUrl = Object.fromEntries(new URLSearchParams(options.parRequest.bodyString));
 
     const clientId = typeof parRequestFormUrl.client_id === 'string' ? parRequestFormUrl.client_id.trim() : '';
@@ -149,7 +159,7 @@ export class PARService {
       requestUri
     });
 
-    return requestUri;
+    return { requestUri, issuerState: authorizationRequest.issuer_state ?? null };
   }
 
   async getByRequestUri(requestUri: string): Promise<ParRequest> {

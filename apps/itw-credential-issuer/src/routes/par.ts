@@ -1,3 +1,5 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
 import { PARService, PostPushedAuthorizationError } from '../domain/index.js';
 import { makeOauthCallbacks } from '../plugins/index.js';
 
@@ -18,7 +20,7 @@ const parRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const service = new PARService(app.parRepository);
-        const requestUri = await service.parseAndStore({
+        const { issuerState, requestUri } = await service.parseAndStore({
           baseURL,
           callbacks: {
             fetch: oauthCallbacks.fetch,
@@ -34,6 +36,21 @@ const parRoute: FastifyPluginAsync = async (app) => {
             url: `${baseURL}${request.url}`
           }
         });
+
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.par.requested',
+            scenarioId: issuerState ?? request.conformance?.correlation?.scenarioId ?? null,
+            correlationId: issuerState ?? request.conformance?.correlation?.correlationId ?? null,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/as/par',
+              body: request.body,
+              headers: Object.fromEntries(headers.entries())
+            }
+          })
+        );
 
         return reply.code(201).send({
           expires_in: 60,
