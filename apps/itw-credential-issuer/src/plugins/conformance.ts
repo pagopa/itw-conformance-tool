@@ -126,62 +126,12 @@ function resolveCorrelation(
   return toCorrelation(correlation.correlationId);
 }
 
-function parseResponsePayload(payload: unknown): Record<string, unknown> | null {
-  const value = Buffer.isBuffer(payload) ? payload.toString('utf8') : payload;
-  if (typeof value !== 'string') return null;
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function registerResponseCorrelationHook(app: FastifyInstance, state: CorrelationState): void {
-  app.addHook('onSend', async (request, reply, payload) => {
-    if (reply.statusCode >= 400) return payload;
-
-    const body = parseResponsePayload(payload);
-    const step = resolveStep(request);
-
-    if (step === 'PAR') {
-      const requestUri = typeof body?.['request_uri'] === 'string' ? body['request_uri'] : null;
-      request.conformance.correlation = toCorrelation(requestUri ? extractIssuerSessionId(requestUri) : null);
-      return payload;
-    }
-
-    if (step !== 'TOKEN' || !request.conformance.correlation) return payload;
-
-    const accessToken = typeof body?.['access_token'] === 'string' ? body['access_token'] : null;
-    if (!accessToken) return payload;
-
-    try {
-      const tokenPayload = decodeJwt(accessToken);
-      const jti = typeof tokenPayload.jti === 'string' ? tokenPayload.jti : null;
-      const expiresAt = typeof tokenPayload.exp === 'number' ? tokenPayload.exp * 1000 : null;
-      if (!jti || !expiresAt || expiresAt <= Date.now()) return payload;
-
-      removeExpiredCorrelations(state);
-      const correlation = { ...request.conformance.correlation, expiresAt };
-      state.tokenJti.set(jti, correlation);
-      state.pendingNonce.push(correlation);
-    } catch (error) {
-      request.log.warn({ err: error }, 'Failed to register token conformance correlation');
-    }
-
-    return payload;
-  });
-}
-
 export default fp(
   async function conformancePlugin(app) {
     const state: CorrelationState = {
       pendingNonce: [],
       tokenJti: new Map()
     };
-
-    registerResponseCorrelationHook(app, state);
 
     await app.register(
       createConformanceInstrumentationPlugin({

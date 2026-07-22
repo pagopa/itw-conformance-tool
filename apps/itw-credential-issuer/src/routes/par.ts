@@ -47,7 +47,8 @@ const parRoute: FastifyPluginAsync = async (app) => {
             diagnostic: {
               endpoint: '/as/par',
               body: request.body,
-              headers: Object.fromEntries(headers.entries())
+              headers: Object.fromEntries(headers.entries()),
+              requestUri
             }
           })
         );

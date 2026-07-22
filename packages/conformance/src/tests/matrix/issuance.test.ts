@@ -138,6 +138,37 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
+      '[WP_053]: Wallet Instance sends an Authorization Request to the Credential Issuer Authorization Endpoint using the received request_uri and client_id.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const parEvent = events.find((event) => event.name === 'issuer.par.requested');
+        const authorizationEvent = events.find((event) => event.name === 'issuer.authorization.requested');
+
+        expect(parEvent).toBeDefined();
+        expect(authorizationEvent).toBeDefined();
+        if (!parEvent || !authorizationEvent) {
+          throw new Error('Missing issuer.par.requested or issuer.authorization.requested evidence');
+        }
+
+        expect(authorizationEvent.diagnostic?.['endpoint']).toBe('/authorize');
+
+        const parRequestUri = parEvent.diagnostic?.['requestUri'];
+        const authorizationRequestUri = authorizationEvent.diagnostic?.['requestUri'];
+        expect(typeof parRequestUri).toBe('string');
+        expect(parRequestUri).not.toHaveLength(0);
+        expect(authorizationRequestUri).toBe(parRequestUri);
+
+        expect(authorizationRequest).toBeDefined();
+        const authorizationClientId = authorizationEvent.diagnostic?.['clientId'];
+        expect(typeof authorizationClientId).toBe('string');
+        expect(authorizationClientId).not.toHaveLength(0);
+        expect(authorizationClientId).toBe(authorizationRequest.client_id);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
       '[WP_052a]: Wallet Instance creates the code_verifier following RFC 7636 recommendations for random number generation to prevent brute-force attacks.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
