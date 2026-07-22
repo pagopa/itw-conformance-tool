@@ -11,11 +11,12 @@ const DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS = [
 
 export const DEFAULT_CONFIG = {
   global: {
+    organization_name: 'PagoPA S.p.A.',
     data_dir: '.itw-conformance-tool',
     log_level: 'info'
   },
   wallet: {
-    wallet_name: 'IT Wallet Conformance Tool',
+    wallet_name: 'My Wallet Solution',
     wallet_version: 'V1_4'
   },
   'wallet-provider': {
@@ -49,6 +50,8 @@ const rpDefaults = DEFAULT_CONFIG['relying-party'];
 const trustAnchorDefaults = DEFAULT_CONFIG['trust-anchor'];
 
 export const ConfigIniTemplate = `[global]
+; Organization name (used in conformance test reports)
+organization_name = ${globalDefaults.organization_name}
 ; Local directory for keys, certificates, and generated data
 ; Default: ${globalDefaults.data_dir}
 data_dir = ${globalDefaults.data_dir}
@@ -58,7 +61,6 @@ log_level = ${globalDefaults.log_level}
 
 [wallet]
 ; Wallet name (used in conformance test reports)
-; Default: ${walletDefaults.wallet_name}
 wallet_name = ${walletDefaults.wallet_name}
 ; Wallet version (used in conformance test reports)
 ; Default: ${walletDefaults.wallet_version}
@@ -198,6 +200,7 @@ const nonEmptyString = z.string().trim().min(1);
 
 const GlobalConfigSchema = z
   .object({
+    organization_name: nonEmptyString.default(globalDefaults.organization_name),
     data_dir: nonEmptyString.default(globalDefaults.data_dir),
     log_level: z.preprocess(trimLowercaseString, z.enum(LOG_LEVELS)).default(globalDefaults.log_level)
   })

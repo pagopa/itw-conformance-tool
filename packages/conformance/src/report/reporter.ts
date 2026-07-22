@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { loadConfig } from '@itw-conformance-tool/config';
+import { loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 import { DatabaseClient } from '@itw-conformance-tool/database';
 import { logger } from '@itw-conformance-tool/logger';
 
@@ -19,17 +19,17 @@ type TestType = Phase;
 
 // Example IT Wallet Test Matrix IDs -> WP_001
 const REQUIREMENT_ID_PATTERN = /^([A-Z]+[_]\d+\w*)\s*:/;
-const DEFAULT_ENTITY_NAME = '-';
 
 export class ConformanceReporter implements Reporter {
   private checkResults: CheckResult[] = [];
   private db: DatabaseClient;
   private sessionId: string | undefined;
   private readonly testType: TestType;
+  private config: ConfigSchemaType;
 
   constructor(testType: TestType) {
-    const config = loadConfig();
-    this.db = new DatabaseClient(config.global.data_dir);
+    this.config = loadConfig();
+    this.db = new DatabaseClient(this.config.global.data_dir);
     this.testType = testType;
   }
 
@@ -73,7 +73,7 @@ export class ConformanceReporter implements Reporter {
     this.checkResults = [];
 
     createSession(this.db, {
-      entityName: DEFAULT_ENTITY_NAME,
+      entityName: this.config.global.organization_name,
       id: this.sessionId,
       phase: this.testType,
       startedAt: new Date().toISOString(),
