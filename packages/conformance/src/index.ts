@@ -54,8 +54,6 @@ export type {
 export { createProtocolObservedScenarioRunner } from './runner/scenario-runner.js';
 export { createScenarioPromptModel, type ScenarioPromptModel } from './runner/prompts.js';
 export { resolveTimeoutProfile, type ResolvedTimeoutProfile } from './runner/timeout-profile.js';
-export { issuanceMatrix } from './matrix/issuance.js';
-export { walletInstanceMatrix } from './matrix/wallet-instance.js';
 export {
   createScenarioRegistry,
   validateProtocolObservedScenarioDefinition,
