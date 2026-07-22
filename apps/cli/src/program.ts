@@ -1,4 +1,5 @@
 import { loadConfig } from '@itw-conformance-tool/config';
+import { reportCreate } from '@itw-conformance-tool/conformance';
 import { createLogger } from '@itw-conformance-tool/logger';
 import { Argument, Command, InvalidArgumentError } from 'commander';
 
@@ -30,15 +31,6 @@ function parseTestCategory(value: string): TestCategory {
   return category;
 }
 
-function parseReportFormat(value: string): 'html' | 'pdf' {
-  const format = value.toLowerCase();
-  if (format !== 'html' && format !== 'pdf') {
-    throw new InvalidArgumentError(`Invalid format: ${value}. Must be 'html' or 'pdf'.`);
-  }
-
-  return format;
-}
-
 async function start(flags: StartFlags): Promise<void> {
   const nxRootPath = findNxRoot();
   const config = loadConfig();
@@ -60,10 +52,6 @@ async function test(category: TestCategory): Promise<void> {
 }
 
 async function listReports(): Promise<void> {
-  throw new Error('Not implemented yet.');
-}
-
-async function createReport(): Promise<void> {
   throw new Error('Not implemented yet.');
 }
 
@@ -112,12 +100,11 @@ function createProgram(): Command {
     });
 
   program
-    .command('report:create')
-    .description('Generate a conformance report file for a given run')
-    .argument('<uuid>', 'run identifier')
-    .addArgument(new Argument('[format]', 'report format').argParser(parseReportFormat).default('html'))
-    .action(async () => {
-      await createReport();
+    .command('create <run_id|latest> <format>')
+    .description('Generate an HTML or PDF conformance report for a run ID or the latest run')
+    .option('--view <view>', 'Which view to render: both (default), executive, or technical', 'both')
+    .action(async (runId, format, options) => {
+      await reportCreate(runId, format, options.view);
     });
 
   program
