@@ -24,7 +24,6 @@ export interface ScenarioTimingSummary {
 }
 
 export interface ScenarioOutcome {
-  scenarioId: string;
   testCaseId: string;
   verdict: ScenarioVerdict;
   reason: string;

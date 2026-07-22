@@ -24,7 +24,6 @@ interface EventRow {
   monotonic_ms: number;
   name: string;
   request_id: string | null;
-  scenario_id: string | null;
   service: string;
   timestamp: string;
   validation: string | null;
@@ -49,7 +48,6 @@ function rowToObservedEvent(row: EventRow): ObservedEvent {
   return {
     id: row.id,
     name: row.name as ObservedEventName,
-    scenarioId: row.scenario_id,
     correlationId: row.correlation_id,
     service: row.service as ObservedServiceName,
     timestamp: row.timestamp,
@@ -84,7 +82,7 @@ function isPostStartEvent(event: ObservedEvent, startedAt: string): boolean {
  * ID or protocol correlation ID.
  */
 function isUncorrelatedEvent(event: ObservedEvent): boolean {
-  return event.scenarioId === null && event.correlationId === null;
+  return event.correlationId === null;
 }
 
 /**
@@ -165,7 +163,6 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
       `INSERT OR IGNORE INTO conformance_events (
         id,
         name,
-        scenario_id,
         correlation_id,
         service,
         timestamp,
@@ -176,11 +173,10 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
         http,
         error,
         validation
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         event.id,
         event.name,
-        event.scenarioId,
         event.correlationId,
         event.service,
         event.timestamp,
@@ -200,7 +196,6 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
       `SELECT
         id,
         name,
-        scenario_id,
         correlation_id,
         service,
         timestamp,
@@ -224,16 +219,12 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
 export function createSqliteScenarioEventBridge(
   options: CreateSqliteScenarioEventBridgeOptions
 ): ScenarioEventBridgeFactory {
-  return ({ correlationId, definition, endpoints, eventStore, scenarioId, startedAt }) => {
+  return ({ correlationId, definition, endpoints, eventStore, startedAt }) => {
     const repository = new SqliteScenarioEventRepository(options.db);
     const seenEventIds = new Set(eventStore.all().map((event) => event.id));
 
     function belongsToScenario(event: ObservedEvent): boolean {
-      return (
-        event.scenarioId === scenarioId ||
-        event.correlationId === correlationId ||
-        matchesRequiredEventEvidence(event, definition, endpoints, startedAt)
-      );
+      return matchesRequiredEventEvidence(event, definition, endpoints, startedAt);
     }
 
     function poll(): void {
@@ -243,7 +234,7 @@ export function createSqliteScenarioEventBridge(
           seenEventIds.add(event.id);
           if (!belongsToScenario(event)) continue;
 
-          void eventStore.emit({ ...event, scenarioId });
+          void eventStore.emit(event);
         }
       } catch (error) {
         options.onError?.(error);

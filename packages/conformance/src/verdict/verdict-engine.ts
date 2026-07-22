@@ -10,7 +10,6 @@ export interface VerdictInput {
   events: ObservedEvent[];
   artifactValidationResults: ArtifactValidationResult[];
   timings: ScenarioTimingSummary;
-  scenarioId: string;
 }
 
 export interface VerdictEngine {
@@ -62,7 +61,6 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
       const entry = input.events.find((event) => event.name === input.definition.entryEvent);
       if (!entry) {
         return {
-          scenarioId: input.scenarioId,
           testCaseId: input.definition.id,
           verdict: 'INCONCLUSIVE',
           reason: 'The wallet did not enter the scenario; no protocol evidence was observed.',
@@ -84,7 +82,6 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
       );
       if (forbiddenEvents.length > 0) {
         return {
-          scenarioId: input.scenarioId,
           testCaseId: input.definition.id,
           verdict: 'FAIL',
           reason: 'The wallet continued the flow after receiving a non-conformant response.',
@@ -106,7 +103,6 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
       const invalidArtifact = input.artifactValidationResults.find((result) => result.status === 'invalid');
       if (invalidArtifact) {
         return {
-          scenarioId: input.scenarioId,
           testCaseId: input.definition.id,
           verdict: 'FAIL',
           reason: invalidArtifact.reason ?? `Artifact validation failed: ${invalidArtifact.expectationId}`,
@@ -124,7 +120,6 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
       if (missingRequiredEvents.length > 0) {
         const verdict = input.definition.missingRequiredEventPolicy === 'fail' ? 'FAIL' : 'INCONCLUSIVE';
         return {
-          scenarioId: input.scenarioId,
           testCaseId: input.definition.id,
           verdict,
           reason: `Required protocol events were not observed: ${missingRequiredEvents.join(', ')}`,
@@ -144,7 +139,6 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         const violation = findRequiredEventOrderViolation(requiredEventNames, input.events, entry);
         if (violation) {
           return {
-            scenarioId: input.scenarioId,
             testCaseId: input.definition.id,
             verdict: 'FAIL',
             reason: `Required events were observed out of order: "${violation.observedName}" was observed before its required predecessor "${violation.expectedName}".`,
@@ -177,7 +171,6 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
       ];
 
       return {
-        scenarioId: input.scenarioId,
         testCaseId: input.definition.id,
         verdict: 'PASS',
         reason: 'Entry event observed, required events were observed, and no forbidden continuation was observed.',

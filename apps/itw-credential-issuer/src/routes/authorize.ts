@@ -41,7 +41,6 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
         await app.conformanceEventSink?.emit(
           createObservedEvent({
             name: 'issuer.authorization.requested',
-            scenarioId: request.conformance?.correlation?.scenarioId ?? null,
             correlationId: request.conformance?.correlation?.correlationId ?? null,
             service: 'credential-issuer',
             requestId: request.id,

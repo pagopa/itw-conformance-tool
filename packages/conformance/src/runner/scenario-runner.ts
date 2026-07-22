@@ -40,7 +40,6 @@ export interface ScenarioRunner extends AsyncDisposable {
 }
 
 export interface InteractiveScenarioSession extends AsyncDisposable {
-  readonly scenarioId: string;
   readonly correlationId: string;
   readonly definition: ProtocolObservedScenarioDefinition;
   readonly endpoints: LocalServiceEndpoints;
@@ -214,7 +213,6 @@ export function createProtocolObservedScenarioRunner(
       if (!definition) throw new Error(`Unknown protocol-observed scenario: ${id}`);
 
       const startedAt = new Date().toISOString();
-      const scenarioId = randomUUID();
       const initialCorrelationId = randomUUID();
       const abortController = new AbortController();
       const eventStore = options.eventStoreFactory?.() ?? createInMemoryScenarioEventStore();
@@ -228,7 +226,6 @@ export function createProtocolObservedScenarioRunner(
         definition,
         endpoints,
         eventStore,
-        scenarioId,
         startedAt
       });
 
@@ -236,7 +233,6 @@ export function createProtocolObservedScenarioRunner(
         createObservedEvent({
           name:
             stimulus.type === 'presentation-request' ? 'presentation_request.generated' : 'credential_offer.generated',
-          scenarioId,
           correlationId,
           service: 'collector',
           diagnostic: { stimulusType: stimulus.type }
@@ -244,7 +240,6 @@ export function createProtocolObservedScenarioRunner(
       );
 
       const session: InteractiveScenarioSession = {
-        scenarioId,
         correlationId,
         definition,
         endpoints,
@@ -256,7 +251,7 @@ export function createProtocolObservedScenarioRunner(
           await copyQrPayloadToClipboard(stimulus, write);
           eventSubscription?.dispose();
           eventSubscription = eventStore.subscribe((event) => {
-            write(`[event] ${event.name} service=${event.service} scenario=${event.scenarioId ?? 'unmatched'}`);
+            write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
           });
         },
         async awaitVerdict(awaitOptions = {}) {
@@ -313,8 +308,7 @@ export function createProtocolObservedScenarioRunner(
             definition,
             events: eventStore.all(),
             artifactValidationResults: [],
-            timings: createTimings(startedAt),
-            scenarioId
+            timings: createTimings(startedAt)
           });
           writeOutcome(outcome, write);
           return outcome;

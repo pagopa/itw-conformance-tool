@@ -55,7 +55,6 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           await app.conformanceEventSink?.emit(
             createObservedEvent({
               name: 'federation.fetch.requested',
-              scenarioId: request.conformance?.correlation?.scenarioId ?? null,
               correlationId: request.conformance?.correlation?.correlationId ?? null,
               service: 'federation',
               requestId: request.id,

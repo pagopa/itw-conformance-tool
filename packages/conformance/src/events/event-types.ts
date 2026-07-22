@@ -43,14 +43,12 @@ export type RedactedHeaderValue = string | string[] | undefined;
 export type RedactedHeaders = Record<string, RedactedHeaderValue>;
 
 export interface ScenarioCorrelation {
-  scenarioId: string;
   correlationId: string;
 }
 
 export interface BaseObservedEvent {
   id: string;
   name: ObservedEventName;
-  scenarioId: string | null;
   correlationId: string | null;
   service: ObservedServiceName;
   timestamp: string;

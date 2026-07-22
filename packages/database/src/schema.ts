@@ -73,7 +73,6 @@ export const DDL = `
   CREATE TABLE IF NOT EXISTS conformance_events (
     id             TEXT    PRIMARY KEY,
     name           TEXT    NOT NULL,
-    scenario_id    TEXT,
     correlation_id TEXT,
     service        TEXT    NOT NULL,
     timestamp      TEXT    NOT NULL,

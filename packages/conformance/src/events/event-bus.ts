@@ -17,7 +17,6 @@ export interface ScenarioEventSink {
 
 export interface ObservedEventInput {
   name: ObservedEventName;
-  scenarioId: string | null;
   correlationId: string | null;
   service: ObservedServiceName;
   requestId?: string;

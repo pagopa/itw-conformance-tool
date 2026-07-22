@@ -22,7 +22,6 @@ export const getAuthorizationRequestHandler = async (
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.request_object.requested',
-      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
       correlationId: state,
       service: 'relying-party',
       requestId: req.id,

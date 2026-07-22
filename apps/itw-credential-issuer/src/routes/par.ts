@@ -40,7 +40,6 @@ const parRoute: FastifyPluginAsync = async (app) => {
         await app.conformanceEventSink?.emit(
           createObservedEvent({
             name: 'issuer.par.requested',
-            scenarioId: issuerState ?? request.conformance?.correlation?.scenarioId ?? null,
             correlationId: issuerState ?? request.conformance?.correlation?.correlationId ?? null,
             service: 'credential-issuer',
             requestId: request.id,

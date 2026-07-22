@@ -35,7 +35,9 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'issuer.authorization.requested',
-      service: 'credential-issuer'
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/authorize' }
     },
     {
       event: 'issuer.token.requested',

@@ -13,7 +13,7 @@ function getStringParam(value: unknown): string | null {
 }
 
 function toCorrelation(correlationId: string | null): ScenarioCorrelation | null {
-  return correlationId ? { correlationId, scenarioId: correlationId } : null;
+  return correlationId ? { correlationId } : null;
 }
 
 function resolveCorrelation(request: FastifyRequest): ScenarioCorrelation | null {
