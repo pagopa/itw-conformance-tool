@@ -59,18 +59,22 @@ export function resolveComplianceTier(pct: number): ComplianceTier {
  */
 export function resolveProfile(phase: Phase): string {
   if (phase === 'issuance') {
-    return 'Credential Issuer (CI)';
+    return 'Wallet Provider (Issuance Phase)';
   }
 
   if (phase === 'presentation') {
-    return 'Relying Party (RP)';
+    return 'Wallet Provider (Presentation Phase)';
   }
 
   if (phase === 'wallet-instance') {
-    return 'Wallet Instance (WI)';
+    return 'Wallet Instance';
   }
 
-  return 'Wallet Provider (WP)';
+  if (phase === 'wallet-provider') {
+    return 'Wallet Provider Backend';
+  }
+
+  return 'Wallet Provider';
 }
 
 export function resolveTierLabel(tier: ComplianceTier): string {
