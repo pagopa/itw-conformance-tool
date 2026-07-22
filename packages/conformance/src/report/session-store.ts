@@ -179,7 +179,7 @@ export function listSessions(db: DatabaseClient): SessionSummary[] {
       s.status,
       COUNT(c.id) AS checks_performed
     FROM conformance_sessions s
-    LEFT JOIN checks c ON c.session_id = s.id
+    LEFT JOIN conformance_checks c ON c.session_id = s.id
     GROUP BY s.id, s.started_at, s.closed_at, s.status
     ORDER BY s.started_at DESC
   `);

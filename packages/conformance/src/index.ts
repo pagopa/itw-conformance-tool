@@ -104,3 +104,4 @@ export type {
 export type { ArtifactValidationResult } from './verdict/rules.js';
 export { assertConformanceOutcome, type AssertConformanceOutcomeOptions } from './vitest/matchers.js';
 export { reportCreate } from './report/commands/report-create.js';
+export { reportList } from './report/commands/report-list.js';

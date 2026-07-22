@@ -1,5 +1,5 @@
 import { loadConfig } from '@itw-conformance-tool/config';
-import { reportCreate } from '@itw-conformance-tool/conformance';
+import { reportCreate, reportList } from '@itw-conformance-tool/conformance';
 import { createLogger } from '@itw-conformance-tool/logger';
 import { Argument, Command, InvalidArgumentError } from 'commander';
 
@@ -94,8 +94,8 @@ function createProgram(): Command {
     .command('list')
     .alias('ls')
     .description('List all conformance test runs')
-    .action(async () => {
-      throw new Error('Not implemented yet.');
+    .action(() => {
+      reportList();
     });
 
   report
