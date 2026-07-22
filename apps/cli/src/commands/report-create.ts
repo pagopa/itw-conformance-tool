@@ -2,14 +2,15 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { loadConfig } from '@itw-conformance-tool/config';
+import {
+  getLatestSessionId,
+  getSession,
+  renderHtml,
+  renderPdf,
+  type ReportView
+} from '@itw-conformance-tool/conformance';
 import { DatabaseClient } from '@itw-conformance-tool/database';
 import { logger } from '@itw-conformance-tool/logger';
-
-import { renderPdf } from '../pdf.js';
-import { getLatestSessionId, getSession } from '../session-store.js';
-import { renderHtml } from '../template/index.js';
-
-import type { ReportView } from '../template/types.js';
 
 type ReportFormat = 'html' | 'pdf';
 

@@ -1,8 +1,7 @@
 import { loadConfig } from '@itw-conformance-tool/config';
+import { listSessions } from '@itw-conformance-tool/conformance';
 import { DatabaseClient } from '@itw-conformance-tool/database';
 import { logger } from '@itw-conformance-tool/logger';
-
-import { listSessions } from '../session-store.js';
 
 const RUN_ID_WIDTH = 36;
 const STARTED_AT_WIDTH = 24;

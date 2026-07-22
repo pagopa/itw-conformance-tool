@@ -101,5 +101,7 @@ export type {
 } from './verdict/outcome.js';
 export type { ArtifactValidationResult } from './verdict/rules.js';
 export { assertConformanceOutcome, type AssertConformanceOutcomeOptions } from './vitest/matchers.js';
-export { reportCreate } from './report/commands/report-create.js';
-export { reportList } from './report/commands/report-list.js';
+export { renderPdf } from './report/pdf.js';
+export { getLatestSessionId, getSession, listSessions } from './report/session-store.js';
+export { renderHtml } from './report/template/index.js';
+export type { ReportView } from './report/template/types.js';
