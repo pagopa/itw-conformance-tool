@@ -11,8 +11,13 @@ const DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS = [
 
 export const DEFAULT_CONFIG = {
   global: {
+    organization_name: 'PagoPA S.p.A.',
     data_dir: '.itw-conformance-tool',
     log_level: 'info'
+  },
+  wallet: {
+    wallet_name: 'My Wallet Solution',
+    wallet_version: 'V1_4'
   },
   'wallet-provider': {
     url: 'https://wallet-provider-backend.example.com'
@@ -38,18 +43,28 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 const globalDefaults = DEFAULT_CONFIG.global;
+const walletDefaults = DEFAULT_CONFIG.wallet;
 const walletProviderDefaults = DEFAULT_CONFIG['wallet-provider'];
 const issuerDefaults = DEFAULT_CONFIG['credential-issuer'];
 const rpDefaults = DEFAULT_CONFIG['relying-party'];
 const trustAnchorDefaults = DEFAULT_CONFIG['trust-anchor'];
 
 export const ConfigIniTemplate = `[global]
+; Organization name (used in conformance test reports)
+organization_name = ${globalDefaults.organization_name}
 ; Local directory for keys, certificates, and generated data
 ; Default: ${globalDefaults.data_dir}
 data_dir = ${globalDefaults.data_dir}
 ; Logging level: debug | info | warn | error
 ; Default: ${globalDefaults.log_level}
 log_level = ${globalDefaults.log_level}
+
+[wallet]
+; Wallet name (used in conformance test reports)
+wallet_name = ${walletDefaults.wallet_name}
+; Wallet version (used in conformance test reports)
+; Default: ${walletDefaults.wallet_version}
+wallet_version = ${walletDefaults.wallet_version}
 
 [wallet-provider]
 ; Wallet Provider Backend URL (used for conformance tests)
@@ -185,10 +200,18 @@ const nonEmptyString = z.string().trim().min(1);
 
 const GlobalConfigSchema = z
   .object({
+    organization_name: nonEmptyString.default(globalDefaults.organization_name),
     data_dir: nonEmptyString.default(globalDefaults.data_dir),
     log_level: z.preprocess(trimLowercaseString, z.enum(LOG_LEVELS)).default(globalDefaults.log_level)
   })
   .default(globalDefaults);
+
+const WalletConfigSchema = z
+  .object({
+    wallet_name: nonEmptyString.default(walletDefaults.wallet_name),
+    wallet_version: nonEmptyString.default(walletDefaults.wallet_version)
+  })
+  .default(walletDefaults);
 
 const WalletProviderConfigSchema = z
   .object({
@@ -245,6 +268,7 @@ const TrustAnchorConfigSchema = z
 
 export const ConfigSchema = z.object({
   global: GlobalConfigSchema,
+  wallet: WalletConfigSchema,
   'wallet-provider': WalletProviderConfigSchema,
   'credential-issuer': IssuerConfigSchema,
   'relying-party': RpConfigSchema,

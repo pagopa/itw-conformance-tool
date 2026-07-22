@@ -1,76 +1,45 @@
+import { loadConfig } from '@itw-conformance-tool/config';
+import { listSessions } from '@itw-conformance-tool/conformance';
 import { DatabaseClient } from '@itw-conformance-tool/database';
+import { logger } from '@itw-conformance-tool/logger';
 
-import type { EmitLog } from '../types/types.js';
+const RUN_ID_WIDTH = 36;
+const STARTED_AT_WIDTH = 24;
+const CLOSED_AT_WIDTH = 24;
+const STATUS_WIDTH = 10;
 
-type SessionRow = {
-  session_id: string;
-  started_at: string;
-  closed_at: string | null;
-  status: string;
-  checks: string;
-};
-
-function calcPad(value: string, width: number): string {
-  return value.padEnd(width + 2);
-}
-
-/**
- * Prints a formatted table of all conformance sessions to stdout.
- */
-export function reportList(dataDir: string, emitter: EmitLog): void {
-  const db = new DatabaseClient(dataDir);
+export function reportList(): void {
+  const config = loadConfig();
+  const db = new DatabaseClient(config.global.data_dir);
 
   try {
-    const rows = db.query<SessionRow>(`
-      SELECT
-        session_id,
-        started_at,
-        closed_at,
-        status,
-        checks
-      FROM conformance_sessions
-      ORDER BY started_at DESC
-    `);
-
-    if (rows.length === 0) {
-      emitter('No conformance runs found in the database.\n', 'info');
+    const sessions = listSessions(db);
+    if (sessions.length === 0) {
+      logger.warn('No conformance runs found.');
       return;
     }
 
-    const columns = {
-      runId: 'RUN ID',
-      startedAt: 'STARTED AT',
-      closedAt: 'CLOSED AT',
-      status: 'STATUS',
-      checks: 'CHECKS'
-    };
+    const header = [
+      'RUN ID'.padEnd(RUN_ID_WIDTH),
+      'STARTED AT'.padEnd(STARTED_AT_WIDTH),
+      'CLOSED AT'.padEnd(CLOSED_AT_WIDTH),
+      'STATUS'.padEnd(STATUS_WIDTH),
+      'CHECKS'
+    ].join(' ');
 
-    const data = rows.map((row) => ({
-      runId: row.session_id,
-      startedAt: row.started_at,
-      closedAt: row.closed_at ?? '-',
-      status: row.status,
-      checks: String((JSON.parse(row.checks) as unknown[]).length)
-    }));
-
-    const widths = {
-      runId: Math.max(columns.runId.length, ...data.map((r) => r.runId.length)),
-      startedAt: Math.max(columns.startedAt.length, ...data.map((r) => r.startedAt.length)),
-      closedAt: Math.max(columns.closedAt.length, ...data.map((r) => r.closedAt.length)),
-      status: Math.max(columns.status.length, ...data.map((r) => r.status.length)),
-      checks: Math.max(columns.checks.length, ...data.map((r) => r.checks.length))
-    };
-
-    // Print header
-    process.stdout.write(
-      `${calcPad(columns.runId, widths.runId)}${calcPad(columns.startedAt, widths.startedAt)}${calcPad(columns.closedAt, widths.closedAt)}${calcPad(columns.status, widths.status)}${calcPad(columns.checks, widths.checks)}\n`
+    const rows = sessions.map((session) =>
+      [
+        session.runId.padEnd(RUN_ID_WIDTH),
+        session.startedAt.padEnd(STARTED_AT_WIDTH),
+        (session.closedAt ?? '-').padEnd(CLOSED_AT_WIDTH),
+        session.status.padEnd(STATUS_WIDTH),
+        String(session.checksPerformed)
+      ].join(' ')
     );
 
-    // Print data rows
-    for (const row of data) {
-      process.stdout.write(
-        `${calcPad(row.runId, widths.runId)}${calcPad(row.startedAt, widths.startedAt)}${calcPad(row.closedAt, widths.closedAt)}${calcPad(row.status, widths.status)}${calcPad(row.checks, widths.checks)}\n`
-      );
+    logger.info(header);
+    for (const row of rows) {
+      logger.info(row);
     }
   } finally {
     db.close();

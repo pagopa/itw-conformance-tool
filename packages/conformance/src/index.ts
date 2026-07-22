@@ -1,36 +1,4 @@
-export type {
-  ClosedConformanceSessionStatus,
-  ConformanceCheck,
-  ConformanceCheckResult,
-  ConformancePhase,
-  ConformanceSession,
-  ConformanceSessionStatus,
-  ConformanceStep
-} from './models/types.js';
-export type { IConformanceSessionRepository } from './models/types.js';
-export { SqliteConformanceSessionRepository } from './repository.js';
-export { runConformanceCleanup, startConformanceCleanupJob } from './jobs/cleanup.js';
-export {
-  buildJsonReporterFromRepository,
-  buildJsonReporterFromSession,
-  loadSessionForReport,
-  type JsonReporterAssertionResult,
-  type JsonReporterBuildOptions,
-  type JsonReporterBuildResult,
-  type JsonReporterResult,
-  type JsonReporterTestResult
-} from './reporters/json-reporter.js';
-export {
-  generateRenderedReport,
-  renderHtmlReport,
-  renderPdfReport,
-  type HtmlPdfGeneratorOptions,
-  type RenderedReport,
-  type ReportFormat
-} from './reporters/html-pdf-generator.js';
 export { extractIssuerSessionId, extractRpSessionId } from './utils/session-extractor.js';
-export type { RequirementDefinition } from './utils/requirement-mapper.js';
-export { getRequirements } from './utils/requirement-mapper.js';
 export {
   createInMemoryArtifactStore,
   type ArtifactRef,
@@ -86,8 +54,6 @@ export type {
 export { createProtocolObservedScenarioRunner } from './runner/scenario-runner.js';
 export { createScenarioPromptModel, type ScenarioPromptModel } from './runner/prompts.js';
 export { resolveTimeoutProfile, type ResolvedTimeoutProfile } from './runner/timeout-profile.js';
-export { issuanceMatrix } from './matrix/issuance.js';
-export { walletInstanceMatrix } from './matrix/wallet-instance.js';
 export {
   createScenarioRegistry,
   validateProtocolObservedScenarioDefinition,
@@ -135,3 +101,7 @@ export type {
 } from './verdict/outcome.js';
 export type { ArtifactValidationResult } from './verdict/rules.js';
 export { assertConformanceOutcome, type AssertConformanceOutcomeOptions } from './vitest/matchers.js';
+export { renderPdf } from './report/pdf.js';
+export { getLatestSessionId, getSession, listSessions } from './report/session-store.js';
+export { renderHtml } from './report/template/index.js';
+export type { ReportView } from './report/template/types.js';
