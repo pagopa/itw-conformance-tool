@@ -51,10 +51,6 @@ async function test(category: TestCategory): Promise<void> {
   process.exitCode = await runConformanceTests(category);
 }
 
-async function listReports(): Promise<void> {
-  throw new Error('Not implemented yet.');
-}
-
 function createProgram(): Command {
   const program = new Command().name('itwct').description('Local CLI for ITW Conformance flows').showHelpAfterError();
 
@@ -92,14 +88,17 @@ function createProgram(): Command {
       await test(category);
     });
 
-  program
-    .command('report:list')
-    .description('List all conformance runs stored in the database')
+  const report = program.command('report').description('Manage conformance test reports');
+
+  report
+    .command('list')
+    .alias('ls')
+    .description('List all conformance test runs')
     .action(async () => {
-      await listReports();
+      throw new Error('Not implemented yet.');
     });
 
-  program
+  report
     .command('create <run_id|latest> <format>')
     .description('Generate an HTML or PDF conformance report for a run ID or the latest run')
     .option('--view <view>', 'Which view to render: both (default), executive, or technical', 'both')

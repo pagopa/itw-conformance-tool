@@ -55,8 +55,7 @@ export function resolveComplianceTier(pct: number): ComplianceTier {
 
 /**
  * Resolves the conformance profile label from the session phase.
- * The phase is set authoritatively by the reporter at session creation
- * time based on which Vitest config was used (issuance vs presentation).
+ * The phase is set authoritatively by the reporter at session creation time.
  */
 export function resolveProfile(phase: Phase): string {
   if (phase === 'issuance') {
@@ -67,7 +66,11 @@ export function resolveProfile(phase: Phase): string {
     return 'Relying Party (RP)';
   }
 
-  throw new Error(`Unknown phase: ${phase}`);
+  if (phase === 'wallet-instance') {
+    return 'Wallet Instance (WI)';
+  }
+
+  return 'Wallet Provider (WP)';
 }
 
 export function resolveTierLabel(tier: ComplianceTier): string {

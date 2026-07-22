@@ -17,7 +17,7 @@ export interface ConformanceSession {
   status: 'FAILED' | 'INCOMPLETE' | 'OPEN' | 'PASSED';
 }
 
-export type Phase = 'issuance' | 'presentation';
+export type Phase = 'issuance' | 'presentation' | 'wallet-instance' | 'wallet-provider';
 
 export interface VitestAssertionResult {
   ancestorTitles: string[];

@@ -73,7 +73,7 @@ export const DDL = `
 
   CREATE TABLE IF NOT EXISTS conformance_checks (
     id             TEXT PRIMARY KEY,
-    session_id     TEXT NOT NULL REFERENCES sessions(id),
+    session_id     TEXT NOT NULL REFERENCES conformance_sessions(id),
     requirement_id TEXT NOT NULL,
     description    TEXT NOT NULL,
     phase          TEXT NOT NULL,

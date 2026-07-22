@@ -6,7 +6,7 @@ import { logger } from '@itw-conformance-tool/logger';
 
 import { appendCheck, closeSession, createSession } from './session-store.js';
 
-import type { ConformanceCheck } from './types.js';
+import type { ConformanceCheck, Phase } from './types.js';
 import type { TestResult } from 'vitest/node';
 import type { Reporter } from 'vitest/reporters';
 
@@ -15,7 +15,7 @@ type CheckResult = ConformanceCheck['result'];
 type ReporterTestCase = Parameters<NonNullable<Reporter['onTestCaseResult']>>[0];
 
 type SessionStatus = 'FAILED' | 'INCOMPLETE' | 'PASSED';
-type TestType = 'issuance' | 'presentation';
+type TestType = Phase;
 
 // Example IT Wallet Test Matrix IDs -> WP_001
 const REQUIREMENT_ID_PATTERN = /^([A-Z]+[_]\d+\w*)\s*:/;

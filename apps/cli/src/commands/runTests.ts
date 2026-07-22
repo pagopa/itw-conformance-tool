@@ -23,13 +23,17 @@ export function requiredServicesForCategory(category: TestCategory): SupervisedS
   return [];
 }
 
-/** Preserves colours for an interactive CLI invocation without overriding user preferences. */
+/** Configures Vitest with the selected conformance category and terminal colours. */
 export function createConformanceTestEnvironment(
+  category: TestCategory,
   environment: NodeJS.ProcessEnv = process.env,
   isInteractive = process.stdout.isTTY === true
 ): NodeJS.ProcessEnv {
-  if (!isInteractive || environment.FORCE_COLOR !== undefined || environment.NO_COLOR !== undefined) return environment;
-  return { ...environment, FORCE_COLOR: '1' };
+  const testEnvironment: NodeJS.ProcessEnv = { ...environment, ITWCT_CONFORMANCE_TEST_CATEGORY: category };
+  if (!isInteractive || testEnvironment.FORCE_COLOR !== undefined || testEnvironment.NO_COLOR !== undefined) {
+    return testEnvironment;
+  }
+  return { ...testEnvironment, FORCE_COLOR: '1' };
 }
 
 function runVitest(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<number> {
@@ -55,7 +59,7 @@ export async function runConformanceTests(category: TestCategory): Promise<numbe
     return await runVitest(
       buildConformanceTestArgs(category, nxRootPath),
       nxRootPath,
-      createConformanceTestEnvironment()
+      createConformanceTestEnvironment(category)
     );
   } finally {
     process.removeListener('SIGINT', stop);

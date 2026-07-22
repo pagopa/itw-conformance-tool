@@ -11,6 +11,18 @@ const sourceReporterPath = path.join(packageRoot, 'packages/conformance/src/repo
 const reporterModulePath = existsSync(builtReporterPath) ? builtReporterPath : sourceReporterPath;
 const { ConformanceReporter } = await import(pathToFileURL(reporterModulePath).href);
 
+const conformanceTestCategory = process.env.ITWCT_CONFORMANCE_TEST_CATEGORY;
+if (
+  conformanceTestCategory !== 'issuance' &&
+  conformanceTestCategory !== 'presentation' &&
+  conformanceTestCategory !== 'wallet-instance' &&
+  conformanceTestCategory !== 'wallet-provider'
+) {
+  throw new Error(
+    'ITWCT_CONFORMANCE_TEST_CATEGORY must be one of: issuance, presentation, wallet-instance, wallet-provider.'
+  );
+}
+
 export default defineConfig(() => ({
   root: packageRoot,
   cacheDir: path.join(packageRoot, 'node_modules/.vitest'),
@@ -21,7 +33,7 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['packages/conformance/src/tests/matrix/**/*.test.ts'],
-    reporters: ['dot', new ConformanceReporter()],
+    reporters: ['dot', new ConformanceReporter(conformanceTestCategory)],
     // node:sqlite requires --experimental-sqlite on Node.js 22.
     pool: 'forks',
     forks: {
