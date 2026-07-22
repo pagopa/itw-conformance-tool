@@ -3,8 +3,8 @@ import { createLogger } from '@itw-conformance-tool/logger';
 import { Argument, Command, InvalidArgumentError } from 'commander';
 
 import { init } from './commands/init.js';
-import { reportCreate } from './commands/report-create.js';
-import { reportList } from './commands/report-list.js';
+import { reportCreate } from './commands/reportCreate.js';
+import { reportList } from './commands/reportList.js';
 import { runConformanceTests } from './commands/runTests.js';
 import { isTestCategory, testCategories, type TestCategory } from './commands/testCategories.js';
 import { getNxCommands } from './services/getNxCommands.js';
