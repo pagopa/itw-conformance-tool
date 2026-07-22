@@ -57,21 +57,21 @@ export function resolveComplianceTier(pct: number): ComplianceTier {
  * Resolves the conformance profile label from the session phase.
  * The phase is set authoritatively by the reporter at session creation time.
  */
-export function resolveProfile(phase: Phase): string {
+export function resolveProfile(phase: Phase | 'all'): string {
   if (phase === 'issuance') {
-    return 'Wallet Provider (Issuance Phase)';
+    return 'Wallet Provider (Issuance)';
   }
 
   if (phase === 'presentation') {
-    return 'Wallet Provider (Presentation Phase)';
+    return 'Wallet Provider (Presentation)';
   }
 
   if (phase === 'wallet-instance') {
-    return 'Wallet Instance';
+    return 'Wallet Provider (Wallet Instance)';
   }
 
   if (phase === 'wallet-provider') {
-    return 'Wallet Provider Backend';
+    return 'Wallet Provider (Backend)';
   }
 
   return 'Wallet Provider';
