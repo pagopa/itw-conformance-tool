@@ -1,6 +1,6 @@
-import { getRequiredEventNames } from '../scenarios/definitions.js';
+import { getRequiredEventNames, hasVerdictRule } from '../scenarios/definitions.js';
 
-import type { ObservedEvent } from '../events/event-types.js';
+import type { ObservedEvent, ObservedEventName } from '../events/event-types.js';
 import type { ProtocolObservedScenarioDefinition } from '../scenarios/definitions.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from './outcome.js';
 import type { ArtifactValidationResult } from './rules.js';
@@ -15,6 +15,44 @@ export interface VerdictInput {
 
 export interface VerdictEngine {
   evaluate(input: VerdictInput): ScenarioOutcome;
+}
+
+interface RequiredEventOrderViolation {
+  expectedName: ObservedEventName;
+  observedEvent: ObservedEvent;
+  observedName: ObservedEventName;
+}
+
+/**
+ * Finds the first required event that was observed before an earlier-declared
+ * required event, when the scenario opts in to the 'required-events-in-order'
+ * verdict rule. Only called once every required event's presence has already
+ * been confirmed, so each name is guaranteed to have at least one occurrence
+ * after the entry event.
+ */
+function findRequiredEventOrderViolation(
+  requiredEventNames: ObservedEventName[],
+  events: ObservedEvent[],
+  entry: ObservedEvent
+): RequiredEventOrderViolation | undefined {
+  let previous: { event: ObservedEvent; name: ObservedEventName } | undefined;
+
+  for (const name of requiredEventNames) {
+    if (name === entry.name) continue;
+
+    const firstOccurrence = events
+      .filter((event) => event.name === name && event.monotonicMs > entry.monotonicMs)
+      .sort((a, b) => a.monotonicMs - b.monotonicMs)[0];
+    if (!firstOccurrence) continue;
+
+    if (previous && firstOccurrence.monotonicMs < previous.event.monotonicMs) {
+      return { expectedName: previous.name, observedEvent: firstOccurrence, observedName: name };
+    }
+
+    previous = { event: firstOccurrence, name };
+  }
+
+  return undefined;
 }
 
 export function createProtocolObservedVerdictEngine(): VerdictEngine {
@@ -100,6 +138,34 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
           forbiddenEvidence: [],
           timings: input.timings
         };
+      }
+
+      if (hasVerdictRule(input.definition, 'required-events-in-order')) {
+        const violation = findRequiredEventOrderViolation(requiredEventNames, input.events, entry);
+        if (violation) {
+          return {
+            scenarioId: input.scenarioId,
+            testCaseId: input.definition.id,
+            verdict: 'FAIL',
+            reason: `Required events were observed out of order: "${violation.observedName}" was observed before its required predecessor "${violation.expectedName}".`,
+            evidence: [
+              {
+                eventId: entry.id,
+                eventName: entry.name,
+                message: 'Entry event observed.',
+                timestamp: entry.timestamp
+              }
+            ],
+            missingEvidence: [
+              {
+                eventName: violation.observedName,
+                message: `Required event "${violation.observedName}" was observed before its required predecessor "${violation.expectedName}".`
+              }
+            ],
+            forbiddenEvidence: [],
+            timings: input.timings
+          };
+        }
       }
 
       const evidenceEvents = [

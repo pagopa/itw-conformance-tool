@@ -12,7 +12,7 @@ import {
 } from '../events/event-store.js';
 import { createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
-import { getRequiredEventName } from '../scenarios/definitions.js';
+import { getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
@@ -276,18 +276,20 @@ export function createProtocolObservedScenarioRunner(
           }
 
           if (entryEvent) {
+            const enforceOrder = hasVerdictRule(definition, 'required-events-in-order');
             let previous = entryEvent;
             for (const requiredEvent of definition.requiredEvents ?? []) {
               const requiredEventName = getRequiredEventName(requiredEvent);
               if (requiredEventName === entryEvent.name) continue;
 
               try {
-                previous = await eventStore.waitFor(requiredEventName, {
-                  after: previous,
+                const observed = await eventStore.waitFor(requiredEventName, {
+                  after: enforceOrder ? previous : entryEvent,
                   timeoutMs: definition.timeouts.protocolStepMs,
                   signal,
                   inconclusiveMessage: `The wallet did not send required event ${requiredEventName}.`
                 });
+                if (enforceOrder) previous = observed;
               } catch (error) {
                 if (!isControlledWaitError(error)) throw error;
                 break;
