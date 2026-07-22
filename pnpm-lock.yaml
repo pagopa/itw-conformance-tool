@@ -499,6 +499,9 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database
+      '@itw-conformance-tool/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@itw-conformance-tool/utils':
         specifier: workspace:*
         version: link:../utils
@@ -523,13 +526,13 @@ importers:
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
     devDependencies:
       '@types/node':
         specifier: catalog:node
         version: 22.20.1
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
 
   packages/crypto:
     dependencies:

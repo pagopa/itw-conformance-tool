@@ -11,7 +11,7 @@ export function buildConformanceTestArgs(category: TestCategory, nxRootPath: str
     'vitest',
     'run',
     '--config',
-    join(nxRootPath, 'vitest.conformance-test.config.mts'),
+    join(nxRootPath, 'vitest.conformance.config.mts'),
     testCategoryFilters[category]
   ];
 }

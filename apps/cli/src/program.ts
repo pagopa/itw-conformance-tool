@@ -3,8 +3,6 @@ import { createLogger } from '@itw-conformance-tool/logger';
 import { Argument, Command, InvalidArgumentError } from 'commander';
 
 import { init } from './commands/init.js';
-import { reportCreate } from './commands/reportCreate.js';
-import { reportList } from './commands/reportList.js';
 import { runConformanceTests } from './commands/runTests.js';
 import { isTestCategory, testCategories, type TestCategory } from './commands/testCategories.js';
 import { getNxCommands } from './services/getNxCommands.js';
@@ -62,18 +60,11 @@ async function test(category: TestCategory): Promise<void> {
 }
 
 async function listReports(): Promise<void> {
-  const config = loadConfig();
-  reportList(config.global.data_dir, createEmitter(createLogger({ level: config.global.log_level })));
+  throw new Error('Not implemented yet.');
 }
 
-async function createReport(runId: string, format: 'html' | 'pdf'): Promise<void> {
-  const config = loadConfig();
-  await reportCreate(
-    runId,
-    format,
-    config.global.data_dir,
-    createEmitter(createLogger({ level: config.global.log_level }))
-  );
+async function createReport(): Promise<void> {
+  throw new Error('Not implemented yet.');
 }
 
 function createProgram(): Command {
@@ -125,8 +116,8 @@ function createProgram(): Command {
     .description('Generate a conformance report file for a given run')
     .argument('<uuid>', 'run identifier')
     .addArgument(new Argument('[format]', 'report format').argParser(parseReportFormat).default('html'))
-    .action(async (runId: string, format: 'html' | 'pdf') => {
-      await createReport(runId, format);
+    .action(async () => {
+      await createReport();
     });
 
   program

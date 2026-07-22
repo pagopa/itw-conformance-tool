@@ -14,6 +14,10 @@ export const DEFAULT_CONFIG = {
     data_dir: '.itw-conformance-tool',
     log_level: 'info'
   },
+  wallet: {
+    wallet_name: 'IT Wallet Conformance Tool',
+    wallet_version: 'V1_4'
+  },
   'wallet-provider': {
     url: 'https://wallet-provider-backend.example.com'
   },
@@ -38,6 +42,7 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 const globalDefaults = DEFAULT_CONFIG.global;
+const walletDefaults = DEFAULT_CONFIG.wallet;
 const walletProviderDefaults = DEFAULT_CONFIG['wallet-provider'];
 const issuerDefaults = DEFAULT_CONFIG['credential-issuer'];
 const rpDefaults = DEFAULT_CONFIG['relying-party'];
@@ -50,6 +55,14 @@ data_dir = ${globalDefaults.data_dir}
 ; Logging level: debug | info | warn | error
 ; Default: ${globalDefaults.log_level}
 log_level = ${globalDefaults.log_level}
+
+[wallet]
+; Wallet name (used in conformance test reports)
+; Default: ${walletDefaults.wallet_name}
+wallet_name = ${walletDefaults.wallet_name}
+; Wallet version (used in conformance test reports)
+; Default: ${walletDefaults.wallet_version}
+wallet_version = ${walletDefaults.wallet_version}
 
 [wallet-provider]
 ; Wallet Provider Backend URL (used for conformance tests)
@@ -190,6 +203,13 @@ const GlobalConfigSchema = z
   })
   .default(globalDefaults);
 
+const WalletConfigSchema = z
+  .object({
+    wallet_name: nonEmptyString.default(walletDefaults.wallet_name),
+    wallet_version: nonEmptyString.default(walletDefaults.wallet_version)
+  })
+  .default(walletDefaults);
+
 const WalletProviderConfigSchema = z
   .object({
     url: z.url({ protocol: /^https$/ }).default(walletProviderDefaults.url)
@@ -245,6 +265,7 @@ const TrustAnchorConfigSchema = z
 
 export const ConfigSchema = z.object({
   global: GlobalConfigSchema,
+  wallet: WalletConfigSchema,
   'wallet-provider': WalletProviderConfigSchema,
   'credential-issuer': IssuerConfigSchema,
   'relying-party': RpConfigSchema,

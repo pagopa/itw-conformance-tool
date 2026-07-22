@@ -20,6 +20,7 @@
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/logger": "workspace:*",
     "@itw-conformance-tool/utils": "workspace:*",
     "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
     "chalk": "^5.6.2",
@@ -27,10 +28,10 @@
     "fastify-plugin": "catalog:fastify",
     "jose": "catalog:",
     "puppeteer": "^24.0.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "vitest": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:node",
-    "vitest": "catalog:"
+    "@types/node": "catalog:node"
   }
 }

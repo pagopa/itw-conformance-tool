@@ -1,13 +1,15 @@
 import {
   createConformanceInstrumentationPlugin,
   extractIssuerSessionId,
-  type ConformanceStep,
   type ScenarioCorrelation
 } from '@itw-conformance-tool/conformance';
 import fp from 'fastify-plugin';
 import { decodeJwt } from 'jose';
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+
+type ConformanceStep =
+  'AUTHORIZE' | 'AUTHORIZATION_CODE' | 'PAR' | 'CREDENTIAL' | 'NONCE' | 'PRESENTATION_RESPONSE' | 'TOKEN';
 
 const STEP_MAP: Partial<Record<string, ConformanceStep>> = {
   'GET:/authorize': 'AUTHORIZE',
