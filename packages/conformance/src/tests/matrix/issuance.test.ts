@@ -14,7 +14,7 @@ import {
   IT_WALLET_CLIENT_ATTESTATION_POP_ALLOWED_ALG_VALUES
 } from '@pagopa/io-wallet-oauth2';
 import { IoWalletSdkConfig, ItWalletSpecsVersion, type HttpMethod } from '@pagopa/io-wallet-utils';
-import { calculateJwkThumbprint, importJWK, jwtVerify, type JWK } from 'jose';
+import { importJWK, jwtVerify, type JWK } from 'jose';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { isRfc7636CodeVerifier } from '../../helpers/issuance.js';
