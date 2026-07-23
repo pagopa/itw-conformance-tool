@@ -3,13 +3,18 @@ import { DatabaseClient } from '@itw-conformance-tool/database';
 import {
   decodeJwt,
   decodeJwtHeader,
+  htuFromRequestUrl,
   parseAccessTokenRequest,
   parsePushedAuthorizationRequest,
   verifyClientAttestationPopJwt,
+  zDpopJwtHeader,
+  zDpopJwtPayload,
+  zItWalletClientAttestationPopJwtHeader,
+  zItWalletClientAttestationPopJwtPayload,
   IT_WALLET_CLIENT_ATTESTATION_POP_ALLOWED_ALG_VALUES
 } from '@pagopa/io-wallet-oauth2';
 import { IoWalletSdkConfig, ItWalletSpecsVersion, type HttpMethod } from '@pagopa/io-wallet-utils';
-import { importJWK, jwtVerify, type JWK } from 'jose';
+import { calculateJwkThumbprint, importJWK, jwtVerify, type JWK } from 'jose';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { isRfc7636CodeVerifier } from '../../helpers/issuance.js';
@@ -59,6 +64,12 @@ const verifyJwtWithJwk: NonNullable<CallbackContext['verifyJwt']> = async (signe
   }
 };
 
+// Tolerance (seconds) used to assert that the DPoP proof's `iat` claim is
+// recent relative to the observed `issuer.token.requested` event timestamp,
+// matching the clock tolerance already used for JWT signature verification
+// in this file.
+const DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS = 300;
+
 describe('Test Cases for Issuance Phase', () => {
   let runner: ScenarioRunner;
   let db: DatabaseClient;
@@ -87,6 +98,9 @@ describe('Test Cases for Issuance Phase', () => {
     let events: ObservedEvent[];
     let authorizationRequest: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['authorizationRequest'];
     let clientAttestation: Awaited<ReturnType<typeof parsePushedAuthorizationRequest>>['clientAttestation'];
+    let tokenEvent: ObservedEvent;
+    let tokenRequestUrl: string;
+    let tokenRequestResult: ReturnType<typeof parseAccessTokenRequest>;
 
     beforeAll(async () => {
       const session = await runner.start(wpCiHappyScenario.id);
@@ -115,6 +129,29 @@ describe('Test Cases for Issuance Phase', () => {
           }
         }));
       }
+
+      // Shared for WP_052a/WP_055/WP_055a/WP_055b/WP_055c/WP_055d: parse the
+      // Token Request once here instead of repeating this parsing in every test.
+      const foundTokenEvent = events.find((event) => event.name === 'issuer.token.requested');
+      if (!foundTokenEvent) {
+        throw new Error('Missing issuer.token.requested evidence required to assert WP_055 requirements');
+      }
+      tokenEvent = foundTokenEvent;
+
+      const tokenEndpoint = tokenEvent.diagnostic?.['endpoint'];
+      if (typeof tokenEndpoint !== 'string' || tokenEndpoint.length === 0) {
+        throw new Error('issuer.token.requested evidence is missing the endpoint diagnostic');
+      }
+      tokenRequestUrl = `${config['credential-issuer'].url}${tokenEndpoint}`;
+
+      tokenRequestResult = parseAccessTokenRequest({
+        accessTokenRequest: tokenEvent.diagnostic?.['body'] as Record<string, unknown>,
+        request: {
+          headers: toHeaders(tokenEvent.diagnostic?.['headers']),
+          method: 'POST' as HttpMethod,
+          url: tokenRequestUrl
+        }
+      });
     }, wpCiHappyScenario.timeouts.vitestTestMs);
 
     test(
@@ -173,24 +210,11 @@ describe('Test Cases for Issuance Phase', () => {
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
-        const tokenEvent = events.find((event) => event.name === 'issuer.token.requested');
-        expect(tokenEvent).toBeDefined();
-
-        const body = tokenEvent?.diagnostic?.['body'];
-        const headers = tokenEvent?.diagnostic?.['headers'];
-        const endpoint = tokenEvent?.diagnostic?.['endpoint'];
-
-        const { pkceCodeVerifier } = parseAccessTokenRequest({
-          accessTokenRequest: body as Record<string, unknown>,
-          request: {
-            headers: toHeaders(headers),
-            method: 'POST' as HttpMethod,
-            url: `${config['credential-issuer'].url}${endpoint}`
-          }
-        });
-
-        expect(pkceCodeVerifier).toBeDefined();
-        expect(pkceCodeVerifier).toSatisfy(isRfc7636CodeVerifier, 'code_verifier must be an RFC 7636 compliant string');
+        expect(tokenRequestResult.pkceCodeVerifier).toBeDefined();
+        expect(tokenRequestResult.pkceCodeVerifier).toSatisfy(
+          isRfc7636CodeVerifier,
+          'code_verifier must be an RFC 7636 compliant string'
+        );
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );
@@ -278,6 +302,179 @@ describe('Test Cases for Issuance Phase', () => {
         const hasMatchingScope = authorizationRequest.scope?.split(/\s+/).includes(expectedCredentialConfigurationId);
 
         expect(hasMatchingAuthorizationDetail || hasMatchingScope).toBe(true);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      '[WP_055]: Wallet Instance sends the Token Request to the Credential Issuer Token Endpoint using the authorization_code grant with the code, redirect_uri and PKCE code_verifier.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(tokenEvent.diagnostic?.['endpoint']).toBe('/token');
+
+        const tokenRequestHeaders = toHeaders(tokenEvent.diagnostic?.['headers']);
+        const contentType = tokenRequestHeaders.get('content-type');
+        expect(contentType).not.toBeNull();
+        expect(contentType?.toLowerCase()).toContain('application/x-www-form-urlencoded');
+
+        expect(tokenRequestResult.grant.grantType).toBe('authorization_code');
+        if (tokenRequestResult.grant.grantType !== 'authorization_code') {
+          throw new Error('Expected the Token Request to use the authorization_code grant');
+        }
+        expect(tokenRequestResult.grant.code).not.toHaveLength(0);
+
+        const { accessTokenRequest } = tokenRequestResult;
+        expect(accessTokenRequest.grant_type).toBe('authorization_code');
+        if (accessTokenRequest.grant_type !== 'authorization_code') {
+          throw new Error('Expected the Token Request body to use the authorization_code grant');
+        }
+
+        // The redirect_uri from the Token Request must match the one carried
+        // in the PAR Request Object, proving the Wallet Instance presents the
+        // same redirection endpoint it registered during authorization.
+        expect(authorizationRequest).toBeDefined();
+        expect(accessTokenRequest.redirect_uri).toBe(authorizationRequest.redirect_uri);
+
+        expect(tokenRequestResult.pkceCodeVerifier).toBeDefined();
+        expect(tokenRequestResult.pkceCodeVerifier).not.toHaveLength(0);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      '[WP_055a]: Wallet Instance authenticates the Token Request with the DPoP proof, the Wallet Attestation and the Wallet Instance PoP, sent as three distinct JWT headers.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(tokenRequestResult.dpop.jwt).not.toHaveLength(0);
+        expect(tokenRequestResult.clientAttestation.walletAttestationJwt).not.toHaveLength(0);
+        expect(tokenRequestResult.clientAttestation.clientAttestationPopJwt).not.toHaveLength(0);
+
+        const { header: dpopHeader } = decodeJwtHeader({
+          jwt: tokenRequestResult.dpop.jwt,
+          headerSchema: zDpopJwtHeader
+        });
+        expect(dpopHeader.typ).toBe('dpop+jwt');
+
+        // Confirms the Wallet Attestation header decodes as a well-formed JWT;
+        // its `typ` is version-dependent (see zWalletAttestationJwtHeaderV1_0/
+        // V1_3/V1_4 in the SDK) and is intentionally not pinned to one value here.
+        expect(() => decodeJwtHeader({ jwt: tokenRequestResult.clientAttestation.walletAttestationJwt })).not.toThrow();
+
+        const { header: popHeader } = decodeJwtHeader({
+          jwt: tokenRequestResult.clientAttestation.clientAttestationPopJwt,
+          headerSchema: zItWalletClientAttestationPopJwtHeader
+        });
+        expect(popHeader.typ).toBe('oauth-client-attestation-pop+jwt');
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      '[WP_055b]: Wallet Instance generates a fresh DPoP key for the Token Request, with a proof JWT conforming to RFC 9449 and bound to the Token Endpoint.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const { header: dpopHeader, payload: dpopPayload } = decodeJwt({
+          jwt: tokenRequestResult.dpop.jwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+
+        expect(dpopHeader.typ).toBe('dpop+jwt');
+        expect(dpopHeader.alg).not.toBe('none');
+
+        expect(dpopHeader.jwk).toBeDefined();
+        expect(dpopHeader.jwk.d).toBeUndefined();
+
+        expect(dpopPayload.htm).toBe('POST');
+        expect(dpopPayload.htu).toBe(htuFromRequestUrl(tokenRequestUrl));
+
+        expect(dpopPayload.iat).toBeTypeOf('number');
+        const iatMs = dpopPayload.iat * 1000;
+        const eventMs = new Date(tokenEvent.timestamp).getTime();
+        expect(Math.abs(eventMs - iatMs)).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+
+        expect(dpopPayload.jti).not.toHaveLength(0);
+
+        // Reuse of the PAR DPoP proof/key for the Token Request would defeat
+        // the purpose of per-request proof-of-possession, so both the `jti`
+        // and the JWK thumbprint (RFC 7638) must differ from the PAR DPoP.
+        expect(clientAttestation).toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('Missing DPoP proof from the PAR request needed to assert key rotation');
+        }
+        const { payload: parDpopPayload } = decodeJwt({
+          jwt: clientAttestation?.clientAttestationPopJwt,
+          headerSchema: zItWalletClientAttestationPopJwtHeader,
+          payloadSchema: zItWalletClientAttestationPopJwtPayload
+        });
+        expect(dpopPayload.jti).not.toBe(parDpopPayload.jti);
+
+        expect(jwtVerify(clientAttestation?.clientAttestationPopJwt, dpopHeader.jwk)).rejects.toThrow();
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      '[WP_055c]: Wallet Instance signs the Token Request DPoP proof with the private key matching the public JWK declared in the DPoP proof header.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const { header: dpopHeader } = decodeJwtHeader({
+          jwt: tokenRequestResult.dpop.jwt,
+          headerSchema: zDpopJwtHeader
+        });
+
+        // `jwtVerify` throws (rejects) on any signature mismatch, so a
+        // resolved (defined) result is proof the DPoP proof was signed by the
+        // private key corresponding to the declared public JWK.
+        const publicKey = await importJWK(dpopHeader.jwk as JWK, dpopHeader.alg);
+        await expect(jwtVerify(tokenRequestResult.dpop.jwt, publicKey)).resolves.toBeDefined();
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      '[WP_055d]: Wallet Instance binds the Token Request to the Wallet Instance ephemeral key by signing the Wallet Instance PoP with the private key matching the Wallet Attestation cnf.jwk.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const { payload: attestationPayload } = decodeJwt({
+          jwt: tokenRequestResult.clientAttestation.walletAttestationJwt
+        });
+        const cnfJwk = attestationPayload.cnf?.jwk;
+        expect(cnfJwk).toBeDefined();
+        if (!cnfJwk) {
+          throw new Error('Token Request Wallet Attestation payload is missing cnf.jwk');
+        }
+
+        const { header: popHeader, payload: popPayload } = decodeJwt({
+          jwt: tokenRequestResult.clientAttestation.clientAttestationPopJwt,
+          headerSchema: zItWalletClientAttestationPopJwtHeader,
+          payloadSchema: zItWalletClientAttestationPopJwtPayload
+        });
+        expect(popHeader.typ).toBe('oauth-client-attestation-pop+jwt');
+        expect(popHeader.alg).toBeOneOf([...IT_WALLET_CLIENT_ATTESTATION_POP_ALLOWED_ALG_VALUES]);
+
+        expect(popPayload.aud).toBe(config['credential-issuer'].url);
+        expect(popPayload.iat).toBeTypeOf('number');
+        expect(popPayload.iss).not.toHaveLength(0);
+        expect(popPayload.jti).not.toHaveLength(0);
+
+        // `verifyClientAttestationPopJwt` throws (rejects) on any decoding,
+        // algorithm, signature, or claim validation failure, so a resolved
+        // (defined) result is proof the Wallet Instance PoP for the Token
+        // Request is bound to the Wallet Attestation's cnf.jwk.
+        await expect(
+          verifyClientAttestationPopJwt({
+            authorizationServer: config['credential-issuer'].url,
+            callbacks: { verifyJwt: verifyJwtWithJwk },
+            clientAttestationPopJwt: tokenRequestResult.clientAttestation.clientAttestationPopJwt,
+            clientAttestationPublicJwk: cnfJwk
+          })
+        ).resolves.toBeDefined();
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );
