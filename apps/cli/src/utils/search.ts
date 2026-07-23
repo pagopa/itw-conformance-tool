@@ -1,7 +1,10 @@
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import type { SearchParamResult } from '../types/types.js';
+type SearchParamResult = {
+  value: string;
+  remainingArgs: string[];
+};
 
 /** Utility function to find the root directory of the Nx workspace
  * by looking for the presence of 'nx.json'.

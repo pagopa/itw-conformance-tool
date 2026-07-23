@@ -1,18 +1,41 @@
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
+import { BaseSequencer, type TestSpecification } from 'vitest/node';
 
 const packageRoot = import.meta.dirname;
 
-const builtReporterPath = path.join(packageRoot, 'packages/conformance/dist/report/reporter.js');
-const sourceReporterPath = path.join(packageRoot, 'packages/conformance/src/report/reporter.ts');
-const reporterModulePath = existsSync(builtReporterPath) ? builtReporterPath : sourceReporterPath;
-const { ConformanceReporter } = await import(pathToFileURL(reporterModulePath).href);
+const matrixTestOrder: Readonly<Record<string, number>> = {
+  'wallet-provider.test.ts': 0,
+  'wallet-instance.test.ts': 1,
+  'issuance.test.ts': 2,
+  'presentation.test.ts': 3
+};
 
-const conformanceTestCategory = process.env.ITWCT_CONFORMANCE_TEST_CATEGORY;
+function getTestOrder(file: TestSpecification): number {
+  const fileName = path.basename(file.moduleId);
+  const configuredOrder = matrixTestOrder[fileName];
+
+  return configuredOrder ?? Number.MAX_SAFE_INTEGER;
+}
+
+class MatrixSequencer extends BaseSequencer {
+  async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
+    return [...files].sort((left, right) => {
+      const orderDifference = getTestOrder(left) - getTestOrder(right);
+
+      return orderDifference || left.moduleId.localeCompare(right.moduleId);
+    });
+  }
+}
+
+const reporterModulePath = path.join(packageRoot, 'packages/conformance/dist/report/reporters.js');
+const { ConformanceReporter, TerminalConformanceReporter } = await import(pathToFileURL(reporterModulePath).href);
+
+const conformanceTestCategory = process.env.ITWCT_CONFORMANCE_TEST_CATEGORY ?? 'all';
 if (
+  conformanceTestCategory !== 'all' &&
   conformanceTestCategory !== 'issuance' &&
   conformanceTestCategory !== 'presentation' &&
   conformanceTestCategory !== 'wallet-instance' &&
@@ -22,6 +45,8 @@ if (
     'ITWCT_CONFORMANCE_TEST_CATEGORY must be one of: issuance, presentation, wallet-instance, wallet-provider.'
   );
 }
+
+const reporters = [new TerminalConformanceReporter(), new ConformanceReporter(conformanceTestCategory)];
 
 export default defineConfig(() => ({
   root: packageRoot,
@@ -33,7 +58,9 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'node',
     include: ['packages/conformance/src/tests/matrix/**/*.test.ts'],
-    reporters: ['dot', new ConformanceReporter(conformanceTestCategory)],
+    fileParallelism: false,
+    sequence: { sequencer: MatrixSequencer },
+    reporters,
     // node:sqlite requires --experimental-sqlite on Node.js 22.
     pool: 'forks',
     forks: {

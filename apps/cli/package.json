@@ -17,6 +17,7 @@
     "@itw-conformance-tool/database": "workspace:",
     "@itw-conformance-tool/logger": "workspace:",
     "@itw-conformance-tool/ipc": "workspace:*",
+    "@itw-conformance-tool/utils": "workspace:*",
     "itw-credential-issuer": "workspace:*",
     "itw-relying-party": "workspace:*",
     "itw-trust-anchor": "workspace:*",

@@ -1,42 +1,77 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Purpose and Workspace Layout
 
-This repository is a pnpm + Nx TypeScript monorepo for the IT Wallet conformance tool. Runnable services live under `apps/`: `apps/itw-credential-issuer`, `apps/itw-relying-party`, and `apps/itw-trust-anchor`. Shared libraries live under `packages/`, currently `packages/logger`. Application code is in each project’s `src/` directory, with Fastify routes under `src/routes` and external plugins under `src/plugins/external`.
+This is a pnpm + Nx TypeScript monorepo for the Italian IT Wallet conformance tool. It runs OpenID4VCI and OpenID4VP conformance scenarios against a Wallet Solution, records protocol events and verdicts, and produces reports.
 
-## Build, Test, and Development Commands
+- `apps/cli`: the `itwct` command-line interface. It initializes local state, supervises services, runs conformance categories, and creates reports.
+- `apps/itw-credential-issuer`, `apps/itw-relying-party`, `apps/itw-trust-anchor`: Fastify services used by the scenarios.
+- `packages/conformance`: scenario definitions, runner, event capture, verdict engine, artifacts, and report generation. Matrix tests live in `src/tests/matrix`.
+- `packages/config`, `database`, `crypto`, `ipc`, `logger`, and `utils`: shared workspace libraries.
+- `.itw-conformance-tool/` and root `config.ini`: generated local state; both are ignored and must not be committed.
 
-Run commands from the repository root.
+Use package names such as `@itw-conformance-tool/conformance` for cross-project dependencies. Keep application code in each project's `src/`; service routes and plugins follow their existing local structure.
 
-- `pnpm install`: install workspace dependencies.
-- `pnpm build`: build all Nx projects with a `build` target.
-- `pnpm typecheck`: run TypeScript checks across projects.
-- `pnpm lint`: run ESLint across projects.
-- `pnpm test`: run Vitest for projects with tests.
-- `pnpm issuer`: serve `itw-credential-issuer`.
-- `pnpm rp`: serve `itw-relying-party`.
-- `pnpm trust-anchor`: serve `itw-trust-anchor`.
-- `pnpm nx run itw-credential-issuer:test`: run one project target.
-- `pnpm format`: format JS, TS, JSON, and Markdown with Prettier.
+## Toolchain and Commands
 
-Use Node.js `22` from `.nvmrc` and pnpm `10.30.3`.
+Run commands from the repository root. Use the Node.js version in `.nvmrc` and pnpm `11.13.1`, as pinned by `package.json`.
 
-## Coding Style & Naming Conventions
+```bash
+pnpm install                    # install workspace dependencies
+pnpm build                      # build every Nx project with a build target
+pnpm start                      # build and run all Nx targets with a serve target
+pnpm typecheck                  # type-check projects
+pnpm lint                       # lint projects
+pnpm test                       # run inferred Vitest project tests
+pnpm format:check               # verify formatting
+pnpm format                     # rewrite formatting
+pnpm nx run <project>:<target>  # run one Nx target
+```
 
-Use TypeScript ESM (`"type": "module"`) with strict compiler settings from `tsconfig.base.json`. EditorConfig requires UTF-8, two-space indentation, final newlines, and trimmed trailing whitespace. Prettier uses single quotes, semicolons, `printWidth: 120`, bracket spacing, and no trailing commas.
+Useful project targets include `itw-conformance-cli:run`, `itw-credential-issuer:serve`, `itw-relying-party:serve`, and `itw-trust-anchor:serve`. Build the CLI before invoking its `run` target; Nx models that dependency automatically.
 
-ESLint enforces Nx module boundaries and alphabetized import groups via `eslint-plugin-perfectionist`. Avoid `console`; it is a warning. Prefer project-local aliases and workspace dependencies over relative cross-project imports.
+### Local Conformance Workflow
 
-## Testing Guidelines
+```bash
+pnpm init                       # create local data, keys, and config template
+pnpm test:all                   # run all conformance categories
+pnpm test:issuance
+pnpm test:presentation
+pnpm test:wallet-instance
+pnpm test:wallet-provider
+```
 
-Tests use Vitest in a Node environment. Name test files `*.spec.ts` or `*.test.ts` and place them under `src/` or `tests/`; colocated `__test__` folders are already used in migration code. Coverage uses the V8 provider and writes to each project’s `test-output/vitest/coverage`. Add focused tests for protocol logic, route behavior, and shared library changes.
+The category commands run the CLI and require valid local configuration, including `wallet_provider_backend_url`. The explicit matrix profile is `vitest.conformance.config.mts`; it runs sequentially with Node's `--experimental-sqlite` flag and imports built conformance reporters. Build before running it directly:
 
-## Commit & Pull Request Guidelines
+```bash
+pnpm build
+pnpm vitest run --config vitest.conformance.config.mts
+```
 
-Recent history uses short imperative summaries, sometimes with conventional prefixes such as `chore:`. Keep commits focused, for example `chore: update CODEOWNERS` or `add itw-relying-party app`.
+`pnpm test` is the standard unit-test command. It is distinct from external conformance runs.
 
-Pull requests should follow `.github/pull_request_template.md`: include a clear list of changes, motivation and context, and how the change was tested. Link related issues when available, note documentation updates, and request review from CODEOWNERS for touched areas.
+## TypeScript, Formatting, and Imports
 
-## Security & Configuration Tips
+Write strict TypeScript ESM. The base configuration uses NodeNext modules and resolution, ES2022, `verbatimModuleSyntax`, `isolatedModules`, `erasableSyntaxOnly`, `noImplicitReturns`, and `noUnusedLocals`. Preserve `.js` extensions in relative runtime imports where the surrounding code requires them.
 
-Do not commit secrets or local environment files. Start from each app’s `.env.example` and keep real values in untracked `.env` files.
+EditorConfig requires UTF-8, two-space indentation, final newlines, and no trailing whitespace. Prettier enforces 120-column lines, semicolons, single quotes, bracket spacing, and no trailing commas.
+
+ESLint enforces Nx module boundaries and buildable-library dependencies. `eslint-plugin-perfectionist` alphabetizes imports in this order: builtins, external packages, internal packages, relative imports, side-effect imports, then type imports. `console` is a warning; use the workspace logger in production paths.
+
+## Testing and Changes
+
+Use Vitest in the Node environment. Colocate focused unit tests as `*.test.ts` or `*.spec.ts`; existing route tests are under `apps/itw-trust-anchor/src/routes/tests`, while conformance matrix coverage is under `packages/conformance/src/tests/matrix`.
+
+For a changed project, run its Nx test target when it exists, then run relevant type-checking and linting. For CLI, service orchestration, protocol, or report changes, exercise the affected command or scenario after building rather than relying only on static checks. Do not add external conformance tests to ordinary unit-test targets.
+
+## CI, Commits, and Pull Requests
+
+CI installs with `pnpm install --frozen-lockfile` and runs `pnpm test` on pull requests and `main`. A separate workflow builds, initializes the CLI, and runs issuance conformance against PagoPA's `wallet-conformance-test`.
+
+Keep commits focused and imperative. Current history commonly uses conventional prefixes, for example `feat(conformance): ...`, `tests(matrix): ...`, and `chore: ...`.
+
+Follow `.github/pull_request_template.md`: state the changes, motivation/context, and verification; link related issues and mention documentation updates. Request review from owners in `CODEOWNERS` when applicable.
+
+## Security and Local Data
+
+Never commit credentials, certificates, generated reports, `.env`, `config.ini`, or `.itw-conformance-tool/` contents. Treat captured conformance events and artifacts as potentially sensitive protocol data. Regenerate local configuration through `pnpm init` instead of checking in a working copy.
