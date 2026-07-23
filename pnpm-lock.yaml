@@ -533,6 +533,9 @@ importers:
       '@pagopa/io-wallet-oauth2':
         specifier: ^1.5.3
         version: 1.5.3
+      '@pagopa/io-wallet-oid4vci':
+        specifier: catalog:pagopa
+        version: 1.5.4-alpha-20260717125503
       '@pagopa/io-wallet-utils':
         specifier: ^1.5.3
         version: 1.5.3

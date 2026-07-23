@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 import { DatabaseClient } from '@itw-conformance-tool/database';
 import {
@@ -13,8 +15,9 @@ import {
   zItWalletClientAttestationPopJwtPayload,
   IT_WALLET_CLIENT_ATTESTATION_POP_ALLOWED_ALG_VALUES
 } from '@pagopa/io-wallet-oauth2';
+import { zCredentialRequestV1_3, zProofJwtHeaderV1_3, zProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 import { IoWalletSdkConfig, ItWalletSpecsVersion, type HttpMethod } from '@pagopa/io-wallet-utils';
-import { importJWK, jwtVerify, type JWK } from 'jose';
+import { calculateJwkThumbprint, importJWK, jwtVerify, type JWK } from 'jose';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { isRfc7636CodeVerifier } from '../../helpers/issuance.js';
@@ -27,7 +30,8 @@ import {
 } from '../../index.js';
 
 import type { ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
-import type { CallbackContext } from '@pagopa/io-wallet-oauth2';
+import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
+import type { CredentialRequestV1_3, ProofJwtHeaderV1_3, ProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 
 function toHeaders(value: unknown): Headers {
   if (value === null || typeof value !== 'object') {
@@ -39,6 +43,19 @@ function toHeaders(value: unknown): Headers {
   );
 
   return new Headers(entries);
+}
+
+function requiredDiagnosticString(event: ObservedEvent, key: string): string {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
+}
+
+function sha256Base64Url(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('base64url');
 }
 
 /**
@@ -101,6 +118,18 @@ describe('Test Cases for Issuance Phase', () => {
     let tokenEvent: ObservedEvent;
     let tokenRequestUrl: string;
     let tokenRequestResult: ReturnType<typeof parseAccessTokenRequest>;
+    let tokenDpopHeader: DpopJwtHeader;
+    let tokenDpopPayload: DpopJwtPayload;
+    let nonceEvent: ObservedEvent;
+    let credentialEvent: ObservedEvent;
+    let credentialRequestUrl: string;
+    let credentialRequest: CredentialRequestV1_3;
+    let credentialDpopJwt: string;
+    let credentialDpopHeader: DpopJwtHeader;
+    let credentialDpopPayload: DpopJwtPayload;
+    let credentialProofJwt: string;
+    let credentialProofHeader: ProofJwtHeaderV1_3;
+    let credentialProofPayload: ProofJwtPayload;
 
     beforeAll(async () => {
       const session = await runner.start(wpCiHappyScenario.id);
@@ -152,6 +181,54 @@ describe('Test Cases for Issuance Phase', () => {
           url: tokenRequestUrl
         }
       });
+
+      ({ header: tokenDpopHeader, payload: tokenDpopPayload } = decodeJwt({
+        jwt: tokenRequestResult.dpop.jwt,
+        headerSchema: zDpopJwtHeader,
+        payloadSchema: zDpopJwtPayload
+      }));
+
+      const foundNonceEvent = events.find((event) => event.name === 'issuer.nonce.requested');
+      if (!foundNonceEvent) {
+        throw new Error('Missing issuer.nonce.requested evidence required to assert WP_056a requirements');
+      }
+      nonceEvent = foundNonceEvent;
+
+      const foundCredentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+      if (!foundCredentialEvent) {
+        throw new Error('Missing issuer.credential.requested evidence required to assert WP_056 requirements');
+      }
+      credentialEvent = foundCredentialEvent;
+
+      const credentialEndpoint = requiredDiagnosticString(credentialEvent, 'endpoint');
+      credentialRequestUrl = `${config['credential-issuer'].url}${credentialEndpoint}`;
+
+      const credentialRequestParseResult = zCredentialRequestV1_3.safeParse(credentialEvent.diagnostic?.['body']);
+      if (!credentialRequestParseResult.success) {
+        throw new Error(
+          `issuer.credential.requested evidence body is not a valid IT-Wallet v1.3/v1.4 Credential Request: ${credentialRequestParseResult.error.message}`
+        );
+      }
+      credentialRequest = credentialRequestParseResult.data;
+
+      const proofJwts = credentialRequest.proofs.jwt;
+      if (proofJwts.length !== 1) {
+        throw new Error(`Expected exactly one proofs.jwt entry for the standard happy path, found ${proofJwts.length}`);
+      }
+      credentialProofJwt = proofJwts[0];
+
+      credentialDpopJwt = requiredDiagnosticString(credentialEvent, 'dpopProof');
+      ({ header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
+        jwt: credentialDpopJwt,
+        headerSchema: zDpopJwtHeader,
+        payloadSchema: zDpopJwtPayload
+      }));
+
+      ({ header: credentialProofHeader, payload: credentialProofPayload } = decodeJwt({
+        jwt: credentialProofJwt,
+        headerSchema: zProofJwtHeaderV1_3,
+        payloadSchema: zProofJwtPayload
+      }));
     }, wpCiHappyScenario.timeouts.vitestTestMs);
 
     test(
@@ -475,6 +552,120 @@ describe('Test Cases for Issuance Phase', () => {
             clientAttestationPublicJwk: cnfJwk
           })
         ).resolves.toBeDefined();
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_056: Wallet Instance sends a complete Credential Request with DPoP Access Token authentication, the expected credential identifier, and a valid proof of possession.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(credentialEvent.diagnostic?.['endpoint']).toBe('/credential');
+        expect(credentialEvent.diagnostic?.['method']).toBe('POST');
+
+        const contentType = requiredDiagnosticString(credentialEvent, 'contentType');
+        expect(contentType.toLowerCase()).toContain('application/json');
+
+        expect(credentialEvent.diagnostic?.['authorizationScheme']).toBe('DPoP');
+        expect(requiredDiagnosticString(credentialEvent, 'accessTokenSha256')).not.toHaveLength(0);
+        expect(credentialDpopJwt).not.toHaveLength(0);
+
+        expect(credentialRequest.credential_identifier).toBe('dc_sd_jwt_EuropeanDisabilityCard');
+        expect(credentialProofJwt).not.toHaveLength(0);
+
+        const publicKey = await importJWK(credentialProofHeader.jwk as JWK, credentialProofHeader.alg);
+        await expect(jwtVerify(credentialProofJwt, publicKey)).resolves.toBeDefined();
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_056a: Wallet Instance obtains a fresh Nonce Endpoint c_nonce and uses it in the Credential proof JWT.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(nonceEvent.diagnostic?.['endpoint']).toBe('/nonce');
+        expect(nonceEvent.diagnostic?.['method']).toBe('POST');
+        expect(nonceEvent.monotonicMs).toBeLessThan(credentialEvent.monotonicMs);
+
+        const cNonceSha256 = requiredDiagnosticString(nonceEvent, 'cNonceSha256');
+        expect(cNonceSha256).not.toHaveLength(0);
+
+        expect(credentialProofPayload.nonce).not.toHaveLength(0);
+        expect(sha256Base64Url(credentialProofPayload.nonce)).toBe(cNonceSha256);
+
+        expect(credentialProofPayload.iat).toBeTypeOf('number');
+        const iatMs = credentialProofPayload.iat * 1000;
+        const eventMs = new Date(credentialEvent.timestamp).getTime();
+        expect(Math.abs(eventMs - iatMs)).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_056b: Wallet Instance sends a fresh Credential Request DPoP proof bound to the Credential Endpoint, reusing the Token Request DPoP key and carrying the RFC 9449 ath claim.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(credentialDpopHeader.typ).toBe('dpop+jwt');
+        expect(credentialDpopHeader.alg).not.toBe('none');
+        expect(credentialDpopHeader.jwk).toBeDefined();
+        expect(credentialDpopHeader.jwk.kty).not.toBe('oct');
+        expect(credentialDpopHeader.jwk.d).toBeUndefined();
+
+        const publicKey = await importJWK(credentialDpopHeader.jwk as JWK, credentialDpopHeader.alg);
+        await expect(jwtVerify(credentialDpopJwt, publicKey)).resolves.toBeDefined();
+
+        expect(credentialDpopPayload.htm).toBe('POST');
+        expect(credentialDpopPayload.htu).toBe(htuFromRequestUrl(credentialRequestUrl));
+
+        expect(credentialDpopPayload.iat).toBeTypeOf('number');
+        const iatMs = credentialDpopPayload.iat * 1000;
+        const eventMs = new Date(credentialEvent.timestamp).getTime();
+        expect(Math.abs(eventMs - iatMs)).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+
+        expect(credentialDpopPayload.jti).not.toHaveLength(0);
+        expect(credentialDpopPayload.jti).not.toBe(tokenDpopPayload.jti);
+
+        await expect(calculateJwkThumbprint(credentialDpopHeader.jwk as JWK)).resolves.toBe(
+          await calculateJwkThumbprint(tokenDpopHeader.jwk as JWK)
+        );
+
+        expect(credentialDpopPayload.ath).toBe(requiredDiagnosticString(credentialEvent, 'accessTokenSha256'));
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_056c: Wallet Instance sends a single proofs.jwt Credential proof with key attestation and binds its public JWK to the Credential Request DPoP key.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(credentialRequest.proofs).toBeDefined();
+        expect(Array.isArray(credentialRequest.proofs.jwt)).toBe(true);
+        expect(credentialRequest.proofs.jwt).toHaveLength(1);
+        expect(credentialRequest.proofs.jwt[0]).toBe(credentialProofJwt);
+
+        expect(credentialProofHeader.typ).toBe('openid4vci-proof+jwt');
+        expect(credentialProofHeader.alg).not.toBe('none');
+        expect(credentialProofHeader.jwk).toBeDefined();
+        expect(credentialProofHeader.jwk.kty).not.toBe('oct');
+        expect(credentialProofHeader.jwk.d).toBeUndefined();
+        expect(credentialProofHeader.key_attestation).not.toHaveLength(0);
+
+        expect(credentialProofPayload.aud).toBe(config['credential-issuer'].url);
+        expect(credentialProofPayload.iss).toBeTypeOf('string');
+        expect(credentialProofPayload.iss).not.toHaveLength(0);
+        expect(credentialProofPayload.iat).toBeTypeOf('number');
+        expect(credentialProofPayload.nonce).not.toHaveLength(0);
+
+        const publicKey = await importJWK(credentialProofHeader.jwk as JWK, credentialProofHeader.alg);
+        await expect(jwtVerify(credentialProofJwt, publicKey)).resolves.toBeDefined();
+
+        await expect(calculateJwkThumbprint(credentialProofHeader.jwk as JWK)).resolves.toBe(
+          await calculateJwkThumbprint(credentialDpopHeader.jwk as JWK)
+        );
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );

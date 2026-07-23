@@ -32,8 +32,8 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:node",
     "@pagopa/io-wallet-oauth2": "^1.5.3",
+    "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
     "@pagopa/io-wallet-utils": "^1.5.3",
     "@types/node": "catalog:node",
     "vitest": "catalog:"
