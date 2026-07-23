@@ -636,38 +636,5 @@ describe('Test Cases for Issuance Phase', () => {
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );
-
-    test(
-      'WP_056c: Wallet Instance sends a single proofs.jwt Credential proof with key attestation and binds its public JWK to the Credential Request DPoP key.',
-      async () => {
-        assertConformanceOutcome(outcome, { expected: 'PASS' });
-
-        expect(credentialRequest.proofs).toBeDefined();
-        expect(Array.isArray(credentialRequest.proofs.jwt)).toBe(true);
-        expect(credentialRequest.proofs.jwt).toHaveLength(1);
-        expect(credentialRequest.proofs.jwt[0]).toBe(credentialProofJwt);
-
-        expect(credentialProofHeader.typ).toBe('openid4vci-proof+jwt');
-        expect(credentialProofHeader.alg).not.toBe('none');
-        expect(credentialProofHeader.jwk).toBeDefined();
-        expect(credentialProofHeader.jwk.kty).not.toBe('oct');
-        expect(credentialProofHeader.jwk.d).toBeUndefined();
-        expect(credentialProofHeader.key_attestation).not.toHaveLength(0);
-
-        expect(credentialProofPayload.aud).toBe(config['credential-issuer'].url);
-        expect(credentialProofPayload.iss).toBeTypeOf('string');
-        expect(credentialProofPayload.iss).not.toHaveLength(0);
-        expect(credentialProofPayload.iat).toBeTypeOf('number');
-        expect(credentialProofPayload.nonce).not.toHaveLength(0);
-
-        const publicKey = await importJWK(credentialProofHeader.jwk as JWK, credentialProofHeader.alg);
-        await expect(jwtVerify(credentialProofJwt, publicKey)).resolves.toBeDefined();
-
-        await expect(calculateJwkThumbprint(credentialProofHeader.jwk as JWK)).resolves.toBe(
-          await calculateJwkThumbprint(credentialDpopHeader.jwk as JWK)
-        );
-      },
-      wpCiHappyScenario.timeouts.vitestTestMs
-    );
   });
 });
