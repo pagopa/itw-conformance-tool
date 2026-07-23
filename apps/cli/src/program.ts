@@ -48,13 +48,6 @@ function createProgram(): Command {
       await reportCreate(runId, format, options.view);
     });
 
-  program
-    .command('version')
-    .description('display the CLI version')
-    .action(() => {
-      process.stdout.write('0.1.0\n');
-    });
-
   program.version(readPackageVersion(), '-v, --version', 'display the CLI version');
 
   return program;
