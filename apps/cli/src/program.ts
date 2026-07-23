@@ -6,12 +6,11 @@ import { reportCreate } from './commands/reportCreate.js';
 import { reportList } from './commands/reportList.js';
 import { runConformanceTests } from './commands/runTests.js';
 
-export async function run(argv = process.argv): Promise<void> {
-  await createProgram().parseAsync(normalizeArgv(argv));
-}
-
-function createProgram(): Command {
-  const program = new Command().name('itwct').description('Local CLI for ITW Conformance flows').showHelpAfterError();
+export function createProgram(): Command {
+  const program = new Command()
+    .name('itwct')
+    .description('Local CLI for IT Wallet Conformance flows')
+    .showHelpAfterError();
 
   program
     .command('init')
@@ -51,15 +50,6 @@ function createProgram(): Command {
   program.version(readPackageVersion(), '-v, --version', 'display the CLI version');
 
   return program;
-}
-
-function normalizeArgv(argv: string[]): string[] {
-  if (argv.length === 3) {
-    const [node, executable, combinedArgs] = argv;
-    return [node, executable, ...combinedArgs.split(/\s+/).filter(Boolean)];
-  }
-
-  return argv;
 }
 
 function parseTestCategory(value: string): TestCategory {

@@ -1,3 +1,3 @@
-import { run } from './program.js';
+import { createProgram } from './program.js';
 
-await run();
+createProgram().parse(process.argv);
