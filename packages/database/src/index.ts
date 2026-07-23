@@ -16,4 +16,3 @@ export type {
 export { SqliteNonceRepository } from './nonce-repository.js';
 export { SqlitePARRepository } from './par-repository.js';
 export { SqliteRefreshTokenRepository } from './refresh-token-repository.js';
-export { SqliteSessionRepository } from './session-repository.js';

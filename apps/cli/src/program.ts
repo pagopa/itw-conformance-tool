@@ -32,15 +32,6 @@ function parseTestCategory(value: string): TestCategory {
   return category;
 }
 
-function parseReportFormat(value: string): 'html' | 'pdf' {
-  const format = value.toLowerCase();
-  if (format !== 'html' && format !== 'pdf') {
-    throw new InvalidArgumentError(`Invalid format: ${value}. Must be 'html' or 'pdf'.`);
-  }
-
-  return format;
-}
-
 async function start(flags: StartFlags): Promise<void> {
   const nxRootPath = findNxRoot();
   const config = loadConfig();
@@ -59,21 +50,6 @@ async function start(flags: StartFlags): Promise<void> {
 async function test(category: TestCategory): Promise<void> {
   loadConfig();
   process.exitCode = await runConformanceTests(category);
-}
-
-async function listReports(): Promise<void> {
-  const config = loadConfig();
-  reportList(config.global.data_dir, createEmitter(createLogger({ level: config.global.log_level })));
-}
-
-async function createReport(runId: string, format: 'html' | 'pdf'): Promise<void> {
-  const config = loadConfig();
-  await reportCreate(
-    runId,
-    format,
-    config.global.data_dir,
-    createEmitter(createLogger({ level: config.global.log_level }))
-  );
 }
 
 function createProgram(): Command {
@@ -113,20 +89,22 @@ function createProgram(): Command {
       await test(category);
     });
 
-  program
-    .command('report:list')
-    .description('List all conformance runs stored in the database')
-    .action(async () => {
-      await listReports();
+  const report = program.command('report').description('Manage conformance test reports');
+
+  report
+    .command('list')
+    .alias('ls')
+    .description('List all conformance test runs')
+    .action(() => {
+      reportList();
     });
 
-  program
-    .command('report:create')
-    .description('Generate a conformance report file for a given run')
-    .argument('<uuid>', 'run identifier')
-    .addArgument(new Argument('[format]', 'report format').argParser(parseReportFormat).default('html'))
-    .action(async (runId: string, format: 'html' | 'pdf') => {
-      await createReport(runId, format);
+  report
+    .command('create <run_id|latest> <format>')
+    .description('Generate an HTML or PDF conformance report for a run ID or the latest run')
+    .option('--view <view>', 'Which view to render: both (default), executive, or technical', 'both')
+    .action(async (runId, format, options) => {
+      await reportCreate(runId, format, options.view);
     });
 
   program

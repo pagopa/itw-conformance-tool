@@ -63,11 +63,23 @@ export const DDL = `
   );
 
   CREATE TABLE IF NOT EXISTS conformance_sessions (
-    session_id  TEXT    PRIMARY KEY,
-    started_at  TEXT    NOT NULL,
+    id          TEXT PRIMARY KEY,
+    started_at  TEXT NOT NULL,
     closed_at   TEXT,
-    status      TEXT    NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'PASSED', 'FAILED', 'INCOMPLETE')),
-    checks      TEXT    NOT NULL DEFAULT '[]' CHECK(json_type(checks) = 'array')
+    entity_name TEXT NOT NULL DEFAULT '-',
+    phase       TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'OPEN'
+  );
+
+  CREATE TABLE IF NOT EXISTS conformance_checks (
+    id             TEXT PRIMARY KEY,
+    session_id     TEXT NOT NULL REFERENCES conformance_sessions(id),
+    requirement_id TEXT NOT NULL,
+    description    TEXT NOT NULL,
+    phase          TEXT NOT NULL,
+    result         TEXT NOT NULL,
+    timestamp      TEXT NOT NULL,
+    error_message  TEXT
   );
 
   CREATE TABLE IF NOT EXISTS conformance_events (
