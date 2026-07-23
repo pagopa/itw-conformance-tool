@@ -21,6 +21,39 @@ The tool runs the following local services and observes the protocol traffic the
 
 A conformance run starts only the local services required by the selected category, gives the tester the required wallet action and QR/deep-link payload when applicable, captures the observed exchange, and stores the result in a local SQLite database. Every completed run can be rendered later as a report.
 
+## Local federation endpoints
+
+The tool starts local HTTPS services that publish the OpenID Federation metadata required by the selected conformance category. The Trust Anchor is the root of trust for the local Credential Issuer and Relying Party; the Wallet Provider Backend is external to the tool and is not started locally.
+
+| Service           | Default listening URL    | Default entity ID            | Purpose                                                                             |
+| ----------------- | ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------- |
+| Trust Anchor      | `https://127.0.0.1:3001` | `https://localhost:3001`     | Publishes the Trust Anchor entity configuration and resolves federation statements. |
+| Credential Issuer | `https://127.0.0.1:3000` | Configured from its base URL | Issues representative credentials and publishes issuer federation metadata.         |
+| Relying Party     | `https://127.0.0.1:3002` | `https://127.0.0.1:3002`     | Creates presentation requests and publishes Relying Party federation metadata.      |
+
+### Local DNS for named endpoints
+
+The generated configuration uses `127.0.0.1` and `localhost`, so it requires no DNS setup. If the Wallet Solution requires stable named local endpoints, each configured hostname must resolve to `127.0.0.1` on the machine running the services and tests. Add the names to the system hosts file, for example:
+
+```text
+127.0.0.1 trust-anchor.wct.example.org credential-issuer.wct.example.org relying-party.wct.example.org
+```
+
+Use the same hostname and explicit local port consistently in the corresponding `url`, `entity_id`, and `trust_anchor_url` settings. The services bind to the host and port in each `url`; they do not listen on HTTPS port 443 by default. For example:
+
+```ini
+[credential-issuer]
+url = https://credential-issuer.wct.example.org:3000
+
+[relying-party]
+url = https://relying-party.wct.example.org:3002
+
+[trust-anchor]
+url = https://trust-anchor.wct.example.org:3001
+```
+
+The generated TLS certificate is valid only for `localhost`, `127.0.0.1`, and `::1`. Named endpoints therefore require the Wallet Solution's explicitly test-only unsafe-TLS mode; they are not suitable for production use.
+
 ## Prerequisites
 
 | Requirement                                    | Supported version / purpose                                                       |
