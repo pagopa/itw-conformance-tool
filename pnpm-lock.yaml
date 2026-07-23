@@ -182,6 +182,9 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      '@itw-conformance-tool/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       '@peculiar/x509':
         specifier: ^1.12.4
         version: 1.14.3

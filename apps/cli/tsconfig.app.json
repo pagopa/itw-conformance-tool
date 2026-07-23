@@ -33,6 +33,9 @@
       "path": "../itw-credential-issuer/tsconfig.app.json"
     },
     {
+      "path": "../../packages/utils/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/ipc/tsconfig.lib.json"
     },
     {
