@@ -64,9 +64,9 @@ During an interactive scenario, follow the terminal instructions: use the displa
 ### 1. Initialize or refresh local state
 
 ```sh
-pnpm init
+pnpm run init
 # or, explicitly overwrite generated configuration and key material
-pnpm nx run itw-conformance-cli:run --args="init --force"
+pnpm run init:force
 ```
 
 `init` creates `config.ini` if it does not already exist, creates the configured data directory, and provisions the local key and certificate material used by the services:
