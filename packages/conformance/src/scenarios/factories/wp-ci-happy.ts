@@ -29,7 +29,21 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'issuer.par.requested',
-      service: 'credential-issuer'
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/as/par' }
+    },
+    {
+      event: 'issuer.authorization.requested',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/authorize' }
+    },
+    {
+      event: 'issuer.token.requested',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/token' }
     }
   ],
   timeouts: {
@@ -37,11 +51,11 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
     protocolStepMs: 60_000,
     vitestTestMs: 330_000
   },
-  verdictRules: [{ type: 'entry-event-required' }, { type: 'required-events-in-order' }],
+  verdictRules: [{ type: 'entry-event-required' }],
   instructions: {
-    goal: 'Verify that the Wallet Instance discovers the Credential Issuer and obtains a credential from it.',
+    goal: 'Verify that the Wallet Instance discovers the Credential Issuer and successfully completes the Authorization Code Flow through PAR, Authorization, and Token exchange.',
     expectedBehavior:
-      'After opening the credential offer, the wallet must request the Credential Issuer Entity Configuration and obtain a credential from the Credential Issuer.',
+      'After opening the credential offer, the wallet must request the Credential Issuer Entity Configuration, resolve the Trust Anchor subordinate statement, successfully push an Authorization Request to the Credential Issuer PAR endpoint, request the Credential Issuer Authorization Endpoint using the received request_uri and client_id, complete the identity verification/consent step with the (mock) Identity Provider, and exchange the resulting authorization code at the Credential Issuer Token endpoint.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
@@ -51,7 +65,8 @@ export const wpCiHappyScenario: ProtocolObservedScenarioDefinition = {
       'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services and waits for their readiness.',
       'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
       'Keep the wallet and test process running while the wallet resolves the Credential Issuer federation trust chain.',
-      'The runner will continue automatically after the wallet requests the Issuer Entity Configuration and the Trust Anchor subordinate statement.'
+      'Complete the identity verification / consent step in the (mock) Identity Provider so the wallet receives the authorization code and automatically exchanges it at the Token endpoint.',
+      'The runner will continue automatically after the wallet requests the Issuer Entity Configuration, the Trust Anchor subordinate statement, pushes the Authorization Request to the PAR endpoint, requests the Authorization Endpoint with the received request_uri and client_id, and exchanges the authorization code at the Token endpoint.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

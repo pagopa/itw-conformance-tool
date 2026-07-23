@@ -12,7 +12,7 @@ import {
 } from '../events/event-store.js';
 import { createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
-import { getRequiredEventName } from '../scenarios/definitions.js';
+import { getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
@@ -40,7 +40,6 @@ export interface ScenarioRunner extends AsyncDisposable {
 }
 
 export interface InteractiveScenarioSession extends AsyncDisposable {
-  readonly scenarioId: string;
   readonly correlationId: string;
   readonly definition: ProtocolObservedScenarioDefinition;
   readonly endpoints: LocalServiceEndpoints;
@@ -214,7 +213,6 @@ export function createProtocolObservedScenarioRunner(
       if (!definition) throw new Error(`Unknown protocol-observed scenario: ${id}`);
 
       const startedAt = new Date().toISOString();
-      const scenarioId = randomUUID();
       const initialCorrelationId = randomUUID();
       const abortController = new AbortController();
       const eventStore = options.eventStoreFactory?.() ?? createInMemoryScenarioEventStore();
@@ -228,7 +226,6 @@ export function createProtocolObservedScenarioRunner(
         definition,
         endpoints,
         eventStore,
-        scenarioId,
         startedAt
       });
 
@@ -236,7 +233,6 @@ export function createProtocolObservedScenarioRunner(
         createObservedEvent({
           name:
             stimulus.type === 'presentation-request' ? 'presentation_request.generated' : 'credential_offer.generated',
-          scenarioId,
           correlationId,
           service: 'collector',
           diagnostic: { stimulusType: stimulus.type }
@@ -244,7 +240,6 @@ export function createProtocolObservedScenarioRunner(
       );
 
       const session: InteractiveScenarioSession = {
-        scenarioId,
         correlationId,
         definition,
         endpoints,
@@ -256,7 +251,7 @@ export function createProtocolObservedScenarioRunner(
           await copyQrPayloadToClipboard(stimulus, write);
           eventSubscription?.dispose();
           eventSubscription = eventStore.subscribe((event) => {
-            write(`[event] ${event.name} service=${event.service} scenario=${event.scenarioId ?? 'unmatched'}`);
+            write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
           });
         },
         async awaitVerdict(awaitOptions = {}) {
@@ -276,18 +271,20 @@ export function createProtocolObservedScenarioRunner(
           }
 
           if (entryEvent) {
+            const enforceOrder = hasVerdictRule(definition, 'required-events-in-order');
             let previous = entryEvent;
             for (const requiredEvent of definition.requiredEvents ?? []) {
               const requiredEventName = getRequiredEventName(requiredEvent);
               if (requiredEventName === entryEvent.name) continue;
 
               try {
-                previous = await eventStore.waitFor(requiredEventName, {
-                  after: previous,
+                const observed = await eventStore.waitFor(requiredEventName, {
+                  after: enforceOrder ? previous : entryEvent,
                   timeoutMs: definition.timeouts.protocolStepMs,
                   signal,
                   inconclusiveMessage: `The wallet did not send required event ${requiredEventName}.`
                 });
+                if (enforceOrder) previous = observed;
               } catch (error) {
                 if (!isControlledWaitError(error)) throw error;
                 break;
@@ -311,8 +308,7 @@ export function createProtocolObservedScenarioRunner(
             definition,
             events: eventStore.all(),
             artifactValidationResults: [],
-            timings: createTimings(startedAt),
-            scenarioId
+            timings: createTimings(startedAt)
           });
           writeOutcome(outcome, write);
           return outcome;

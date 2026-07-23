@@ -6,7 +6,6 @@ export interface ScenarioEventBridgeContext {
   definition: ProtocolObservedScenarioDefinition;
   endpoints: LocalServiceEndpoints;
   eventStore: ScenarioEventStore;
-  scenarioId: string;
   startedAt: string;
 }
 
