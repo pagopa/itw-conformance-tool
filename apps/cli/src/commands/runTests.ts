@@ -1,19 +1,18 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
-import { ServiceSupervisor, type SupervisedService } from '../services/serviceSupervisor.js';
-import { findNxRoot } from '../utils/search.js';
-import { testCategoryFilters, type TestCategory } from './testCategories.js';
+import { testCategories, type TestCategory } from '@itw-conformance-tool/utils';
 
-/** Builds the Vitest arguments for a selected conformance test category. */
-export function buildConformanceTestArgs(category: TestCategory, nxRootPath: string): string[] {
-  return [
-    'vitest',
-    'run',
-    '--config',
-    join(nxRootPath, 'vitest.conformance.config.mts'),
-    testCategoryFilters[category]
-  ];
+import { ServiceSupervisor, type SupervisedService } from '../supervisor.js';
+import { findNxRoot } from '../utils/search.js';
+
+/** Builds the Vitest arguments for one category, or all conformance matrix tests. */
+export function buildConformanceTestArgs(category: TestCategory | undefined, nxRootPath: string): string[] {
+  const args = ['vitest', 'run', '--config', join(nxRootPath, 'vitest.conformance.config.mts')];
+  if (category) {
+    args.push(testCategories[category].fileName);
+  }
+  return args;
 }
 
 export function requiredServicesForCategory(category: TestCategory): SupervisedService[] {
@@ -23,16 +22,23 @@ export function requiredServicesForCategory(category: TestCategory): SupervisedS
   return [];
 }
 
-/** Configures Vitest with the selected conformance category and terminal colours. */
+/** Configures Vitest for one category, or for the complete conformance matrix. */
 export function createConformanceTestEnvironment(
-  category: TestCategory,
+  category: TestCategory | undefined,
   environment: NodeJS.ProcessEnv = process.env,
   isInteractive = process.stdout.isTTY === true
 ): NodeJS.ProcessEnv {
-  const testEnvironment: NodeJS.ProcessEnv = { ...environment, ITWCT_CONFORMANCE_TEST_CATEGORY: category };
+  const testEnvironment = { ...environment };
+  delete testEnvironment.ITWCT_CONFORMANCE_TEST_CATEGORY;
+
+  if (category) {
+    testEnvironment.ITWCT_CONFORMANCE_TEST_CATEGORY = category;
+  }
+
   if (!isInteractive || testEnvironment.FORCE_COLOR !== undefined || testEnvironment.NO_COLOR !== undefined) {
     return testEnvironment;
   }
+
   return { ...testEnvironment, FORCE_COLOR: '1' };
 }
 
@@ -44,8 +50,8 @@ function runVitest(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise
   });
 }
 
-/** Runs a category with the CLI as the sole owner of required local services. */
-export async function runConformanceTests(category: TestCategory): Promise<number> {
+/** Runs one conformance category, or the complete matrix, with the CLI owning local services. */
+export async function runConformanceTests(category?: TestCategory): Promise<number> {
   const nxRootPath = findNxRoot();
   const supervisor = new ServiceSupervisor({ cwd: nxRootPath });
   const stop = (): void => {
@@ -55,7 +61,9 @@ export async function runConformanceTests(category: TestCategory): Promise<numbe
   process.once('SIGTERM', stop);
 
   try {
-    await supervisor.start(requiredServicesForCategory(category));
+    await supervisor.start(
+      category ? requiredServicesForCategory(category) : ['trust-anchor', 'credential-issuer', 'relying-party']
+    );
     return await runVitest(
       buildConformanceTestArgs(category, nxRootPath),
       nxRootPath,

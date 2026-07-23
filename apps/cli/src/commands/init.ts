@@ -18,7 +18,9 @@ import {
 } from '../utils/crypto.js';
 import { existsFileSync } from '../utils/search.js';
 
-import type { InitFlags } from '../types/types.js';
+export type InitFlags = {
+  force: boolean;
+};
 
 type InitConfig = {
   global: Pick<ConfigSchemaType['global'], 'data_dir' | 'log_level'>;

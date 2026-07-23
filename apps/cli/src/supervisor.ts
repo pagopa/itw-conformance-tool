@@ -89,6 +89,7 @@ export class ServiceSupervisor {
       env: process.env,
       silent: false
     });
+
     const managed: ManagedService = { child, service };
     this.managed.set(service, managed);
 
@@ -97,14 +98,17 @@ export class ServiceSupervisor {
         () => reject(new Error(`Timed out waiting for ${service} readiness`)),
         this.readinessTimeoutMs
       );
+
       const fail = (reason: Error): void => {
         clearTimeout(timeout);
         reject(reason);
       };
+
       child.once('error', (error) => fail(new Error(`${service} failed to start: ${error.message}`)));
       child.once('exit', (code, signal) => {
         if (!managed.endpoint) fail(new Error(`${service} exited before readiness (code=${code}, signal=${signal})`));
       });
+
       child.on('message', (rawMessage) => {
         const message = parseIpcMessage(rawMessage);
         if (!message) return;
@@ -124,7 +128,9 @@ export class ServiceSupervisor {
   private async stopOne(managed: ManagedService): Promise<void> {
     const { child, service } = managed;
     if (child.exitCode !== null || child.signalCode !== null) return;
+
     const requestId = randomUUID();
+
     const stopped = new Promise<void>((resolve) => {
       child.on('message', (rawMessage) => {
         const message = parseIpcMessage(rawMessage);
@@ -140,9 +146,12 @@ export class ServiceSupervisor {
     });
 
     child.send({ version: SERVICE_PROTOCOL_VERSION, type: 'service.stop', requestId });
+
     await Promise.race([stopped, waitForExit(child, this.shutdownTimeoutMs)]);
+
     if (child.exitCode === null && child.signalCode === null) this.kill(child, 'SIGTERM');
     await waitForExit(child, this.shutdownTimeoutMs);
+
     if (child.exitCode === null && child.signalCode === null) this.kill(child, 'SIGKILL');
   }
 
