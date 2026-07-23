@@ -155,7 +155,7 @@ describe('Test Cases for Issuance Phase', () => {
     }, wpCiHappyScenario.timeouts.vitestTestMs);
 
     test(
-      `[WP_046]: Wallet Instance successfully uses Federation API endpoints (.well-known/openid-federation, /fetch) to retrieve current metadata and configurations of the Credential Issuer.`,
+      `WP_046: Wallet Instance successfully uses Federation API endpoints (.well-known/openid-federation, /fetch) to retrieve current metadata and configurations of the Credential Issuer.`,
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
       },
@@ -163,7 +163,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_051]: Wallet Instance successfully requests PID/(Q)EAA from the PID/(Q)EAA Provider using the Authorization Code Flow per OpenID4VCI.',
+      'WP_051: Wallet Instance successfully requests PID/(Q)EAA from the PID/(Q)EAA Provider using the Authorization Code Flow per OpenID4VCI.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -175,7 +175,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_053]: Wallet Instance sends an Authorization Request to the Credential Issuer Authorization Endpoint using the received request_uri and client_id.',
+      'WP_053: Wallet Instance sends an Authorization Request to the Credential Issuer Authorization Endpoint using the received request_uri and client_id.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -206,7 +206,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_052a]: Wallet Instance creates the code_verifier following RFC 7636 recommendations for random number generation to prevent brute-force attacks.',
+      'WP_052a: Wallet Instance creates the code_verifier following RFC 7636 recommendations for random number generation to prevent brute-force attacks.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -220,7 +220,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      "[WP_052b]: Wallet Instance generates the Wallet Attestation PoP JWT and binds it to the same ephemeral public key referenced in the Wallet Attestation's cnf.jwk.",
+      "WP_052b: Wallet Instance generates the Wallet Attestation PoP JWT and binds it to the same ephemeral public key referenced in the Wallet Attestation's cnf.jwk.",
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
         expect(clientAttestation).toBeDefined();
@@ -255,7 +255,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      "[WP_052c]: Wallet Instance signs the PoP JWT with the ephemeral private key corresponding to the public key in the Wallet Attestation's cnf.jwk.",
+      "WP_052c: Wallet Instance signs the PoP JWT with the ephemeral private key corresponding to the public key in the Wallet Attestation's cnf.jwk.",
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
         expect(clientAttestation).toBeDefined();
@@ -286,7 +286,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_052d]: Wallet Instance embeds correct Digital Credential types in the Request Object using the authorization_details (or scope) parameter.',
+      'WP_052d: Wallet Instance embeds correct Digital Credential types in the Request Object using the authorization_details (or scope) parameter.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
         expect(authorizationRequest).toBeDefined();
@@ -307,7 +307,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_055]: Wallet Instance sends the Token Request to the Credential Issuer Token Endpoint using the authorization_code grant with the code, redirect_uri and PKCE code_verifier.',
+      'WP_055: Wallet Instance sends the Token Request to the Credential Issuer Token Endpoint using the authorization_code grant with the code, redirect_uri and PKCE code_verifier.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -343,7 +343,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_055a]: Wallet Instance authenticates the Token Request with the DPoP proof, the Wallet Attestation and the Wallet Instance PoP, sent as three distinct JWT headers.',
+      'WP_055a: Wallet Instance authenticates the Token Request with the DPoP proof, the Wallet Attestation and the Wallet Instance PoP, sent as three distinct JWT headers.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -372,7 +372,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_055b]: Wallet Instance generates a fresh DPoP key for the Token Request, with a proof JWT conforming to RFC 9449 and bound to the Token Endpoint.',
+      'WP_055b: Wallet Instance generates a fresh DPoP key for the Token Request, with a proof JWT conforming to RFC 9449 and bound to the Token Endpoint.',
       () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -418,7 +418,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_055c]: Wallet Instance signs the Token Request DPoP proof with the private key matching the public JWK declared in the DPoP proof header.',
+      'WP_055c: Wallet Instance signs the Token Request DPoP proof with the private key matching the public JWK declared in the DPoP proof header.',
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -437,7 +437,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test(
-      '[WP_055d]: Wallet Instance binds the Token Request to the Wallet Instance ephemeral key by signing the Wallet Instance PoP with the private key matching the Wallet Attestation cnf.jwk.',
+      'WP_055d: Wallet Instance binds the Token Request to the Wallet Instance ephemeral key by signing the Wallet Instance PoP with the private key matching the Wallet Attestation cnf.jwk.',
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
