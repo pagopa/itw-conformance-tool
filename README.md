@@ -16,6 +16,7 @@ The tool runs the following local services and observes the protocol traffic the
 | Credential Issuer   | Issues representative IT Wallet credentials and exposes issuer federation metadata             | OpenID4VCI, OpenID Federation |
 | Relying Party       | Creates and validates presentation requests and responses                                      | OpenID4VP, OpenID Federation  |
 | Trust Anchor        | Serves federation trust-chain material                                                         | OpenID Federation             |
+| Wallet Provider     | Publishes local Wallet Provider federation metadata for Wallet Instance infrastructure         | OpenID Federation             |
 | CLI (`itwct`)       | Initializes local state, orchestrates matrix runs, and produces reports                        | —                             |
 | Conformance package | Defines scenarios, captures/redacts events and artifacts, evaluates rules, and renders reports | —                             |
 
@@ -23,21 +24,20 @@ A conformance run starts only the local services required by the selected catego
 
 ## Local federation endpoints
 
-The tool starts local HTTPS services that publish the OpenID Federation metadata required by the selected conformance category. The Trust Anchor is the root of trust for the local Credential Issuer and Relying Party; the Wallet Provider Backend is external to the tool and is not started locally.
+The tool starts local HTTPS services that publish the OpenID Federation metadata required by the selected conformance category. The Trust Anchor is the root of trust for the local Credential Issuer, Relying Party, and Wallet Provider helper. The Wallet Provider Backend under test remains external and is never replaced by the local helper.
 
-| Service           | Default listening URL    | Default entity ID            | Purpose                                                                             |
-| ----------------- | ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------- |
-| Trust Anchor      | `https://127.0.0.1:3001` | `https://localhost:3001`     | Publishes the Trust Anchor entity configuration and resolves federation statements. |
-| Credential Issuer | `https://127.0.0.1:3000` | Configured from its base URL | Issues representative credentials and publishes issuer federation metadata.         |
-| Relying Party     | `https://127.0.0.1:3002` | `https://127.0.0.1:3002`     | Creates presentation requests and publishes Relying Party federation metadata.      |
+| Service                | Default listening URL    | Default entity ID            | Purpose                                                                             |
+| ---------------------- | ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------- |
+| Trust Anchor           | `https://127.0.0.1:3001` | `https://localhost:3001`     | Publishes the Trust Anchor entity configuration and resolves federation statements. |
+| Credential Issuer      | `https://127.0.0.1:3000` | Configured from its base URL | Issues representative credentials and publishes issuer federation metadata.         |
+| Relying Party          | `https://127.0.0.1:3002` | `https://127.0.0.1:3002`     | Creates presentation requests and publishes Relying Party federation metadata.      |
+| Wallet Provider helper | `https://127.0.0.1:3003` | `https://127.0.0.1:3003`     | Publishes Wallet Provider entity configuration for Wallet Instance scenarios.       |
 
 ### Local DNS for named endpoints
 
 The generated configuration uses `127.0.0.1` and `localhost`, so it requires no DNS setup. If the Wallet Solution requires stable named local endpoints, each configured hostname must resolve to `127.0.0.1` on the machine running the services and tests. Add the names to the system hosts file, for example:
 
-```text
-127.0.0.1 trust-anchor.wct.example.org credential-issuer.wct.example.org relying-party.wct.example.org
-```
+127.0.0.1 trust-anchor.wct.example.org credential-issuer.wct.example.org relying-party.wct.example.org wallet-provider.wct.example.org
 
 Use the same hostname and explicit local port consistently in the corresponding `url`, `entity_id`, and `trust_anchor_url` settings. The services bind to the host and port in each `url`; they do not listen on HTTPS port 443 by default. For example:
 
@@ -77,12 +77,12 @@ corepack prepare pnpm@11.13.1 --activate
 pnpm install --frozen-lockfile
 
 # 2. Create config.ini and local keys/certificates under .itw-conformance-tool/.
-pnpm init
+pnpm run init
 
-# 3. Edit config.ini. At minimum, replace the Wallet Provider Backend URL.
+# 3. Edit config.ini. At minimum, replace the remote Wallet Provider Backend URL.
 #    [wallet-provider]
 #    url = https://wallet-provider-backend.example.com
-
+#    local_url = https://127.0.0.1:3003
 # 4. Execute one category. The CLI builds what it needs and manages local services.
 pnpm test:issuance
 ```
@@ -115,9 +115,11 @@ pnpm run init:force
 ├── rp/
 │   ├── jwks.json                  # relying-party keys
 │   └── cert.pem                   # relying-party certificate
-└── trust-anchor/
-    ├── federation-key.jwk.json
-    └── federation-cert.pem
+├── trust-anchor/
+│   ├── federation-key.jwk.json
+│   └── federation-cert.pem
+└── wallet-provider/
+    └── jwks.json                  # Wallet Provider federation signing key
 ```
 
 Without `--force`, existing generated files are retained. Use `--force` only when rotating all local test material is intended; it invalidates state that depends on the replaced keys.
@@ -137,7 +139,8 @@ Start from the template generated by `pnpm init`. The following table documents 
 | `[global]`            | `log_level`                       | `debug`, `info`, `warn`, `error`                     | Controls application log verbosity.                                                                                                                    |
 | `[wallet]`            | `wallet_name`                     | Non-empty text                                       | Identifies the Wallet Solution in reports.                                                                                                             |
 | `[wallet]`            | `wallet_version`                  | Non-empty text                                       | Identifies the Wallet Solution version in reports.                                                                                                     |
-| `[wallet-provider]`   | `url`                             | Absolute HTTPS URL                                   | Wallet Provider Backend under test. Replace the generated placeholder before running a real test.                                                      |
+| `[wallet-provider]`   | `url`                             | Absolute HTTPS URL                                   | Remote Wallet Provider Backend under test. Replace the generated placeholder before running the `wallet-provider` matrix.                              |
+| `[wallet-provider]`   | `local_url`                       | Absolute HTTPS URL                                   | Local Wallet Provider helper base URL and Entity ID. The CLI starts it for Wallet Instance and all-category runs. Default: `https://127.0.0.1:3003`.   |
 | `[credential-issuer]` | `url`                             | Absolute HTTPS URL                                   | Base URL on which the local Credential Issuer listens.                                                                                                 |
 | `[credential-issuer]` | `auth_flow`                       | `direct`, `l2plus`, `l3`                             | Issuer authorization flow exercised by the local issuer.                                                                                               |
 | `[credential-issuer]` | `credential_types`                | Comma-separated `pid`, `mdl`, `badge`, and/or `eaa`  | Enables representative credential types exposed by the issuer.                                                                                         |
@@ -153,7 +156,7 @@ Start from the template generated by `pnpm init`. The following table documents 
 
 Example minimal customization:
 
-```ini
+````ini
 [global]
 organization_name = Example Wallet Provider
 log_level = info
@@ -163,8 +166,10 @@ wallet_name = Example Wallet
 wallet_version = 1.0.0
 
 [wallet-provider]
+# Remote Wallet Provider Backend under test
 url = https://wallet-provider.example.test
-```
+# Local helper started only for Wallet Instance infrastructure
+local_url = https://127.0.0.1:3003
 
 > [!CAUTION]
 > The default `trusted_wallet_provider_issuers` values are examples. Replace them with the exact entity identifiers trusted in your test environment. Do not use a broad production allowlist merely to make a test pass.
@@ -173,13 +178,13 @@ url = https://wallet-provider.example.test
 
 The CLI command is `itwct`; the root scripts below are the recommended way to invoke it from a checkout.
 
-| Command                     | Runs                                            | Local services managed by the CLI              |
-| --------------------------- | ----------------------------------------------- | ---------------------------------------------- |
-| `pnpm test:all`             | Every matrix category, in a deterministic order | Trust Anchor, Credential Issuer, Relying Party |
-| `pnpm test:issuance`        | Credential issuance scenarios                   | Trust Anchor, Credential Issuer                |
-| `pnpm test:presentation`    | Credential presentation scenarios               | Trust Anchor, Relying Party                    |
-| `pnpm test:wallet-instance` | Wallet Instance scenarios                       | Trust Anchor, Credential Issuer, Relying Party |
-| `pnpm test:wallet-provider` | Wallet Provider Backend scenarios               | None                                           |
+| Command                     | Runs                                            | Local services managed by the CLI                                |
+| --------------------------- | ----------------------------------------------- | --------------------------------------------------------------- |
+| `pnpm test:all`             | Every matrix category, in a deterministic order | Trust Anchor, Credential Issuer, Relying Party, Wallet Provider |
+| `pnpm test:issuance`        | Credential issuance scenarios                   | Trust Anchor, Credential Issuer                                 |
+| `pnpm test:presentation`    | Credential presentation scenarios               | Trust Anchor, Relying Party                                     |
+| `pnpm test:wallet-instance` | Wallet Instance scenarios                       | Trust Anchor, Credential Issuer, Relying Party, Wallet Provider |
+| `pnpm test:wallet-provider` | Remote Wallet Provider Backend scenarios        | None                                                            |
 
 Equivalent CLI invocations:
 
@@ -189,7 +194,7 @@ pnpm nx run itw-conformance-cli:run --args="test issuance"
 pnpm nx run itw-conformance-cli:run --args="test presentation"
 pnpm nx run itw-conformance-cli:run --args="test wallet-instance"
 pnpm nx run itw-conformance-cli:run --args="test wallet-provider"
-```
+````
 
 The test command owns its children: it starts the minimal service set, waits for service readiness, runs the selected sequential Vitest matrix, and stops services on success, failure, interruption, or timeout. Do **not** separately start the same local services for a CLI-managed test run.
 
@@ -224,10 +229,11 @@ pnpm nx run itw-conformance-cli:run --args="report create <run-id> html --view e
 For manual debugging, first initialize the workspace, then run one service directly through Nx:
 
 ```sh
-pnpm init
+pnpm run init
 pnpm nx run itw-credential-issuer:serve
 pnpm nx run itw-relying-party:serve
 pnpm nx run itw-trust-anchor:serve
+pnpm nx run itw-wallet-provider:serve
 
 # Or run every project with a serve target.
 pnpm start
@@ -235,11 +241,12 @@ pnpm start
 
 The default endpoints are:
 
-| Service           | Default URL              | Useful endpoint                                             |
-| ----------------- | ------------------------ | ----------------------------------------------------------- |
-| Credential Issuer | `https://127.0.0.1:3000` | `GET /health`; interactive API documentation at `/api/docs` |
-| Trust Anchor      | `https://localhost:3001` | `GET /health`; interactive API documentation at `/api/docs` |
-| Relying Party     | `https://127.0.0.1:3002` | `GET /health`; interactive API documentation at `/api/docs` |
+| Service                | Default URL              | Useful endpoint                                             |
+| ---------------------- | ------------------------ | ----------------------------------------------------------- |
+| Credential Issuer      | `https://127.0.0.1:3000` | `GET /health`; interactive API documentation at `/api/docs` |
+| Trust Anchor           | `https://localhost:3001` | `GET /health`; interactive API documentation at `/api/docs` |
+| Relying Party          | `https://127.0.0.1:3002` | `GET /health`; interactive API documentation at `/api/docs` |
+| Wallet Provider helper | `https://127.0.0.1:3003` | `GET /health`; `GET /.well-known/openid-federation`         |
 
 If `credential_identifiers` is populated, the Credential Issuer opens `https://127.0.0.1:3000/credential-offer` after it starts. That page shows a scannable OpenID4VCI Credential Offer and a copyable URI.
 
@@ -280,21 +287,22 @@ pnpm remove --global itw-conformance-cli
 
 This repository is a pnpm + Nx TypeScript monorepo.
 
-```text
 apps/
-├── cli/                       # itwct command and service supervision
-├── itw-credential-issuer/     # Fastify OpenID4VCI service
-├── itw-relying-party/         # Fastify OpenID4VP service
-└── itw-trust-anchor/          # Fastify federation trust-anchor service
+├── cli/ # itwct command and service supervision
+├── itw-credential-issuer/ # Fastify OpenID4VCI service
+├── itw-relying-party/ # Fastify OpenID4VP service
+├── itw-trust-anchor/ # Fastify federation trust-anchor service
+└── itw-wallet-provider/ # Fastify local Wallet Provider federation helper
 packages/
-├── config/                    # INI parsing, defaults, and validation
-├── conformance/               # scenarios, events, artifacts, verdicts, reports
-├── crypto/                    # local crypto, certificates, and TLS helpers
-├── database/                  # SQLite client and persistence
-├── ipc/                       # CLI-to-service lifecycle signaling
-├── logger/                    # shared structured logger
-└── utils/                     # shared types and utilities
-```
+├── config/ # INI parsing, defaults, and validation
+├── conformance/ # scenarios, events, artifacts, verdicts, reports
+├── crypto/ # local crypto, certificates, and TLS helpers
+├── database/ # SQLite client and persistence
+├── ipc/ # CLI-to-service lifecycle signaling
+├── logger/ # shared structured logger
+└── utils/ # shared types and utilities
+
+````
 
 The conformance package is the core testing pipeline:
 
@@ -311,7 +319,7 @@ corepack enable
 corepack prepare pnpm@11.13.1 --activate
 pnpm install --frozen-lockfile
 pnpm build
-```
+````
 
 Nx targets can be invoked per project when iterating:
 

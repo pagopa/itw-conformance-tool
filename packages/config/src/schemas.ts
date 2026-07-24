@@ -6,7 +6,8 @@ export const CREDENTIAL_TYPES = ['pid', 'mdl', 'badge', 'eaa'] as const;
 const DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS = [
   'https://wallet-provider.example',
   'https://wallet-provider.wct.example:3002',
-  'https://wallet-provider.wct.example.org:3002'
+  'https://wallet-provider.wct.example.org:3002',
+  'https://127.0.0.1:3003'
 ] as const;
 
 export const DEFAULT_CONFIG = {
@@ -20,7 +21,8 @@ export const DEFAULT_CONFIG = {
     wallet_version: 'V1_4'
   },
   'wallet-provider': {
-    url: 'https://wallet-provider-backend.example.com'
+    url: 'https://wallet-provider-backend.example.com',
+    local_url: 'https://127.0.0.1:3003'
   },
   'credential-issuer': {
     url: 'https://127.0.0.1:3000',
@@ -67,9 +69,11 @@ wallet_name = ${walletDefaults.wallet_name}
 wallet_version = ${walletDefaults.wallet_version}
 
 [wallet-provider]
-; Wallet Provider Backend URL (used for conformance tests)
-; You need to set this to the URL of your wallet provider backend for the conformance tests to work.
+; Remote Wallet Provider backend URL used by the user and wallet-provider conformance matrix.
+; Set this to the real Wallet Provider backend to test.
 url = ${walletProviderDefaults.url}
+; Local helper Wallet Provider URL started for wallet-instance infrastructure.
+local_url = ${walletProviderDefaults.local_url}
 
 [credential-issuer]
 ; Local Credential Issuer URL (used for conformance tests)
@@ -215,7 +219,8 @@ const WalletConfigSchema = z
 
 const WalletProviderConfigSchema = z
   .object({
-    url: z.url({ protocol: /^https$/ }).default(walletProviderDefaults.url)
+    url: z.url({ protocol: /^https$/ }).default(walletProviderDefaults.url),
+    local_url: z.url({ protocol: /^https$/ }).default(walletProviderDefaults.local_url)
   })
   .default(walletProviderDefaults);
 

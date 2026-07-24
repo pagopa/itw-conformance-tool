@@ -69,6 +69,20 @@ export function createRelyingPartyPrivateKeys() {
   return { keys: [signing, encryption, federation] };
 }
 
+/** Generates a JWKS containing the Wallet Provider federation signing key. */
+export function createWalletProviderPrivateKeys() {
+  return {
+    keys: [
+      createEcPrivateJwk({
+        kid: 'wallet-provider-signing-key',
+        use: 'sig',
+        alg: 'ES256',
+        keyOps: ['sign']
+      })
+    ]
+  };
+}
+
 /** Generates and returns a JWKS containing a single EC P-256 private
  * ES256 signing key for the issuer intermediate CA.
  *
