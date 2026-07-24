@@ -1,4 +1,5 @@
 import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '@itw-conformance-tool/crypto';
+import { isNonEmptyString, isRecord } from '@itw-conformance-tool/utils';
 import {
   SignJWT,
   calculateJwkThumbprint,
@@ -17,6 +18,7 @@ const ATTESTATION_TTL_SECONDS = 3600;
 const REQUEST_JWT_TYPE = 'wia-request+jwt';
 const RESPONSE_JWT_TYPE = 'oauth-client-attestation+jwt';
 const signingCertificates = new Map<string, Promise<string>>();
+
 export const walletInstanceAttestationRequestSchema = z.object({
   assertion: z.string().min(1).describe('Signed Wallet Instance Attestation request JWT.')
 });
@@ -30,32 +32,38 @@ export const walletInstanceAttestationErrorSchema = z.object({
   error_description: z.string().min(1)
 });
 
+const attestationRequiredStringClaims = [
+  'hardware_key_tag',
+  'hardware_signature',
+  'integrity_assertion',
+  'nonce',
+  'platform',
+  'wallet_solution_id',
+  'wallet_solution_version'
+] as const;
+
+const attestationRequestPayloadSchema = z.looseObject({
+  cnf: z.object({ jwk: z.custom<JWK>(isRecord) }),
+  exp: z.number(),
+  hardware_key_tag: z.string().min(1),
+  hardware_signature: z.string().min(1),
+  iat: z.number(),
+  integrity_assertion: z.string().min(1),
+  nonce: z.string().min(1),
+  platform: z.string().min(1),
+  wallet_solution_id: z.string().min(1),
+  wallet_solution_version: z.string().min(1)
+});
+
 type AttestationRequestBody = z.infer<typeof walletInstanceAttestationRequestSchema>;
 
-type AttestationRequestPayload = JWTPayload & {
-  cnf: { jwk: JWK };
-  hardware_key_tag: string;
-  hardware_signature: string;
-  integrity_assertion: string;
-  nonce: string;
-  platform: string;
-  wallet_solution_id: string;
-  wallet_solution_version: string;
-};
+type AttestationRequestPayload = z.infer<typeof attestationRequestPayloadSchema>;
 
 type AttestationError = {
   description: string;
   error: 'bad_request' | 'integrity_check_error' | 'invalid_request';
   statusCode: 400 | 403;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
 
 function isAttestationError(value: AttestationRequestPayload | AttestationError): value is AttestationError {
   return 'statusCode' in value;
@@ -79,32 +87,29 @@ function invalidRequest(description: string): AttestationError {
   return { description, error: 'invalid_request', statusCode: 403 };
 }
 
-function validatePayload(payload: JWTPayload): AttestationRequestPayload | AttestationError {
-  if (!isRecord(payload.cnf) || !isRecord(payload.cnf.jwk)) {
+function validationErrorForPayload(error: z.ZodError<AttestationRequestPayload>): AttestationError {
+  const invalidPaths = new Set(error.issues.map((issue) => issue.path.join('.')));
+
+  if (invalidPaths.has('cnf') || invalidPaths.has('cnf.jwk')) {
     return { description: 'The assertion cnf.jwk claim is required.', error: 'bad_request', statusCode: 400 };
   }
 
-  const requiredStringClaims = [
-    'hardware_key_tag',
-    'hardware_signature',
-    'integrity_assertion',
-    'nonce',
-    'platform',
-    'wallet_solution_id',
-    'wallet_solution_version'
-  ] as const;
-
-  for (const claim of requiredStringClaims) {
-    if (!isNonEmptyString(payload[claim])) {
+  for (const claim of attestationRequiredStringClaims) {
+    if (invalidPaths.has(claim)) {
       return { description: `The assertion ${claim} claim is required.`, error: 'bad_request', statusCode: 400 };
     }
   }
 
-  if (typeof payload.iat !== 'number' || typeof payload.exp !== 'number') {
+  if (invalidPaths.has('iat') || invalidPaths.has('exp')) {
     return { description: 'The assertion iat and exp claims are required.', error: 'bad_request', statusCode: 400 };
   }
 
-  return payload as AttestationRequestPayload;
+  return { description: 'The assertion payload is invalid.', error: 'bad_request', statusCode: 400 };
+}
+
+function validatePayload(payload: JWTPayload): AttestationRequestPayload | AttestationError {
+  const parsedPayload = attestationRequestPayloadSchema.safeParse(payload);
+  return parsedPayload.success ? parsedPayload.data : validationErrorForPayload(parsedPayload.error);
 }
 
 function sendError(reply: FastifyReply, error: AttestationError): FastifyReply {
