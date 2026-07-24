@@ -38,12 +38,12 @@ async function startServer() {
   await app.ready();
   app.server.headersTimeout = 15_000;
 
-  const url = new URL(app.config.baseUrl);
+  const url = new URL(app.config.BASE_URL);
 
   try {
     await app.listen({
       host: url.hostname,
-      port: parseInt(url.port, 10),
+      port: Number(url.port),
       listenTextResolver: (address) => `IT Wallet Provider listening on ${address}`
     });
   } catch (err) {
@@ -52,7 +52,7 @@ async function startServer() {
   }
 
   attachServiceIpcAdapter({
-    endpoint: app.config.baseUrl,
+    endpoint: app.config.BASE_URL,
     service: 'wallet-provider',
     stop: () => app.close()
   });

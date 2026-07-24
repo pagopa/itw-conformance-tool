@@ -1,4 +1,4 @@
-import { convertPemToBase64Der, createSelfSignedCertificateFromJwk, hashCallback } from '@itw-conformance-tool/crypto';
+import { hashCallback } from '@itw-conformance-tool/crypto';
 import {
   HashAlgorithm,
   decodeJwt,
@@ -19,9 +19,6 @@ const ATTESTATION_TTL_SECONDS = 3600;
 const REQUEST_JWT_TYPE = 'wia-request+jwt';
 const ATTESTATION_STATUS_LIST_INDEX = 0;
 const WIA_REQUEST_ALLOWED_ALGORITHMS = ['ES256', 'ES384', 'ES512'] as const;
-
-const signingCertificates = new Map<string, Promise<string>>();
-
 export const walletInstanceAttestationRequestSchema = z.object({
   assertion: z.string().min(1).describe('Signed Wallet Instance Attestation request JWT.')
 });
@@ -81,21 +78,6 @@ type AttestationError = {
 function isAttestationError(value: unknown): value is AttestationError {
   return typeof value === 'object' && value !== null && 'statusCode' in value;
 }
-
-function signingCertificateCacheKey(jwk: JWK): string {
-  return JSON.stringify({ crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y });
-}
-
-function getSigningCertificate(jwk: JWK): Promise<string> {
-  const cacheKey = signingCertificateCacheKey(jwk);
-  const cachedCertificate = signingCertificates.get(cacheKey);
-  if (cachedCertificate) return cachedCertificate;
-
-  const certificate = createSelfSignedCertificateFromJwk(jwk);
-  signingCertificates.set(cacheKey, certificate);
-  return certificate;
-}
-
 function invalidRequest(description: string): AttestationError {
   return { description, error: 'invalid_request', statusCode: 403 };
 }
@@ -192,11 +174,10 @@ async function verifyAssertionSignature(
 }
 
 async function issueWalletInstanceAttestation(
-  options: Pick<FastifyRequest['server'], 'config' | 'walletProvider' | 'walletProviderKeys'>,
+  options: Pick<FastifyRequest['server'], 'config' | 'jwks' | 'walletProvider'>,
   payload: AttestationRequestPayload
 ): Promise<string> {
-  const { signingPrivateJwk, signingPublicJwk } = options.walletProviderKeys;
-  const signingCertificate = await getSigningCertificate(signingPrivateJwk);
+  const { private: signingPrivateJwk, public: signingPublicJwk } = options.jwks.sig;
   const expiresAt = new Date(Date.now() + ATTESTATION_TTL_SECONDS * 1000);
 
   return options.walletProvider.createItWalletAttestationJwt({
@@ -206,21 +187,21 @@ async function issueWalletInstanceAttestation(
     },
     dpopJwkPublic: payload.cnf.jwk,
     expiresAt,
-    issuer: options.config.baseUrl,
+    issuer: options.config.BASE_URL,
     signer: {
       alg: 'ES256',
       kid: signingPublicJwk.kid,
       method: 'x5c',
-      x5c: [convertPemToBase64Der(signingCertificate)]
+      x5c: [options.config.WALLET_PROVIDER_X509]
     },
     status: {
       status_list: {
         idx: ATTESTATION_STATUS_LIST_INDEX,
-        uri: `${options.config.baseUrl}/wallet-instance-attestation/status-list`
+        uri: `${options.config.BASE_URL}/wallet-instance-attestation/status-list`
       }
     },
-    walletLink: options.config.baseUrl,
-    walletName: options.config.walletName
+    walletLink: options.config.BASE_URL,
+    walletName: options.config.WALLET_NAME
   } satisfies WalletAttestationOptionsV1_4);
 }
 
@@ -257,7 +238,7 @@ export const issueWalletInstanceAttestationHandler = async (
   const issuedAtError = validateIssuedAt(payload);
   if (issuedAtError) return sendError(reply, issuedAtError);
 
-  if (payload.iss !== request.server.config.baseUrl) {
+  if (payload.iss !== request.server.config.BASE_URL) {
     return sendError(reply, invalidRequest('The assertion iss claim does not match the Wallet Provider identifier.'));
   }
 
@@ -277,7 +258,7 @@ export const issueWalletInstanceAttestationHandler = async (
   }
 
   try {
-    await verifyAssertionSignature(assertion, header, payload, request.server.config.baseUrl);
+    await verifyAssertionSignature(assertion, header, payload, request.server.config.BASE_URL);
   } catch {
     return sendError(reply, invalidRequest('The assertion signature cannot be verified with cnf.jwk.'));
   }
