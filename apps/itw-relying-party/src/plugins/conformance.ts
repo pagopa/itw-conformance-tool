@@ -19,7 +19,7 @@ function toCorrelation(correlationId: string | null): ScenarioCorrelation | null
 function resolveCorrelation(request: FastifyRequest): ScenarioCorrelation | null {
   const route = request.routeOptions.url;
 
-  if (route === '/auth/request/:state') {
+  if (route === '/auth/request/:state' || route === '/callback/:state') {
     const correlationId = getStringParam((request.params as Record<string, unknown>).state);
     return toCorrelation(correlationId);
   }

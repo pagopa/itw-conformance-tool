@@ -122,7 +122,7 @@ export const getAuthorizationResponseHandler = async (
     })
   );
 
-  const redirectUri = new URL(`${req.server.config.BASE_URL}/success.html`);
+  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback/${authorizationRequest.id}`);
   const responseCode = randomBytes(32).toString('hex');
   redirectUri.searchParams.set('response_code', responseCode);
   requestObjectRepository.update(authorizationRequest.id, 'verified', redirectUri.toString(), verificationResult.value);

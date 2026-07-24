@@ -100,6 +100,7 @@ export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scena
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
 export { wp077Scenario } from './scenarios/factories/wp-077.js';
 export { wp080Scenario } from './scenarios/factories/wp-080.js';
+export { wpRpHappyScenario } from './scenarios/factories/wp-rp-happy.js';
 export type {
   ArtifactExpectation,
   AutomationMode,

@@ -51,21 +51,24 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           trustAnchorBaseUrl: baseUrl
         });
 
-        if (subjectKind === 'issuer') {
-          await app.conformanceEventSink?.emit(
-            createObservedEvent({
-              name: 'federation.fetch.requested',
-              scenarioId: request.conformance?.correlation?.scenarioId ?? null,
-              correlationId: request.conformance?.correlation?.correlationId ?? null,
-              service: 'federation',
-              requestId: request.id,
-              diagnostic: {
-                endpoint: '/fetch',
-                sub
-              }
-            })
-          );
-        }
+        // The wallet fetches the subordinate statement about the requested
+        // entity while resolving its Trust Chain. Both the issuance flow
+        // (sub = Credential Issuer) and the presentation flow (sub = Relying
+        // Party) rely on this evidence; the `sub` diagnostic lets the scenario
+        // narrow adoption to the entity it expects (WP_078 / WP_079 / WP_080).
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'federation.fetch.requested',
+            scenarioId: request.conformance?.correlation?.scenarioId ?? null,
+            correlationId: request.conformance?.correlation?.correlationId ?? null,
+            service: 'federation',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/fetch',
+              sub
+            }
+          })
+        );
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(subordinateStatement);
       } catch (error) {

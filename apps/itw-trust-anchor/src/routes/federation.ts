@@ -1,3 +1,5 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
 import { createTrustAnchorEntityConfiguration } from '../federation/statements.js';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -17,6 +19,21 @@ const federationRoute: FastifyPluginAsync = async (app) => {
           relyingPartyEntityId: app.config.rpEntityId,
           trustAnchorBaseUrl: app.config.baseUrl
         });
+
+        // Trust Chain resolution step: the wallet fetches the Trust Anchor
+        // Entity Configuration (WP_079). The request carries no scenario
+        // correlation, so it is adopted as uncorrelated evidence narrowed by the
+        // endpoint diagnostic.
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'federation.anchor.requested',
+            scenarioId: request.conformance?.correlation?.scenarioId ?? null,
+            correlationId: request.conformance?.correlation?.correlationId ?? null,
+            service: 'federation',
+            requestId: request.id,
+            diagnostic: { endpoint: '/.well-known/openid-federation' }
+          })
+        );
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(entityConfiguration);
       } catch (error) {

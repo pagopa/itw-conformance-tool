@@ -149,11 +149,10 @@ export async function createSubordinate(options: {
   subjectPrivateJwk: JwkKey;
   trustAnchorBaseUrl: string;
 }): Promise<string> {
-  const { federationPrivateJwk, subjectEntityId, subjectKind, subjectPrivateJwk, trustAnchorBaseUrl } = options;
+  const { federationPrivateJwk, subjectEntityId, subjectPrivateJwk, trustAnchorBaseUrl } = options;
 
   const trustAnchorPublicJwk = stripPrivateParams(federationPrivateJwk);
-  const subjectPublicJwk =
-    subjectKind === 'rp' ? await toRpPublicJwk(subjectPrivateJwk) : stripPrivateParams(subjectPrivateJwk);
+  const subjectPublicJwk = stripPrivateParams(subjectPrivateJwk);
 
   // The subject's federation public key must be present so a verifier can validate the
   // entity configuration the subject signs for itself. The Trust Anchor's own signing key

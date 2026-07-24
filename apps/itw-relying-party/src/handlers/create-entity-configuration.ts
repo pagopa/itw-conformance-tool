@@ -1,3 +1,6 @@
+import { createPrivateKey, sign } from 'node:crypto';
+
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import {
   createItWalletEntityConfiguration,
   itWalletMetadataV1_3,
@@ -5,7 +8,7 @@ import {
   type SignCallback
 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
-import { CompactSign, importJWK, SignJWT, type JWK } from 'jose';
+import { importJWK, SignJWT, type JWK } from 'jose';
 import z from 'zod';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -43,25 +46,49 @@ async function createRelyingPartyTrustMark(options: {
 
 export const entityConfigurationResponseSchema = z.string().describe('Signed OpenID Federation entity statement JWT.');
 
+// The SDK builds `toBeSigned` as `base64url(header).base64url(payload)` and appends the
+// bytes we return verbatim as the JWT signature, so we must sign `toBeSigned` itself and
+// return a raw JWS (IEEE P-1363, R||S) signature. Signing directly with node:crypto avoids
+// wrapping `toBeSigned` in a throwaway compact JWS — which would sign a different message
+// and yield an entity configuration no verifier can validate. Mirrors the Trust Anchor's
+// signer (apps/itw-trust-anchor/src/federation/signer.ts).
 const signJwtCallback: SignCallback = async ({ jwk, toBeSigned }) => {
-  const alg = jwk.alg ?? 'ES256';
-  const key = await importJWK(jwk, alg);
-  const jws = await new CompactSign(toBeSigned).setProtectedHeader({ alg }).sign(key);
+  const alg = jwk.alg ?? ENTITY_STATEMENT_SIGNING_ALG;
+  const digestAlgorithm =
+    alg === 'ES256' ? 'sha256' : alg === 'ES384' ? 'sha384' : alg === 'ES512' ? 'sha512' : undefined;
 
-  const parts = jws.split('.');
-  if (parts.length !== 3) {
-    throw new Error('JWS compact format is not valid');
+  if (!digestAlgorithm) {
+    throw new Error(`Unsupported federation signing algorithm: ${alg}`);
   }
 
-  const signatureBase64Url = parts[2];
-  const signatureBase64 = Buffer.from(signatureBase64Url, 'base64url').toString('base64');
-  return new Uint8Array(Buffer.from(signatureBase64, 'base64'));
+  const privateKey = createPrivateKey({ key: jwk, format: 'jwk' });
+  const signature = sign(digestAlgorithm, Buffer.from(toBeSigned), {
+    key: privateKey,
+    dsaEncoding: 'ieee-p1363'
+  });
+
+  return new Uint8Array(signature);
 };
 
 export const createEntityConfigurationHandler = async (
   req: FastifyRequest,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  // The wallet fetches the RP Entity Configuration to discover its metadata and
+  // verifier keys (WP_078 / WP_084). The request carries no scenario
+  // correlation, so it is adopted as uncorrelated evidence narrowed by the
+  // endpoint diagnostic.
+  await req.server.conformanceEventSink.emit(
+    createObservedEvent({
+      name: 'rp.metadata.requested',
+      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
+      correlationId: req.conformance?.correlation?.correlationId ?? null,
+      service: 'relying-party',
+      requestId: req.id,
+      diagnostic: { endpoint: '/.well-known/openid-federation' }
+    })
+  );
+
   const { BASE_URL, TRUST_ANCHOR_URL } = req.server.config;
   const federationPublicKey = req.server.jwks.federation.public;
   const federationPrivateJwk = req.server.jwks.federation.private;
@@ -124,7 +151,8 @@ export const createEntityConfigurationHandler = async (
           trust_mark: trustMark,
           trust_mark_type: getTrustMarkType(TRUST_ANCHOR_URL)
         }
-      ]
+      ],
+      authority_hints: [TRUST_ANCHOR_URL]
     },
     header: {
       alg: ENTITY_STATEMENT_SIGNING_ALG,

@@ -105,7 +105,12 @@ async function createStimulus(
   if (definition.stimulus.type === 'presentation-request') {
     const relyingParty = endpoints.relyingParty;
     if (!relyingParty) throw new Error(`Scenario ${definition.id} requires a Relying Party endpoint`);
-    const uri = await createPresentationRequestUri(relyingParty);
+    // A deep-link engagement drives a same-device flow (the wallet redirects the
+    // user-agent back to the RP), whereas a QR engagement drives a cross-device
+    // flow (the verifier polls status). This decides whether a redirect_uri
+    // follow is expected.
+    const flowType = definition.stimulus.delivery.includes('deep-link') ? 'same-device' : 'cross-device';
+    const uri = await createPresentationRequestUri(relyingParty, flowType);
     return {
       correlationId: extractPresentationCorrelationId(uri),
       stimulus: { type: 'presentation-request', uri, qrCode: uri }
