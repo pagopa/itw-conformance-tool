@@ -65,6 +65,10 @@ export { presentationScenarioRegistry, presentationScenarios } from './scenarios
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';
+export {
+  WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
+  wpUnsupportedCredentialOfferScenario
+} from './scenarios/factories/wp-unsupported-credential-offer.js';
 export { wp077Scenario } from './scenarios/factories/wp-077.js';
 export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export type {

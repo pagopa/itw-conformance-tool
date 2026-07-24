@@ -76,9 +76,10 @@ const mdlInvalidSignatureProfileSchema = z
 
 /**
  * Runtime-validated, discriminated catalog of Credential Issuer fault
- * profiles. Only `invalid-trust-anchor` is wired to a mutation today; the
- * remaining variants are reserved so the shared type, IPC protocol, and
- * catalog metadata do not drift as future fault scenarios are implemented.
+ * profiles. `invalid-trust-anchor` and `unsupported-credential-offer` are
+ * wired to a mutation today; the remaining variants are reserved so the
+ * shared type, IPC protocol, and catalog metadata do not drift as future
+ * fault scenarios are implemented.
  */
 export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   invalidTrustAnchorProfileSchema,

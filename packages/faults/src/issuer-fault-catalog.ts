@@ -42,10 +42,18 @@ const ALL_SPEC_VERSIONS = supportedItWalletSpecVersions;
 /**
  * Associates every catalogued fault `type` with its application point,
  * supported specification versions, mutation timing, and implementation
- * status. Only `invalid-trust-anchor` is `implemented: true` in this
- * increment; every other entry is reserved metadata so the runner, IPC
- * protocol, and CLI can already validate and reject activation requests for
- * profiles that have no Credential Issuer mutation yet.
+ * status. `invalid-trust-anchor` and `unsupported-credential-offer` are
+ * `implemented: true`; every other entry is reserved metadata so the runner,
+ * IPC protocol, and CLI can already validate and reject activation requests
+ * for profiles that have no mutation yet.
+ *
+ * `unsupported-credential-offer`'s application point is `credential-offer`,
+ * but unlike the other profiles it is not mutated by a Credential Issuer
+ * HTTP response: for interactive scenarios the Credential Offer is built by
+ * the conformance runner itself (see `helpers/issuance.ts` and
+ * `runner/scenario-runner.ts` in `@itw-conformance-tool/conformance`), which
+ * applies the mutation after activation is acknowledged, acting as the third
+ * party that presents the offer to the wallet.
  */
 export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerFaultCatalogEntry>> = {
   'invalid-trust-anchor': {
@@ -60,7 +68,7 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
     applicationPoint: 'credential-offer',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'invalid-policy-or-trust-mark': {
     type: 'invalid-policy-or-trust-mark',
