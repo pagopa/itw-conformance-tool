@@ -287,6 +287,7 @@ pnpm remove --global itw-conformance-cli
 
 This repository is a pnpm + Nx TypeScript monorepo.
 
+```text
 apps/
 ├── cli/ # itwct command and service supervision
 ├── itw-credential-issuer/ # Fastify OpenID4VCI service
@@ -301,8 +302,7 @@ packages/
 ├── ipc/ # CLI-to-service lifecycle signaling
 ├── logger/ # shared structured logger
 └── utils/ # shared types and utilities
-
-````
+```
 
 The conformance package is the core testing pipeline:
 
@@ -319,7 +319,7 @@ corepack enable
 corepack prepare pnpm@11.13.1 --activate
 pnpm install --frozen-lockfile
 pnpm build
-````
+```
 
 Nx targets can be invoked per project when iterating:
 
