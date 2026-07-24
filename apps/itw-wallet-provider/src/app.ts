@@ -3,23 +3,14 @@ import path from 'node:path';
 import FastifyAutoLoad from '@fastify/autoload';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 
-import configPlugin from './plugins/config.js';
-import conformancePlugin from './plugins/conformance.js';
-import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
-import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
-import sensiblePlugin from './plugins/external/sensible.js';
-import swaggerPlugin from './plugins/external/swagger.js';
-import keysPlugin from './plugins/keys.js';
-
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
-  await app.register(configPlugin);
-  await app.register(keysPlugin);
-  await app.register(conformancePlugin);
-
-  await app.register(corsPlugin, corsConfig);
-  await app.register(helmetPlugin, helmetConfig);
-  await app.register(sensiblePlugin);
-  await app.register(swaggerPlugin);
+  app.register(FastifyAutoLoad, {
+    dir: path.join(import.meta.dirname, 'plugins'),
+    autoHooks: true,
+    autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
+    cascadeHooks: true,
+    options: { ...opts }
+  });
 
   app.register(FastifyAutoLoad, {
     dir: path.join(import.meta.dirname, 'routes'),

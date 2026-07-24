@@ -7,3 +7,6 @@ export {
   testCategoryNames,
   type TestCategory
 } from './test-categories.js';
+export * from './json-schema.js';
+export * from './result.js';
+export * from './matchers.js';

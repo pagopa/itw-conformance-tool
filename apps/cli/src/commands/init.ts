@@ -28,6 +28,7 @@ type InitConfig = {
   'relying-party': Pick<ConfigSchemaType['relying-party'], 'url'>;
   'trust-anchor': Pick<ConfigSchemaType['trust-anchor'], 'entity_id'>;
   'credential-issuer': Pick<ConfigSchemaType['credential-issuer'], 'url'>;
+  'wallet-provider': Pick<ConfigSchemaType['wallet-provider'], 'local_url'>;
 };
 
 /** Initializes the configuration file.
@@ -50,7 +51,8 @@ function checkConfig(flags: InitFlags): InitConfig {
     global: rawConfigs.global,
     'relying-party': rawConfigs['relying-party'],
     'trust-anchor': rawConfigs['trust-anchor'],
-    'credential-issuer': rawConfigs['credential-issuer']
+    'credential-issuer': rawConfigs['credential-issuer'],
+    'wallet-provider': rawConfigs['wallet-provider']
   };
   const dataDirExists = existsSync(configs.global.data_dir) && statSync(configs.global.data_dir).isDirectory();
   mkdirSync(configs.global.data_dir, { recursive: true });
@@ -204,7 +206,8 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
   }
 
   const walletProviderKeysPath = join(walletProviderDirPath, 'jwks.json');
-  if (!existsFileSync(walletProviderKeysPath) || flags.force) {
+  const walletProviderSigningKeysGenerated = !existsFileSync(walletProviderKeysPath) || flags.force;
+  if (walletProviderSigningKeysGenerated) {
     const walletProviderPrivateKeys = createWalletProviderPrivateKeys();
     writeFileSync(walletProviderKeysPath, JSON.stringify(walletProviderPrivateKeys, null, 2), {
       encoding: 'utf8',
@@ -213,6 +216,24 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     process.stdout.write(`✓ Generated wallet-provider signing keys → ${walletProviderKeysPath}\n`);
   } else {
     process.stdout.write(`⚠ Wallet-provider keys already exist → skipped (use --force to regenerate)\n`);
+  }
+
+  const walletProviderCertPath = join(walletProviderDirPath, 'cert.pem');
+  if (!existsFileSync(walletProviderCertPath) || flags.force || walletProviderSigningKeysGenerated) {
+    const walletProviderJwks = JSON.parse(readFileSync(walletProviderKeysPath, 'utf8')) as Parameters<
+      typeof selectEs256SigningJwk
+    >[0];
+    const walletProviderSigningJwk = selectEs256SigningJwk(walletProviderJwks, 'wallet-provider-signing-key');
+    const commonName = new URL(configs['wallet-provider'].local_url).hostname;
+    const walletProviderCertificate = await createSelfSignedCertificateFromJwk(walletProviderSigningJwk, {
+      commonName,
+      organizationalUnitName: 'Wallet Provider'
+    });
+
+    writeFileSync(walletProviderCertPath, walletProviderCertificate, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated wallet-provider certificate → ${walletProviderCertPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Wallet-provider certificate already exists → skipped (use --force to regenerate)\n`);
   }
 
   const rpCertPath = join(rpDirPath, 'cert.pem');

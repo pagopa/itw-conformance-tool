@@ -1,9 +1,10 @@
+import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
+
 import {
   getAuthorizationRequestHandler,
   getAuthorizationRequestParamsSchema,
   getAuthorizationRequestResponseSchema
 } from '../handlers/get-authorization-request.js';
-import { toFastifyJsonSchema } from '../utils/json-schema.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 

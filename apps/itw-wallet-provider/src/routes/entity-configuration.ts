@@ -7,15 +7,12 @@ import {
 
 import type { FastifyPluginAsync } from 'fastify';
 
-const entityConfigurationRoute: FastifyPluginAsync = async (app) => {
+const federationRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/.well-known/openid-federation',
     method: 'GET',
     schema: {
-      operationId: 'getEntityConfiguration',
-      summary: 'Fetch the OpenID Federation entity statement',
-      description: 'Returns the signed entity configuration for the relying party as an entity-statement JWT.',
-      tags: ['Entity Configuration'],
+      tags: ['Federation'],
       produces: ['application/entity-statement+jwt'],
       response: {
         200: {
@@ -28,4 +25,4 @@ const entityConfigurationRoute: FastifyPluginAsync = async (app) => {
   });
 };
 
-export default entityConfigurationRoute;
+export default federationRoute;
