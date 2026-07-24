@@ -31,6 +31,7 @@ import {
   issuanceScenarioRegistry,
   wp046aScenario,
   wp054MissingCodeScenario,
+  wp054aInvalidStateScenario,
   wpCiHappyScenario
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
@@ -834,9 +835,10 @@ describe('Test Cases for Issuance Phase', () => {
   // requires a live Authorization request_uri from a fresh PAR/authorize
   // round-trip, so it cannot be probed out-of-band with a plain HTTP request
   // after the scenario ends. Instead, cleanup is verified with a
-  // control-channel probe (see "WP_054 cleanup" below): if any variant leaked
-  // its active fault, activating a fresh profile for an unrelated scenario ID
-  // would be rejected by the Credential Issuer's single-active-fault store.
+  // control-channel probe (see "Authorization Response fault cleanup" below):
+  // if any variant leaked its active fault, activating a fresh profile for an
+  // unrelated scenario ID would be rejected by the Credential Issuer's
+  // single-active-fault store.
   describe('WP_054 (missing code)', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
@@ -891,21 +893,75 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe('WP_054 cleanup', () => {
-    test('the authorization-response-missing-claim fault is deactivated and a later scenario can activate a fresh profile', async () => {
+  describe('WP_054a (invalid state)', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp054aInvalidStateScenario.id);
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp054aInvalidStateScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_054a: Wallet Instance rejects an Authorization Response with mismatched state.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const authorizationEvent = events.find((event) => event.name === 'issuer.authorization.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          authorizationEvent,
+          'Wallet must request the Credential Issuer Authorization Endpoint before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The authorization-response-invalid-state fault must have been applied while serving /code/jwt'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('authorization-response-invalid-state');
+        expect(faultAppliedEvent?.diagnostic?.['mutatedClaim']).toBe('state');
+
+        expect(
+          events.find((event) => event.name === 'issuer.token.requested'),
+          'Wallet must not continue to the Token Endpoint after an Authorization Response with mismatched state'
+        ).toBeUndefined();
+        expect(
+          events.find((event) => event.name === 'issuer.nonce.requested'),
+          'Wallet must not continue to the Nonce Endpoint after a mismatched Authorization Response state'
+        ).toBeUndefined();
+        expect(
+          events.find((event) => event.name === 'issuer.credential.requested'),
+          'Wallet must not continue to the Credential Endpoint after a mismatched Authorization Response state'
+        ).toBeUndefined();
+      },
+      wp054aInvalidStateScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('Authorization Response fault cleanup', () => {
+    test('authorization-response faults are deactivated and a later scenario can activate a fresh profile', async () => {
       // Each `session.stop()` above already deactivates its own fault, but if
-      // any of the three WP_054 variants had leaked its active fault, this
-      // activation (for an unrelated scenario ID) would be rejected with
-      // FAULT_ALREADY_ACTIVE by the Credential Issuer's single-active-fault
-      // store. Successfully activating and deactivating here is a
-      // control-channel probe proving cleanup worked and a later scenario can
-      // still activate a fresh implemented profile.
+      // any Authorization Response negative scenario had leaked its active
+      // fault, this activation (for an unrelated scenario ID) would be
+      // rejected with FAULT_ALREADY_ACTIVE by the Credential Issuer's
+      // single-active-fault store. Successfully activating and deactivating
+      // here is a control-channel probe proving cleanup worked and a later
+      // scenario can still activate a fresh implemented profile.
       const probeScenarioId = `wp054-cleanup-probe-${randomUUID()}`;
 
       await issuerFaultController.activateIssuerFault({
         scenarioId: probeScenarioId,
         specVersion: '1.4',
-        profile: { type: 'authorization-response-missing-claim', claim: 'code' }
+        profile: { type: 'authorization-response-invalid-state' }
       });
 
       await issuerFaultController.deactivateIssuerFault({ scenarioId: probeScenarioId });

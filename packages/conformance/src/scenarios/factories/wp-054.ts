@@ -98,6 +98,4 @@ function createWp054Scenario(claim: Wp054MissingClaim): ProtocolObservedScenario
 
 export const wp054MissingCodeScenario = createWp054Scenario('code');
 
-export const wp054Scenarios: ProtocolObservedScenarioDefinition[] = [
-  wp054MissingCodeScenario
-];
+export const wp054Scenarios: ProtocolObservedScenarioDefinition[] = [wp054MissingCodeScenario];

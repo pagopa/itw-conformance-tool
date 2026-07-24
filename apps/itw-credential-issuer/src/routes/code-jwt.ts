@@ -7,6 +7,10 @@ import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from
 
 import type { FastifyPluginAsync } from 'fastify';
 
+type AuthorizationResponseFaultProfile =
+  | { readonly type: 'authorization-response-missing-claim'; readonly claim: 'code' | 'iss' | 'state' }
+  | { readonly type: 'authorization-response-invalid-state' };
+
 function sha256HashArtifact(value: string): string {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
 }
@@ -29,8 +33,12 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
       const requestUri = (request.query as { request_uri: string }).request_uri;
       const { baseURL, sdkConfig } = makeOauthCallbacks(app, request);
       const activeFault = app.issuerFaultStore.getActive();
-      const missingClaimProfile =
-        activeFault?.profile.type === 'authorization-response-missing-claim' ? activeFault.profile : undefined;
+      const authorizationResponseFault = [
+        'authorization-response-missing-claim',
+        'authorization-response-invalid-state'
+      ].includes(activeFault?.profile.type ?? '')
+        ? (activeFault?.profile as AuthorizationResponseFaultProfile)
+        : undefined;
 
       try {
         const service = new CodeJwtService({
@@ -39,9 +47,16 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
           parRepository: makeCodeJwtParRepository(app)
         });
 
-        const result = await service.createAuthorizationCodeJwt(requestUri, missingClaimProfile?.claim);
+        const mutation =
+          authorizationResponseFault?.type === 'authorization-response-missing-claim'
+            ? { type: 'omit-claim' as const, claim: authorizationResponseFault.claim }
+            : authorizationResponseFault?.type === 'authorization-response-invalid-state'
+              ? { type: 'replace-state' as const }
+              : undefined;
 
-        if (missingClaimProfile && activeFault) {
+        const result = await service.createAuthorizationCodeJwt(requestUri, mutation);
+
+        if (authorizationResponseFault && activeFault) {
           // Emission failures must not be reported as a successfully applied
           // fault: any error here surfaces through the outer catch below (as
           // a 500), rather than emitting a false "applied" event.
@@ -53,8 +68,10 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
               requestId: request.id,
               diagnostic: {
                 endpoint: '/code/jwt',
-                faultProfileType: missingClaimProfile.type,
-                omittedClaim: missingClaimProfile.claim,
+                faultProfileType: authorizationResponseFault.type,
+                ...(authorizationResponseFault.type === 'authorization-response-missing-claim'
+                  ? { omittedClaim: authorizationResponseFault.claim }
+                  : { mutatedClaim: 'state' }),
                 scenarioId: activeFault.scenarioId,
                 resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
                 artifactHash: sha256HashArtifact(result.jwt),

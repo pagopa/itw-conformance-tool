@@ -42,11 +42,10 @@ const ALL_SPEC_VERSIONS = supportedItWalletSpecVersions;
 /**
  * Associates every catalogued fault `type` with its application point,
  * supported specification versions, mutation timing, and implementation
- * status. Only `invalid-trust-anchor` and `authorization-response-missing-claim`
- * are `implemented: true` so far; every other entry is reserved metadata so
+ * status. Only entries whose Credential Issuer mutation is wired should be
+ * marked `implemented: true`; the remaining entries are reserved metadata so
  * the runner, IPC protocol, and CLI can already validate and reject
- * activation requests for profiles that have no Credential Issuer mutation
- * yet.
+ * activation requests for profiles that have no mutation yet.
  */
 export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerFaultCatalogEntry>> = {
   'invalid-trust-anchor': {
@@ -82,7 +81,7 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'authorization-response-invalid-issuer': {
     type: 'authorization-response-invalid-issuer',

@@ -27,6 +27,9 @@ export interface ICodeJwtParRepository {
  */
 export type AuthorizationResponseClaim = 'code' | 'iss' | 'state';
 
+export type AuthorizationResponseMutation =
+  { readonly type: 'omit-claim'; readonly claim: AuthorizationResponseClaim } | { readonly type: 'replace-state' };
+
 export interface CreateAuthorizationCodeJwtResult {
   readonly formPost: string;
   readonly redirectUri: string;
@@ -46,6 +49,10 @@ export class InvalidRequestUriError extends Error {
   }
 }
 
+export function createInvalidAuthorizationResponseState(originalState: string | undefined): string {
+  return `${originalState ?? ''}.itwct-invalid-state`;
+}
+
 export class CodeJwtService {
   private readonly baseURL: string;
   private readonly jwksRepository: JwksRepository;
@@ -59,7 +66,7 @@ export class CodeJwtService {
 
   async createAuthorizationCodeJwt(
     requestUri: string,
-    omittedClaim?: AuthorizationResponseClaim
+    mutation?: AuthorizationResponseMutation
   ): Promise<CreateAuthorizationCodeJwtResult> {
     const parEntry = await this.parRepository.get(requestUri);
 
@@ -71,7 +78,7 @@ export class CodeJwtService {
     const codeExpiresAt = Math.floor(Date.now() / 1000) + AUTHORIZATION_CODE_TTL_SECONDS;
 
     const { private: privateSig } = this.jwksRepository.getSign();
-    const importSig = await importJWK(privateSig);
+    const importSig = await importJWK(privateSig, 'ES256');
 
     // Build the nominal claim set first, then remove only the requested
     // claim, so the fault mutates the same response the wallet would
@@ -82,8 +89,12 @@ export class CodeJwtService {
       iss: this.baseURL
     };
 
-    if (omittedClaim) {
-      delete responseClaims[omittedClaim];
+    if (mutation?.type === 'omit-claim') {
+      delete responseClaims[mutation.claim];
+    }
+
+    if (mutation?.type === 'replace-state') {
+      responseClaims.state = createInvalidAuthorizationResponseState(parEntry.state);
     }
 
     const jwt = await new SignJWT(responseClaims)
