@@ -8,7 +8,7 @@ import {
 import { ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import { decodeJwt } from 'jose';
 
-import { createDisabilityCardCredential } from '../credentials/disability-card.js';
+import { DISABILITY_CARD_ID, createDisabilityCardCredential } from '../credentials/disability-card.js';
 import { createPidCredential } from '../credentials/pid.js';
 import { generateFakeUser } from '../faker.js';
 import { createMdocCredential, getMdocCredentialDefinition } from '../mdoc/index.js';
@@ -21,6 +21,10 @@ import {
 } from './credential-request-auth-service.js';
 
 import type { FakeUser } from '../faker.js';
+import type {
+  DigitalCredentialClaimsFaultMutationEvidence,
+  DigitalCredentialClaimsFaultProfile
+} from '../faults/digital-credential-claims-fault.js';
 import type { SupportedCredentialsId } from '../z-credential.js';
 import type { IDeferredCredentialRepository, INonceRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext, JwtPayload } from '@pagopa/io-wallet-oauth2';
@@ -58,6 +62,8 @@ export interface CreateCredentialOptions {
   body: string;
   callbacks: Pick<CallbackContext, 'hash' | 'verifyJwt'>;
   config: IoWalletSdkConfig;
+  /** The active WP_060 fault profile, if any; narrowed and passed in by the route (see routes/credential.ts). */
+  digitalCredentialClaimsFaultProfile?: DigitalCredentialClaimsFaultProfile;
   headers: Headers;
   method: HttpMethod;
   trustedWalletProviderIssuers: readonly string[];
@@ -65,6 +71,13 @@ export interface CreateCredentialOptions {
 }
 
 export interface CreateCredentialResult {
+  /**
+   * Present only when `digitalCredentialClaimsFaultProfile` was provided and
+   * successfully applied while creating the Digital Credential(s); lets the
+   * route emit `issuer.fault.applied` only for a mutation that actually
+   * happened (see `routes/credential.ts`).
+   */
+  digitalCredentialClaimsFaultEvidence?: DigitalCredentialClaimsFaultMutationEvidence;
   /** Raw SDK result; the actual JSON body to send is `sdkResult.credentialResponse`. */
   sdkResult: CreateCredentialResponseResult;
   /** Whether the request was answered immediately (`200`) or deferred (`202`). */
@@ -156,6 +169,7 @@ export class CredentialService {
 
     const credentials: string[] = [];
     const noncesToConsume = new Set<string>();
+    let digitalCredentialClaimsFaultEvidence: DigitalCredentialClaimsFaultMutationEvidence | undefined;
 
     for (const proof of proofs) {
       const jwt = proof.jwt;
@@ -198,16 +212,20 @@ export class CredentialService {
         throw new CreateCredentialError('Private keys are not allowed in the proof JWT!');
       }
 
-      const credential = await this.#createCredentialByConfiguration(
+      const { credential, faultEvidence } = await this.#createCredentialByConfiguration(
         credentialIdentifier,
         options.baseURL,
         options.config,
         fakeUser,
         holderPublicKey.data,
-        accessTokenPayload
+        accessTokenPayload,
+        options.digitalCredentialClaimsFaultProfile
       );
 
       credentials.push(credential);
+      if (faultEvidence) {
+        digitalCredentialClaimsFaultEvidence = faultEvidence;
+      }
     }
 
     for (const nonce of noncesToConsume) {
@@ -219,11 +237,11 @@ export class CredentialService {
 
     if (options.batchIssuanceByDeferred && credentials.length > 1) {
       const sdkResult = await this.#buildDeferredCredentialResponse(options, credentials, sub, jkt);
-      return { sdkResult, status: 'deferred' };
+      return { digitalCredentialClaimsFaultEvidence, sdkResult, status: 'deferred' };
     }
 
     const sdkResult = await this.#buildCredentialResponse(options, credentials);
-    return { sdkResult, status: 'immediate' };
+    return { digitalCredentialClaimsFaultEvidence, sdkResult, status: 'immediate' };
   }
 
   async #verifyCredentialProof(
@@ -346,10 +364,16 @@ export class CredentialService {
     config: IoWalletSdkConfig,
     fakeUser: FakeUser,
     holderPublicKey: JwkPublicKey,
-    accessTokenPayload?: JwtPayload & { auth_flow?: string }
-  ): Promise<string> {
+    accessTokenPayload?: JwtPayload & { auth_flow?: string },
+    activeFaultProfile?: DigitalCredentialClaimsFaultProfile
+  ): Promise<{ credential: string; faultEvidence?: DigitalCredentialClaimsFaultMutationEvidence }> {
     if (credentialIdentifier === 'dc_sd_jwt_PersonIdentificationData') {
-      return createPidCredential(
+      if (activeFaultProfile) {
+        throw new CreateCredentialError(
+          `The digital-credential-claims-invalid fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
+        );
+      }
+      const credential = await createPidCredential(
         baseURL,
         this.#jwksRepository,
         holderPublicKey,
@@ -357,10 +381,18 @@ export class CredentialService {
         fakeUser,
         accessTokenPayload?.auth_flow
       );
+      return { credential };
     }
 
     if (credentialIdentifier === 'dc_sd_jwt_EuropeanDisabilityCard') {
-      return createDisabilityCardCredential(baseURL, this.#jwksRepository, holderPublicKey, config, fakeUser);
+      return createDisabilityCardCredential(
+        baseURL,
+        this.#jwksRepository,
+        holderPublicKey,
+        config,
+        fakeUser,
+        activeFaultProfile
+      );
     }
 
     if (
@@ -369,8 +401,14 @@ export class CredentialService {
       credentialIdentifier === 'mso_mdoc_CompanyBadge' ||
       credentialIdentifier === 'mso_mdoc_PersonIdentificationData'
     ) {
+      if (activeFaultProfile) {
+        throw new CreateCredentialError(
+          `The digital-credential-claims-invalid fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
+        );
+      }
       const document = getMdocCredentialDefinition(credentialIdentifier, config, holderPublicKey, fakeUser);
-      return createMdocCredential(document, this.#jwksRepository, holderPublicKey);
+      const credential = await createMdocCredential(document, this.#jwksRepository, holderPublicKey);
+      return { credential };
     }
 
     const unsupportedIdentifier: never = credentialIdentifier;

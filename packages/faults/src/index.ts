@@ -1,8 +1,10 @@
 export {
   credentialResponseFaultParameters,
+  digitalCredentialClaimsFaultVariants,
   issuerFaultProfileSchema,
   parseIssuerFaultProfile,
   type CredentialResponseFaultParameter,
+  type DigitalCredentialClaimsFaultVariant,
   type IssuerFaultProfile,
   type IssuerFaultProfileType
 } from './issuer-fault-profile.js';

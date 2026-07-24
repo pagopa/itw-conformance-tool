@@ -3,12 +3,17 @@ import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils
 import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
 import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
 
+import { applyDigitalCredentialClaimsFault } from '../faults/digital-credential-claims-fault.js';
 import { createSRIHash, createSignerVerifier } from '../sd-jwt.js';
 import { createBase64Portrait } from '../utils/portrait.js';
 import { STATUS_LIST_URI } from '../utils/status-list.js';
 import { DISABILITY_CARD_SCOPE, DISABILITY_CARD_VCT } from '../z-credential.js';
 
 import type { FakeUser } from '../faker.js';
+import type {
+  DigitalCredentialClaimsFaultMutationEvidence,
+  DigitalCredentialClaimsFaultProfile
+} from '../faults/digital-credential-claims-fault.js';
 import type { JwksRepository } from '../signer.js';
 import type { JwkPublicKey } from '../z-jwk.js';
 import type { DisclosureFrame } from '@sd-jwt/types';
@@ -16,13 +21,28 @@ import type { DisclosureFrame } from '@sd-jwt/types';
 export { DISABILITY_CARD_SCOPE, DISABILITY_CARD_VCT };
 export const DISABILITY_CARD_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
 
+export class DigitalCredentialClaimsFaultApplicationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DigitalCredentialClaimsFaultApplicationError';
+    Object.setPrototypeOf(this, DigitalCredentialClaimsFaultApplicationError.prototype);
+  }
+}
+
+export interface CreateDisabilityCardCredentialResult {
+  credential: string;
+  /** Present only when `activeFaultProfile` was provided and successfully applied. */
+  faultEvidence?: DigitalCredentialClaimsFaultMutationEvidence;
+}
+
 export async function createDisabilityCardCredential(
   iss: string,
   jwksRepository: JwksRepository,
   holderPublicKey: JwkPublicKey,
   config: IoWalletSdkConfig,
-  fakeUser: FakeUser
-): Promise<string> {
+  fakeUser: FakeUser,
+  activeFaultProfile?: DigitalCredentialClaimsFaultProfile
+): Promise<CreateDisabilityCardCredentialResult> {
   const jwks = jwksRepository.getSign();
 
   const [signer, verifier] = await createSignerVerifier({
@@ -76,35 +96,56 @@ export async function createDisabilityCardCredential(
     throw new Error('Unable to issue disability card credential: missing subject identifier');
   }
 
-  const credential = await sdjwt.issue(
-    {
-      cnf: { jwk: holderPublicKey },
-      exp: Math.floor(expiration.getTime() / 1000),
-      iat: Math.floor(now.getTime() / 1000),
-      iss,
-      status: {
-        ...(config.isVersion(ItWalletSpecsVersion.V1_0) && {
-          status_assertion: { credential_hash_alg: 'sha-256' }
-        }),
-        status_list: {
-          idx: 1,
-          uri: STATUS_LIST_URI(iss)
-        }
-      },
-      sub: subject,
-      vct: DISABILITY_CARD_VCT,
-      'vct#integrity': vctIntegrity,
-      ...claims
-    },
-    disclosureFrame,
-    {
-      header: {
-        kid: jwks.private.kid,
-        typ: 'dc+sd-jwt',
-        x5c: jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
+  // Assemble the complete unsigned payload first so an optional WP_060 fault
+  // (see digital-credential-claims-fault.ts) can be applied to it before
+  // signing, keeping the resulting SD-JWT VC validly signed while only its
+  // semantic content is defective.
+  const unsignedPayload = {
+    cnf: { jwk: holderPublicKey },
+    exp: Math.floor(expiration.getTime() / 1000),
+    iat: Math.floor(now.getTime() / 1000),
+    iss,
+    status: {
+      ...(config.isVersion(ItWalletSpecsVersion.V1_0) && {
+        status_assertion: { credential_hash_alg: 'sha-256' }
+      }),
+      status_list: {
+        idx: 1,
+        uri: STATUS_LIST_URI(iss)
       }
-    }
-  );
+    },
+    sub: subject,
+    vct: DISABILITY_CARD_VCT,
+    'vct#integrity': vctIntegrity,
+    ...claims
+  };
 
-  return credential;
+  let payloadToSign: typeof unsignedPayload = unsignedPayload;
+  let faultEvidence: DigitalCredentialClaimsFaultMutationEvidence | undefined;
+
+  if (activeFaultProfile) {
+    const mutation = applyDigitalCredentialClaimsFault({ profile: activeFaultProfile, claims: unsignedPayload });
+    if (!mutation.ok) {
+      throw new DigitalCredentialClaimsFaultApplicationError(
+        `Unable to apply the digital-credential-claims-invalid fault to the disability card credential: ${mutation.reason}`
+      );
+    }
+
+    // The mutated claims may be missing `issuing_country` (schema-invalid
+    // variant), so it is only structurally compatible with the nominal
+    // payload type, not identical to it; the runtime shape is exactly what
+    // the fault helper's own tests verify.
+    payloadToSign = mutation.mutation.claims as typeof unsignedPayload;
+    faultEvidence = mutation.mutation.evidence;
+  }
+
+  const credential = await sdjwt.issue(payloadToSign, disclosureFrame, {
+    header: {
+      kid: jwks.private.kid,
+      typ: 'dc+sd-jwt',
+      x5c: jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
+    }
+  });
+
+  return { credential, faultEvidence };
 }

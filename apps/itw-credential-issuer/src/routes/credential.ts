@@ -10,7 +10,8 @@ import {
   formatSpecVersionHeader,
   InvalidProofError,
   type ActiveIssuerFault,
-  type CredentialResponseFaultProfile
+  type CredentialResponseFaultProfile,
+  type DigitalCredentialClaimsFaultProfile
 } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
@@ -43,6 +44,13 @@ function isCredentialResponseFault(
   return fault?.profile.type === 'edc-missing-required-claims';
 }
 
+/** Narrows an active issuer fault to the WP_060 Digital Credential claims profile, so its `variant` field is accessible. */
+function isDigitalCredentialClaimsFault(
+  fault: ActiveIssuerFault | undefined
+): fault is ActiveIssuerFault & { profile: DigitalCredentialClaimsFaultProfile } {
+  return fault?.profile.type === 'digital-credential-claims-invalid';
+}
+
 const credentialRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/credential',
@@ -59,6 +67,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
       const dpopProof = firstHeaderValue(request.headers.dpop);
       const activeFault = app.issuerFaultStore.getActive();
       const credentialResponseFault = isCredentialResponseFault(activeFault) ? activeFault : undefined;
+      const digitalCredentialClaimsFault = isDigitalCredentialClaimsFault(activeFault) ? activeFault : undefined;
 
       reply.header('Cache-Control', 'no-store');
 
@@ -77,6 +86,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
             verifyJwt: oauthCallbacks.verifyJwt
           },
           config: sdkConfig,
+          digitalCredentialClaimsFaultProfile: digitalCredentialClaimsFault?.profile,
           headers,
           method: request.method as HttpMethod,
           trustedWalletProviderIssuers: app.config.TRUSTED_WALLET_PROVIDER_ISSUERS,
@@ -103,6 +113,28 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
 
         const statusCode = result.status === 'deferred' ? 202 : 200;
         let responseBody: unknown = result.sdkResult.credentialResponse ?? result.sdkResult;
+
+        if (digitalCredentialClaimsFault && result.digitalCredentialClaimsFaultEvidence) {
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.fault.applied',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/credential',
+                faultProfileType: digitalCredentialClaimsFault.profile.type,
+                scenarioId: digitalCredentialClaimsFault.scenarioId,
+                resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
+                ...result.digitalCredentialClaimsFaultEvidence,
+                artifactHash: sha256HashArtifact(JSON.stringify(responseBody)),
+                statusCode,
+                contentType: 'application/json',
+                outcome: 'applied'
+              }
+            })
+          );
+        }
 
         if (credentialResponseFault && result.status === 'immediate') {
           const mutation = applyCredentialResponseFault({

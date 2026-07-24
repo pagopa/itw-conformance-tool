@@ -84,10 +84,32 @@ const mdlInvalidSignatureProfileSchema = z
   .strict();
 
 /**
+ * WP_060 variants: `type-mismatch` replaces the issued Digital Credential's
+ * `vct` with a reserved, collision-resistant test URN so it no longer
+ * matches the requested/published Credential type; `schema-invalid` keeps
+ * the nominal `vct` but omits the required, non-selectively-disclosable
+ * `issuing_country` Digital Credential Data Model claim. Both are mutated
+ * before signing (see `mutationTiming: 'pre-signature'` in the catalog) so
+ * the resulting SD-JWT VC remains validly signed; only its semantic content
+ * is defective.
+ */
+export const digitalCredentialClaimsFaultVariants = ['type-mismatch', 'schema-invalid'] as const;
+
+export type DigitalCredentialClaimsFaultVariant = (typeof digitalCredentialClaimsFaultVariants)[number];
+
+const digitalCredentialClaimsInvalidProfileSchema = z
+  .object({
+    type: z.literal('digital-credential-claims-invalid'),
+    variant: z.enum(digitalCredentialClaimsFaultVariants)
+  })
+  .strict();
+
+/**
  * Runtime-validated, discriminated catalog of Credential Issuer fault
  * profiles. `invalid-trust-anchor`, `authorization-response-missing-claim`,
- * `authorization-response-invalid-state`, and
- * `authorization-response-invalid-issuer` are wired to a mutation today; the
+ * `authorization-response-invalid-state`,
+ * `authorization-response-invalid-issuer`, and
+ * `digital-credential-claims-invalid` are wired to a mutation today; the
  * remaining variants are reserved so the shared type, IPC protocol, and
  * catalog metadata do not drift as future fault scenarios are implemented.
  */
@@ -101,7 +123,8 @@ export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   edcMissingRequiredClaimsProfileSchema,
   edcInvalidTrustChainProfileSchema,
   edcInvalidSignatureProfileSchema,
-  mdlInvalidSignatureProfileSchema
+  mdlInvalidSignatureProfileSchema,
+  digitalCredentialClaimsInvalidProfileSchema
 ]);
 
 export type IssuerFaultProfile = z.infer<typeof issuerFaultProfileSchema>;

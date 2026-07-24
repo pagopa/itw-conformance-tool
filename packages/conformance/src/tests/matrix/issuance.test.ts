@@ -33,6 +33,7 @@ import {
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario,
   wp059Scenario,
+  wp060TypeMismatchScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -1244,6 +1245,86 @@ describe('Test Cases for Issuance Phase', () => {
         // apps/itw-credential-issuer/src/domain/faults/credential-response-fault.test.ts.
       },
       wp059Scenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe.each([
+    {
+      scenario: wp060TypeMismatchScenario,
+      label: 'type-mismatch',
+      testTitle: "WP_060: Wallet Instance rejects a Digital Credential whose 'vct' does not match the requested type."
+    }
+  ])('WP_060 ($label)', ({ scenario, label, testTitle }) => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, scenario.timeouts.vitestTestMs);
+
+    test(
+      testTitle,
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The digital-credential-claims-invalid fault must have been applied while serving the Credential Response'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('digital-credential-claims-invalid');
+        expect(faultAppliedEvent?.diagnostic?.['variant']).toBe(label);
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        if (label === 'type-mismatch') {
+          const expectedVct = faultAppliedEvent?.diagnostic?.['expectedVct'];
+          const injectedVct = faultAppliedEvent?.diagnostic?.['injectedVct'];
+
+          expect(typeof expectedVct).toBe('string');
+          expect(typeof injectedVct).toBe('string');
+          expect(
+            injectedVct,
+            'The injected vct must differ from the nominal/requested Digital Credential type'
+          ).not.toBe(expectedVct);
+        } else {
+          expect(
+            faultAppliedEvent?.diagnostic?.['omittedClaim'],
+            'The fault must report issuing_country as the only omitted required claim'
+          ).toBe('issuing_country');
+        }
+
+        // Protocol-observed evidence proves the defective credential was delivered exactly as
+        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
+        // certifies fault delivery. The operator-facing instructions above require confirming the
+        // wallet's visible error/rejection separately (see instructions.steps in wp-060.ts).
+        //
+        // Signature validity and single-defect isolation for each generated credential are proven
+        // by the focused unit tests in
+        // apps/itw-credential-issuer/src/domain/credentials/disability-card.test.ts.
+      },
+      scenario.timeouts.vitestTestMs
     );
   });
 });

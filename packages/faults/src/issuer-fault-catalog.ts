@@ -55,6 +55,16 @@ const ALL_SPEC_VERSIONS = supportedItWalletSpecVersions;
 const CREDENTIAL_RESPONSE_TESTED_SPEC_VERSIONS = ['1.4'] as const satisfies readonly SupportedItWalletSpecVersion[];
 
 /**
+ * Specification versions verified for the `digital-credential-claims-invalid`
+ * (WP_060) pre-signature mutation. Limited to `1.4`, the version targeted by
+ * this increment's scenario and matrix test, until `1.0` and `1.3` have their
+ * own verified fixtures; see the plan's "Version drift" risk note.
+ */
+const DIGITAL_CREDENTIAL_CLAIMS_TESTED_SPEC_VERSIONS = [
+  '1.4'
+] as const satisfies readonly SupportedItWalletSpecVersion[];
+
+/**
  * Associates every catalogued fault `type` with its application point,
  * supported specification versions, mutation timing, and implementation
  * status. `invalid-trust-anchor` and `unsupported-credential-offer` are
@@ -140,6 +150,13 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'post-serialization',
     implemented: false
+  },
+  'digital-credential-claims-invalid': {
+    type: 'digital-credential-claims-invalid',
+    applicationPoint: 'edc-claims',
+    supportedSpecVersions: DIGITAL_CREDENTIAL_CLAIMS_TESTED_SPEC_VERSIONS,
+    mutationTiming: 'pre-signature',
+    implemented: true
   }
 };
 
