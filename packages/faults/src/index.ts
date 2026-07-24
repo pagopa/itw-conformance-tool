@@ -1,8 +1,8 @@
 export {
-  edcRequiredClaims,
+  credentialResponseFaultParameters,
   issuerFaultProfileSchema,
   parseIssuerFaultProfile,
-  type EdcRequiredClaim,
+  type CredentialResponseFaultParameter,
   type IssuerFaultProfile,
   type IssuerFaultProfileType
 } from './issuer-fault-profile.js';

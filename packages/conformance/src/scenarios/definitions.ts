@@ -21,9 +21,27 @@ export type ScenarioStimulus =
   | { type: 'web-url'; url: string; qrCode?: string };
 
 export interface TimeoutProfile {
+  /**
+   * How long to keep watching for forbidden events after the entry event
+   * before concluding none occurred. Optional; falls back to `protocolStepMs`
+   * when not set (see `resolveTimeoutProfile`).
+   */
   forbiddenObservationMs?: number;
+  /**
+   * Max time to wait for each subsequent required event once the protocol
+   * exchange has started (i.e. after the entry event has been observed).
+   */
   protocolStepMs: number;
+  /**
+   * Max time to wait for the entry event, i.e. for the tester to perform the
+   * manual action (e.g. scan the QR code / open the deep link) that kicks
+   * off the wallet interaction.
+   */
   testerActionMs: number;
+  /**
+   * Overall timeout for the Vitest test case running the scenario. Optional;
+   * defaults to `testerActionMs + protocolStepMs` when not set.
+   */
   vitestTestMs?: number;
 }
 

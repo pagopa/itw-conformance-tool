@@ -23,10 +23,16 @@ export type IssuerFaultApplicationPoint =
   | 'edc-claims'
   | 'edc-header'
   | 'edc-serialization'
-  | 'mdl-serialization';
+  | 'mdl-serialization'
+  | 'credential-response';
 
-/** Whether the mutation happens on unsigned claims, or on an already-serialized artifact. */
-export type IssuerFaultMutationTiming = 'pre-signature' | 'post-serialization';
+/**
+ * Whether the mutation happens on unsigned claims, on an already-serialized
+ * artifact, or on the unsigned Credential Response wrapper after the SDK has
+ * built it (`post-build`). The Credential Response is not itself a signed
+ * artifact, so mutating it does not fit `pre-signature`/`post-serialization`.
+ */
+export type IssuerFaultMutationTiming = 'pre-signature' | 'post-serialization' | 'post-build';
 
 export interface IssuerFaultCatalogEntry {
   readonly type: IssuerFaultProfileType;
@@ -38,6 +44,15 @@ export interface IssuerFaultCatalogEntry {
 }
 
 const ALL_SPEC_VERSIONS = supportedItWalletSpecVersions;
+
+/**
+ * Specification versions verified for the `edc-missing-required-claims`
+ * Credential Response mutation. The immediate response shape is documented
+ * as identical across all supported versions, but this increment's WP_059
+ * scenario and matrix test only exercise `1.4`; widen this list only once
+ * `1.0` and `1.3` have their own verified test coverage.
+ */
+const CREDENTIAL_RESPONSE_TESTED_SPEC_VERSIONS = ['1.4'] as const satisfies readonly SupportedItWalletSpecVersion[];
 
 /**
  * Associates every catalogued fault `type` with its application point,
@@ -82,28 +97,28 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'authorization-response-invalid-state': {
     type: 'authorization-response-invalid-state',
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'authorization-response-invalid-issuer': {
     type: 'authorization-response-invalid-issuer',
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'edc-missing-required-claims': {
     type: 'edc-missing-required-claims',
-    applicationPoint: 'edc-claims',
-    supportedSpecVersions: ALL_SPEC_VERSIONS,
-    mutationTiming: 'pre-signature',
-    implemented: false
+    applicationPoint: 'credential-response',
+    supportedSpecVersions: CREDENTIAL_RESPONSE_TESTED_SPEC_VERSIONS,
+    mutationTiming: 'post-build',
+    implemented: true
   },
   'edc-invalid-trust-chain': {
     type: 'edc-invalid-trust-chain',
