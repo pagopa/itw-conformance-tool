@@ -24,6 +24,9 @@
   ],
   "references": [
     {
+      "path": "../itw-wallet-provider/tsconfig.app.json"
+    },
+    {
       "path": "../itw-trust-anchor/tsconfig.app.json"
     },
     {

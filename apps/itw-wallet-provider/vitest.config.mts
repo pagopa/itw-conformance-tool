@@ -1,0 +1,31 @@
+import { resolve } from 'node:path';
+
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig(() => ({
+  root: import.meta.dirname,
+  cacheDir: '../../node_modules/.vite/apps/itw-wallet-provider',
+  resolve: {
+    alias: {
+      '@itw-conformance-tool/crypto': resolve(import.meta.dirname, '../../packages/crypto/src/index.ts')
+    }
+  },
+  test: {
+    name: 'itw-wallet-provider',
+    watch: false,
+    passWithNoTests: true,
+    globals: true,
+    environment: 'node',
+    include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    reporters: ['default'],
+    coverage: {
+      reportsDirectory: './test-output/vitest/coverage',
+      provider: 'v8' as const
+    },
+    server: {
+      deps: {
+        inline: ['@fastify/autoload']
+      }
+    }
+  }
+}));

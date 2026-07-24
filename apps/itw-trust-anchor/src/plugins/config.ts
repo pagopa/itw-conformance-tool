@@ -9,6 +9,7 @@ declare module 'fastify' {
       dataDir: string;
       issuerEntityId: string;
       rpEntityId: string;
+      walletProviderEntityId: string;
     };
   }
 }
@@ -19,12 +20,14 @@ export default fp(
     const trustAnchorConfig = config['trust-anchor'];
     const issuerConfig = config['credential-issuer'];
     const rpConfig = config['relying-party'];
+    const walletProviderConfig = config['wallet-provider'];
 
     app.decorate('config', {
       baseUrl: trustAnchorConfig.url,
       dataDir: config.global.data_dir,
       issuerEntityId: trimTrailingSlashes(issuerConfig.url.trim()),
-      rpEntityId: trimTrailingSlashes(rpConfig.url.trim())
+      rpEntityId: trimTrailingSlashes(rpConfig.url.trim()),
+      walletProviderEntityId: trimTrailingSlashes(walletProviderConfig.local_url.trim())
     });
   },
 

@@ -20,6 +20,7 @@ export type TrustAnchorKeys = {
   federationPrivateJwk: JwkKey;
   issuerFederationJwk: JwkKey;
   rpFederationJwk: JwkKey;
+  walletProviderFederationJwk: JwkKey;
 };
 
 declare module 'fastify' {
@@ -174,16 +175,20 @@ export default fp(
   async function keysPlugin(app) {
     const { dataDir } = app.config;
 
-    const [federationPrivateJwk, issuerFederationJwk, rpFederationJwk] = await Promise.all([
-      loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
-      loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
-      loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 'rp-federation-key')
-    ]);
+    const [federationPrivateJwk, issuerFederationJwk, rpFederationJwk, walletProviderFederationJwk] = await Promise.all(
+      [
+        loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
+        loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
+        loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 'rp-federation-key'),
+        loadFederationJwkFromJwks(dataDir, join('wallet-provider', 'jwks.json'), 'wallet-provider-signing-key')
+      ]
+    );
 
     app.decorate('trustAnchorKeys', {
       federationPrivateJwk,
       issuerFederationJwk,
-      rpFederationJwk
+      rpFederationJwk,
+      walletProviderFederationJwk
     });
   },
   { name: 'keys', dependencies: ['config'] }

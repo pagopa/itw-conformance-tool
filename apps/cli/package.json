@@ -21,6 +21,7 @@
     "itw-credential-issuer": "workspace:*",
     "itw-relying-party": "workspace:*",
     "itw-trust-anchor": "workspace:*",
+    "itw-wallet-provider": "workspace:*",
     "@peculiar/x509": "^1.12.4",
     "commander": "^15.0.0"
   }

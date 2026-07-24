@@ -19,7 +19,7 @@ const CREDENTIAL_ISSUER_TRUST_MARK_TYPE = 'trust_marks/issuance/credential_issue
 
 /** Identifies which leaf entity a subordinate statement is being produced for, so the
  * correct public-JWK derivation (see {@link toRpPublicJwk}) can be selected. */
-export type SubordinateEntityKind = 'issuer' | 'rp';
+export type SubordinateEntityKind = 'issuer' | 'rp' | 'wallet-provider';
 
 /** Strips private key material from a stored federation JWK, preserving every other
  * member (including `kid`) unchanged.

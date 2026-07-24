@@ -21,7 +21,7 @@ export function buildConformanceTestArgs(category: TestCategory | undefined, nxR
 export function requiredServicesForCategory(category: TestCategory): SupervisedService[] {
   if (category === 'issuance') return ['trust-anchor', 'credential-issuer'];
   if (category === 'presentation') return ['trust-anchor', 'relying-party'];
-  if (category === 'wallet-instance') return ['trust-anchor', 'credential-issuer', 'relying-party'];
+  if (category === 'wallet-instance') return ['trust-anchor', 'wallet-provider'];
   return [];
 }
 
@@ -73,7 +73,9 @@ export async function runConformanceTests(category?: TestCategory): Promise<numb
 
   try {
     await supervisor.start(
-      category ? requiredServicesForCategory(category) : ['trust-anchor', 'credential-issuer', 'relying-party']
+      category
+        ? requiredServicesForCategory(category)
+        : ['trust-anchor', 'credential-issuer', 'relying-party', 'wallet-provider']
     );
     controlServer = await startServiceControlServer({ supervisor });
     return await runVitest(

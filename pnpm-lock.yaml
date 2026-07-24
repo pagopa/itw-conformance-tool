@@ -200,6 +200,9 @@ importers:
       itw-trust-anchor:
         specifier: workspace:*
         version: link:../itw-trust-anchor
+      itw-wallet-provider:
+        specifier: workspace:*
+        version: link:../itw-wallet-provider
 
   apps/itw-credential-issuer:
     dependencies:
@@ -419,6 +422,66 @@ importers:
         version: 4.4.3
 
   apps/itw-trust-anchor:
+    dependencies:
+      '@fastify/autoload':
+        specifier: catalog:fastify
+        version: 6.4.0
+      '@fastify/cors':
+        specifier: catalog:fastify
+        version: 11.3.0
+      '@fastify/helmet':
+        specifier: catalog:fastify
+        version: 13.1.0
+      '@fastify/sensible':
+        specifier: catalog:fastify
+        version: 6.0.4
+      '@fastify/swagger':
+        specifier: catalog:fastify
+        version: 9.8.1
+      '@fastify/swagger-ui':
+        specifier: catalog:fastify
+        version: 5.2.6
+      '@itw-conformance-tool/config':
+        specifier: 'workspace:'
+        version: link:../../packages/config
+      '@itw-conformance-tool/conformance':
+        specifier: 'workspace:'
+        version: link:../../packages/conformance
+      '@itw-conformance-tool/crypto':
+        specifier: 'workspace:'
+        version: link:../../packages/crypto
+      '@itw-conformance-tool/database':
+        specifier: 'workspace:'
+        version: link:../../packages/database
+      '@itw-conformance-tool/ipc':
+        specifier: workspace:*
+        version: link:../../packages/ipc
+      '@itw-conformance-tool/logger':
+        specifier: 'workspace:'
+        version: link:../../packages/logger
+      '@itw-conformance-tool/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+      '@pagopa/io-wallet-oid-federation':
+        specifier: catalog:pagopa
+        version: 1.5.4-alpha-20260717125503
+      '@pagopa/io-wallet-utils':
+        specifier: catalog:pagopa
+        version: 1.5.4-alpha-20260717125503
+      close-with-grace:
+        specifier: ^2.5.0
+        version: 2.5.0
+      fastify:
+        specifier: catalog:fastify
+        version: 5.10.0
+      fastify-plugin:
+        specifier: catalog:fastify
+        version: 5.1.0
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.3
+
+  apps/itw-wallet-provider:
     dependencies:
       '@fastify/autoload':
         specifier: catalog:fastify
