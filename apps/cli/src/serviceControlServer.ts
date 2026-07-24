@@ -37,7 +37,7 @@ async function allocateEndpoint(): Promise<string> {
     return `\\\\.\\pipe\\itwct-control-${randomUUID()}`;
   }
 
-  const dir = await mkdtemp(path.join(tmpdir(), `itwct-control-${randomUUID()}`));
+  const dir = await mkdtemp(path.join(tmpdir(), `itwct-control-}`));
   await chmod(dir, 0o700);
   return path.join(dir, 'control.sock');
 }
