@@ -32,6 +32,7 @@ import {
   wp046aScenario,
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario,
+  wp059Scenario,
   wpCiHappyScenario
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
@@ -988,5 +989,66 @@ describe('Test Cases for Issuance Phase', () => {
       });
       await issuerFaultController.deactivateIssuerFault({ scenarioId: probeScenarioId });
     }, 10_000);
+  });
+
+  describe('WP_Credential_Response_Claims_Missed', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp059Scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp059Scenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_059: Wallet Instance rejects an immediate Credential Response missing the required credentials parameter.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The edc-missing-required-claims fault must have been applied while serving the Credential Response'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('edc-missing-required-claims');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['omittedParameters'],
+          'The fault must report credentials as the omitted parameter'
+        ).toEqual(['credentials']);
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The malformed immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        // Protocol-observed evidence proves the malformed response was delivered exactly as
+        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
+        // certifies fault delivery. The operator-facing instructions above require confirming the
+        // wallet's visible error/rejection separately (see instructions.steps in wp-059.ts).
+        //
+        // A full authenticated HTTP replay of /credential to prove cleanup is infeasible without a
+        // real wallet's DPoP proof, nonce, and access token; deactivation/restoration of the nominal
+        // (unfaulted) response path is instead proven by the focused unit test in
+        // apps/itw-credential-issuer/src/domain/faults/credential-response-fault.test.ts.
+      },
+      wp059Scenario.timeouts.vitestTestMs
+    );
   });
 });

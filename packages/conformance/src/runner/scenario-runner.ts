@@ -1,5 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 import chalk from 'chalk';
 
 import { createObservedEvent } from '../events/event-bus.js';
@@ -27,7 +28,6 @@ import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
 import type { ScenarioRegistry } from '../scenarios/registry.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from '../verdict/outcome.js';
 import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
-import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 
 /** Default IT Wallet specification version reported at issuer fault activation when not overridden. */
 const DEFAULT_ISSUER_FAULT_SPEC_VERSION = '1.4';
