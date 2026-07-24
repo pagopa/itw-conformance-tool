@@ -16,11 +16,10 @@ import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
  * observable. It therefore covers WP_076 (deep-link reception) rather than the
  * mutually exclusive WP_077 (QR / cross-device reception).
  *
- * The federation-discovery events are triggered by the wallet directly against
- * the RP and Trust Anchor without propagating the scenario correlation, so they
- * are adopted as uncorrelated, post-start evidence narrowed by their diagnostics
- * (`match`). The later events happen on RP routes that carry the `state` /
- * `session_id`, so they are correlated to the scenario and need no `match`.
+ * The protocol correlationId mechanism is currently disabled, so every observed
+ * event — the federation-discovery calls and the later RP-route calls alike — is
+ * emitted uncorrelated and adopted as post-start evidence narrowed by its
+ * diagnostics (`match`).
  */
 export const wpRpHappyScenario: ProtocolObservedScenarioDefinition = {
   id: 'WP_RP_HAPPY',
@@ -68,29 +67,38 @@ export const wpRpHappyScenario: ProtocolObservedScenarioDefinition = {
     // WP_076 / WP_082: the wallet retrieves the signed Request Object via HTTP
     // GET on the request_uri endpoint (the RP advertises no request_uri_method,
     // so GET is used; WP_082 is chosen over the mutually exclusive WP_083 POST).
-    // Correlated through the `state` carried in the request_uri path.
+    // Adopted as uncorrelated post-start evidence narrowed by the GET method on
+    // the request_uri endpoint (WP_082 is chosen over the POST WP_083).
     {
       event: 'rp.request_object.requested',
-      service: 'relying-party'
+      service: 'relying-party',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/auth/request/:state', method: 'GET' }
     },
     // WP_091 / WP_092 / WP_093 (+ a/b/c): the wallet posts the encrypted
     // Authorization Response with the vp_token to the response_uri.
     {
       event: 'rp.presentation_response.received',
-      service: 'relying-party'
+      service: 'relying-party',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/auth/response', method: 'POST' }
     },
     // Anchors the response content checks (WP_092, WP_093, WP_093a/b/c): the RP
     // decrypts the response and validates the vp_token, its SD-JWT disclosures,
     // and the Key Binding JWTs.
     {
       event: 'vp_token.validation.succeeded',
-      service: 'relying-party'
+      service: 'relying-party',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/auth/response' }
     },
     // WP_094: the wallet follows the RP-supplied redirect_uri, hitting the
-    // instrumented `/callback/:state` endpoint. Correlated through `state`.
+    // instrumented `/callback/:state` endpoint via HTTP GET.
     {
       event: 'rp.redirect.followed',
-      service: 'relying-party'
+      service: 'relying-party',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/callback/:state', method: 'GET' }
     }
   ],
   forbiddenEvents: ['vp_token.validation.failed'],

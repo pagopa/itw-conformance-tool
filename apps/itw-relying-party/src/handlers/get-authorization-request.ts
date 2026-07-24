@@ -19,13 +19,17 @@ export const getAuthorizationRequestHandler = async (
   const state = req.params.state;
   const requestObject = requestObjectRepository.get(state);
 
+  // WP_082: the wallet retrieves the signed Request Object via HTTP GET on the
+  // request_uri endpoint. Correlation is disabled, so the event is emitted
+  // uncorrelated and the scenario adopts it as post-start evidence narrowed by
+  // the endpoint/method diagnostics.
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.request_object.requested',
-      correlationId: state,
+      correlationId: null,
       service: 'relying-party',
       requestId: req.id,
-      diagnostic: { endpoint: '/auth/request/:state' }
+      diagnostic: { endpoint: '/auth/request/:state', method: req.method }
     })
   );
 

@@ -64,8 +64,6 @@ export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuanc
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
-export { wp077Scenario } from './scenarios/factories/wp-077.js';
-export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export { wpRpHappyScenario } from './scenarios/factories/wp-rp-happy.js';
 export type {
   ArtifactExpectation,

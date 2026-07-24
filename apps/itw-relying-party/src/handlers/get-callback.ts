@@ -52,15 +52,21 @@ export const getCallbackHandler = async (
   }
 
   // WP_094: the wallet followed the RP-supplied redirect_uri, landing the
-  // user-agent back on the Relying Party. Correlated through the `state` carried
-  // in the callback path.
+  // user-agent back on the Relying Party. Correlation is disabled, so the event
+  // is emitted uncorrelated and adopted as post-start evidence narrowed by the
+  // endpoint/method diagnostics.
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.redirect.followed',
-      correlationId: state,
+      correlationId: null,
       service: 'relying-party',
       requestId: req.id,
-      diagnostic: { endpoint: '/callback/:state' }
+      diagnostic: {
+        endpoint: '/callback/:state',
+        method: req.method,
+        redirectUri: requestObject?.redirectUri ?? null,
+        responseCode: response_code
+      }
     })
   );
 

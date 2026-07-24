@@ -26,7 +26,11 @@ export function createProgram(): Command {
     .description('Run all conformance tests or a selected category')
     .addArgument(new Argument('[category]', `one of: ${testCategoryNames.join(', ')}`).argParser(parseTestCategory))
     .action(async (category: TestCategory | undefined) => {
-      await runConformanceTests(category);
+      // Surface the Vitest exit code as the process exit code so callers (e.g.
+      // CI) fail when the conformance verdict is not PASS. Setting exitCode
+      // rather than calling process.exit lets service shutdown and report
+      // writing finish draining first.
+      process.exitCode = await runConformanceTests(category);
     });
 
   const report = program.command('report').description('Manage conformance test reports');
