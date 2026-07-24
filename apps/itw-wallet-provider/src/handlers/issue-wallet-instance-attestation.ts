@@ -1,4 +1,5 @@
 import { hashCallback } from '@itw-conformance-tool/crypto';
+import { toResult } from '@itw-conformance-tool/utils';
 import {
   HashAlgorithm,
   decodeJwt,
@@ -218,10 +219,8 @@ export const issueWalletInstanceAttestationHandler = async (
 ): Promise<FastifyReply> => {
   const { assertion } = request.body;
 
-  let decodedAssertion: ReturnType<typeof decodeJwt>;
-  try {
-    decodedAssertion = decodeJwt({ jwt: assertion });
-  } catch {
+  const decodedAssertion = await toResult(decodeJwt({ jwt: assertion }));
+  if (!decodedAssertion.ok) {
     return sendError(reply, {
       description: 'The assertion must be a compact JWT.',
       error: 'bad_request',
@@ -229,10 +228,10 @@ export const issueWalletInstanceAttestationHandler = async (
     });
   }
 
-  const header = validateHeader(decodedAssertion.header);
+  const header = validateHeader(decodedAssertion.value.header);
   if (isAttestationError(header)) return sendError(reply, header);
 
-  const payload = validatePayload(decodedAssertion.payload);
+  const payload = validatePayload(decodedAssertion.value.payload);
   if (isAttestationError(payload)) return sendError(reply, payload);
 
   const issuedAtError = validateIssuedAt(payload);
@@ -242,10 +241,8 @@ export const issueWalletInstanceAttestationHandler = async (
     return sendError(reply, invalidRequest('The assertion iss claim does not match the Wallet Provider identifier.'));
   }
 
-  let jwkThumbprint: string;
-  try {
-    jwkThumbprint = await calculateAssertionJwkThumbprint(payload.cnf.jwk);
-  } catch {
+  const jwkThumbprint = await toResult(calculateAssertionJwkThumbprint(payload.cnf.jwk));
+  if (!jwkThumbprint.ok) {
     return sendError(reply, {
       description: 'The assertion cnf.jwk claim is invalid.',
       error: 'bad_request',
@@ -253,7 +250,7 @@ export const issueWalletInstanceAttestationHandler = async (
     });
   }
 
-  if (header.kid !== jwkThumbprint) {
+  if (header.kid !== jwkThumbprint.value) {
     return sendError(reply, invalidRequest('The assertion kid does not match the cnf.jwk thumbprint.'));
   }
 

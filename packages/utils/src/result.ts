@@ -1,9 +1,9 @@
 type Result<T, E extends Error> = { ok: true; value: T } | { ok: false; error: E };
 
-export const toResult = async <T, E extends Error>(promise: Promise<T>): Promise<Result<T, E>> => {
+export const toResult = async <T, E extends Error>(value: T | PromiseLike<T>): Promise<Result<T, E>> => {
   try {
-    const value = await promise;
-    return { ok: true, value };
+    const result = await value;
+    return { ok: true, value: result };
   } catch (error) {
     return { ok: false, error: error as E };
   }
