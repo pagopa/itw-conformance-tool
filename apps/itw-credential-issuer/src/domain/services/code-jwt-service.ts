@@ -19,9 +19,23 @@ export interface ICodeJwtParRepository {
   readonly setCode: (requestUri: string, code: string, codeExpiresAt: number) => Promise<void>;
 }
 
+/**
+ * The Authorization Response claims that the `authorization-response-missing-claim`
+ * issuer fault (see `@itw-conformance-tool/faults`) can omit. Kept as a local
+ * literal union, instead of importing the fault profile type, so this
+ * service stays usable independently of the fault package.
+ */
+export type AuthorizationResponseClaim = 'code' | 'iss' | 'state';
+
 export interface CreateAuthorizationCodeJwtResult {
   readonly formPost: string;
   readonly redirectUri: string;
+  /**
+   * The signed Authorization Response JWT, exposed only so callers can
+   * derive safe evidence (e.g. a SHA-256 hash) for `issuer.fault.applied`
+   * diagnostics. Must never be logged or emitted verbatim.
+   */
+  readonly jwt: string;
 }
 
 export class InvalidRequestUriError extends Error {
@@ -43,7 +57,10 @@ export class CodeJwtService {
     this.parRepository = opts.parRepository;
   }
 
-  async createAuthorizationCodeJwt(requestUri: string): Promise<CreateAuthorizationCodeJwtResult> {
+  async createAuthorizationCodeJwt(
+    requestUri: string,
+    omittedClaim?: AuthorizationResponseClaim
+  ): Promise<CreateAuthorizationCodeJwtResult> {
     const parEntry = await this.parRepository.get(requestUri);
 
     if (!parEntry) {
@@ -56,21 +73,35 @@ export class CodeJwtService {
     const { private: privateSig } = this.jwksRepository.getSign();
     const importSig = await importJWK(privateSig);
 
-    const jwt = await new SignJWT({
+    // Build the nominal claim set first, then remove only the requested
+    // claim, so the fault mutates the same response the wallet would
+    // otherwise receive instead of constructing a differently-shaped one.
+    const responseClaims: Record<string, string> = {
       code,
-      ...(parEntry.state ? { state: parEntry.state } : {})
-    })
-      .setIssuer(this.baseURL)
+      ...(parEntry.state ? { state: parEntry.state } : {}),
+      iss: this.baseURL
+    };
+
+    if (omittedClaim) {
+      delete responseClaims[omittedClaim];
+    }
+
+    const jwt = await new SignJWT(responseClaims)
       .setIssuedAt()
       .setExpirationTime(codeExpiresAt)
       .setProtectedHeader({ alg: 'ES256' })
       .sign(importSig);
 
+    // The authorization code is always persisted with its nominal expiry,
+    // even when the fault omits `code` from the response: the wallet must
+    // fail because the response is malformed, not because the server never
+    // recorded a redeemable code.
     await this.parRepository.setCode(requestUri, code, codeExpiresAt);
 
     return {
       formPost: getFormPostFromRedirectUriAndJwt(parEntry.redirectUri, jwt),
-      redirectUri: parEntry.redirectUri
+      redirectUri: parEntry.redirectUri,
+      jwt
     };
   }
 }

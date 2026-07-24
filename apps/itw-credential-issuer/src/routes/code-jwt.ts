@@ -1,7 +1,15 @@
-import { CodeJwtService, InvalidRequestUriError } from '../domain/index.js';
+import { createHash } from 'node:crypto';
+
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
+import { CodeJwtService, InvalidRequestUriError, formatSpecVersionHeader } from '../domain/index.js';
 import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
+
+function sha256HashArtifact(value: string): string {
+  return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
+}
 
 const codeJwtRoute: FastifyPluginAsync = async (app) => {
   app.route({
@@ -19,7 +27,10 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const requestUri = (request.query as { request_uri: string }).request_uri;
-      const { baseURL } = makeOauthCallbacks(app, request);
+      const { baseURL, sdkConfig } = makeOauthCallbacks(app, request);
+      const activeFault = app.issuerFaultStore.getActive();
+      const missingClaimProfile =
+        activeFault?.profile.type === 'authorization-response-missing-claim' ? activeFault.profile : undefined;
 
       try {
         const service = new CodeJwtService({
@@ -28,7 +39,31 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
           parRepository: makeCodeJwtParRepository(app)
         });
 
-        const result = await service.createAuthorizationCodeJwt(requestUri);
+        const result = await service.createAuthorizationCodeJwt(requestUri, missingClaimProfile?.claim);
+
+        if (missingClaimProfile && activeFault) {
+          // Emission failures must not be reported as a successfully applied
+          // fault: any error here surfaces through the outer catch below (as
+          // a 500), rather than emitting a false "applied" event.
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.fault.applied',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/code/jwt',
+                faultProfileType: missingClaimProfile.type,
+                omittedClaim: missingClaimProfile.claim,
+                scenarioId: activeFault.scenarioId,
+                resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
+                artifactHash: sha256HashArtifact(result.jwt),
+                outcome: 'applied'
+              }
+            })
+          );
+        }
+
         return reply.code(200).header('Content-Type', 'text/html').send(result.formPost);
       } catch (error) {
         if (error instanceof InvalidRequestUriError) {
