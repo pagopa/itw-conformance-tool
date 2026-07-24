@@ -88,7 +88,7 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'edc-missing-required-claims': {
     type: 'edc-missing-required-claims',

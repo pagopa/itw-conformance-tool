@@ -32,6 +32,7 @@ import {
   wp046aScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
+  wp054bInvalidIssuerScenario,
   wpCiHappyScenario
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
@@ -944,6 +945,60 @@ describe('Test Cases for Issuance Phase', () => {
         ).toBeUndefined();
       },
       wp054aInvalidStateScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_054b (invalid issuer)', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp054bInvalidIssuerScenario.id);
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp054bInvalidIssuerScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_054b: Wallet Instance rejects an Authorization Response with mismatched issuer.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const authorizationEvent = events.find((event) => event.name === 'issuer.authorization.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          authorizationEvent,
+          'Wallet must request the Credential Issuer Authorization Endpoint before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The authorization-response-invalid-issuer fault must have been applied while serving /code/jwt'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('authorization-response-invalid-issuer');
+        expect(faultAppliedEvent?.diagnostic?.['mutatedClaim']).toBe('iss');
+
+        expect(
+          events.find((event) => event.name === 'issuer.token.requested'),
+          'Wallet must not continue to the Token Endpoint after an Authorization Response with mismatched issuer'
+        ).toBeUndefined();
+        expect(
+          events.find((event) => event.name === 'issuer.nonce.requested'),
+          'Wallet must not continue to the Nonce Endpoint after a mismatched Authorization Response issuer'
+        ).toBeUndefined();
+        expect(
+          events.find((event) => event.name === 'issuer.credential.requested'),
+          'Wallet must not continue to the Credential Endpoint after a mismatched Authorization Response issuer'
+        ).toBeUndefined();
+      },
+      wp054bInvalidIssuerScenario.timeouts.vitestTestMs
     );
   });
 

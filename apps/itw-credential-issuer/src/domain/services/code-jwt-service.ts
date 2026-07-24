@@ -28,7 +28,9 @@ export interface ICodeJwtParRepository {
 export type AuthorizationResponseClaim = 'code' | 'iss' | 'state';
 
 export type AuthorizationResponseMutation =
-  { readonly type: 'omit-claim'; readonly claim: AuthorizationResponseClaim } | { readonly type: 'replace-state' };
+  | { readonly type: 'omit-claim'; readonly claim: AuthorizationResponseClaim }
+  | { readonly type: 'replace-state' }
+  | { readonly type: 'replace-issuer' };
 
 export interface CreateAuthorizationCodeJwtResult {
   readonly formPost: string;
@@ -51,6 +53,17 @@ export class InvalidRequestUriError extends Error {
 
 export function createInvalidAuthorizationResponseState(originalState: string | undefined): string {
   return `${originalState ?? ''}.itwct-invalid-state`;
+}
+
+/**
+ * Derives an `iss` value that is syntactically a valid HTTPS URL but is
+ * deterministically different from the nominal Credential Issuer
+ * `baseURL`, so the `authorization-response-invalid-issuer` fault mutates
+ * only the semantic identity of the issuer without producing a malformed
+ * claim.
+ */
+export function createInvalidAuthorizationResponseIssuer(baseURL: string): string {
+  return `${baseURL}/itwct-invalid-issuer`;
 }
 
 export class CodeJwtService {
@@ -95,6 +108,10 @@ export class CodeJwtService {
 
     if (mutation?.type === 'replace-state') {
       responseClaims.state = createInvalidAuthorizationResponseState(parEntry.state);
+    }
+
+    if (mutation?.type === 'replace-issuer') {
+      responseClaims.iss = createInvalidAuthorizationResponseIssuer(this.baseURL);
     }
 
     const jwt = await new SignJWT(responseClaims)

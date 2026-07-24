@@ -9,7 +9,8 @@ import type { FastifyPluginAsync } from 'fastify';
 
 type AuthorizationResponseFaultProfile =
   | { readonly type: 'authorization-response-missing-claim'; readonly claim: 'code' | 'iss' | 'state' }
-  | { readonly type: 'authorization-response-invalid-state' };
+  | { readonly type: 'authorization-response-invalid-state' }
+  | { readonly type: 'authorization-response-invalid-issuer' };
 
 function sha256HashArtifact(value: string): string {
   return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
@@ -35,7 +36,8 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
       const activeFault = app.issuerFaultStore.getActive();
       const authorizationResponseFault = [
         'authorization-response-missing-claim',
-        'authorization-response-invalid-state'
+        'authorization-response-invalid-state',
+        'authorization-response-invalid-issuer'
       ].includes(activeFault?.profile.type ?? '')
         ? (activeFault?.profile as AuthorizationResponseFaultProfile)
         : undefined;
@@ -52,7 +54,9 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
             ? { type: 'omit-claim' as const, claim: authorizationResponseFault.claim }
             : authorizationResponseFault?.type === 'authorization-response-invalid-state'
               ? { type: 'replace-state' as const }
-              : undefined;
+              : authorizationResponseFault?.type === 'authorization-response-invalid-issuer'
+                ? { type: 'replace-issuer' as const }
+                : undefined;
 
         const result = await service.createAuthorizationCodeJwt(requestUri, mutation);
 
@@ -71,7 +75,9 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
                 faultProfileType: authorizationResponseFault.type,
                 ...(authorizationResponseFault.type === 'authorization-response-missing-claim'
                   ? { omittedClaim: authorizationResponseFault.claim }
-                  : { mutatedClaim: 'state' }),
+                  : authorizationResponseFault.type === 'authorization-response-invalid-state'
+                    ? { mutatedClaim: 'state' }
+                    : { mutatedClaim: 'iss' }),
                 scenarioId: activeFault.scenarioId,
                 resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
                 artifactHash: sha256HashArtifact(result.jwt),

@@ -76,7 +76,9 @@ const mdlInvalidSignatureProfileSchema = z
 
 /**
  * Runtime-validated, discriminated catalog of Credential Issuer fault
- * profiles. Only `invalid-trust-anchor` is wired to a mutation today; the
+ * profiles. `invalid-trust-anchor`, `authorization-response-missing-claim`,
+ * `authorization-response-invalid-state`, and
+ * `authorization-response-invalid-issuer` are wired to a mutation today; the
  * remaining variants are reserved so the shared type, IPC protocol, and
  * catalog metadata do not drift as future fault scenarios are implemented.
  */

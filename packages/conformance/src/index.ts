@@ -67,6 +67,7 @@ export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';
 export { wp054MissingCodeScenario, wp054Scenarios, type Wp054MissingClaim } from './scenarios/factories/wp-054.js';
 export { wp054aInvalidStateScenario } from './scenarios/factories/wp-054a.js';
+export { wp054bInvalidIssuerScenario } from './scenarios/factories/wp-054b.js';
 export { wp077Scenario } from './scenarios/factories/wp-077.js';
 export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export type {
