@@ -2,7 +2,7 @@ import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import fp from 'fastify-plugin';
 
-export const swaggerDocsRoutePrefix = '/docs';
+export const swaggerDocsRoutePrefix = '/api/docs';
 
 export default fp(async function (fastify) {
   await fastify.register(fastifySwagger, {

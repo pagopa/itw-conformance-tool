@@ -33,10 +33,11 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@pagopa/io-wallet-oauth2": "catalog:pagopa",
+    "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
+    "@pagopa/io-wallet-utils": "catalog:pagopa",
     "@types/node": "catalog:node",
     "@itw-conformance-tool/ipc": "workspace:*",
-    "@pagopa/io-wallet-oauth2": "^1.5.3",
-    "@pagopa/io-wallet-utils": "^1.5.3",
     "vitest": "catalog:"
   }
 }

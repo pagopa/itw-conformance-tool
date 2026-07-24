@@ -33,6 +33,9 @@
       "path": "../../packages/logger/tsconfig.lib.json"
     },
     {
+      "path": "../../packages/faults/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/database/tsconfig.lib.json"
     },
     {
@@ -43,9 +46,6 @@
     },
     {
       "path": "../../packages/config/tsconfig.lib.json"
-    },
-    {
-      "path": "../../packages/faults/tsconfig.lib.json"
     }
   ]
 }
