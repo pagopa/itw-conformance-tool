@@ -525,7 +525,13 @@ importers:
       '@itw-conformance-tool/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@pagopa/io-wallet-oauth2':
+        specifier: catalog:pagopa
+        version: 1.5.4-alpha-20260717125503
       '@pagopa/io-wallet-oid-federation':
+        specifier: catalog:pagopa
+        version: 1.5.4-alpha-20260717125503
+      '@pagopa/io-wallet-oid4vci':
         specifier: catalog:pagopa
         version: 1.5.4-alpha-20260717125503
       '@pagopa/io-wallet-utils':
