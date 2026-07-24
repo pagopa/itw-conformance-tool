@@ -9,7 +9,7 @@
     "build": "nx run-many -t build",
     "lint": "nx run-many -t lint",
     "typecheck": "nx run-many -t typecheck",
-    "test": "NODE_OPTIONS='--max-listeners=30' nx run-many -t test",
+    "test": "nx run-many -t test",
     "init": "nx run itw-conformance-cli:run --args init",
     "init:force": "nx run itw-conformance-cli:run --args \"init --force\"",
     "test:all": "nx run itw-conformance-cli:run --args test",
