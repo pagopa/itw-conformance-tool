@@ -1,5 +1,6 @@
+import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
+
 import { getHealthCheckHandler, healthCheckResponseSchema } from '../handlers/health.js';
-import { toFastifyJsonSchema } from '../utils/json-schema.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 

@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
 
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
+import { toResult } from '@itw-conformance-tool/utils';
 import { parseAuthorizationResponse, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt } from 'jose';
 import z from 'zod';
 
-import { toResult } from '../utils/result.js';
 import { VpTokenVerifier } from '../utils/vp-token.js';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';

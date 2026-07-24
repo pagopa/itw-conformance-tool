@@ -375,6 +375,9 @@ importers:
       '@itw-conformance-tool/logger':
         specifier: 'workspace:'
         version: link:../../packages/logger
+      '@itw-conformance-tool/utils':
+        specifier: 'workspace:'
+        version: link:../../packages/utils
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
         version: 1.5.4-alpha-20260717125503
@@ -540,6 +543,9 @@ importers:
       jose:
         specifier: 'catalog:'
         version: 6.2.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
 
   packages/config:
     dependencies:
@@ -705,6 +711,9 @@ importers:
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
     devDependencies:
       vitest:
         specifier: 'catalog:'

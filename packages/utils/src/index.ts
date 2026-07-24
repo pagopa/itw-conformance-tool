@@ -7,3 +7,5 @@ export {
   testCategoryNames,
   type TestCategory
 } from './test-categories.js';
+export { toFastifyJsonSchema } from './json-schema.js';
+export { toResult } from './result.js';
