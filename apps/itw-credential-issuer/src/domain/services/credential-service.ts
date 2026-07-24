@@ -23,6 +23,7 @@ import {
 import type { DisabilityCardFaultProfile } from '../credentials/disability-card.js';
 import type { FakeUser } from '../faker.js';
 import type { DigitalCredentialClaimsFaultMutationEvidence } from '../faults/digital-credential-claims-fault.js';
+import type { DigitalCredentialSignatureFaultMutationEvidence } from '../faults/digital-credential-signature-fault.js';
 import type { DigitalCredentialTrustChainFaultMutationEvidence } from '../faults/digital-credential-trust-chain-fault.js';
 import type { SupportedCredentialsId } from '../z-credential.js';
 import type { IDeferredCredentialRepository, INonceRepository } from '@itw-conformance-tool/database';
@@ -63,9 +64,10 @@ export interface CreateCredentialOptions {
   config: IoWalletSdkConfig;
   /**
    * The active WP_060 (`digital-credential-claims-invalid`) or WP_061
-   * (`edc-invalid-trust-chain`) fault profile, if any; narrowed and passed
-   * in by the route (see routes/credential.ts). Only the disability-card
-   * SD-JWT builder supports either fault.
+   * (`edc-invalid-trust-chain`) or WP_062a (`edc-invalid-signature`) fault
+   * profile, if any; narrowed and passed in by the route (see
+   * routes/credential.ts). Only the disability-card SD-JWT builder supports
+   * these Digital Credential faults.
    */
   disabilityCardFaultProfile?: DisabilityCardFaultProfile;
   headers: Headers;
@@ -82,7 +84,9 @@ export interface CreateCredentialResult {
    * happened (see `routes/credential.ts`).
    */
   disabilityCardFaultEvidence?:
-    DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence;
+    | DigitalCredentialClaimsFaultMutationEvidence
+    | DigitalCredentialSignatureFaultMutationEvidence
+    | DigitalCredentialTrustChainFaultMutationEvidence;
   /** Raw SDK result; the actual JSON body to send is `sdkResult.credentialResponse`. */
   sdkResult: CreateCredentialResponseResult;
   /** Whether the request was answered immediately (`200`) or deferred (`202`). */
@@ -175,7 +179,10 @@ export class CredentialService {
     const credentials: string[] = [];
     const noncesToConsume = new Set<string>();
     let disabilityCardFaultEvidence:
-      DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence | undefined;
+      | DigitalCredentialClaimsFaultMutationEvidence
+      | DigitalCredentialSignatureFaultMutationEvidence
+      | DigitalCredentialTrustChainFaultMutationEvidence
+      | undefined;
 
     for (const proof of proofs) {
       const jwt = proof.jwt;
@@ -374,7 +381,10 @@ export class CredentialService {
     activeFaultProfile?: DisabilityCardFaultProfile
   ): Promise<{
     credential: string;
-    faultEvidence?: DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence;
+    faultEvidence?:
+      | DigitalCredentialClaimsFaultMutationEvidence
+      | DigitalCredentialSignatureFaultMutationEvidence
+      | DigitalCredentialTrustChainFaultMutationEvidence;
   }> {
     if (credentialIdentifier === 'dc_sd_jwt_PersonIdentificationData') {
       if (activeFaultProfile) {

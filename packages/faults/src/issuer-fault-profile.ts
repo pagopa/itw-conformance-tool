@@ -119,10 +119,10 @@ const digitalCredentialClaimsInvalidProfileSchema = z
  * profiles. `invalid-trust-anchor`, `authorization-response-missing-claim`,
  * `authorization-response-invalid-state`,
  * `authorization-response-invalid-issuer`,
- * `digital-credential-claims-invalid`, and `edc-invalid-trust-chain` are
- * wired to a mutation today; the remaining variants are reserved so the
- * shared type, IPC protocol, and catalog metadata do not drift as future
- * fault scenarios are implemented.
+ * `digital-credential-claims-invalid`, `edc-invalid-trust-chain`, and
+ * `edc-invalid-signature` are wired to a mutation today; the remaining
+ * variants are reserved so the shared type, IPC protocol, and catalog
+ * metadata do not drift as future fault scenarios are implemented.
  */
 export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   invalidTrustAnchorProfileSchema,

@@ -4,6 +4,7 @@ import { ES256, digest, generateSalt } from '@sd-jwt/crypto-nodejs';
 import { SDJwtVcInstance } from '@sd-jwt/sd-jwt-vc';
 
 import { applyDigitalCredentialClaimsFault } from '../faults/digital-credential-claims-fault.js';
+import { applyDigitalCredentialSignatureFault } from '../faults/digital-credential-signature-fault.js';
 import { applyDigitalCredentialTrustChainFault } from '../faults/digital-credential-trust-chain-fault.js';
 import { createSRIHash, createSignerVerifier } from '../sd-jwt.js';
 import { createBase64Portrait } from '../utils/portrait.js';
@@ -15,6 +16,10 @@ import type {
   DigitalCredentialClaimsFaultMutationEvidence,
   DigitalCredentialClaimsFaultProfile
 } from '../faults/digital-credential-claims-fault.js';
+import type {
+  DigitalCredentialSignatureFaultMutationEvidence,
+  DigitalCredentialSignatureFaultProfile
+} from '../faults/digital-credential-signature-fault.js';
 import type {
   DigitalCredentialTrustChainFaultMutationEvidence,
   DigitalCredentialTrustChainFaultProfile
@@ -42,18 +47,33 @@ export class DigitalCredentialTrustChainFaultApplicationError extends Error {
   }
 }
 
+export class DigitalCredentialSignatureFaultApplicationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DigitalCredentialSignatureFaultApplicationError';
+    Object.setPrototypeOf(this, DigitalCredentialSignatureFaultApplicationError.prototype);
+  }
+}
+
 /**
  * The disability card credential builder's supported fault profiles, kept
  * as an explicit discriminated union (over `type`) so the WP_060 payload
- * mutation and the WP_061 JOSE-header mutation branch separately and can
- * never be active/applied together in the same issuance.
+ * mutation, WP_061 JOSE-header mutation, and WP_062a serialized-signature
+ * mutation branch separately and can never be active/applied together in the
+ * same issuance.
  */
-export type DisabilityCardFaultProfile = DigitalCredentialClaimsFaultProfile | DigitalCredentialTrustChainFaultProfile;
+export type DisabilityCardFaultProfile =
+  | DigitalCredentialClaimsFaultProfile
+  | DigitalCredentialSignatureFaultProfile
+  | DigitalCredentialTrustChainFaultProfile;
 
 export interface CreateDisabilityCardCredentialResult {
   credential: string;
   /** Present only when `activeFaultProfile` was provided and successfully applied. */
-  faultEvidence?: DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence;
+  faultEvidence?:
+    | DigitalCredentialClaimsFaultMutationEvidence
+    | DigitalCredentialSignatureFaultMutationEvidence
+    | DigitalCredentialTrustChainFaultMutationEvidence;
 }
 
 export async function createDisabilityCardCredential(
@@ -143,7 +163,10 @@ export async function createDisabilityCardCredential(
 
   let payloadToSign: typeof unsignedPayload = unsignedPayload;
   let faultEvidence:
-    DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence | undefined;
+    | DigitalCredentialClaimsFaultMutationEvidence
+    | DigitalCredentialSignatureFaultMutationEvidence
+    | DigitalCredentialTrustChainFaultMutationEvidence
+    | undefined;
   // Nominal x5c: the leaf certificate's public key always corresponds to
   // `jwks.private` (see `JwksRepository.issuerCertificateChain` docs).
   let x5c = jwksRepository.issuerCertificateChain().map(convertPemToBase64Der);
@@ -181,13 +204,25 @@ export async function createDisabilityCardCredential(
     faultEvidence = mutation.mutation.evidence;
   }
 
-  const credential = await sdjwt.issue(payloadToSign, disclosureFrame, {
+  let credential = await sdjwt.issue(payloadToSign, disclosureFrame, {
     header: {
       kid: jwks.private.kid,
       typ: 'dc+sd-jwt',
       x5c
     }
   });
+
+  if (activeFaultProfile?.type === 'edc-invalid-signature') {
+    const mutation = applyDigitalCredentialSignatureFault({ credential, profile: activeFaultProfile });
+    if (!mutation.ok) {
+      throw new DigitalCredentialSignatureFaultApplicationError(
+        `Unable to apply the edc-invalid-signature fault to the disability card credential: ${mutation.reason}`
+      );
+    }
+
+    credential = mutation.mutation.credential;
+    faultEvidence = mutation.mutation.evidence;
+  }
 
   return { credential, faultEvidence };
 }

@@ -35,6 +35,7 @@ import {
   wp059Scenario,
   wp060TypeMismatchScenario,
   wp061Scenario,
+  wp062aScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -117,7 +118,7 @@ describe('Test Cases for Issuance Phase', () => {
     const controlEndpoint = process.env[SERVICE_CONTROL_ENDPOINT_ENV_VAR];
     if (!controlEndpoint) {
       throw new Error(
-        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by WP_046a, WP_050b and WP_054.`
+        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by the interactive issuance scenarios.`
       );
     }
     issuerFaultController = createServiceControlClient({ endpoint: controlEndpoint });
@@ -1234,16 +1235,6 @@ describe('Test Cases for Issuance Phase', () => {
           'The malformed immediate response must still be served as HTTP 200'
         ).toBe(200);
         expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
-
-        // Protocol-observed evidence proves the malformed response was delivered exactly as
-        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
-        // certifies fault delivery. The operator-facing instructions above require confirming the
-        // wallet's visible error/rejection separately (see instructions.steps in wp-059.ts).
-        //
-        // A full authenticated HTTP replay of /credential to prove cleanup is infeasible without a
-        // real wallet's DPoP proof, nonce, and access token; deactivation/restoration of the nominal
-        // (unfaulted) response path is instead proven by the focused unit test in
-        // apps/itw-credential-issuer/src/domain/faults/credential-response-fault.test.ts.
       },
       wp059Scenario.timeouts.vitestTestMs
     );
@@ -1315,15 +1306,6 @@ describe('Test Cases for Issuance Phase', () => {
             'The fault must report issuing_country as the only omitted required claim'
           ).toBe('issuing_country');
         }
-
-        // Protocol-observed evidence proves the defective credential was delivered exactly as
-        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
-        // certifies fault delivery. The operator-facing instructions above require confirming the
-        // wallet's visible error/rejection separately (see instructions.steps in wp-060.ts).
-        //
-        // Signature validity and single-defect isolation for each generated credential are proven
-        // by the focused unit tests in
-        // apps/itw-credential-issuer/src/domain/credentials/disability-card.test.ts.
       },
       scenario.timeouts.vitestTestMs
     );
@@ -1379,18 +1361,67 @@ describe('Test Cases for Issuance Phase', () => {
           'The injected x5c must be a single self-signed leaf certificate (no intermediate)'
         ).toBe(1);
         expect(faultAppliedEvent?.diagnostic?.['certificateThumbprintSha256']).toMatch(/^[0-9a-f]{64}$/);
-
-        // Protocol-observed evidence proves the defective credential was delivered exactly as
-        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
-        // certifies fault delivery. The operator-facing instructions above require confirming the
-        // wallet's visible error/rejection separately (see instructions.steps in wp-061.ts).
-        //
-        // Signature validity against the injected leaf, single-defect isolation from WP_060/WP_062a,
-        // and rejection of the injected leaf against the nominal trusted chain are proven by the
-        // focused unit tests in
-        // apps/itw-credential-issuer/src/domain/credentials/disability-card.test.ts.
       },
       wp061Scenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_062a', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp062aScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp062aScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_062a: Wallet Instance rejects a Digital Credential whose SD-JWT signature verification fails.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvents = events.filter((event) => event.name === 'issuer.fault.applied');
+        const [faultAppliedEvent] = faultAppliedEvents;
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvents,
+          'The edc-invalid-signature fault must have been applied exactly once while serving the Credential Response'
+        ).toHaveLength(1);
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('edc-invalid-signature');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        expect(faultAppliedEvent?.diagnostic?.['mutationTarget']).toBe('jws-signature');
+        expect(faultAppliedEvent?.diagnostic?.['strategy']).toBe('flip-last-signature-byte-low-bit');
+        expect(
+          faultAppliedEvent?.diagnostic?.['signatureByteLength'],
+          'The fault must report the decoded signature byte length without exposing signature material'
+        ).toBeGreaterThan(0);
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('credential');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('signature');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('disclosures');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('x5c');
+      },
+      wp062aScenario.timeouts.vitestTestMs
     );
   });
 });

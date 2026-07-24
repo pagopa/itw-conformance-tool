@@ -16,6 +16,7 @@ export * from './credential-offer.js';
 // Faults
 export * from './faults/credential-response-fault.js';
 export * from './faults/digital-credential-claims-fault.js';
+export * from './faults/digital-credential-signature-fault.js';
 export * from './faults/digital-credential-trust-chain-fault.js';
 export * from './faults/issuer-fault-store.js';
 

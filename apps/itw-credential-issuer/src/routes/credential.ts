@@ -12,6 +12,7 @@ import {
   type ActiveIssuerFault,
   type CredentialResponseFaultProfile,
   type DigitalCredentialClaimsFaultProfile,
+  type DigitalCredentialSignatureFaultProfile,
   type DigitalCredentialTrustChainFaultProfile
 } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
@@ -59,6 +60,13 @@ function isDigitalCredentialTrustChainFault(
   return fault?.profile.type === 'edc-invalid-trust-chain';
 }
 
+/** Narrows an active issuer fault to the WP_062a Digital Credential signature profile. */
+function isDigitalCredentialSignatureFault(
+  fault: ActiveIssuerFault | undefined
+): fault is ActiveIssuerFault & { profile: DigitalCredentialSignatureFaultProfile } {
+  return fault?.profile.type === 'edc-invalid-signature';
+}
+
 const credentialRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/credential',
@@ -79,9 +87,11 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
       const digitalCredentialTrustChainFault = isDigitalCredentialTrustChainFault(activeFault)
         ? activeFault
         : undefined;
+      const digitalCredentialSignatureFault = isDigitalCredentialSignatureFault(activeFault) ? activeFault : undefined;
       // The issuer fault store only ever activates a single fault at a time,
-      // so at most one of these two can be set.
-      const disabilityCardFault = digitalCredentialClaimsFault ?? digitalCredentialTrustChainFault;
+      // so at most one of these Digital Credential faults can be set.
+      const disabilityCardFault =
+        digitalCredentialClaimsFault ?? digitalCredentialTrustChainFault ?? digitalCredentialSignatureFault;
 
       reply.header('Cache-Control', 'no-store');
 
