@@ -34,3 +34,16 @@ export const resolveSpecVersionFromHeaders = (headers: Headers): ItWalletSpecsVe
 
   return specVersion;
 };
+
+const SPEC_VERSION_HEADER_BY_VALUE = new Map<ItWalletSpecsVersion, SupportedSpecVersionHeader>(
+  Object.entries(SPEC_VERSION_BY_HEADER).map(([header, value]) => [value, header as SupportedSpecVersionHeader])
+);
+
+/**
+ * Formats a resolved `ItWalletSpecsVersion` back to the `X-Spec-Version`
+ * header string (e.g. `'1.4'`), for evidence and diagnostics that must
+ * report the resolved specification version in the same format testers see
+ * on the wire.
+ */
+export const formatSpecVersionHeader = (version: ItWalletSpecsVersion): string =>
+  SPEC_VERSION_HEADER_BY_VALUE.get(version) ?? version;

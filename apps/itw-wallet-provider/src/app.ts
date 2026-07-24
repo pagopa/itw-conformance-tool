@@ -1,25 +1,43 @@
 import path from 'node:path';
 
 import FastifyAutoLoad from '@fastify/autoload';
-import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginOptions, type FastifyReply } from 'fastify';
 
-import configPlugin from './plugins/config.js';
-import conformancePlugin from './plugins/conformance.js';
-import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
-import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
-import sensiblePlugin from './plugins/external/sensible.js';
-import swaggerPlugin from './plugins/external/swagger.js';
-import keysPlugin from './plugins/keys.js';
+function isWalletInstanceManagementRequest(url: string): boolean {
+  const path = url.split('?', 1)[0];
+  return path === '/wallet-instances' || path.startsWith('/wallet-instances/');
+}
+
+function getErrorStatusCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('statusCode' in error)) {
+    return undefined;
+  }
+
+  const statusCode = error.statusCode;
+
+  return typeof statusCode === 'number' ? statusCode : undefined;
+}
+
+function sendWalletInstanceManagementError(
+  reply: FastifyReply,
+  statusCode: number,
+  error: string,
+  errorDescription: string
+) {
+  return reply.code(statusCode).header('cache-control', 'no-store').send({
+    error,
+    error_description: errorDescription
+  });
+}
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
-  await app.register(configPlugin);
-  await app.register(keysPlugin);
-  await app.register(conformancePlugin);
-
-  await app.register(corsPlugin, corsConfig);
-  await app.register(helmetPlugin, helmetConfig);
-  await app.register(sensiblePlugin);
-  await app.register(swaggerPlugin);
+  app.register(FastifyAutoLoad, {
+    dir: path.join(import.meta.dirname, 'plugins'),
+    autoHooks: true,
+    autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
+    cascadeHooks: true,
+    options: { ...opts }
+  });
 
   app.register(FastifyAutoLoad, {
     dir: path.join(import.meta.dirname, 'routes'),
@@ -30,6 +48,66 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
   });
 
   app.setErrorHandler(function (err, request, reply) {
+    if (isWalletInstanceManagementRequest(request.url)) {
+      const statusCode = getErrorStatusCode(err) ?? 500;
+
+      if (statusCode === 400) {
+        return sendWalletInstanceManagementError(
+          reply,
+          400,
+          'bad_request',
+          'The request is malformed, missing required parameters, or includes invalid and unknown parameters.'
+        );
+      }
+
+      if (statusCode === 401) {
+        return sendWalletInstanceManagementError(
+          reply,
+          401,
+          'unauthorized',
+          'The request lacks valid authentication credentials.'
+        );
+      }
+
+      if (statusCode === 403) {
+        return sendWalletInstanceManagementError(
+          reply,
+          403,
+          'forbidden',
+          'The user does not have permission to retrieve this Wallet Instance.'
+        );
+      }
+
+      if (statusCode === 404) {
+        return sendWalletInstanceManagementError(reply, 404, 'not_found', 'The Wallet Instance was not found.');
+      }
+
+      if (statusCode === 422) {
+        return sendWalletInstanceManagementError(
+          reply,
+          422,
+          'validation_error',
+          'The request does not adhere to the required format.'
+        );
+      }
+
+      if (statusCode === 503) {
+        return sendWalletInstanceManagementError(
+          reply,
+          503,
+          'temporarily_unavailable',
+          'The service is unavailable. Please try again later.'
+        );
+      }
+
+      return sendWalletInstanceManagementError(
+        reply,
+        500,
+        'server_error',
+        'An internal error occurred while processing the request.'
+      );
+    }
+
     if (err instanceof Fastify.errorCodes.FST_ERR_BAD_STATUS_CODE) {
       this.log.error(
         {
@@ -46,9 +124,9 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
 
       reply.code(err.statusCode ?? 500);
       const message = err.statusCode && err.statusCode < 500 ? err.message : 'Internal Server Error';
-      reply.send({ message });
+      return reply.send({ message });
     } else {
-      reply.send(err);
+      return reply.send(err);
     }
   });
 
@@ -64,6 +142,10 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
       },
       'Resource not found'
     );
+
+    if (isWalletInstanceManagementRequest(request.url)) {
+      return sendWalletInstanceManagementError(reply, 404, 'not_found', 'The Wallet Instance was not found.');
+    }
 
     reply.code(404);
     return { message: 'Not Found' };

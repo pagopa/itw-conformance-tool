@@ -11,9 +11,9 @@ import {
   assertConformanceOutcome,
   createProtocolObservedScenarioRunner,
   createSqliteScenarioEventBridge,
-  presentationScenarioRegistry,
-  wpRpHappyScenario
+  presentationScenarioRegistry
 } from '../../index.js';
+import { wpRpHappyScenario } from '../../scenarios/factories/wp-rp-happy.js';
 
 import type { ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
 

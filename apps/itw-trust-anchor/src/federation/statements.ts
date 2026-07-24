@@ -44,21 +44,16 @@ function stripPrivateParams(jwk: JwkKey): JsonWebKey {
   return publicJwk as JsonWebKey;
 }
 
-/** Derives the relying party's public federation JWK the same way the RP derives it for
- * itself (apps/itw-relying-party/src/federation/entity-configuration.ts `toPublicJwk`):
+/** Derives a leaf's public federation JWK as the corresponding service advertises it:
  * the stored `kid` is discarded and replaced with an RFC 7638 JWK thumbprint computed
  * over the key.
  *
- * The RP computes this thumbprint from a PEM round-trip of its private key; computing
- * `calculateJwkThumbprint` directly against the stored private JWK yields an identical
- * result because RFC 7638 thumbprints only cover a key's canonical required members
- * (e.g. `kty`, `crv`, `x`, `y` for EC) and ignore any other members present, such as `d`
- * or the original `kid`. Replicating the RP's exact `kid` here is required so that the
- * subordinate statement's JWK matches what the RP itself advertises (see
- * `@pagopa/io-wallet-oid-federation`'s trust-chain validation, which looks up the leaf's
- * signing key by `kid` inside the superior's subordinate statement).
+ * RFC 7638 thumbprints only cover a key's canonical required members (e.g. `kty`, `crv`,
+ * `x`, `y` for EC) and ignore other stored members, including `d` and the original `kid`.
+ * The subordinate statement must use the same identifier as the leaf Entity Configuration
+ * so verifiers can resolve the leaf signing key through the trust chain.
  */
-async function toRpPublicJwk(jwk: JwkKey): Promise<JsonWebKey> {
+async function toThumbprintPublicJwk(jwk: JwkKey): Promise<JsonWebKey> {
   const { d, key_ops, kid: _storedKid, ...publicJwk } = jwk;
   void d;
   void key_ops;
@@ -149,10 +144,13 @@ export async function createSubordinate(options: {
   subjectPrivateJwk: JwkKey;
   trustAnchorBaseUrl: string;
 }): Promise<string> {
-  const { federationPrivateJwk, subjectEntityId, subjectPrivateJwk, trustAnchorBaseUrl } = options;
+  const { federationPrivateJwk, subjectEntityId, subjectKind, subjectPrivateJwk, trustAnchorBaseUrl } = options;
 
   const trustAnchorPublicJwk = stripPrivateParams(federationPrivateJwk);
-  const subjectPublicJwk = stripPrivateParams(subjectPrivateJwk);
+  const subjectPublicJwk =
+    subjectKind === 'wallet-provider'
+      ? await toThumbprintPublicJwk(subjectPrivateJwk)
+      : stripPrivateParams(subjectPrivateJwk);
 
   // The subject's federation public key must be present so a verifier can validate the
   // entity configuration the subject signs for itself. The Trust Anchor's own signing key

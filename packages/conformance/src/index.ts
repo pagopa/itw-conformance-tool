@@ -64,7 +64,15 @@ export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuanc
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
-export { wpRpHappyScenario } from './scenarios/factories/wp-rp-happy.js';
+export { wp046aScenario } from './scenarios/factories/wp-046a.js';
+export { wp054MissingCodeScenario, wp054Scenarios, type Wp054MissingClaim } from './scenarios/factories/wp-054.js';
+export { wp054aInvalidStateScenario } from './scenarios/factories/wp-054a.js';
+export { wp054bInvalidIssuerScenario } from './scenarios/factories/wp-054b.js';
+export {
+  WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
+  wpUnsupportedCredentialOfferScenario
+} from './scenarios/factories/wp-unsupported-credential-offer.js';
+export { wp059Scenario } from './scenarios/factories/wp-059.js';
 export type {
   ArtifactExpectation,
   AutomationMode,
@@ -76,12 +84,18 @@ export type {
   RequiredEventExpectation,
   RequiredEventMatchValue,
   ScenarioInstructions,
+  ScenarioSetup,
   ScenarioStimulus,
   StimulusDefinition,
   TimeoutProfile,
   VerdictRule
 } from './scenarios/definitions.js';
 export { getRequiredEventName, getRequiredEventNames } from './scenarios/definitions.js';
+export type {
+  ActivateIssuerFaultRequest,
+  DeactivateIssuerFaultRequest,
+  IssuerFaultController
+} from './services/issuer-fault-controller.js';
 export {
   createConformanceInstrumentationPlugin,
   type InstrumentationOptions

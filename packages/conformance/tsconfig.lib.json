@@ -17,10 +17,16 @@
       "path": "../logger/tsconfig.lib.json"
     },
     {
+      "path": "../faults/tsconfig.lib.json"
+    },
+    {
       "path": "../database/tsconfig.lib.json"
     },
     {
       "path": "../config/tsconfig.lib.json"
+    },
+    {
+      "path": "../ipc/tsconfig.lib.json"
     }
   ]
 }

@@ -1,10 +1,11 @@
+import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
+
 import {
   authorizationResponsePayloadSchema,
   authorizationResponseResultSchema,
   getAuthorizationResponseHandler,
   sessionIdQuerystringSchema
 } from '../handlers/get-authorization-response.js';
-import { toFastifyJsonSchema } from '../utils/json-schema.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 

@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import {
   parseIpcMessage,
   SERVICE_PROTOCOL_VERSION,
+  type IpcMessage,
   type LocalServiceName,
   type ServiceErrorMessage
 } from '@itw-conformance-tool/ipc';
@@ -74,6 +75,36 @@ export class ServiceSupervisor {
   public async stopAll(): Promise<void> {
     await Promise.all([...this.managed.values()].map((managed) => this.stopOne(managed)));
     this.managed.clear();
+  }
+
+  /**
+   * Forwards one IPC message to a managed child's process channel. Returns
+   * `false` without throwing if the service is not currently managed or has
+   * already exited, so callers can surface an explicit control-plane error.
+   */
+  public sendToChild(service: SupervisedService, message: IpcMessage): boolean {
+    const managed = this.managed.get(service);
+    if (!managed || managed.child.exitCode !== null || managed.child.signalCode !== null) return false;
+    managed.child.send(message);
+    return true;
+  }
+
+  /**
+   * Subscribes to validated IPC messages from a managed child. Returns an
+   * unsubscribe function. Messages that fail schema validation are dropped
+   * silently, matching the rest of the IPC transport.
+   */
+  public onChildMessage(service: SupervisedService, listener: (message: IpcMessage) => void): () => void {
+    const managed = this.managed.get(service);
+    if (!managed) return () => undefined;
+
+    const handler = (rawMessage: unknown): void => {
+      const message = parseIpcMessage(rawMessage);
+      if (message) listener(message);
+    };
+
+    managed.child.on('message', handler);
+    return () => managed.child.off('message', handler);
   }
 
   private async startOne(service: SupervisedService): Promise<void> {

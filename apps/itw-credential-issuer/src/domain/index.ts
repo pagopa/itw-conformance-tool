@@ -13,6 +13,10 @@ export * from './sd-jwt.js';
 export * from './crypto.js';
 export * from './credential-offer.js';
 
+// Faults
+export * from './faults/credential-response-fault.js';
+export * from './faults/issuer-fault-store.js';
+
 // Utils
 export * from './utils/status-list.js';
 export {

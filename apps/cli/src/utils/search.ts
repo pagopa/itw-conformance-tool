@@ -64,6 +64,7 @@ export function filesToSearch(filePath: string): string[] {
     join(filePath, 'rp', 'jwks.json'),
     join(filePath, 'rp', 'cert.pem'),
     join(filePath, 'wallet-provider', 'jwks.json'),
+    join(filePath, 'wallet-provider', 'cert.pem'),
     join(filePath, 'trust-anchor', 'federation-key.jwk.json'),
     join(filePath, 'trust-anchor', 'federation-cert.pem')
   ];

@@ -1,8 +1,9 @@
+import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
+
 import {
   createEntityConfigurationHandler,
   entityConfigurationResponseSchema
 } from '../handlers/create-entity-configuration.js';
-import { toFastifyJsonSchema } from '../utils/json-schema.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 

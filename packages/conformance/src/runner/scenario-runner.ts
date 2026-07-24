@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 import chalk from 'chalk';
 
 import { createObservedEvent } from '../events/event-bus.js';
@@ -18,6 +19,7 @@ import {
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
+import { type IssuerFaultController } from '../services/issuer-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
@@ -25,6 +27,10 @@ import { createScenarioPromptModel } from './prompts.js';
 import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
 import type { ScenarioRegistry } from '../scenarios/registry.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from '../verdict/outcome.js';
+import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
+
+/** Default IT Wallet specification version reported at issuer fault activation when not overridden. */
+const DEFAULT_ISSUER_FAULT_SPEC_VERSION = '1.4';
 
 export interface StartScenarioOptions {
   signal?: AbortSignal;
@@ -59,6 +65,10 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   registry: ScenarioRegistry;
   verdictEngine?: VerdictEngine;
   write?: (message: string) => void;
+  /** Required to run any scenario that declares `setup.issuerFault`. */
+  issuerFaultController?: IssuerFaultController;
+  /** IT Wallet specification version reported when activating an issuer fault. Defaults to '1.4'. */
+  issuerFaultSpecVersion?: string;
 }
 
 function defaultWrite(message: string): void {
@@ -89,12 +99,13 @@ interface CreatedStimulus {
 async function createStimulus(
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
-  correlationId: string
+  correlationId: string,
+  issuerFaultProfile: IssuerFaultProfile | undefined
 ): Promise<CreatedStimulus> {
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
-    const uri = createCredentialOfferUri(credentialIssuer, correlationId);
+    const uri = createCredentialOfferUri(credentialIssuer, correlationId, issuerFaultProfile);
     return { correlationId, stimulus: { type: 'credential-offer', uri, qrCode: uri } };
   }
 
@@ -226,116 +237,174 @@ export function createProtocolObservedScenarioRunner(
       let eventSubscription: Disposable | undefined;
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
-      const { correlationId, stimulus } = await createStimulus(definition, endpoints, initialCorrelationId);
-      const eventBridge = await options.eventBridgeFactory?.({
-        correlationId,
-        definition,
-        endpoints,
-        eventStore,
-        startedAt
-      });
 
-      await eventStore.emit(
-        createObservedEvent({
-          name:
-            stimulus.type === 'presentation-request' ? 'presentation_request.generated' : 'credential_offer.generated',
-          correlationId,
-          service: 'collector',
-          diagnostic: { stimulusType: stimulus.type }
-        })
-      );
+      const issuerFaultProfile = definition.setup?.issuerFault;
+      let issuerFaultActive = false;
 
-      const session: InteractiveScenarioSession = {
-        correlationId,
-        definition,
-        endpoints,
-        stimulus,
-        events: eventStore,
-        abortSignal: abortController.signal,
-        async showInstructions() {
-          showPrompt(definition, stimulus, endpoints, write);
-          await copyQrPayloadToClipboard(stimulus, write);
-          eventSubscription?.dispose();
-          eventSubscription = eventStore.subscribe((event) => {
-            write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
-          });
-        },
-        async awaitVerdict(awaitOptions = {}) {
-          const signal = awaitOptions.signal ?? abortController.signal;
-
-          let entryEvent = eventStore.find((event) => event.name === definition.entryEvent);
-          if (!entryEvent) {
-            try {
-              entryEvent = await eventStore.waitFor(definition.entryEvent, {
-                timeoutMs: definition.timeouts.testerActionMs,
-                signal,
-                inconclusiveMessage: `The wallet did not request ${definition.entryEvent}.`
-              });
-            } catch (error) {
-              if (!isControlledWaitError(error)) throw error;
-            }
-          }
-
-          if (entryEvent) {
-            const enforceOrder = hasVerdictRule(definition, 'required-events-in-order');
-            let previous = entryEvent;
-            for (const requiredEvent of definition.requiredEvents ?? []) {
-              const requiredEventName = getRequiredEventName(requiredEvent);
-              if (requiredEventName === entryEvent.name) continue;
-
-              try {
-                const observed = await eventStore.waitFor(requiredEventName, {
-                  after: enforceOrder ? previous : entryEvent,
-                  timeoutMs: definition.timeouts.protocolStepMs,
-                  signal,
-                  inconclusiveMessage: `The wallet did not send required event ${requiredEventName}.`
-                });
-                if (enforceOrder) previous = observed;
-              } catch (error) {
-                if (!isControlledWaitError(error)) throw error;
-                break;
-              }
-            }
-
-            if (definition.forbiddenEvents && definition.forbiddenEvents.length > 0) {
-              try {
-                await eventStore.expectNone(definition.forbiddenEvents, {
-                  after: entryEvent,
-                  timeoutMs: definition.timeouts.forbiddenObservationMs ?? definition.timeouts.protocolStepMs,
-                  signal
-                });
-              } catch (error) {
-                if (!isControlledWaitError(error)) throw error;
-              }
-            }
-          }
-
-          outcome = verdictEngine.evaluate({
-            definition,
-            events: eventStore.all(),
-            artifactValidationResults: [],
-            timings: createTimings(startedAt)
-          });
-          writeOutcome(outcome, write);
-          return outcome;
-        },
-        async stop() {
-          if (stopped) return;
-          stopped = true;
-          abortController.abort();
-          eventSubscription?.dispose();
-          eventBridge?.dispose();
-          eventStore.close();
-          activeSessions.delete(session);
-          if (!outcome) write(`Scenario ${definition.id} stopped before verdict.`);
-        },
-        async [Symbol.asyncDispose]() {
-          await this.stop();
-        }
+      const deactivateIssuerFaultIfActive = async (): Promise<void> => {
+        if (!issuerFaultActive) return;
+        issuerFaultActive = false;
+        await options.issuerFaultController?.deactivateIssuerFault({ scenarioId: initialCorrelationId });
       };
 
-      activeSessions.add(session);
-      return session;
+      try {
+        if (issuerFaultProfile) {
+          if (!options.issuerFaultController) {
+            throw new Error(
+              `Scenario ${definition.id} declares setup.issuerFault, but no issuerFaultController is configured`
+            );
+          }
+
+          // Await activation before creating/showing the stimulus, so the
+          // Credential Issuer never serves a nominal response for this run.
+          await options.issuerFaultController.activateIssuerFault({
+            scenarioId: initialCorrelationId,
+            specVersion: options.issuerFaultSpecVersion ?? DEFAULT_ISSUER_FAULT_SPEC_VERSION,
+            profile: issuerFaultProfile
+          });
+          issuerFaultActive = true;
+        }
+
+        const { correlationId, stimulus } = await createStimulus(
+          definition,
+          endpoints,
+          initialCorrelationId,
+          issuerFaultProfile
+        );
+        const eventBridge = await options.eventBridgeFactory?.({
+          correlationId,
+          definition,
+          endpoints,
+          eventStore,
+          startedAt
+        });
+
+        // Safe (non-sensitive) local evidence that the unsupported-credential-offer
+        // fault was applied to this stimulus: the fault type, the injected test
+        // identifier, and a hash of the shown URI. Never the URI/payload itself,
+        // and never a token or credential.
+        let appliedIssuerFaultDiagnostic: Record<string, unknown> = {};
+        if (stimulus.type === 'credential-offer' && issuerFaultProfile?.type === 'unsupported-credential-offer') {
+          appliedIssuerFaultDiagnostic = {
+            faultProfileType: issuerFaultProfile.type,
+            credentialConfigurationId: issuerFaultProfile.credentialConfigurationId,
+            artifactHash: sha256HashArtifact(stimulus.uri),
+            outcome: 'applied'
+          };
+        }
+
+        await eventStore.emit(
+          createObservedEvent({
+            name:
+              stimulus.type === 'presentation-request'
+                ? 'presentation_request.generated'
+                : 'credential_offer.generated',
+            correlationId,
+            service: 'collector',
+            diagnostic: { stimulusType: stimulus.type, ...appliedIssuerFaultDiagnostic }
+          })
+        );
+
+        const session: InteractiveScenarioSession = {
+          correlationId,
+          definition,
+          endpoints,
+          stimulus,
+          events: eventStore,
+          abortSignal: abortController.signal,
+          async showInstructions() {
+            showPrompt(definition, stimulus, endpoints, write);
+            await copyQrPayloadToClipboard(stimulus, write);
+            eventSubscription?.dispose();
+            eventSubscription = eventStore.subscribe((event) => {
+              write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
+            });
+          },
+          async awaitVerdict(awaitOptions = {}) {
+            const signal = awaitOptions.signal ?? abortController.signal;
+
+            let entryEvent = eventStore.find((event) => event.name === definition.entryEvent);
+            if (!entryEvent) {
+              try {
+                entryEvent = await eventStore.waitFor(definition.entryEvent, {
+                  timeoutMs: definition.timeouts.testerActionMs,
+                  signal,
+                  inconclusiveMessage: `The wallet did not request ${definition.entryEvent}.`
+                });
+              } catch (error) {
+                if (!isControlledWaitError(error)) throw error;
+              }
+            }
+
+            if (entryEvent) {
+              const enforceOrder = hasVerdictRule(definition, 'required-events-in-order');
+              let previous = entryEvent;
+              for (const requiredEvent of definition.requiredEvents ?? []) {
+                const requiredEventName = getRequiredEventName(requiredEvent);
+                if (requiredEventName === entryEvent.name) continue;
+
+                try {
+                  const observed = await eventStore.waitFor(requiredEventName, {
+                    after: enforceOrder ? previous : entryEvent,
+                    timeoutMs: definition.timeouts.protocolStepMs,
+                    signal,
+                    inconclusiveMessage: `The wallet did not send required event ${requiredEventName}.`
+                  });
+                  if (enforceOrder) previous = observed;
+                } catch (error) {
+                  if (!isControlledWaitError(error)) throw error;
+                  break;
+                }
+              }
+
+              if (definition.forbiddenEvents && definition.forbiddenEvents.length > 0) {
+                try {
+                  await eventStore.expectNone(definition.forbiddenEvents, {
+                    after: entryEvent,
+                    timeoutMs: definition.timeouts.forbiddenObservationMs ?? definition.timeouts.protocolStepMs,
+                    signal
+                  });
+                } catch (error) {
+                  if (!isControlledWaitError(error)) throw error;
+                }
+              }
+            }
+
+            outcome = verdictEngine.evaluate({
+              definition,
+              events: eventStore.all(),
+              artifactValidationResults: [],
+              timings: createTimings(startedAt)
+            });
+            writeOutcome(outcome, write);
+            return outcome;
+          },
+          async stop() {
+            if (stopped) return;
+            stopped = true;
+            abortController.abort();
+            eventSubscription?.dispose();
+            eventBridge?.dispose();
+            eventStore.close();
+            activeSessions.delete(session);
+            if (!outcome) write(`Scenario ${definition.id} stopped before verdict.`);
+            // Deactivate last so any deactivation failure still surfaces to the caller.
+            await deactivateIssuerFaultIfActive();
+          },
+          async [Symbol.asyncDispose]() {
+            await this.stop();
+          }
+        };
+
+        activeSessions.add(session);
+        return session;
+      } catch (error) {
+        // Best-effort cleanup on any startup failure (including a missing
+        // controller, activation failure, or a later error before the
+        // session object exists) so a fault is never left dangling.
+        await deactivateIssuerFaultIfActive().catch(() => undefined);
+        throw error;
+      }
     },
     async close() {
       await Promise.all([...activeSessions].map((session) => session.stop()));
