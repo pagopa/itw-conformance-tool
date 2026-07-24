@@ -61,7 +61,11 @@ async function startServer() {
   attachServiceIpcAdapter({
     endpoint: app.config.BASE_URL,
     service: 'credential-issuer',
-    stop: () => app.close()
+    stop: () => app.close(),
+    issuerFaults: {
+      activate: async (request) => app.issuerFaultStore.activate(request),
+      deactivate: async (request) => app.issuerFaultStore.deactivate(request)
+    }
   });
 
   // Only opens a browser tab when at least one credential identifier is

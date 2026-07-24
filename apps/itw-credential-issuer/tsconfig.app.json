@@ -43,6 +43,9 @@
     },
     {
       "path": "../../packages/config/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/faults/tsconfig.lib.json"
     }
   ]
 }
