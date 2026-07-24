@@ -20,6 +20,7 @@
   "dependencies": {
     "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/faults": "workspace:*",
     "@itw-conformance-tool/logger": "workspace:*",
     "@itw-conformance-tool/utils": "workspace:*",
     "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
@@ -33,9 +34,9 @@
   },
   "devDependencies": {
     "@types/node": "catalog:node",
+    "@itw-conformance-tool/ipc": "workspace:*",
     "@pagopa/io-wallet-oauth2": "^1.5.3",
     "@pagopa/io-wallet-utils": "^1.5.3",
-    "@types/node": "catalog:node",
     "vitest": "catalog:"
   }
 }

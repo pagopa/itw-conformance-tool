@@ -12,6 +12,7 @@ export const observedEventNames = [
   'wallet_provider.entity_configuration.requested',
   'federation.fetch.requested',
   'issuer.entity_configuration.requested',
+  'issuer.fault.applied',
   'issuer.metadata.requested',
   'issuer.par.requested',
   'issuer.authorization.requested',
