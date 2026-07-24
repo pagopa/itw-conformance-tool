@@ -7,7 +7,7 @@ import fp from 'fastify-plugin';
 
 export default fp(
   async function conformancePlugin(app) {
-    const dbClient = new DatabaseClient(app.config.dataDir);
+    const dbClient = new DatabaseClient(app.config.DATA_DIR);
     const eventSink = new SqliteScenarioEventRepository(dbClient);
 
     await app.register(

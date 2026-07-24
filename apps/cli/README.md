@@ -76,13 +76,13 @@ When executed, it:
 
 - creates or reads the workspace-root `config.ini`
 - creates the data directory
-- creates the `issuer`, `rp`, and `trust-anchor` subdirectories
+- creates the `issuer`, `rp`, `wallet-provider`, and `trust-anchor` subdirectories
 - generates issuer signing keys and an issuer intermediate CA signing key
 - generates the trust-anchor federation key and self-signed federation certificate
 - generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
 - generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
-- generates relying party authentication keys
-- generates a self-signed TLS certificate and private key **only if `https = true`** in the config
+- generates relying party authentication keys and a self-signed certificate
+- generates wallet provider signing keys and a self-signed certificate
 - creates or overwrites the config file when needed
 
 Generated structure:
@@ -95,6 +95,8 @@ Generated structure:
 - `<data_dir>/rp/auth-response-key.jwk.json`
 - `<data_dir>/rp/federation-key.jwk.json`
 - `<data_dir>/rp/cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/wallet-provider/jwks.json` — wallet provider signing key used for Wallet Instance Attestations
+- `<data_dir>/wallet-provider/cert.pem` — self-signed X.509 certificate whose public key corresponds to the wallet provider signing key and is used in Wallet Instance Attestation `x5c` headers
 - `<data_dir>/trust-anchor/federation-key.jwk.json`
 - `<data_dir>/trust-anchor/federation-cert.pem` — self-signed X.509 certificate generated from the federation key
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)

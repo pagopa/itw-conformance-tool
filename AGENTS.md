@@ -19,7 +19,7 @@ Run commands from the repository root.
 - `pnpm nx run itw-credential-issuer:test`: run one project target.
 - `pnpm format`: format JS, TS, JSON, and Markdown with Prettier.
 
-Use Node.js `22` from `.nvmrc` and pnpm `10.30.3`.
+Use Node.js `22` from `.nvmrc` and pnpm `11.13.1`.
 
 ## Coding Style & Naming Conventions
 

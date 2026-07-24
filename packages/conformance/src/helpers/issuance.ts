@@ -1,15 +1,84 @@
-export function createCredentialOfferUri(credentialIssuer: string, correlationId: string): string {
-  const credentialOffer = {
+import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
+
+/** The only `credential_configuration_id` nominally published by the local Credential Issuer today. */
+export const NOMINAL_CREDENTIAL_CONFIGURATION_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
+
+export interface CredentialOfferPayload {
+  credential_issuer: string;
+  credential_configuration_ids: string[];
+  grants: {
+    authorization_code: {
+      issuer_state: string;
+    };
+  };
+}
+
+/** Builds the nominal, unmutated Credential Offer for a `credential-offer` stimulus. */
+export function buildCredentialOffer(credentialIssuer: string, correlationId: string): CredentialOfferPayload {
+  return {
     credential_issuer: credentialIssuer,
-    credential_configuration_ids: ['dc_sd_jwt_EuropeanDisabilityCard'],
+    credential_configuration_ids: [NOMINAL_CREDENTIAL_CONFIGURATION_ID],
     grants: {
       authorization_code: {
         issuer_state: correlationId
       }
     }
   };
+}
 
-  return `openid-credential-offer://?credential_offer=${encodeURIComponent(JSON.stringify(credentialOffer))}`;
+/**
+ * Applies the `unsupported-credential-offer` fault profile to a nominal
+ * Credential Offer: replaces the single `credential_configuration_ids` entry
+ * with the profile's `credentialConfigurationId`, leaving `credential_issuer`
+ * and `issuer_state` (the scenario correlation id) untouched. Unlike the
+ * other issuer fault profiles, this mutation is applied by the conformance
+ * runner itself (see `runner/scenario-runner.ts`), not by a Credential
+ * Issuer HTTP response, because the Credential Offer for interactive
+ * scenarios is built and shown by the runner rather than served by
+ * `apps/itw-credential-issuer`'s `/credential-offer` route.
+ */
+export function applyUnsupportedCredentialOfferFault(
+  offer: CredentialOfferPayload,
+  profile: Extract<IssuerFaultProfile, { type: 'unsupported-credential-offer' }>
+): CredentialOfferPayload {
+  return {
+    ...offer,
+    credential_configuration_ids: [profile.credentialConfigurationId]
+  };
+}
+
+/**
+ * Applies `issuerFault` to `offer` when the fault's application point is
+ * this helper's concern (`unsupported-credential-offer`); every other fault
+ * profile has a different application point and leaves the offer unchanged.
+ */
+export function applyIssuerFaultToCredentialOffer(
+  offer: CredentialOfferPayload,
+  issuerFault: IssuerFaultProfile | undefined
+): CredentialOfferPayload {
+  if (issuerFault?.type !== 'unsupported-credential-offer') return offer;
+  return applyUnsupportedCredentialOfferFault(offer, issuerFault);
+}
+
+export function serializeCredentialOfferUri(offer: CredentialOfferPayload): string {
+  return `openid-credential-offer://?credential_offer=${encodeURIComponent(JSON.stringify(offer))}`;
+}
+
+/**
+ * Builds and serializes the Credential Offer shown for a `credential-offer`
+ * stimulus. When `issuerFault` is the already-activated
+ * `unsupported-credential-offer` profile, the offer carries the profile's
+ * unsupported `credential_configuration_id` instead of the nominal one; any
+ * other fault profile (a different application point) leaves the offer
+ * nominal.
+ */
+export function createCredentialOfferUri(
+  credentialIssuer: string,
+  correlationId: string,
+  issuerFault?: IssuerFaultProfile
+): string {
+  const offer = applyIssuerFaultToCredentialOffer(buildCredentialOffer(credentialIssuer, correlationId), issuerFault);
+  return serializeCredentialOfferUri(offer);
 }
 
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9\-._~]{43,128}$/;

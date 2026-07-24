@@ -1,10 +1,20 @@
 import { createHash } from 'node:crypto';
 
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 
-import { CreateCredentialError, CredentialService, InvalidProofError } from '../domain/index.js';
+import {
+  applyCredentialResponseFault,
+  CreateCredentialError,
+  CredentialService,
+  formatSpecVersionHeader,
+  InvalidProofError,
+  type ActiveIssuerFault,
+  type CredentialResponseFaultProfile
+} from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
+import type { CredentialResponse } from '@pagopa/io-wallet-oid4vci';
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -26,6 +36,13 @@ const credentialRequestDiagnosticBody = (requestBody: unknown): unknown => {
   return JSON.parse(requestBody) as unknown;
 };
 
+/** Narrows an active issuer fault to the Credential Response profile, so its `parameters` field is accessible. */
+function isCredentialResponseFault(
+  fault: ActiveIssuerFault | undefined
+): fault is ActiveIssuerFault & { profile: CredentialResponseFaultProfile } {
+  return fault?.profile.type === 'edc-missing-required-claims';
+}
+
 const credentialRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/credential',
@@ -40,6 +57,8 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
         firstHeaderValue(request.headers.authorization)
       );
       const dpopProof = firstHeaderValue(request.headers.dpop);
+      const activeFault = app.issuerFaultStore.getActive();
+      const credentialResponseFault = isCredentialResponseFault(activeFault) ? activeFault : undefined;
 
       reply.header('Cache-Control', 'no-store');
 
@@ -83,7 +102,47 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
         );
 
         const statusCode = result.status === 'deferred' ? 202 : 200;
-        return reply.code(statusCode).send(result.sdkResult.credentialResponse ?? result.sdkResult);
+        let responseBody: unknown = result.sdkResult.credentialResponse ?? result.sdkResult;
+
+        if (credentialResponseFault && result.status === 'immediate') {
+          const mutation = applyCredentialResponseFault({
+            profile: credentialResponseFault.profile,
+            response: responseBody as CredentialResponse,
+            responseKind: result.status
+          });
+
+          if (!mutation.ok) {
+            request.log.error(
+              { reason: mutation.reason },
+              'Credential Response fault could not be applied; failing closed'
+            );
+            return reply.code(500).send({ error: 'internal_server_error' });
+          }
+
+          responseBody = mutation.mutation.body;
+
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.fault.applied',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/credential',
+                faultProfileType: credentialResponseFault.profile.type,
+                scenarioId: credentialResponseFault.scenarioId,
+                resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
+                omittedParameters: mutation.mutation.omittedParameters,
+                artifactHash: sha256HashArtifact(JSON.stringify(responseBody)),
+                statusCode,
+                contentType: 'application/json',
+                outcome: 'applied'
+              }
+            })
+          );
+        }
+
+        return reply.code(statusCode).send(responseBody);
       } catch (error) {
         if (error instanceof InvalidProofError) {
           return reply.code(400).send({ error: 'invalid_or_missing_proof', error_description: error.message });

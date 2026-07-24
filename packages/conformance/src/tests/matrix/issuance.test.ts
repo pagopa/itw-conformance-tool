@@ -30,6 +30,9 @@ import {
   createSqliteScenarioEventBridge,
   issuanceScenarioRegistry,
   wp046aScenario,
+  WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
+  wpUnsupportedCredentialOfferScenario,
+  wp059Scenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -112,7 +115,7 @@ describe('Test Cases for Issuance Phase', () => {
     const controlEndpoint = process.env[SERVICE_CONTROL_ENDPOINT_ENV_VAR];
     if (!controlEndpoint) {
       throw new Error(
-        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by WP_046a and WP_054.`
+        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by WP_046a, WP_050b and WP_054.`
       );
     }
     issuerFaultController = createServiceControlClient({ endpoint: controlEndpoint });
@@ -1021,5 +1024,226 @@ describe('Test Cases for Issuance Phase', () => {
 
       await issuerFaultController.deactivateIssuerFault({ scenarioId: probeScenarioId });
     }, 10_000);
+  });
+
+  describe('WP_Unsupported_Credential_Offer', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let credentialOfferUri: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wpUnsupportedCredentialOfferScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wpUnsupportedCredentialOfferScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_050b: Wallet Instance rejects a Credential Offer whose credential_configuration_ids entry is not published in the Credential Issuer metadata.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const entityConfigurationEvent = events.find((event) => event.name === 'issuer.entity_configuration.requested');
+        const credentialOfferGeneratedEvent = events.find((event) => event.name === 'credential_offer.generated');
+
+        expect(
+          entityConfigurationEvent,
+          'Wallet must request the Credential Issuer Entity Configuration before this scenario can pass'
+        ).toBeDefined();
+
+        // unsupported-credential-offer's application point is the runner
+        // itself (the offer is built and shown by createStimulus, not served
+        // by a Credential Issuer HTTP route), so the safe local evidence that
+        // the fault was applied lives on credential_offer.generated rather
+        // than on an issuer.fault.applied HTTP event.
+        expect(
+          credentialOfferGeneratedEvent,
+          'The runner must record that the unsupported-credential-offer fault was applied to the shown stimulus'
+        ).toBeDefined();
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['faultProfileType']).toBe('unsupported-credential-offer');
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['credentialConfigurationId']).toBe(
+          WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID
+        );
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['outcome']).toBe('applied');
+
+        // Decode the credential offer actually shown to the wallet and prove
+        // it carries the reserved, unsupported id -- not the nominal one --
+        // so a genuine conformance failure would mean the wallet accepted an
+        // offer it could not have found in credential_configurations_supported.
+        const credentialOfferParam = new URL(credentialOfferUri).searchParams.get('credential_offer');
+        expect(
+          credentialOfferParam,
+          'openid-credential-offer:// URI must carry a credential_offer payload'
+        ).not.toBeNull();
+        const offerPayload = JSON.parse(credentialOfferParam ?? '{}') as { credential_configuration_ids?: string[] };
+        expect(offerPayload.credential_configuration_ids).toEqual([WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID]);
+
+        expect(
+          events.find((event) => event.name === 'issuer.par.requested'),
+          'Wallet must not continue to PAR after determining the requested credential_configuration_id is unsupported'
+        ).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.authorization.requested')).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.token.requested')).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.nonce.requested')).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.credential.requested')).toBeUndefined();
+      },
+      wpUnsupportedCredentialOfferScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_048: Wallet Instance requests the Credential Issuer Entity Configuration to parse the Credential Offer parameters.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const entityConfigurationEvent = events.find((event) => event.name === 'issuer.entity_configuration.requested');
+
+        expect(
+          entityConfigurationEvent,
+          'Wallet must request the Credential Issuer Entity Configuration before this scenario can pass'
+        ).toBeDefined();
+      },
+      wpUnsupportedCredentialOfferScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_050: Wallet Instance rejects a Credential Offer whose credential_configuration_ids entry is not published in the Credential Issuer metadata.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const entityConfigurationEvent = events.find((event) => event.name === 'issuer.entity_configuration.requested');
+        const credentialOfferGeneratedEvent = events.find((event) => event.name === 'credential_offer.generated');
+
+        expect(
+          entityConfigurationEvent,
+          'Wallet must request the Credential Issuer Entity Configuration before this scenario can pass'
+        ).toBeDefined();
+
+        // unsupported-credential-offer's application point is the runner
+        // itself (the offer is built and shown by createStimulus, not served
+        // by a Credential Issuer HTTP route), so the safe local evidence that
+        // the fault was applied lives on credential_offer.generated rather
+        // than on an issuer.fault.applied HTTP event.
+        expect(
+          credentialOfferGeneratedEvent,
+          'The runner must record that the unsupported-credential-offer fault was applied to the shown stimulus'
+        ).toBeDefined();
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['faultProfileType']).toBe('unsupported-credential-offer');
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['credentialConfigurationId']).toBe(
+          WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID
+        );
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['outcome']).toBe('applied');
+
+        // Decode the credential offer actually shown to the wallet and prove
+        // it carries the reserved, unsupported id -- not the nominal one --
+        // so a genuine conformance failure would mean the wallet accepted an
+        // offer it could not have found in credential_configurations_supported.
+        const credentialOfferParam = new URL(credentialOfferUri).searchParams.get('credential_offer');
+        expect(
+          credentialOfferParam,
+          'openid-credential-offer:// URI must carry a credential_offer payload'
+        ).not.toBeNull();
+        const offerPayload = JSON.parse(credentialOfferParam ?? '{}') as { credential_configuration_ids?: string[] };
+        expect(offerPayload.credential_configuration_ids).toEqual([WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID]);
+
+        expect(
+          events.find((event) => event.name === 'issuer.par.requested'),
+          'Wallet must not continue to PAR after determining the requested credential_configuration_id is unsupported'
+        ).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.authorization.requested')).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.token.requested')).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.nonce.requested')).toBeUndefined();
+        expect(events.find((event) => event.name === 'issuer.credential.requested')).toBeUndefined();
+      },
+      wpUnsupportedCredentialOfferScenario.timeouts.vitestTestMs
+    );
+
+    test('Cleanup: deactivating the unsupported-credential-offer fault does not leave the shared fault store locked for later scenarios.', async () => {
+      // Unlike invalid-trust-anchor, this fault is applied entirely by the
+      // runner when building the credential offer (helpers/issuance.ts),
+      // not by a live Credential Issuer HTTP response, so there is no
+      // endpoint to re-fetch here. Instead, prove that the session.stop()
+      // above released the Credential Issuer's single-active-fault store
+      // (apps/itw-credential-issuer/src/domain/faults/issuer-fault-store.ts)
+      // by activating and deactivating a fresh fault under a new
+      // scenarioId: if deactivation above had leaked, this activation would
+      // be rejected with FAULT_ALREADY_ACTIVE.
+      const probeScenarioId = randomUUID();
+      await issuerFaultController.activateIssuerFault({
+        scenarioId: probeScenarioId,
+        specVersion: '1.4',
+        profile: { type: 'invalid-trust-anchor' }
+      });
+      await issuerFaultController.deactivateIssuerFault({ scenarioId: probeScenarioId });
+    }, 10_000);
+  });
+
+  describe('WP_Credential_Response_Claims_Missed', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp059Scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp059Scenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_059: Wallet Instance rejects an immediate Credential Response missing the required credentials parameter.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The edc-missing-required-claims fault must have been applied while serving the Credential Response'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('edc-missing-required-claims');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['omittedParameters'],
+          'The fault must report credentials as the omitted parameter'
+        ).toEqual(['credentials']);
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The malformed immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        // Protocol-observed evidence proves the malformed response was delivered exactly as
+        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
+        // certifies fault delivery. The operator-facing instructions above require confirming the
+        // wallet's visible error/rejection separately (see instructions.steps in wp-059.ts).
+        //
+        // A full authenticated HTTP replay of /credential to prove cleanup is infeasible without a
+        // real wallet's DPoP proof, nonce, and access token; deactivation/restoration of the nominal
+        // (unfaulted) response path is instead proven by the focused unit test in
+        // apps/itw-credential-issuer/src/domain/faults/credential-response-fault.test.ts.
+      },
+      wp059Scenario.timeouts.vitestTestMs
+    );
   });
 });

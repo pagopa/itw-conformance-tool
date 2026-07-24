@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto';
-
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 
 import { FederationService, formatSpecVersionHeader } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
@@ -15,10 +14,6 @@ import type { FastifyPluginAsync } from 'fastify';
  * fault to replace `authority_hints`.
  */
 const INVALID_TRUST_ANCHOR_ENTITY_ID = 'https://wp-046a-invalid-trust-anchor.itw-conformance-tool.invalid';
-
-function sha256HashArtifact(value: string): string {
-  return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
-}
 
 const federationRoute: FastifyPluginAsync = async (app) => {
   app.route({

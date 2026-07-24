@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 import chalk from 'chalk';
 
 import { createObservedEvent } from '../events/event-bus.js';
@@ -26,6 +27,7 @@ import { createScenarioPromptModel } from './prompts.js';
 import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
 import type { ScenarioRegistry } from '../scenarios/registry.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from '../verdict/outcome.js';
+import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
 
 /** Default IT Wallet specification version reported at issuer fault activation when not overridden. */
 const DEFAULT_ISSUER_FAULT_SPEC_VERSION = '1.4';
@@ -97,12 +99,13 @@ interface CreatedStimulus {
 async function createStimulus(
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
-  correlationId: string
+  correlationId: string,
+  issuerFaultProfile: IssuerFaultProfile | undefined
 ): Promise<CreatedStimulus> {
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
-    const uri = createCredentialOfferUri(credentialIssuer, correlationId);
+    const uri = createCredentialOfferUri(credentialIssuer, correlationId, issuerFaultProfile);
     return { correlationId, stimulus: { type: 'credential-offer', uri, qrCode: uri } };
   }
 
@@ -257,7 +260,12 @@ export function createProtocolObservedScenarioRunner(
           issuerFaultActive = true;
         }
 
-        const { correlationId, stimulus } = await createStimulus(definition, endpoints, initialCorrelationId);
+        const { correlationId, stimulus } = await createStimulus(
+          definition,
+          endpoints,
+          initialCorrelationId,
+          issuerFaultProfile
+        );
         const eventBridge = await options.eventBridgeFactory?.({
           correlationId,
           definition,
@@ -265,6 +273,20 @@ export function createProtocolObservedScenarioRunner(
           eventStore,
           startedAt
         });
+
+        // Safe (non-sensitive) local evidence that the unsupported-credential-offer
+        // fault was applied to this stimulus: the fault type, the injected test
+        // identifier, and a hash of the shown URI. Never the URI/payload itself,
+        // and never a token or credential.
+        let appliedIssuerFaultDiagnostic: Record<string, unknown> = {};
+        if (stimulus.type === 'credential-offer' && issuerFaultProfile?.type === 'unsupported-credential-offer') {
+          appliedIssuerFaultDiagnostic = {
+            faultProfileType: issuerFaultProfile.type,
+            credentialConfigurationId: issuerFaultProfile.credentialConfigurationId,
+            artifactHash: sha256HashArtifact(stimulus.uri),
+            outcome: 'applied'
+          };
+        }
 
         await eventStore.emit(
           createObservedEvent({
@@ -274,7 +296,7 @@ export function createProtocolObservedScenarioRunner(
                 : 'credential_offer.generated',
             correlationId,
             service: 'collector',
-            diagnostic: { stimulusType: stimulus.type }
+            diagnostic: { stimulusType: stimulus.type, ...appliedIssuerFaultDiagnostic }
           })
         );
 
