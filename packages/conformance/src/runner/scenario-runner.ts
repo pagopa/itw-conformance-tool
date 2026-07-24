@@ -1,5 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 import chalk from 'chalk';
 
 import { createObservedEvent } from '../events/event-bus.js';
@@ -93,16 +94,6 @@ function resolveScenarioEndpoints(
 interface CreatedStimulus {
   correlationId: string;
   stimulus: ScenarioStimulus;
-}
-
-/**
- * Safe (non-sensitive) SHA-256 hash of a generated artifact, formatted like
- * `apps/itw-credential-issuer`'s Entity Configuration fault evidence, so
- * fault diagnostics logged by the runner and by the Credential Issuer share
- * the same format.
- */
-function sha256HashArtifact(value: string): string {
-  return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
 }
 
 async function createStimulus(
