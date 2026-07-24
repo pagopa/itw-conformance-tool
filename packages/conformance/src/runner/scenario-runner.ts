@@ -11,7 +11,7 @@ import {
   type Disposable,
   type ScenarioEventStore
 } from '../events/event-store.js';
-import { createCredentialOfferUri } from '../helpers/issuance.js';
+import { NOMINAL_CREDENTIAL_CONFIGURATION_ID, createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
 import { getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
 import {
@@ -93,6 +93,7 @@ function resolveScenarioEndpoints(
 
 interface CreatedStimulus {
   correlationId: string;
+  credentialConfigurationId?: string;
   stimulus: ScenarioStimulus;
 }
 
@@ -105,8 +106,22 @@ async function createStimulus(
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
-    const uri = createCredentialOfferUri(credentialIssuer, correlationId, issuerFaultProfile);
-    return { correlationId, stimulus: { type: 'credential-offer', uri, qrCode: uri } };
+    const selectedCredentialConfigurationId =
+      definition.stimulus.credentialConfigurationId ?? NOMINAL_CREDENTIAL_CONFIGURATION_ID;
+    const uri = createCredentialOfferUri(
+      credentialIssuer,
+      correlationId,
+      issuerFaultProfile,
+      selectedCredentialConfigurationId
+    );
+    return {
+      correlationId,
+      credentialConfigurationId:
+        issuerFaultProfile?.type === 'unsupported-credential-offer'
+          ? issuerFaultProfile.credentialConfigurationId
+          : selectedCredentialConfigurationId,
+      stimulus: { type: 'credential-offer', uri, qrCode: uri }
+    };
   }
 
   if (definition.stimulus.type === 'manual-instruction') {
@@ -260,7 +275,7 @@ export function createProtocolObservedScenarioRunner(
           issuerFaultActive = true;
         }
 
-        const { correlationId, stimulus } = await createStimulus(
+        const { correlationId, credentialConfigurationId, stimulus } = await createStimulus(
           definition,
           endpoints,
           initialCorrelationId,
@@ -282,7 +297,6 @@ export function createProtocolObservedScenarioRunner(
         if (stimulus.type === 'credential-offer' && issuerFaultProfile?.type === 'unsupported-credential-offer') {
           appliedIssuerFaultDiagnostic = {
             faultProfileType: issuerFaultProfile.type,
-            credentialConfigurationId: issuerFaultProfile.credentialConfigurationId,
             artifactHash: sha256HashArtifact(stimulus.uri),
             outcome: 'applied'
           };
@@ -296,7 +310,7 @@ export function createProtocolObservedScenarioRunner(
                 : 'credential_offer.generated',
             correlationId,
             service: 'collector',
-            diagnostic: { stimulusType: stimulus.type, ...appliedIssuerFaultDiagnostic }
+            diagnostic: { stimulusType: stimulus.type, credentialConfigurationId, ...appliedIssuerFaultDiagnostic }
           })
         );
 

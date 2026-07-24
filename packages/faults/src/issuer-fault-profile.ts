@@ -73,7 +73,7 @@ const edcMissingRequiredClaimsProfileSchema = z
  * configured Trust Anchor. Mutated before signing (see `mutationTiming:
  * 'pre-signature'` in the catalog), isolating trust-chain validation from
  * both `digital-credential-claims-invalid` (WP_060) and
- * `edc-invalid-signature` (WP_062a).
+ * `edc-invalid-signature` (WP_062a), and `mdl-invalid-signature` (WP_062b).
  */
 const edcInvalidTrustChainProfileSchema = z
   .object({
@@ -120,9 +120,10 @@ const digitalCredentialClaimsInvalidProfileSchema = z
  * `authorization-response-invalid-state`,
  * `authorization-response-invalid-issuer`,
  * `digital-credential-claims-invalid`, `edc-invalid-trust-chain`, and
- * `edc-invalid-signature` are wired to a mutation today; the remaining
- * variants are reserved so the shared type, IPC protocol, and catalog
- * metadata do not drift as future fault scenarios are implemented.
+ * `edc-invalid-signature`, and `mdl-invalid-signature` are wired to a
+ * mutation today; the remaining variants are reserved so the shared type, IPC
+ * protocol, and catalog metadata do not drift as future fault scenarios are
+ * implemented.
  */
 export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   invalidTrustAnchorProfileSchema,

@@ -36,6 +36,7 @@ import {
   wp060TypeMismatchScenario,
   wp061Scenario,
   wp062aScenario,
+  wp062bScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -70,6 +71,15 @@ function requiredDiagnosticString(event: ObservedEvent, key: string): string {
 
 function sha256Base64Url(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('base64url');
+}
+
+function decodeCredentialOfferUri(uri: string): { credential_configuration_ids?: string[] } {
+  const credentialOffer = new URL(uri).searchParams.get('credential_offer');
+  if (!credentialOffer) {
+    throw new Error('Credential offer URI is missing the credential_offer parameter');
+  }
+
+  return JSON.parse(credentialOffer) as { credential_configuration_ids?: string[] };
 }
 
 /**
@@ -1422,6 +1432,96 @@ describe('Test Cases for Issuance Phase', () => {
         expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('x5c');
       },
       wp062aScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_062b', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let credentialOfferUri: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wp062bScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp062bScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_062b: Wallet Instance rejects an mDL mdoc-CBOR credential whose MSO COSE signature verification fails.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialOfferGeneratedEvent = events.find((event) => event.name === 'credential_offer.generated');
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvents = events.filter((event) => event.name === 'issuer.fault.applied');
+        const [faultAppliedEvent] = faultAppliedEvents;
+
+        expect(
+          credentialOfferGeneratedEvent,
+          'The runner must record safe evidence for the mDL Credential Offer shown to the wallet'
+        ).toBeDefined();
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['credentialConfigurationId']).toBe('org.iso.18013.5.1.mDL');
+
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        expect(
+          offerPayload.credential_configuration_ids,
+          'The shown Credential Offer must contain exactly the mDL configuration id'
+        ).toEqual(['org.iso.18013.5.1.mDL']);
+
+        expect(
+          credentialEvent,
+          'Wallet must send the mDL Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        const credentialRequestParseResult = zCredentialRequestV1_3.safeParse(credentialEvent?.diagnostic?.['body']);
+        expect(
+          credentialRequestParseResult.success,
+          'issuer.credential.requested evidence body must be a valid IT-Wallet v1.3/v1.4 Credential Request'
+        ).toBe(true);
+        if (!credentialRequestParseResult.success) {
+          throw new Error(credentialRequestParseResult.error.message);
+        }
+        expect(credentialRequestParseResult.data.credential_identifier).toBe('org.iso.18013.5.1.mDL');
+
+        expect(
+          faultAppliedEvents,
+          'The mdl-invalid-signature fault must have been applied exactly once while serving the Credential Response'
+        ).toHaveLength(1);
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('mdl-invalid-signature');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(faultAppliedEvent?.diagnostic?.['resolvedSpecVersion']).toBe('1.4');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+        expect(faultAppliedEvent?.diagnostic?.['credentialConfigurationId']).toBe('org.iso.18013.5.1.mDL');
+        expect(faultAppliedEvent?.diagnostic?.['mutationTarget']).toBe('issuerAuth.cose-signature');
+        expect(faultAppliedEvent?.diagnostic?.['strategy']).toBe('flip-last-signature-byte-low-bit');
+        expect(
+          faultAppliedEvent?.diagnostic?.['signatureByteLength'],
+          'The fault must report the decoded COSE signature byte length without exposing signature material'
+        ).toBeGreaterThan(0);
+
+        // The matrix cannot inspect wallet secure storage. Cryptographic
+        // single-defect isolation is covered by the focused issuer unit tests;
+        // this assertion block proves protocol delivery of the controlled
+        // mdoc-CBOR fault and leaves UI/storage rejection to the operator.
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('credential');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('issuerAuth');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('signature');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('x5chain');
+      },
+      wp062bScenario.timeouts.vitestTestMs
     );
   });
 });

@@ -13,7 +13,8 @@ import {
   type CredentialResponseFaultProfile,
   type DigitalCredentialClaimsFaultProfile,
   type DigitalCredentialSignatureFaultProfile,
-  type DigitalCredentialTrustChainFaultProfile
+  type DigitalCredentialTrustChainFaultProfile,
+  type MdocSignatureFaultProfile
 } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
@@ -67,6 +68,27 @@ function isDigitalCredentialSignatureFault(
   return fault?.profile.type === 'edc-invalid-signature';
 }
 
+/** Narrows an active issuer fault to the WP_062b mdoc-CBOR signature profile. */
+function isMdocSignatureFault(
+  fault: ActiveIssuerFault | undefined
+): fault is ActiveIssuerFault & { profile: MdocSignatureFaultProfile } {
+  return fault?.profile.type === 'mdl-invalid-signature';
+}
+
+const credentialConfigurationIdFromRequest = (requestBody: unknown): string | undefined => {
+  if (typeof requestBody === 'string') {
+    try {
+      return credentialConfigurationIdFromRequest(JSON.parse(requestBody) as unknown);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (requestBody === null || typeof requestBody !== 'object') return undefined;
+  const credentialIdentifier = (requestBody as { credential_identifier?: unknown }).credential_identifier;
+  return typeof credentialIdentifier === 'string' && credentialIdentifier.length > 0 ? credentialIdentifier : undefined;
+};
+
 const credentialRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/credential',
@@ -88,6 +110,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
         ? activeFault
         : undefined;
       const digitalCredentialSignatureFault = isDigitalCredentialSignatureFault(activeFault) ? activeFault : undefined;
+      const mdocSignatureFault = isMdocSignatureFault(activeFault) ? activeFault : undefined;
       // The issuer fault store only ever activates a single fault at a time,
       // so at most one of these Digital Credential faults can be set.
       const disabilityCardFault =
@@ -113,6 +136,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
           disabilityCardFaultProfile: disabilityCardFault?.profile,
           headers,
           method: request.method as HttpMethod,
+          mdocFaultProfile: mdocSignatureFault?.profile,
           trustedWalletProviderIssuers: app.config.TRUSTED_WALLET_PROVIDER_ISSUERS,
           url: `${baseURL}${request.url}`
         });
@@ -151,6 +175,29 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
                 scenarioId: disabilityCardFault.scenarioId,
                 resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
                 ...result.disabilityCardFaultEvidence,
+                artifactHash: sha256HashArtifact(JSON.stringify(responseBody)),
+                statusCode,
+                contentType: 'application/json',
+                outcome: 'applied'
+              }
+            })
+          );
+        }
+
+        if (mdocSignatureFault && result.mdocFaultEvidence) {
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.fault.applied',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/credential',
+                faultProfileType: mdocSignatureFault.profile.type,
+                scenarioId: mdocSignatureFault.scenarioId,
+                resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
+                ...result.mdocFaultEvidence,
+                credentialConfigurationId: credentialConfigurationIdFromRequest(request.body),
                 artifactHash: sha256HashArtifact(JSON.stringify(responseBody)),
                 statusCode,
                 contentType: 'application/json',

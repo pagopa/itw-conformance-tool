@@ -19,6 +19,7 @@ export * from './faults/digital-credential-claims-fault.js';
 export * from './faults/digital-credential-signature-fault.js';
 export * from './faults/digital-credential-trust-chain-fault.js';
 export * from './faults/issuer-fault-store.js';
+export * from './faults/mdoc-signature-fault.js';
 
 // Utils
 export * from './utils/status-list.js';

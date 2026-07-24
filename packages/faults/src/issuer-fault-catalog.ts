@@ -83,14 +83,24 @@ const EDC_INVALID_TRUST_CHAIN_TESTED_SPEC_VERSIONS = ['1.4'] as const satisfies 
 const EDC_INVALID_SIGNATURE_TESTED_SPEC_VERSIONS = ['1.4'] as const satisfies readonly SupportedItWalletSpecVersion[];
 
 /**
+ * Specification versions verified for the `mdl-invalid-signature` (WP_062b)
+ * post-serialization mdoc-CBOR signature mutation. Limited to `1.4`, the
+ * version targeted by this increment's scenario and matrix test, until
+ * `1.0` and `1.3` have their own verified fixtures; see the plan's "Version
+ * drift" risk note.
+ */
+const MDL_INVALID_SIGNATURE_TESTED_SPEC_VERSIONS = ['1.4'] as const satisfies readonly SupportedItWalletSpecVersion[];
+
+/**
  * Associates every catalogued fault `type` with its application point,
  * supported specification versions, mutation timing, and implementation
  * status. `invalid-trust-anchor`, `unsupported-credential-offer`,
  * `edc-missing-required-claims`, `digital-credential-claims-invalid`, and
- * `edc-invalid-trust-chain`, and `edc-invalid-signature` are `implemented:
- * true`; every other entry is reserved metadata so the runner, IPC protocol,
- * and CLI can already validate and reject activation requests for profiles
- * that have no mutation yet.
+ * `edc-invalid-trust-chain`, `edc-invalid-signature`, and
+ * `mdl-invalid-signature` are `implemented: true`; every other entry is
+ * reserved metadata so the runner, IPC protocol, and CLI can already
+ * validate and reject activation requests for profiles that have no mutation
+ * yet.
  *
  * `unsupported-credential-offer`'s application point is `credential-offer`,
  * but unlike the other profiles it is not mutated by a Credential Issuer
@@ -167,9 +177,9 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
   'mdl-invalid-signature': {
     type: 'mdl-invalid-signature',
     applicationPoint: 'mdl-serialization',
-    supportedSpecVersions: ALL_SPEC_VERSIONS,
+    supportedSpecVersions: MDL_INVALID_SIGNATURE_TESTED_SPEC_VERSIONS,
     mutationTiming: 'post-serialization',
-    implemented: false
+    implemented: true
   },
   'digital-credential-claims-invalid': {
     type: 'digital-credential-claims-invalid',

@@ -11,6 +11,7 @@ import { decodeJwt } from 'jose';
 import { createDisabilityCardCredential, DISABILITY_CARD_ID } from '../credentials/disability-card.js';
 import { createPidCredential } from '../credentials/pid.js';
 import { generateFakeUser } from '../faker.js';
+import { applyMdocSignatureFault } from '../faults/mdoc-signature-fault.js';
 import { createMdocCredential, getMdocCredentialDefinition } from '../mdoc/index.js';
 import { type JwksRepository } from '../signer.js';
 import { JwkPublicKey } from '../z-jwk.js';
@@ -25,6 +26,7 @@ import type { FakeUser } from '../faker.js';
 import type { DigitalCredentialClaimsFaultMutationEvidence } from '../faults/digital-credential-claims-fault.js';
 import type { DigitalCredentialSignatureFaultMutationEvidence } from '../faults/digital-credential-signature-fault.js';
 import type { DigitalCredentialTrustChainFaultMutationEvidence } from '../faults/digital-credential-trust-chain-fault.js';
+import type { MdocSignatureFaultMutationEvidence, MdocSignatureFaultProfile } from '../faults/mdoc-signature-fault.js';
 import type { SupportedCredentialsId } from '../z-credential.js';
 import type { IDeferredCredentialRepository, INonceRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext, JwtPayload } from '@pagopa/io-wallet-oauth2';
@@ -71,6 +73,8 @@ export interface CreateCredentialOptions {
    */
   disabilityCardFaultProfile?: DisabilityCardFaultProfile;
   headers: Headers;
+  /** The active WP_062b (`mdl-invalid-signature`) profile, if any. */
+  mdocFaultProfile?: MdocSignatureFaultProfile;
   method: HttpMethod;
   trustedWalletProviderIssuers: readonly string[];
   url: string;
@@ -87,6 +91,8 @@ export interface CreateCredentialResult {
     | DigitalCredentialClaimsFaultMutationEvidence
     | DigitalCredentialSignatureFaultMutationEvidence
     | DigitalCredentialTrustChainFaultMutationEvidence;
+  /** Present only when `mdocFaultProfile` was provided and successfully applied. */
+  mdocFaultEvidence?: MdocSignatureFaultMutationEvidence;
   /** Raw SDK result; the actual JSON body to send is `sdkResult.credentialResponse`. */
   sdkResult: CreateCredentialResponseResult;
   /** Whether the request was answered immediately (`200`) or deferred (`202`). */
@@ -183,6 +189,7 @@ export class CredentialService {
       | DigitalCredentialSignatureFaultMutationEvidence
       | DigitalCredentialTrustChainFaultMutationEvidence
       | undefined;
+    let mdocFaultEvidence: MdocSignatureFaultMutationEvidence | undefined;
 
     for (const proof of proofs) {
       const jwt = proof.jwt;
@@ -232,12 +239,20 @@ export class CredentialService {
         fakeUser,
         holderPublicKey.data,
         accessTokenPayload,
-        options.disabilityCardFaultProfile
+        options.disabilityCardFaultProfile,
+        options.mdocFaultProfile
       );
 
       credentials.push(credential);
       if (faultEvidence) {
-        disabilityCardFaultEvidence = faultEvidence;
+        if (options.mdocFaultProfile) {
+          mdocFaultEvidence = faultEvidence as MdocSignatureFaultMutationEvidence;
+        } else {
+          disabilityCardFaultEvidence = faultEvidence as
+            | DigitalCredentialClaimsFaultMutationEvidence
+            | DigitalCredentialSignatureFaultMutationEvidence
+            | DigitalCredentialTrustChainFaultMutationEvidence;
+        }
       }
     }
 
@@ -250,11 +265,11 @@ export class CredentialService {
 
     if (options.batchIssuanceByDeferred && credentials.length > 1) {
       const sdkResult = await this.#buildDeferredCredentialResponse(options, credentials, sub, jkt);
-      return { disabilityCardFaultEvidence, sdkResult, status: 'deferred' };
+      return { disabilityCardFaultEvidence, mdocFaultEvidence, sdkResult, status: 'deferred' };
     }
 
     const sdkResult = await this.#buildCredentialResponse(options, credentials);
-    return { disabilityCardFaultEvidence, sdkResult, status: 'immediate' };
+    return { disabilityCardFaultEvidence, mdocFaultEvidence, sdkResult, status: 'immediate' };
   }
 
   async #verifyCredentialProof(
@@ -378,18 +393,25 @@ export class CredentialService {
     fakeUser: FakeUser,
     holderPublicKey: JwkPublicKey,
     accessTokenPayload?: JwtPayload & { auth_flow?: string },
-    activeFaultProfile?: DisabilityCardFaultProfile
+    activeFaultProfile?: DisabilityCardFaultProfile,
+    activeMdocFaultProfile?: MdocSignatureFaultProfile
   ): Promise<{
     credential: string;
     faultEvidence?:
       | DigitalCredentialClaimsFaultMutationEvidence
       | DigitalCredentialSignatureFaultMutationEvidence
-      | DigitalCredentialTrustChainFaultMutationEvidence;
+      | DigitalCredentialTrustChainFaultMutationEvidence
+      | MdocSignatureFaultMutationEvidence;
   }> {
     if (credentialIdentifier === 'dc_sd_jwt_PersonIdentificationData') {
       if (activeFaultProfile) {
         throw new CreateCredentialError(
           `The ${activeFaultProfile.type} fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
+        );
+      }
+      if (activeMdocFaultProfile) {
+        throw new CreateCredentialError(
+          `The ${activeMdocFaultProfile.type} fault only applies to org.iso.18013.5.1.mDL, not ${credentialIdentifier}`
         );
       }
       const credential = await createPidCredential(
@@ -404,6 +426,11 @@ export class CredentialService {
     }
 
     if (credentialIdentifier === 'dc_sd_jwt_EuropeanDisabilityCard') {
+      if (activeMdocFaultProfile) {
+        throw new CreateCredentialError(
+          `The ${activeMdocFaultProfile.type} fault only applies to org.iso.18013.5.1.mDL, not ${credentialIdentifier}`
+        );
+      }
       return createDisabilityCardCredential(
         baseURL,
         this.#jwksRepository,
@@ -425,8 +452,26 @@ export class CredentialService {
           `The ${activeFaultProfile.type} fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
         );
       }
+      if (activeMdocFaultProfile && credentialIdentifier !== 'org.iso.18013.5.1.mDL') {
+        throw new CreateCredentialError(
+          `The ${activeMdocFaultProfile.type} fault only applies to org.iso.18013.5.1.mDL, not ${credentialIdentifier}`
+        );
+      }
       const document = getMdocCredentialDefinition(credentialIdentifier, config, holderPublicKey, fakeUser);
-      const credential = await createMdocCredential(document, this.#jwksRepository, holderPublicKey);
+      let credential = await createMdocCredential(document, this.#jwksRepository, holderPublicKey);
+
+      if (activeMdocFaultProfile) {
+        const mutation = applyMdocSignatureFault({ credential, profile: activeMdocFaultProfile });
+        if (!mutation.ok) {
+          throw new CreateCredentialError(
+            `Unable to apply the mdl-invalid-signature fault to the mdoc credential: ${mutation.reason}`
+          );
+        }
+
+        credential = mutation.mutation.credential;
+        return { credential, faultEvidence: mutation.mutation.evidence };
+      }
+
       return { credential };
     }
 
