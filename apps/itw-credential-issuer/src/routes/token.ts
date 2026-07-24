@@ -1,3 +1,4 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 
 import {
@@ -53,7 +54,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             .filter(([, value]) => typeof value === 'string' || Array.isArray(value))
             .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value] as [string, string])
         );
-        const response = await service.createAccessToken({
+        const { issuerState, response } = await service.createAccessToken({
           baseURL,
           callbacks: {
             generateRandom: oauthCallbacks.generateRandom,
@@ -69,6 +70,20 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             url: `${baseURL}/token`
           }
         });
+
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.token.requested',
+            correlationId: issuerState ?? request.conformance?.correlation?.correlationId ?? null,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/token',
+              body: request.body,
+              headers: Object.fromEntries(tokenRequestHeaders.entries())
+            }
+          })
+        );
 
         return reply
           .code(200)

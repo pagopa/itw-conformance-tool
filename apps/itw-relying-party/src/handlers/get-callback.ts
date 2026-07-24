@@ -57,7 +57,6 @@ export const getCallbackHandler = async (
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.redirect.followed',
-      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
       correlationId: state,
       service: 'relying-party',
       requestId: req.id,

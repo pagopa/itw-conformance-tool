@@ -58,7 +58,6 @@ export const getAuthorizationResponseHandler = async (
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.presentation_response.received',
-      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
       correlationId,
       service: 'relying-party',
       requestId: req.id,
@@ -99,7 +98,6 @@ export const getAuthorizationResponseHandler = async (
     await req.server.conformanceEventSink.emit(
       createObservedEvent({
         name: 'vp_token.validation.failed',
-        scenarioId: req.conformance?.correlation?.scenarioId ?? null,
         correlationId,
         service: 'relying-party',
         requestId: req.id,
@@ -115,7 +113,6 @@ export const getAuthorizationResponseHandler = async (
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'vp_token.validation.succeeded',
-      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
       correlationId,
       service: 'relying-party',
       requestId: req.id

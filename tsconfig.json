@@ -35,6 +35,9 @@
     },
     {
       "path": "./packages/utils"
+    },
+    {
+      "path": "./apps/itw-wallet-provider"
     }
   ]
 }

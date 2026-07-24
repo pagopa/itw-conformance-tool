@@ -81,7 +81,6 @@ export const createEntityConfigurationHandler = async (
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.metadata.requested',
-      scenarioId: req.conformance?.correlation?.scenarioId ?? null,
       correlationId: req.conformance?.correlation?.correlationId ?? null,
       service: 'relying-party',
       requestId: req.id,

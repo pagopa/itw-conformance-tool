@@ -29,13 +29,15 @@ async function buildApp(federationPrivateJwk: JwkKey): Promise<FastifyInstance> 
     baseUrl: TRUST_ANCHOR_BASE_URL,
     dataDir: '/tmp/unused',
     issuerEntityId: ISSUER_ENTITY_ID,
-    rpEntityId: RP_ENTITY_ID
+    rpEntityId: RP_ENTITY_ID,
+    walletProviderEntityId: 'https://127.0.0.1:3003'
   });
 
   app.decorate('trustAnchorKeys', {
     federationPrivateJwk,
     issuerFederationJwk: {},
-    rpFederationJwk: {}
+    rpFederationJwk: {},
+    walletProviderFederationJwk: {}
   });
 
   await app.register(federationRoute);

@@ -82,7 +82,6 @@ export function createConformanceInstrumentationPlugin(options: InstrumentationO
         await options.eventSink.emit(
           createObservedEvent({
             name: 'http.request.received',
-            scenarioId: correlation?.scenarioId ?? null,
             correlationId: correlation?.correlationId ?? null,
             service: options.serviceName,
             requestId: request.id,
@@ -113,7 +112,6 @@ export function createConformanceInstrumentationPlugin(options: InstrumentationO
         await options.eventSink.emit(
           createObservedEvent({
             name: 'http.response.sent',
-            scenarioId: ctx?.correlation?.scenarioId ?? null,
             correlationId: ctx?.correlation?.correlationId ?? null,
             service: options.serviceName,
             requestId: request.id,
@@ -137,7 +135,6 @@ export function createConformanceInstrumentationPlugin(options: InstrumentationO
         await options.eventSink.emit(
           createObservedEvent({
             name: 'http.request.failed',
-            scenarioId: request.conformance?.correlation?.scenarioId ?? null,
             correlationId: request.conformance?.correlation?.correlationId ?? null,
             service: options.serviceName,
             requestId: request.id,

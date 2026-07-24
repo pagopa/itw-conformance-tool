@@ -1,7 +1,10 @@
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import type { SearchParamResult } from '../types/types.js';
+type SearchParamResult = {
+  value: string;
+  remainingArgs: string[];
+};
 
 /** Utility function to find the root directory of the Nx workspace
  * by looking for the presence of 'nx.json'.
@@ -60,6 +63,7 @@ export function filesToSearch(filePath: string): string[] {
     join(filePath, 'issuer', 'cert.pem'),
     join(filePath, 'rp', 'jwks.json'),
     join(filePath, 'rp', 'cert.pem'),
+    join(filePath, 'wallet-provider', 'jwks.json'),
     join(filePath, 'trust-anchor', 'federation-key.jwk.json'),
     join(filePath, 'trust-anchor', 'federation-cert.pem')
   ];

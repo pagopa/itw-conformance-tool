@@ -69,6 +69,18 @@ export function getRequiredEventNames(requiredEvents: RequiredEventExpectation[]
   return (requiredEvents ?? []).map(getRequiredEventName);
 }
 
+/**
+ * Checks whether a scenario declares a given verdict rule, so both the
+ * interactive wait loop and the verdict engine can share a single source of
+ * truth for whether required events must be observed in declaration order.
+ */
+export function hasVerdictRule(
+  definition: Pick<ProtocolObservedScenarioDefinition, 'verdictRules'>,
+  type: VerdictRule['type']
+): boolean {
+  return definition.verdictRules.some((rule) => rule.type === type);
+}
+
 export interface ProtocolObservedScenarioDefinition {
   id: string;
   title: string;

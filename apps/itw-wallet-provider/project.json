@@ -1,0 +1,87 @@
+{
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^typecheck"],
+      "options": {
+        "cwd": "apps/itw-wallet-provider",
+        "command": "tsc --noEmit -p tsconfig.app.json"
+      }
+    },
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "apps/itw-wallet-provider/dist",
+        "format": ["esm"],
+        "bundle": false,
+        "main": "apps/itw-wallet-provider/src/main.ts",
+        "tsConfig": "apps/itw-wallet-provider/tsconfig.app.json",
+        "esbuildOptions": {
+          "sourcemap": true,
+          "outExtension": {
+            ".js": ".js"
+          }
+        }
+      },
+      "configurations": {
+        "development": {},
+        "production": {
+          "generateLockfile": true,
+          "esbuildOptions": {
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        }
+      }
+    },
+    "prune-lockfile": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "executor": "@nx/js:prune-lockfile",
+      "outputs": ["{projectRoot}/dist/package.json", "{projectRoot}/dist/package-lock.json"],
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "copy-workspace-modules": {
+      "dependsOn": ["build"],
+      "cache": true,
+      "outputs": ["{projectRoot}/dist/workspace_modules"],
+      "executor": "@nx/js:copy-workspace-modules",
+      "options": {
+        "buildTarget": "build"
+      }
+    },
+    "prune": {
+      "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
+      "executor": "nx:noop"
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "itw-wallet-provider:build",
+        "runBuildTargetDependencies": false,
+        "port": 9231
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "itw-wallet-provider:build:development"
+        },
+        "production": {
+          "buildTarget": "itw-wallet-provider:build:production"
+        }
+      }
+    },
+    "docker:build": {
+      "dependsOn": ["build", "prune"]
+    }
+  }
+}

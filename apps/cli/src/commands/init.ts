@@ -11,14 +11,17 @@ import {
   selectEs256SigningJwk
 } from '../utils/certificates.js';
 import {
-  createRelyingPartyPrivateKeys,
   createIssuerIntermediateKey,
   createIssuerPrivateKeys,
-  createTrustAnchorFederationKey
+  createRelyingPartyPrivateKeys,
+  createTrustAnchorFederationKey,
+  createWalletProviderPrivateKeys
 } from '../utils/crypto.js';
 import { existsFileSync } from '../utils/search.js';
 
-import type { InitFlags } from '../types/types.js';
+export type InitFlags = {
+  force: boolean;
+};
 
 type InitConfig = {
   global: Pick<ConfigSchemaType['global'], 'data_dir' | 'log_level'>;
@@ -73,6 +76,9 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
 
   const trustAnchorDirPath = join(configs.global.data_dir, 'trust-anchor');
   mkdirSync(trustAnchorDirPath, { recursive: true });
+
+  const walletProviderDirPath = join(configs.global.data_dir, 'wallet-provider');
+  mkdirSync(walletProviderDirPath, { recursive: true });
 
   // The issuer certificate chain (below) is rooted at the trust-anchor federation
   // certificate, so the trust-anchor federation key/certificate must exist first.
@@ -195,6 +201,18 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     process.stdout.write(`✓ Generated relying-party signing keys → ${rpKeysPath}\n`);
   } else {
     process.stdout.write(`⚠ Relying-party signing keys already exist → skipped (use --force to regenerate)\n`);
+  }
+
+  const walletProviderKeysPath = join(walletProviderDirPath, 'jwks.json');
+  if (!existsFileSync(walletProviderKeysPath) || flags.force) {
+    const walletProviderPrivateKeys = createWalletProviderPrivateKeys();
+    writeFileSync(walletProviderKeysPath, JSON.stringify(walletProviderPrivateKeys, null, 2), {
+      encoding: 'utf8',
+      flag: 'w'
+    });
+    process.stdout.write(`✓ Generated wallet-provider signing keys → ${walletProviderKeysPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Wallet-provider keys already exist → skipped (use --force to regenerate)\n`);
   }
 
   const rpCertPath = join(rpDirPath, 'cert.pem');

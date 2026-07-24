@@ -91,6 +91,18 @@ export interface CreateAccessTokenOptions {
   };
 }
 
+export interface CreateAccessTokenResult {
+  /**
+   * The `issuer_state` claim carried by the PAR request associated with this
+   * token exchange, when present. Mirrors `ParseAndStoreResult.issuerState` in
+   * `par-service.ts` and is used to correlate the `issuer.token.requested`
+   * observed event with the same conformance scenario run as `issuer.par.requested`.
+   * `null` for the refresh_token grant, which has no associated PAR request.
+   */
+  readonly issuerState: string | null;
+  readonly response: Record<string, unknown>;
+}
+
 type FederationMetadata = ReturnType<typeof getEntityConfigurationClaimsMetadata>;
 type AuthorizationServerMetadata = NonNullable<NonNullable<FederationMetadata>['oauth_authorization_server']>;
 
@@ -109,7 +121,7 @@ export class TokenService {
     this.#refreshTokenRepository = refreshTokenRepository;
   }
 
-  async createAccessToken(options: CreateAccessTokenOptions): Promise<Record<string, unknown>> {
+  async createAccessToken(options: CreateAccessTokenOptions): Promise<CreateAccessTokenResult> {
     const form = Object.fromEntries(new URLSearchParams(options.tokenRequest.bodyString));
 
     if (!form.grant_type) {
@@ -189,7 +201,7 @@ export class TokenService {
     grant: ParsedAccessTokenAuthorizationCodeRequestGrant;
     options: CreateAccessTokenOptions;
     pkceCodeVerifier: string;
-  }): Promise<Record<string, unknown>> {
+  }): Promise<CreateAccessTokenResult> {
     const {
       accessTokenRequest,
       authorizationServerMetadata,
@@ -286,7 +298,7 @@ export class TokenService {
       });
     }
 
-    return accessTokenResponse;
+    return { issuerState: parRequest.issuer_state ?? null, response: accessTokenResponse };
   }
 
   async #exchangeRefreshToken(input: {
@@ -296,7 +308,7 @@ export class TokenService {
     dpop: { jwt: string };
     grant: ParsedAccessTokenRefreshTokenRequestGrant;
     options: CreateAccessTokenOptions;
-  }): Promise<Record<string, unknown>> {
+  }): Promise<CreateAccessTokenResult> {
     const { accessTokenRequest, authorizationServerMetadata, clientAttestation, dpop, grant, options } = input;
     const requestedScope = 'scope' in accessTokenRequest ? accessTokenRequest.scope : undefined;
 
@@ -456,7 +468,7 @@ export class TokenService {
       subject: payload.sub
     });
 
-    return accessTokenResponse;
+    return { issuerState: null, response: accessTokenResponse };
   }
 
   async #persistIssuedRefreshToken(input: {
