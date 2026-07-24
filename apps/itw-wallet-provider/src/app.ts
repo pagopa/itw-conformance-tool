@@ -4,7 +4,8 @@ import FastifyAutoLoad from '@fastify/autoload';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions, type FastifyReply } from 'fastify';
 
 function isWalletInstanceManagementRequest(url: string): boolean {
-  return url.split('?', 1)[0] === '/wallet-instances';
+  const path = url.split('?', 1)[0];
+  return path === '/wallet-instances' || path.startsWith('/wallet-instances/');
 }
 
 function getErrorStatusCode(error: unknown): number | undefined {
@@ -59,6 +60,37 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
         );
       }
 
+      if (statusCode === 401) {
+        return sendWalletInstanceManagementError(
+          reply,
+          401,
+          'unauthorized',
+          'The request lacks valid authentication credentials.'
+        );
+      }
+
+      if (statusCode === 403) {
+        return sendWalletInstanceManagementError(
+          reply,
+          403,
+          'forbidden',
+          'The user does not have permission to retrieve this Wallet Instance.'
+        );
+      }
+
+      if (statusCode === 404) {
+        return sendWalletInstanceManagementError(reply, 404, 'not_found', 'The Wallet Instance was not found.');
+      }
+
+      if (statusCode === 422) {
+        return sendWalletInstanceManagementError(
+          reply,
+          422,
+          'validation_error',
+          'The request does not adhere to the required format.'
+        );
+      }
+
       if (statusCode === 503) {
         return sendWalletInstanceManagementError(
           reply,
@@ -110,6 +142,10 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
       },
       'Resource not found'
     );
+
+    if (isWalletInstanceManagementRequest(request.url)) {
+      return sendWalletInstanceManagementError(reply, 404, 'not_found', 'The Wallet Instance was not found.');
+    }
 
     reply.code(404);
     return { message: 'Not Found' };

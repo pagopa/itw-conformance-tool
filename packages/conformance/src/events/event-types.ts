@@ -23,6 +23,8 @@ export const observedEventNames = [
   'rp.request_object.requested',
   'rp.presentation_response.received',
   'wallet_attestation.requested',
+  'wallet_instance.status_retrieval.requested',
+  'wallet_instance.revocation.requested',
   'jwt.validation.succeeded',
   'jwt.validation.failed',
   'vp_token.validation.succeeded',

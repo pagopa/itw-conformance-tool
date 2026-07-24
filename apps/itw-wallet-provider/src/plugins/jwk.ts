@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import fp from 'fastify-plugin';
+import { calculateJwkThumbprint, type JWK } from 'jose';
 
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { FastifyPluginAsync } from 'fastify';
@@ -54,7 +55,11 @@ const parseJwks = (content: string, filePath: string): Jwk[] => {
   });
 };
 
-const getKeyPair = (jwks: Jwk[], selector: { kid: string; use: JwkUse }, filePath: string): JwkKeyPair => {
+const getKeyPair = async (
+  jwks: Jwk[],
+  selector: { kid: string; use: JwkUse },
+  filePath: string
+): Promise<JwkKeyPair> => {
   const matchingKeys = jwks.filter((jwk) => jwk.kid === selector.kid);
   const [jwk] = matchingKeys;
 
@@ -62,7 +67,8 @@ const getKeyPair = (jwks: Jwk[], selector: { kid: string; use: JwkUse }, filePat
     throw new Error(`${filePath} must contain exactly one ${selector.use} JWK with kid ${selector.kid}`);
   }
 
-  const privateJwk = jwk as PrivateJwk;
+  const kid = await calculateJwkThumbprint(jwk as JWK);
+  const privateJwk = { ...jwk, kid } as PrivateJwk;
   const { d, key_ops, ...publicKey } = privateJwk;
   void d;
   void key_ops;
@@ -85,7 +91,7 @@ const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
   const jwks = parseJwks(content, filePath);
 
   return {
-    sig: getKeyPair(jwks, JWK_SELECTORS.sig, filePath)
+    sig: await getKeyPair(jwks, JWK_SELECTORS.sig, filePath)
   };
 };
 
