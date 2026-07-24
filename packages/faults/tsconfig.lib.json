@@ -8,10 +8,6 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts"],
-  "references": [
-    {
-      "path": "../faults/tsconfig.lib.json"
-    }
-  ]
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
+  "references": []
 }

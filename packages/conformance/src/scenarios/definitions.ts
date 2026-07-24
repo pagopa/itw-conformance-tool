@@ -1,4 +1,5 @@
 import type { ObservedEventName, ObservedServiceName } from '../events/event-types.js';
+import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
 
 export type ProtocolObservedPhase = 'ISSUANCE' | 'PRESENTATION' | 'WALLET_INSTANCE';
 
@@ -81,6 +82,15 @@ export function hasVerdictRule(
   return definition.verdictRules.some((rule) => rule.type === type);
 }
 
+/**
+ * Typed scenario setup. `issuerFault` declares a Credential Issuer fault
+ * profile that the runner must activate before showing the stimulus and
+ * deactivate on cleanup; see `IssuerFaultController`.
+ */
+export interface ScenarioSetup {
+  issuerFault?: IssuerFaultProfile;
+}
+
 export interface ProtocolObservedScenarioDefinition {
   id: string;
   title: string;
@@ -96,5 +106,5 @@ export interface ProtocolObservedScenarioDefinition {
   verdictRules: VerdictRule[];
   instructions: ScenarioInstructions;
   missingRequiredEventPolicy?: 'fail' | 'inconclusive';
-  setup?: Record<string, unknown>;
+  setup?: ScenarioSetup;
 }

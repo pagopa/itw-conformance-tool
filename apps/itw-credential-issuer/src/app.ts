@@ -11,12 +11,14 @@ import formbodyPlugin from './plugins/external/formbody.js';
 import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
 import sensiblePlugin from './plugins/external/sensible.js';
 import swaggerPlugin from './plugins/external/swagger.js';
+import issuerFaultsPlugin from './plugins/issuer-faults.js';
 import keysPlugin from './plugins/keys.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
   await app.register(dbPlugin);
   await app.register(keysPlugin);
+  await app.register(issuerFaultsPlugin);
   await app.register(conformancePlugin);
 
   await app.register(corsPlugin, corsConfig);

@@ -2,11 +2,34 @@ import { parseIpcMessage } from './messages.js';
 import { SERVICE_PROTOCOL_VERSION } from './protocol.js';
 
 import type { IpcMessage, LocalServiceName } from './messages.js';
+import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
+
+export interface IssuerFaultActivationRequest {
+  scenarioId: string;
+  specVersion: string;
+  profile: IssuerFaultProfile;
+}
+
+export interface IssuerFaultDeactivationRequest {
+  scenarioId: string;
+}
+
+export interface IssuerFaultActivationResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+}
+
+export interface IssuerFaultHandlers {
+  activate: (request: IssuerFaultActivationRequest) => Promise<IssuerFaultActivationResult>;
+  deactivate: (request: IssuerFaultDeactivationRequest) => Promise<IssuerFaultActivationResult>;
+}
 
 export interface ServiceIpcAdapterOptions {
   endpoint: string;
   service: LocalServiceName;
   stop: () => Promise<void>;
+  issuerFaults?: IssuerFaultHandlers;
 }
 
 /**
@@ -68,15 +91,99 @@ export function attachServiceIpcAdapter(options: ServiceIpcAdapterOptions): void
       return;
     }
 
-    if (message.type.startsWith('issuer.fault.') && 'requestId' in message) {
-      send({
-        version: SERVICE_PROTOCOL_VERSION,
-        type: 'service.error',
-        requestId: message.requestId,
-        service: options.service,
-        code: 'UNSUPPORTED_MESSAGE',
-        message: 'Issuer fault controls are not configured'
-      });
+    if (message.type === 'issuer.fault.activate') {
+      if (!options.issuerFaults) {
+        send({
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'service.error',
+          requestId: message.requestId,
+          service: options.service,
+          code: 'UNSUPPORTED_MESSAGE',
+          message: 'Issuer fault controls are not configured'
+        });
+        return;
+      }
+
+      void options.issuerFaults
+        .activate({ scenarioId: message.scenarioId, specVersion: message.specVersion, profile: message.profile })
+        .then(
+          (result) => {
+            if (!result.ok) {
+              send({
+                version: SERVICE_PROTOCOL_VERSION,
+                type: 'service.error',
+                requestId: message.requestId,
+                service: options.service,
+                code: result.code ?? 'FAULT_ACTIVATION_FAILED',
+                message: result.message ?? 'Issuer fault activation failed'
+              });
+              return;
+            }
+
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'issuer.fault.activated',
+              requestId: message.requestId,
+              scenarioId: message.scenarioId
+            });
+          },
+          () =>
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'service.error',
+              requestId: message.requestId,
+              service: options.service,
+              code: 'FAULT_ACTIVATION_FAILED',
+              message: 'Issuer fault activation failed'
+            })
+        );
+      return;
+    }
+
+    if (message.type === 'issuer.fault.deactivate') {
+      if (!options.issuerFaults) {
+        send({
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'service.error',
+          requestId: message.requestId,
+          service: options.service,
+          code: 'UNSUPPORTED_MESSAGE',
+          message: 'Issuer fault controls are not configured'
+        });
+        return;
+      }
+
+      void options.issuerFaults.deactivate({ scenarioId: message.scenarioId }).then(
+        (result) => {
+          if (!result.ok) {
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'service.error',
+              requestId: message.requestId,
+              service: options.service,
+              code: result.code ?? 'FAULT_DEACTIVATION_FAILED',
+              message: result.message ?? 'Issuer fault deactivation failed'
+            });
+            return;
+          }
+
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'issuer.fault.deactivated',
+            requestId: message.requestId,
+            scenarioId: message.scenarioId
+          });
+        },
+        () =>
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'service.error',
+            requestId: message.requestId,
+            service: options.service,
+            code: 'FAULT_DEACTIVATION_FAILED',
+            message: 'Issuer fault deactivation failed'
+          })
+      );
     }
   });
 

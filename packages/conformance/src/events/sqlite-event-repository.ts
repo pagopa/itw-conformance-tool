@@ -219,7 +219,7 @@ export class SqliteScenarioEventRepository implements ScenarioEventSink {
 export function createSqliteScenarioEventBridge(
   options: CreateSqliteScenarioEventBridgeOptions
 ): ScenarioEventBridgeFactory {
-  return ({ correlationId, definition, endpoints, eventStore, startedAt }) => {
+  return ({ definition, endpoints, eventStore, startedAt }) => {
     const repository = new SqliteScenarioEventRepository(options.db);
     const seenEventIds = new Set(eventStore.all().map((event) => event.id));
 

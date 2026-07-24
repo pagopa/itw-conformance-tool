@@ -20,6 +20,7 @@
     "@itw-conformance-tool/conformance": "workspace:*",
     "@itw-conformance-tool/crypto": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/faults": "workspace:*",
     "@itw-conformance-tool/logger": "workspace:",
     "@itw-conformance-tool/ipc": "workspace:*",
     "@itw-conformance-tool/utils": "workspace:*",

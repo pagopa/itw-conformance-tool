@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 import { DatabaseClient } from '@itw-conformance-tool/database';
+import { createServiceControlClient, type ServiceControlClient } from '@itw-conformance-tool/ipc';
 import {
   decodeJwt,
   decodeJwtHeader,
@@ -20,14 +21,18 @@ import { IoWalletSdkConfig, ItWalletSpecsVersion, type HttpMethod } from '@pagop
 import { calculateJwkThumbprint, importJWK, jwtVerify, type JWK } from 'jose';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
+import { trimTrailingSlash } from '../../helpers/general.js';
 import { isRfc7636CodeVerifier } from '../../helpers/issuance.js';
+import { decodeEntityConfiguration } from '../../helpers/provider.js';
 import {
   assertConformanceOutcome,
   createProtocolObservedScenarioRunner,
   createSqliteScenarioEventBridge,
   issuanceScenarioRegistry,
+  wp046aScenario,
   wpCiHappyScenario
 } from '../../index.js';
+import { httpsRequest } from '../../utils/request.js';
 
 import type { ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
 import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
@@ -87,26 +92,42 @@ const verifyJwtWithJwk: NonNullable<CallbackContext['verifyJwt']> = async (signe
 // in this file.
 const DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS = 300;
 
+// Set by the CLI's local control relay (`itwct test issuance`/`itwct test`)
+// before spawning this Vitest process; see `apps/cli/src/commands/runTests.ts`.
+const SERVICE_CONTROL_ENDPOINT_ENV_VAR = 'ITWCT_SERVICE_CONTROL_ENDPOINT';
+
 describe('Test Cases for Issuance Phase', () => {
   let runner: ScenarioRunner;
   let db: DatabaseClient;
   let config: ConfigSchemaType;
+  let issuerFaultController: ServiceControlClient;
 
   beforeAll(() => {
     config = loadConfig();
     db = new DatabaseClient(config.global.data_dir);
+
+    const controlEndpoint = process.env[SERVICE_CONTROL_ENDPOINT_ENV_VAR];
+    if (!controlEndpoint) {
+      throw new Error(
+        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by WP_046a.`
+      );
+    }
+    issuerFaultController = createServiceControlClient({ endpoint: controlEndpoint });
 
     const credentialIssuer = config['credential-issuer'].url;
     const federation = config['trust-anchor'].url;
     runner = createProtocolObservedScenarioRunner({
       endpoints: { credentialIssuer, federation },
       eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
-      registry: issuanceScenarioRegistry
+      registry: issuanceScenarioRegistry,
+      issuerFaultController,
+      issuerFaultSpecVersion: '1.4'
     });
   });
 
   afterAll(async () => {
     await runner.close();
+    await issuerFaultController.close();
     db.close();
   });
 
@@ -727,5 +748,84 @@ describe('Test Cases for Issuance Phase', () => {
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );
+  });
+
+  describe('WP_046a', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp046aScenario.id);
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp046aScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_046a: Wallet Instance rejects a Credential Issuer whose Entity Configuration authority_hints do not include the expected Trust Anchor.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const entityConfigurationEvent = events.find((event) => event.name === 'issuer.entity_configuration.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          entityConfigurationEvent,
+          'Wallet must request the Credential Issuer Entity Configuration before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The invalid-trust-anchor fault must have been applied while serving the Entity Configuration'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('invalid-trust-anchor');
+
+        expect(
+          events.find((event) => event.name === 'federation.fetch.requested'),
+          'Wallet must not resolve the configured Trust Anchor subordinate statement for the mutated authority_hints'
+        ).toBeUndefined();
+        expect(
+          events.find((event) => event.name === 'issuer.par.requested'),
+          'Wallet must not continue to PAR after failing to validate the invalid Trust Anchor'
+        ).toBeUndefined();
+      },
+      wp046aScenario.timeouts.vitestTestMs
+    );
+
+    test('Cleanup: deactivating the invalid-trust-anchor fault restores the configured Trust Anchor for subsequent scenarios.', async () => {
+      // Local services (credential-issuer, trust-anchor, relying-party) use ephemeral,
+      // self-signed certificates (see @itw-conformance-tool/crypto's createHttpsOptions),
+      // so a plain global `fetch()` fails TLS verification. Use `httpsRequest` with
+      // `rejectUnauthorized: false`, matching the convention used elsewhere for these hosts.
+      const discoveryUrl = new URL('/.well-known/openid-federation', config['credential-issuer'].url);
+      const response = await httpsRequest({
+        method: 'GET',
+        hostname: discoveryUrl.hostname,
+        path: discoveryUrl.pathname,
+        port: discoveryUrl.port,
+        protocol: discoveryUrl.protocol,
+        rejectUnauthorized: false,
+        signal: AbortSignal.timeout(10_000)
+      });
+
+      if (response.statusCode !== 200) {
+        throw new Error(
+          `Unable to fetch Credential Issuer entity configuration (${response.statusCode ?? 'unknown'}): ${response.body}`
+        );
+      }
+
+      const claims = decodeEntityConfiguration(response.body);
+
+      expect(
+        claims.authority_hints,
+        'The Credential Issuer must serve the configured Trust Anchor again once the fault is deactivated'
+      ).toEqual([trimTrailingSlash(config['trust-anchor'].url)]);
+    }, 10_000);
   });
 });

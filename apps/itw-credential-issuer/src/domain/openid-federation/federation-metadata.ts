@@ -47,6 +47,13 @@ export interface GetFederationMetadataOptions {
   config: IoWalletSdkConfig;
   jwksRepository: JwksRepository;
   trustAnchorEntityId: string;
+  /**
+   * Overrides the `authority_hints` claim when set (used by the
+   * `invalid-trust-anchor` issuer fault). Every other claim, the header, and
+   * the signing key are left untouched so the Entity Configuration stays
+   * cryptographically valid.
+   */
+  authorityHintsOverride?: string[];
 }
 
 export const getFederationMetadata = async (options: GetFederationMetadataOptions): Promise<string> => {
@@ -65,7 +72,7 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
 
   return await createItWalletEntityConfiguration({
     claims: {
-      authority_hints: [options.trustAnchorEntityId],
+      authority_hints: options.authorityHintsOverride ?? [options.trustAnchorEntityId],
       exp: issuedAt + ENTITY_STATEMENT_TTL_SECONDS,
       iat: issuedAt,
       iss: options.baseURL,

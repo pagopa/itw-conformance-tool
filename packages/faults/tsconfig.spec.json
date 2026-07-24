@@ -10,12 +10,6 @@
   "references": [
     {
       "path": "./tsconfig.lib.json"
-    },
-    {
-      "path": "../config/tsconfig.lib.json"
-    },
-    {
-      "path": "../ipc/tsconfig.lib.json"
     }
   ]
 }

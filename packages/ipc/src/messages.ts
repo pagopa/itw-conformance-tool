@@ -1,3 +1,4 @@
+import { issuerFaultProfileSchema } from '@itw-conformance-tool/faults';
 import { z } from 'zod';
 
 import { localServiceNames, SERVICE_PROTOCOL_VERSION } from './protocol.js';
@@ -48,10 +49,37 @@ const serviceStoppedMessageSchema = protocolHeaderSchema
   })
   .strict();
 
-const issuerFaultMessageSchema = protocolHeaderSchema
+const issuerFaultActivateMessageSchema = protocolHeaderSchema
   .extend({
-    type: z.custom<`issuer.fault.${string}`>((value) => typeof value === 'string' && value.startsWith('issuer.fault.')),
-    requestId: requestIdSchema
+    type: z.literal('issuer.fault.activate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string(),
+    specVersion: z.string(),
+    profile: issuerFaultProfileSchema
+  })
+  .strict();
+
+const issuerFaultActivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.fault.activated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const issuerFaultDeactivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.fault.deactivate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const issuerFaultDeactivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.fault.deactivated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
   })
   .strict();
 
@@ -71,7 +99,10 @@ const ipcMessageSchema = z.union([
   serviceHealthMessageSchema,
   serviceStopMessageSchema,
   serviceStoppedMessageSchema,
-  issuerFaultMessageSchema,
+  issuerFaultActivateMessageSchema,
+  issuerFaultActivatedMessageSchema,
+  issuerFaultDeactivateMessageSchema,
+  issuerFaultDeactivatedMessageSchema,
   serviceErrorMessageSchema
 ]);
 
@@ -81,8 +112,10 @@ export type ServiceHealthMessage = z.infer<typeof serviceHealthMessageSchema>;
 export type ServiceHealthResponse = z.infer<typeof serviceHealthResponseSchema>;
 export type ServiceStopMessage = z.infer<typeof serviceStopMessageSchema>;
 export type ServiceStoppedMessage = z.infer<typeof serviceStoppedMessageSchema>;
-/** Reserved transport hook for future IssuerFaultProfile controls. */
-export type IssuerFaultMessage = z.infer<typeof issuerFaultMessageSchema>;
+export type IssuerFaultActivateMessage = z.infer<typeof issuerFaultActivateMessageSchema>;
+export type IssuerFaultActivatedMessage = z.infer<typeof issuerFaultActivatedMessageSchema>;
+export type IssuerFaultDeactivateMessage = z.infer<typeof issuerFaultDeactivateMessageSchema>;
+export type IssuerFaultDeactivatedMessage = z.infer<typeof issuerFaultDeactivatedMessageSchema>;
 export type ServiceErrorMessage = z.infer<typeof serviceErrorMessageSchema>;
 export type IpcMessage = z.infer<typeof ipcMessageSchema>;
 

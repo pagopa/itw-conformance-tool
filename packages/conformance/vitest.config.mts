@@ -12,6 +12,7 @@ export default defineConfig(() => ({
   },
   test: {
     name: '@itw-conformance-tool/conformance',
+    setupFiles: ['./vitest.setup.ts'],
     watch: false,
     globals: true,
     environment: 'node',
