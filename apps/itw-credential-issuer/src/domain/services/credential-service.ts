@@ -8,7 +8,7 @@ import {
 import { ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import { decodeJwt } from 'jose';
 
-import { DISABILITY_CARD_ID, createDisabilityCardCredential } from '../credentials/disability-card.js';
+import { createDisabilityCardCredential, DISABILITY_CARD_ID } from '../credentials/disability-card.js';
 import { createPidCredential } from '../credentials/pid.js';
 import { generateFakeUser } from '../faker.js';
 import { createMdocCredential, getMdocCredentialDefinition } from '../mdoc/index.js';
@@ -20,11 +20,10 @@ import {
   verifyCredentialRequestAuth
 } from './credential-request-auth-service.js';
 
+import type { DisabilityCardFaultProfile } from '../credentials/disability-card.js';
 import type { FakeUser } from '../faker.js';
-import type {
-  DigitalCredentialClaimsFaultMutationEvidence,
-  DigitalCredentialClaimsFaultProfile
-} from '../faults/digital-credential-claims-fault.js';
+import type { DigitalCredentialClaimsFaultMutationEvidence } from '../faults/digital-credential-claims-fault.js';
+import type { DigitalCredentialTrustChainFaultMutationEvidence } from '../faults/digital-credential-trust-chain-fault.js';
 import type { SupportedCredentialsId } from '../z-credential.js';
 import type { IDeferredCredentialRepository, INonceRepository } from '@itw-conformance-tool/database';
 import type { CallbackContext, JwtPayload } from '@pagopa/io-wallet-oauth2';
@@ -62,8 +61,13 @@ export interface CreateCredentialOptions {
   body: string;
   callbacks: Pick<CallbackContext, 'hash' | 'verifyJwt'>;
   config: IoWalletSdkConfig;
-  /** The active WP_060 fault profile, if any; narrowed and passed in by the route (see routes/credential.ts). */
-  digitalCredentialClaimsFaultProfile?: DigitalCredentialClaimsFaultProfile;
+  /**
+   * The active WP_060 (`digital-credential-claims-invalid`) or WP_061
+   * (`edc-invalid-trust-chain`) fault profile, if any; narrowed and passed
+   * in by the route (see routes/credential.ts). Only the disability-card
+   * SD-JWT builder supports either fault.
+   */
+  disabilityCardFaultProfile?: DisabilityCardFaultProfile;
   headers: Headers;
   method: HttpMethod;
   trustedWalletProviderIssuers: readonly string[];
@@ -72,12 +76,13 @@ export interface CreateCredentialOptions {
 
 export interface CreateCredentialResult {
   /**
-   * Present only when `digitalCredentialClaimsFaultProfile` was provided and
+   * Present only when `disabilityCardFaultProfile` was provided and
    * successfully applied while creating the Digital Credential(s); lets the
    * route emit `issuer.fault.applied` only for a mutation that actually
    * happened (see `routes/credential.ts`).
    */
-  digitalCredentialClaimsFaultEvidence?: DigitalCredentialClaimsFaultMutationEvidence;
+  disabilityCardFaultEvidence?:
+    DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence;
   /** Raw SDK result; the actual JSON body to send is `sdkResult.credentialResponse`. */
   sdkResult: CreateCredentialResponseResult;
   /** Whether the request was answered immediately (`200`) or deferred (`202`). */
@@ -169,7 +174,8 @@ export class CredentialService {
 
     const credentials: string[] = [];
     const noncesToConsume = new Set<string>();
-    let digitalCredentialClaimsFaultEvidence: DigitalCredentialClaimsFaultMutationEvidence | undefined;
+    let disabilityCardFaultEvidence:
+      DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence | undefined;
 
     for (const proof of proofs) {
       const jwt = proof.jwt;
@@ -219,12 +225,12 @@ export class CredentialService {
         fakeUser,
         holderPublicKey.data,
         accessTokenPayload,
-        options.digitalCredentialClaimsFaultProfile
+        options.disabilityCardFaultProfile
       );
 
       credentials.push(credential);
       if (faultEvidence) {
-        digitalCredentialClaimsFaultEvidence = faultEvidence;
+        disabilityCardFaultEvidence = faultEvidence;
       }
     }
 
@@ -237,11 +243,11 @@ export class CredentialService {
 
     if (options.batchIssuanceByDeferred && credentials.length > 1) {
       const sdkResult = await this.#buildDeferredCredentialResponse(options, credentials, sub, jkt);
-      return { digitalCredentialClaimsFaultEvidence, sdkResult, status: 'deferred' };
+      return { disabilityCardFaultEvidence, sdkResult, status: 'deferred' };
     }
 
     const sdkResult = await this.#buildCredentialResponse(options, credentials);
-    return { digitalCredentialClaimsFaultEvidence, sdkResult, status: 'immediate' };
+    return { disabilityCardFaultEvidence, sdkResult, status: 'immediate' };
   }
 
   async #verifyCredentialProof(
@@ -365,12 +371,15 @@ export class CredentialService {
     fakeUser: FakeUser,
     holderPublicKey: JwkPublicKey,
     accessTokenPayload?: JwtPayload & { auth_flow?: string },
-    activeFaultProfile?: DigitalCredentialClaimsFaultProfile
-  ): Promise<{ credential: string; faultEvidence?: DigitalCredentialClaimsFaultMutationEvidence }> {
+    activeFaultProfile?: DisabilityCardFaultProfile
+  ): Promise<{
+    credential: string;
+    faultEvidence?: DigitalCredentialClaimsFaultMutationEvidence | DigitalCredentialTrustChainFaultMutationEvidence;
+  }> {
     if (credentialIdentifier === 'dc_sd_jwt_PersonIdentificationData') {
       if (activeFaultProfile) {
         throw new CreateCredentialError(
-          `The digital-credential-claims-invalid fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
+          `The ${activeFaultProfile.type} fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
         );
       }
       const credential = await createPidCredential(
@@ -403,7 +412,7 @@ export class CredentialService {
     ) {
       if (activeFaultProfile) {
         throw new CreateCredentialError(
-          `The digital-credential-claims-invalid fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
+          `The ${activeFaultProfile.type} fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`
         );
       }
       const document = getMdocCredentialDefinition(credentialIdentifier, config, holderPublicKey, fakeUser);

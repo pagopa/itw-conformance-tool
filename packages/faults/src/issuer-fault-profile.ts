@@ -65,6 +65,16 @@ const edcMissingRequiredClaimsProfileSchema = z
   })
   .strict();
 
+/**
+ * WP_061: replaces the issued Digital Credential's JOSE header `x5c` with a
+ * self-signed leaf certificate generated from the same issuer signing key,
+ * so the SD-JWT signature remains verifiable with the (now untrusted)
+ * header's public key, but the certificate cannot be chained to the
+ * configured Trust Anchor. Mutated before signing (see `mutationTiming:
+ * 'pre-signature'` in the catalog), isolating trust-chain validation from
+ * both `digital-credential-claims-invalid` (WP_060) and
+ * `edc-invalid-signature` (WP_062a).
+ */
 const edcInvalidTrustChainProfileSchema = z
   .object({
     type: z.literal('edc-invalid-trust-chain')
@@ -108,10 +118,11 @@ const digitalCredentialClaimsInvalidProfileSchema = z
  * Runtime-validated, discriminated catalog of Credential Issuer fault
  * profiles. `invalid-trust-anchor`, `authorization-response-missing-claim`,
  * `authorization-response-invalid-state`,
- * `authorization-response-invalid-issuer`, and
- * `digital-credential-claims-invalid` are wired to a mutation today; the
- * remaining variants are reserved so the shared type, IPC protocol, and
- * catalog metadata do not drift as future fault scenarios are implemented.
+ * `authorization-response-invalid-issuer`,
+ * `digital-credential-claims-invalid`, and `edc-invalid-trust-chain` are
+ * wired to a mutation today; the remaining variants are reserved so the
+ * shared type, IPC protocol, and catalog metadata do not drift as future
+ * fault scenarios are implemented.
  */
 export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   invalidTrustAnchorProfileSchema,

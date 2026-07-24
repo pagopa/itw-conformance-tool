@@ -34,6 +34,7 @@ import {
   wpUnsupportedCredentialOfferScenario,
   wp059Scenario,
   wp060TypeMismatchScenario,
+  wp061Scenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -1325,6 +1326,71 @@ describe('Test Cases for Issuance Phase', () => {
         // apps/itw-credential-issuer/src/domain/credentials/disability-card.test.ts.
       },
       scenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_061', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp061Scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp061Scenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_061: Wallet Instance rejects a Digital Credential whose header x5c does not chain to the Trust Anchor.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The edc-invalid-trust-chain fault must have been applied while serving the Credential Response'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('edc-invalid-trust-chain');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        expect(faultAppliedEvent?.diagnostic?.['mutationTarget']).toBe('x5c');
+        expect(faultAppliedEvent?.diagnostic?.['strategy']).toBe('self-signed-untrusted-leaf');
+        expect(
+          faultAppliedEvent?.diagnostic?.['chainLength'],
+          'The injected x5c must be a single self-signed leaf certificate (no intermediate)'
+        ).toBe(1);
+        expect(faultAppliedEvent?.diagnostic?.['certificateThumbprintSha256']).toMatch(/^[0-9a-f]{64}$/);
+
+        // Protocol-observed evidence proves the defective credential was delivered exactly as
+        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
+        // certifies fault delivery. The operator-facing instructions above require confirming the
+        // wallet's visible error/rejection separately (see instructions.steps in wp-061.ts).
+        //
+        // Signature validity against the injected leaf, single-defect isolation from WP_060/WP_062a,
+        // and rejection of the injected leaf against the nominal trusted chain are proven by the
+        // focused unit tests in
+        // apps/itw-credential-issuer/src/domain/credentials/disability-card.test.ts.
+      },
+      wp061Scenario.timeouts.vitestTestMs
     );
   });
 });

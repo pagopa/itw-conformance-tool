@@ -11,7 +11,8 @@ import {
   InvalidProofError,
   type ActiveIssuerFault,
   type CredentialResponseFaultProfile,
-  type DigitalCredentialClaimsFaultProfile
+  type DigitalCredentialClaimsFaultProfile,
+  type DigitalCredentialTrustChainFaultProfile
 } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
@@ -51,6 +52,13 @@ function isDigitalCredentialClaimsFault(
   return fault?.profile.type === 'digital-credential-claims-invalid';
 }
 
+/** Narrows an active issuer fault to the WP_061 Digital Credential trust-chain profile. */
+function isDigitalCredentialTrustChainFault(
+  fault: ActiveIssuerFault | undefined
+): fault is ActiveIssuerFault & { profile: DigitalCredentialTrustChainFaultProfile } {
+  return fault?.profile.type === 'edc-invalid-trust-chain';
+}
+
 const credentialRoute: FastifyPluginAsync = async (app) => {
   app.route({
     url: '/credential',
@@ -68,6 +76,12 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
       const activeFault = app.issuerFaultStore.getActive();
       const credentialResponseFault = isCredentialResponseFault(activeFault) ? activeFault : undefined;
       const digitalCredentialClaimsFault = isDigitalCredentialClaimsFault(activeFault) ? activeFault : undefined;
+      const digitalCredentialTrustChainFault = isDigitalCredentialTrustChainFault(activeFault)
+        ? activeFault
+        : undefined;
+      // The issuer fault store only ever activates a single fault at a time,
+      // so at most one of these two can be set.
+      const disabilityCardFault = digitalCredentialClaimsFault ?? digitalCredentialTrustChainFault;
 
       reply.header('Cache-Control', 'no-store');
 
@@ -86,7 +100,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
             verifyJwt: oauthCallbacks.verifyJwt
           },
           config: sdkConfig,
-          digitalCredentialClaimsFaultProfile: digitalCredentialClaimsFault?.profile,
+          disabilityCardFaultProfile: disabilityCardFault?.profile,
           headers,
           method: request.method as HttpMethod,
           trustedWalletProviderIssuers: app.config.TRUSTED_WALLET_PROVIDER_ISSUERS,
@@ -114,7 +128,7 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
         const statusCode = result.status === 'deferred' ? 202 : 200;
         let responseBody: unknown = result.sdkResult.credentialResponse ?? result.sdkResult;
 
-        if (digitalCredentialClaimsFault && result.digitalCredentialClaimsFaultEvidence) {
+        if (disabilityCardFault && result.disabilityCardFaultEvidence) {
           await app.conformanceEventSink?.emit(
             createObservedEvent({
               name: 'issuer.fault.applied',
@@ -123,10 +137,10 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
               requestId: request.id,
               diagnostic: {
                 endpoint: '/credential',
-                faultProfileType: digitalCredentialClaimsFault.profile.type,
-                scenarioId: digitalCredentialClaimsFault.scenarioId,
+                faultProfileType: disabilityCardFault.profile.type,
+                scenarioId: disabilityCardFault.scenarioId,
                 resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
-                ...result.digitalCredentialClaimsFaultEvidence,
+                ...result.disabilityCardFaultEvidence,
                 artifactHash: sha256HashArtifact(JSON.stringify(responseBody)),
                 statusCode,
                 contentType: 'application/json',

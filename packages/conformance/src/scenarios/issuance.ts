@@ -4,6 +4,7 @@ import { wp054aInvalidStateScenario } from './factories/wp-054a.js';
 import { wp054bInvalidIssuerScenario } from './factories/wp-054b.js';
 import { wp059Scenario } from './factories/wp-059.js';
 import { wp060Scenarios } from './factories/wp-060.js';
+import { wp061Scenario } from './factories/wp-061.js';
 import { wpCiHappyScenario } from './factories/wp-ci-happy.js';
 import { wpUnsupportedCredentialOfferScenario } from './factories/wp-unsupported-credential-offer.js';
 import { createScenarioRegistry } from './registry.js';
@@ -15,6 +16,7 @@ export const issuanceScenarios: ProtocolObservedScenarioDefinition[] = [
   wp046aScenario,
   wp059Scenario,
   ...wp060Scenarios,
+  wp061Scenario,
   wpUnsupportedCredentialOfferScenario,
   ...wp054Scenarios,
   wp054aInvalidStateScenario,
