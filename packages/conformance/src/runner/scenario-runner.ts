@@ -62,7 +62,8 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
 }
 
 function defaultWrite(message: string): void {
-  process.stdout.write(`${message}\n`);
+  // eslint-disable-next-line no-console
+  console.log(message);
 }
 
 function resolveScenarioEndpoints(
