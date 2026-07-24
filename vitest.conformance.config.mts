@@ -30,8 +30,8 @@ class MatrixSequencer extends BaseSequencer {
   }
 }
 
-const reporterModulePath = path.join(packageRoot, 'packages/conformance/dist/report/reporters.js');
-const { ConformanceReporter, TerminalConformanceReporter } = await import(pathToFileURL(reporterModulePath).href);
+const reporterModulePath = path.join(packageRoot, 'packages/conformance/dist/report/reporter.js');
+const { ConformanceReporter } = await import(pathToFileURL(reporterModulePath).href);
 
 const conformanceTestCategory = process.env.ITWCT_CONFORMANCE_TEST_CATEGORY ?? 'all';
 if (
@@ -46,8 +46,6 @@ if (
   );
 }
 
-const reporters = [new TerminalConformanceReporter(), new ConformanceReporter(conformanceTestCategory)];
-
 export default defineConfig(() => ({
   root: packageRoot,
   cacheDir: path.join(packageRoot, 'node_modules/.vitest'),
@@ -60,7 +58,7 @@ export default defineConfig(() => ({
     include: ['packages/conformance/src/tests/matrix/**/*.test.ts'],
     fileParallelism: false,
     sequence: { sequencer: MatrixSequencer },
-    reporters,
+    reporters: ['tree', new ConformanceReporter(conformanceTestCategory)],
     // node:sqlite requires --experimental-sqlite on Node.js 22.
     pool: 'forks',
     forks: {
