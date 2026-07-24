@@ -27,6 +27,7 @@ import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
 import type { ScenarioRegistry } from '../scenarios/registry.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from '../verdict/outcome.js';
 import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
+import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 
 /** Default IT Wallet specification version reported at issuer fault activation when not overridden. */
 const DEFAULT_ISSUER_FAULT_SPEC_VERSION = '1.4';
@@ -93,16 +94,6 @@ function resolveScenarioEndpoints(
 interface CreatedStimulus {
   correlationId: string;
   stimulus: ScenarioStimulus;
-}
-
-/**
- * Safe (non-sensitive) SHA-256 hash of a generated artifact, formatted like
- * `apps/itw-credential-issuer`'s Entity Configuration fault evidence, so
- * fault diagnostics logged by the runner and by the Credential Issuer share
- * the same format.
- */
-function sha256HashArtifact(value: string): string {
-  return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
 }
 
 async function createStimulus(
