@@ -97,21 +97,21 @@ export const issuerFaultCatalog: Readonly<Record<IssuerFaultProfileType, IssuerF
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'authorization-response-invalid-state': {
     type: 'authorization-response-invalid-state',
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'authorization-response-invalid-issuer': {
     type: 'authorization-response-invalid-issuer',
     applicationPoint: 'authorization-response',
     supportedSpecVersions: ALL_SPEC_VERSIONS,
     mutationTiming: 'pre-signature',
-    implemented: false
+    implemented: true
   },
   'edc-missing-required-claims': {
     type: 'edc-missing-required-claims',

@@ -8,6 +8,10 @@ Il suo scopo è servire una Entity Configuration firmata correttamente, ma con
 `authority_hints` che non punta al Trust Anchor configurato. In questo modo lo scenario verifica il
 comportamento del wallet sulla validazione della trust chain.
 
+Lo stesso ciclo di vita viene usato anche dai fault applicati all'Authorization Response, come
+`authorization-response-missing-claim` e `authorization-response-invalid-state`, che vengono attivati
+dal runner prima dello stimolo e applicati dalla route `/code/jwt` prima della firma della response.
+
 ## Componenti coinvolti
 
 - `packages/faults`: definisce il tipo runtime-validato `IssuerFaultProfile`, il catalogo dei profili,
@@ -206,6 +210,19 @@ Per `WP_046a`, il verdetto richiede sia la richiesta della Entity Configuration 
 `issuer.fault.applied`. Inoltre verifica che, dopo quell'ingresso, il wallet non richieda il
 subordinate statement del Trust Anchor configurato e non prosegua verso PAR.
 
+Per i fault di Authorization Response, la route `/code/jwt` costruisce prima la risposta nominale,
+applica al massimo una mutazione attiva e firma solo dopo la mutazione:
+
+- `authorization-response-missing-claim` elimina il claim richiesto (`code`, `state` oppure `iss`);
+- `authorization-response-invalid-state` sostituisce `state` con una stringa valida e garantita diversa
+  dal valore ricevuto nel Request Object;
+- il codice di autorizzazione viene comunque persistito con la scadenza nominale, cosi il test esercita
+  la validazione della response da parte del wallet, non un errore server successivo.
+
+Anche in questo caso l'evidenza viene emessa solo dopo la generazione riuscita del JWT. La diagnostica
+include `omittedClaim` per i fault di omissione oppure `mutatedClaim: state` per `WP_054a`; non include
+il JWT, il codice di autorizzazione, lo stato originale o lo stato mutato.
+
 ## 9. La disattivazione parte dal cleanup dello scenario
 
 Il test chiama `session.stop()` in un blocco `finally`, cosi la disattivazione parte anche se il verdetto
@@ -255,6 +272,12 @@ La suite di `WP_046a` include un test di cleanup: dopo `session.stop()`, effettu
 
 Questa verifica copre il rischio principale del meccanismo: un fault che resta attivo e contamina gli
 scenari successivi, incluso l'happy path.
+
+Per `/code/jwt` non esiste una probe HTTP stateless equivalente, perche serve un `request_uri` vivo
+prodotto da PAR e Authorization Endpoint. Gli scenari `WP_054` e `WP_054a` verificano quindi il cleanup
+con una probe sul canale di controllo: dopo `session.stop()`, attivare un nuovo fault per uno scenario
+fittizio deve riuscire. Se il fault precedente fosse rimasto attivo, lo store rifiuterebbe la nuova
+attivazione con `FAULT_ALREADY_ACTIVE`.
 
 ## Casi di errore principali
 
