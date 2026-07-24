@@ -27,7 +27,7 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request: FastifyRequest<{ Querystring: FetchQuerystring }>, reply) => {
       const { sub } = request.query;
-      const { baseUrl, issuerEntityId, rpEntityId } = app.config;
+      const { baseUrl, issuerEntityId, rpEntityId, walletProviderEntityId } = app.config;
 
       let subjectKind: SubordinateEntityKind;
       let subjectPrivateJwk: JwkKey;
@@ -38,6 +38,9 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
       } else if (sub === rpEntityId) {
         subjectKind = 'rp';
         subjectPrivateJwk = app.trustAnchorKeys.rpFederationJwk;
+      } else if (sub === walletProviderEntityId) {
+        subjectKind = 'wallet-provider';
+        subjectPrivateJwk = app.trustAnchorKeys.walletProviderFederationJwk;
       } else {
         return reply.code(404).send({ error: 'not_found' });
       }
@@ -51,7 +54,7 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           trustAnchorBaseUrl: baseUrl
         });
 
-        if (subjectKind === 'issuer') {
+        if (subjectKind === 'issuer' || subjectKind === 'wallet-provider') {
           await app.conformanceEventSink?.emit(
             createObservedEvent({
               name: 'federation.fetch.requested',

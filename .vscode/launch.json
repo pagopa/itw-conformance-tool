@@ -36,6 +36,18 @@
       "skipFiles": ["<node_internals>/**"],
       "sourceMaps": true,
       "outFiles": ["${workspaceFolder}/apps/itw-trust-anchor/dist/**/*.(m|c|)js", "!**/node_modules/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Wallet Provider",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["nx", "serve", "itw-wallet-provider"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/apps/itw-wallet-provider/dist/**/*.(m|c|)js", "!**/node_modules/**"]
     }
   ]
 }
