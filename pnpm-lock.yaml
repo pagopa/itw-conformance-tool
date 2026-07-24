@@ -242,6 +242,9 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@itw-conformance-tool/faults':
+        specifier: workspace:*
+        version: link:../../packages/faults
       '@itw-conformance-tool/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc
@@ -502,6 +505,9 @@ importers:
       '@itw-conformance-tool/database':
         specifier: workspace:*
         version: link:../database
+      '@itw-conformance-tool/faults':
+        specifier: workspace:*
+        version: link:../faults
       '@itw-conformance-tool/logger':
         specifier: workspace:*
         version: link:../logger
@@ -533,6 +539,9 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
     devDependencies:
+      '@itw-conformance-tool/ipc':
+        specifier: workspace:*
+        version: link:../ipc
       '@pagopa/io-wallet-oauth2':
         specifier: ^1.5.3
         version: 1.5.3
@@ -587,8 +596,27 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
 
+  packages/faults:
+    dependencies:
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: catalog:node
+        version: 22.20.1
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(yaml@2.9.0))
+
   packages/ipc:
     dependencies:
+      '@itw-conformance-tool/faults':
+        specifier: workspace:*
+        version: link:../faults
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -7102,7 +7130,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 22.20.1
+      '@types/node': 26.1.1
     optional: true
 
   '@typescript-eslint/eslint-plugin@8.64.0(@typescript-eslint/parser@8.64.0(eslint@9.39.5)(typescript@5.9.3))(eslint@9.39.5)(typescript@5.9.3)':
