@@ -1,5 +1,13 @@
 import { loadConfig } from '@itw-conformance-tool/config';
-import { calculateJwkThumbprint, createLocalJWKSet, decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
+import {
+  calculateJwkThumbprint,
+  createLocalJWKSet,
+  decodeProtectedHeader,
+  generateKeyPair,
+  importJWK,
+  jwtVerify,
+  SignJWT
+} from 'jose';
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { isHttpsUrl, isObject, trimTrailingSlash } from '../../helpers/general.js';
@@ -319,5 +327,35 @@ describe('Test Cases for Wallet Provider Backend', () => {
         'Each signed_jwks_uri JWKS key must be a valid public JWK'
       ).resolves.toBeDefined();
     }
+  });
+
+  // Wallet Instance Tests
+
+  test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
+    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
+
+    const invalidAssertionBody = new URLSearchParams({
+      assertion:
+        'eyJhbGciOiJFUzI1NiIsInR5cCI6IldBTExFVC1JTlNUQU5DRS1BVFRFU1RBVElPTitKV1QifQ.eyJpc3MiOiJpbnZhbGlkIiwic3ViIjoiaW52YWxpZCIsImF1ZCI6ImludmFsaWQifQ.invalid_signature'
+    });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: invalidAssertionBody.toString(),
+      signal: AbortSignal.timeout(10_000)
+    });
+
+    expect(
+      response.status,
+      'Wallet Provider must reject invalid attestation requests with a 4xx HTTP status code (e.g., 400 or 401)'
+    ).toBeGreaterThanOrEqual(400);
+
+    expect(
+      response.status,
+      'Wallet Provider must reject invalid attestation requests with a 4xx HTTP status code'
+    ).toBeLessThan(500);
   });
 });
