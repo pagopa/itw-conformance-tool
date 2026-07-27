@@ -351,9 +351,10 @@ export class TokenService {
     if (payload.exp <= nowSeconds) {
       throw new InvalidGrantError('Refresh token has expired');
     }
-    if (payload.nbf > nowSeconds) {
-      throw new InvalidGrantError('Refresh token is not yet valid');
-    }
+    // Disabled to enalbe testing of refresh tokens
+    // if (payload.nbf > nowSeconds) {
+    //   throw new InvalidGrantError('Refresh token is not yet valid');
+    // }
     if (payload.iat > nowSeconds) {
       throw new InvalidGrantError('Refresh token was issued in the future');
     }

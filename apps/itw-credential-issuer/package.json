@@ -43,7 +43,6 @@
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "jose": "catalog:",
-    "open": "^11.0.0",
     "qrcode": "^1.5.4",
     "zod": "catalog:"
   },

@@ -13,15 +13,26 @@ export interface CredentialOfferPayload {
   };
 }
 
+function toCredentialConfigurationIds(credentialConfigurationIds: string | readonly string[]): string[] {
+  const ids = Array.isArray(credentialConfigurationIds)
+    ? [...credentialConfigurationIds]
+    : [credentialConfigurationIds];
+  if (ids.length === 0) {
+    throw new Error('Credential Offer must contain at least one credential_configuration_id');
+  }
+
+  return ids;
+}
+
 /** Builds the nominal, unmutated Credential Offer for a `credential-offer` stimulus. */
 export function buildCredentialOffer(
   credentialIssuer: string,
   correlationId: string,
-  credentialConfigurationId = NOMINAL_CREDENTIAL_CONFIGURATION_ID
+  credentialConfigurationIds: string | readonly string[] = NOMINAL_CREDENTIAL_CONFIGURATION_ID
 ): CredentialOfferPayload {
   return {
     credential_issuer: credentialIssuer,
-    credential_configuration_ids: [credentialConfigurationId],
+    credential_configuration_ids: toCredentialConfigurationIds(credentialConfigurationIds),
     grants: {
       authorization_code: {
         issuer_state: correlationId
@@ -80,10 +91,10 @@ export function createCredentialOfferUri(
   credentialIssuer: string,
   correlationId: string,
   issuerFault?: IssuerFaultProfile,
-  credentialConfigurationId = NOMINAL_CREDENTIAL_CONFIGURATION_ID
+  credentialConfigurationIds: string | readonly string[] = NOMINAL_CREDENTIAL_CONFIGURATION_ID
 ): string {
   const offer = applyIssuerFaultToCredentialOffer(
-    buildCredentialOffer(credentialIssuer, correlationId, credentialConfigurationId),
+    buildCredentialOffer(credentialIssuer, correlationId, credentialConfigurationIds),
     issuerFault
   );
   return serializeCredentialOfferUri(offer);

@@ -37,7 +37,7 @@ import {
   wp061Scenario,
   wp062aScenario,
   wp062bScenario,
-  wp065Wp066Scenario,
+  wpDeferredScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -1565,7 +1565,8 @@ describe('Test Cases for Issuance Phase', () => {
     let events: ObservedEvent[];
     let batchSize: number;
     let allowedProofSigningAlgorithms: string[];
-    let offeredCredentialIdentifier: string;
+    let offeredCredentialIdentifiers: string[];
+    let requestedCredentialIdentifier: string;
     let nonceEvent: ObservedEvent;
     let credentialEvent: ObservedEvent;
     let credentialRequestUrl: string;
@@ -1579,21 +1580,38 @@ describe('Test Cases for Issuance Phase', () => {
     let credentialProofPayloads: ProofJwtPayload[];
 
     beforeAll(async () => {
-      const session = await runner.start(wp065Wp066Scenario.id);
+      const session = await runner.start(wpDeferredScenario.id);
+      const credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
 
       try {
         await session.showInstructions();
         outcome = await session.awaitVerdict();
         events = session.events.all();
 
-        const credentialOfferEvent = events.find((event) => event.name === 'credential_offer.generated');
-        const credentialConfigurationId = credentialOfferEvent?.diagnostic?.['credentialConfigurationId'];
-        if (typeof credentialConfigurationId !== 'string' || credentialConfigurationId.length === 0) {
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        if (
+          !Array.isArray(offerPayload.credential_configuration_ids) ||
+          offerPayload.credential_configuration_ids.length !== 2
+        ) {
           throw new Error(
-            'credential_offer.generated evidence is missing the credentialConfigurationId required to assert WP_058'
+            'WP_Deferred Credential Offer must contain exactly 2 credential_configuration_ids to enable batch issuance'
           );
         }
-        offeredCredentialIdentifier = credentialConfigurationId;
+        offeredCredentialIdentifiers = offerPayload.credential_configuration_ids;
+
+        const credentialOfferEvent = events.find((event) => event.name === 'credential_offer.generated');
+        const credentialConfigurationIds = credentialOfferEvent?.diagnostic?.['credentialConfigurationIds'];
+        if (
+          !Array.isArray(credentialConfigurationIds) ||
+          !credentialConfigurationIds.every(
+            (credentialConfigurationId) => typeof credentialConfigurationId === 'string'
+          )
+        ) {
+          throw new Error(
+            'credential_offer.generated evidence is missing the credentialConfigurationIds required to assert WP_058'
+          );
+        }
+        expect(credentialConfigurationIds).toEqual(offeredCredentialIdentifiers);
 
         const discoveryUrl = new URL('/.well-known/openid-federation', config['credential-issuer'].url);
         const response = await httpsRequest({
@@ -1608,7 +1626,7 @@ describe('Test Cases for Issuance Phase', () => {
 
         if (response.statusCode !== 200) {
           throw new Error(
-            `Unable to fetch Credential Issuer entity configuration while WP_065_WP_066 is active (${response.statusCode ?? 'unknown'}): ${response.body}`
+            `Unable to fetch Credential Issuer entity configuration while WP_Deferred is active (${response.statusCode ?? 'unknown'}): ${response.body}`
           );
         }
 
@@ -1629,17 +1647,6 @@ describe('Test Cases for Issuance Phase', () => {
           );
         }
         batchSize = publishedBatchSize;
-
-        const credentialConfiguration =
-          issuerMetadata?.credential_configurations_supported[offeredCredentialIdentifier];
-        if (!credentialConfiguration) {
-          throw new Error(
-            `Credential Issuer metadata is missing credential_configurations_supported.${offeredCredentialIdentifier} for WP_058a`
-          );
-        }
-        allowedProofSigningAlgorithms = [
-          ...credentialConfiguration.proof_types_supported.jwt.proof_signing_alg_values_supported
-        ];
 
         const foundNonceEvent = events.find((event) => event.name === 'issuer.nonce.requested');
         if (!foundNonceEvent) {
@@ -1664,7 +1671,27 @@ describe('Test Cases for Issuance Phase', () => {
           );
         }
         credentialRequest = credentialRequestParseResult.data;
+        if (!credentialRequest.credential_identifier) {
+          throw new Error('Batch Credential Request is missing credential_identifier');
+        }
+        requestedCredentialIdentifier = credentialRequest.credential_identifier;
+        if (!offeredCredentialIdentifiers.includes(requestedCredentialIdentifier)) {
+          throw new Error(
+            `Batch Credential Request used ${requestedCredentialIdentifier}, which is not one of the shown Credential Offer identifiers: ${offeredCredentialIdentifiers.join(', ')}`
+          );
+        }
         credentialProofJwts = credentialRequest.proofs.jwt;
+
+        const credentialConfiguration =
+          issuerMetadata?.credential_configurations_supported[requestedCredentialIdentifier];
+        if (!credentialConfiguration) {
+          throw new Error(
+            `Credential Issuer metadata is missing credential_configurations_supported.${requestedCredentialIdentifier} for WP_058a`
+          );
+        }
+        allowedProofSigningAlgorithms = [
+          ...credentialConfiguration.proof_types_supported.jwt.proof_signing_alg_values_supported
+        ];
 
         credentialDpopJwt = requiredDiagnosticString(credentialEvent, 'dpopProof');
         ({ header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
@@ -1685,10 +1712,10 @@ describe('Test Cases for Issuance Phase', () => {
       } finally {
         await session.stop();
       }
-    }, wp065Wp066Scenario.timeouts.vitestTestMs);
+    }, wpDeferredScenario.timeouts.vitestTestMs);
 
     test(
-      'WP_058: Wallet Instance sends a complete Batch Credential Request bound to DPoP access-token authentication and the offered credential identifier.',
+      'WP_058: Wallet Instance sends a complete Batch Credential Request bound to DPoP access-token authentication and one of the offered credential identifiers.',
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
 
@@ -1746,12 +1773,12 @@ describe('Test Cases for Issuance Phase', () => {
         expect(
           credentialRequest.credential_identifier,
           'Batch Credential Request should request the credential identifier from the shown offer'
-        ).toBe(offeredCredentialIdentifier);
+        ).toBeOneOf([...offeredCredentialIdentifiers]);
         expect(credentialProofJwts, 'Batch Credential Request should include proofs.jwt entries').toHaveLength(
           batchSize
         );
       },
-      wp065Wp066Scenario.timeouts.vitestTestMs
+      wpDeferredScenario.timeouts.vitestTestMs
     );
 
     test(
@@ -1772,7 +1799,7 @@ describe('Test Cases for Issuance Phase', () => {
           expect(proofHeader.alg, `Credential proof ${index} alg should not be none`).not.toBe('none');
           expect(
             proofHeader.alg,
-            `Credential proof ${index} alg should be published for ${offeredCredentialIdentifier}`
+            `Credential proof ${index} alg should be published for ${requestedCredentialIdentifier}`
           ).toBeOneOf([...allowedProofSigningAlgorithms]);
           expect(proofHeader.jwk, `Credential proof ${index} should include a public JWK`).toBeDefined();
           expect(proofHeader.jwk.kty, `Credential proof ${index} JWK should not be symmetric`).not.toBe('oct');
@@ -1809,7 +1836,7 @@ describe('Test Cases for Issuance Phase', () => {
           'No holder-binding proof JWK should reuse the Credential Request DPoP key'
         ).toBe(false);
       },
-      wp065Wp066Scenario.timeouts.vitestTestMs
+      wpDeferredScenario.timeouts.vitestTestMs
     );
 
     test(
@@ -1852,7 +1879,7 @@ describe('Test Cases for Issuance Phase', () => {
           );
         }
       },
-      wp065Wp066Scenario.timeouts.vitestTestMs
+      wpDeferredScenario.timeouts.vitestTestMs
     );
 
     test(
@@ -1900,7 +1927,7 @@ describe('Test Cases for Issuance Phase', () => {
           'The /credential response for this scenario must not be an immediate HTTP 200 credential payload'
         ).toBe(202);
       },
-      wp065Wp066Scenario.timeouts.vitestTestMs
+      wpDeferredScenario.timeouts.vitestTestMs
     );
 
     test(
@@ -1977,7 +2004,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(issuedResponse?.http.statusCode).toBe(200);
         expect(issuedResponse?.http.contentType.toLowerCase()).toContain('application/json');
       },
-      wp065Wp066Scenario.timeouts.vitestTestMs
+      wpDeferredScenario.timeouts.vitestTestMs
     );
   });
 });

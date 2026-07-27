@@ -1,7 +1,7 @@
 import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
 
-export const wp065Wp066Scenario: ProtocolObservedScenarioDefinition = {
-  id: 'WP_065_WP_066',
+export const wpDeferredScenario: ProtocolObservedScenarioDefinition = {
+  id: 'WP_Deferred',
   title:
     'Deferred batch issuance: Wallet Instance sends a complete batch request and waits for the advertised interval',
   phase: 'ISSUANCE',
@@ -9,6 +9,7 @@ export const wp065Wp066Scenario: ProtocolObservedScenarioDefinition = {
   services: ['credentialIssuer', 'federation'],
   stimulus: {
     type: 'credential-offer',
+    credentialConfigurationIds: ['dc_sd_jwt_EuropeanDisabilityCard', 'dc_sd_jwt_EuropeanDisabilityCard'],
     delivery: ['deep-link', 'qr']
   },
   setup: {
@@ -91,7 +92,7 @@ export const wp065Wp066Scenario: ProtocolObservedScenarioDefinition = {
   instructions: {
     goal: 'Verify that the Wallet Instance builds a complete batch Credential Request using the Issuer metadata batch_size, distinct holder-binding proof keys and the Nonce Endpoint c_nonce, then treats the HTTP 202 Credential Response as deferred issuance and waits for the advertised interval before calling the Deferred Credential Endpoint.',
     expectedBehavior:
-      'After opening the credential offer, the wallet must complete the normal issuance flow through Entity Configuration, Federation Fetch, PAR, Authorization, Token and Nonce, read openid_credential_issuer.batch_credential_issuance.batch_size from the Issuer metadata, then send a DPoP-authenticated Credential Request for the offered credential identifier with exactly N holder-binding proof JWTs, where N equals the published batch_size. Each proof JWT must use a public asymmetric JWK that is distinct from every other proof key and from the Credential Request DPoP key, and each proof must carry the same c_nonce obtained from the Nonce Endpoint. The Credential Issuer enables deferred batch issuance only for this scenario and returns HTTP 202 with transaction_id and interval and no credentials. The wallet must keep running, wait for the advertised interval, call POST /deferred with the same transaction_id and valid DPoP-bound access-token authentication, then receive the deferred credentials.',
+      'After opening the credential offer with two credential types, the wallet must complete the normal issuance flow through Entity Configuration, Federation Fetch, PAR, Authorization, Token and Nonce, read openid_credential_issuer.batch_credential_issuance.batch_size from the Issuer metadata, then send a DPoP-authenticated Credential Request for one of the offered credential identifiers with exactly N holder-binding proof JWTs, where N equals the published batch_size. Each proof JWT must use a public asymmetric JWK that is distinct from every other proof key and from the Credential Request DPoP key, and each proof must carry the same c_nonce obtained from the Nonce Endpoint. The Credential Issuer enables deferred batch issuance only for this scenario and returns HTTP 202 with transaction_id and interval and no credentials. The wallet must keep running, wait for the advertised interval, call POST /deferred with the same transaction_id and valid DPoP-bound access-token authentication, then receive the deferred credentials.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'The wallet must support the Issuer metadata batch_size for batch credential issuance and generate exactly that many holder-binding proof JWTs.',

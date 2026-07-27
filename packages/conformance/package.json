@@ -28,6 +28,7 @@
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "jose": "catalog:",
+    "open": "^11.0.0",
     "puppeteer": "^24.0.0",
     "tslib": "^2.3.0",
     "vitest": "catalog:"

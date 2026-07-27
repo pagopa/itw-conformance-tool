@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 import chalk from 'chalk';
+import open from 'open';
 
 import { createObservedEvent } from '../events/event-bus.js';
 import {
@@ -40,6 +41,8 @@ export interface AwaitVerdictOptions {
   signal?: AbortSignal;
 }
 
+export type BrowserOpener = (url: string) => Promise<void>;
+
 export interface ScenarioRunner extends AsyncDisposable {
   start(id: string, options?: StartScenarioOptions): Promise<InteractiveScenarioSession>;
   close(): Promise<void>;
@@ -69,11 +72,17 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   issuerFaultController?: IssuerScenarioController;
   /** IT Wallet specification version reported when activating an issuer fault. Defaults to '1.4'. */
   issuerFaultSpecVersion?: string;
+  /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
+  browserOpener?: BrowserOpener;
 }
 
 function defaultWrite(message: string): void {
   // eslint-disable-next-line no-console
   console.log(message);
+}
+
+async function defaultBrowserOpener(url: string): Promise<void> {
+  await open(url);
 }
 
 function resolveScenarioEndpoints(
@@ -94,6 +103,7 @@ function resolveScenarioEndpoints(
 interface CreatedStimulus {
   correlationId: string;
   credentialConfigurationId?: string;
+  credentialConfigurationIds?: string[];
   stimulus: ScenarioStimulus;
 }
 
@@ -106,20 +116,26 @@ async function createStimulus(
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
-    const selectedCredentialConfigurationId =
-      definition.stimulus.credentialConfigurationId ?? NOMINAL_CREDENTIAL_CONFIGURATION_ID;
+    if (definition.stimulus.credentialConfigurationIds?.length === 0) {
+      throw new Error(`Scenario ${definition.id} declares an empty credentialConfigurationIds list`);
+    }
+    const selectedCredentialConfigurationIds = definition.stimulus.credentialConfigurationIds
+      ? [...definition.stimulus.credentialConfigurationIds]
+      : [definition.stimulus.credentialConfigurationId ?? NOMINAL_CREDENTIAL_CONFIGURATION_ID];
     const uri = createCredentialOfferUri(
       credentialIssuer,
       correlationId,
       issuerFaultProfile,
-      selectedCredentialConfigurationId
+      selectedCredentialConfigurationIds
     );
+    const effectiveCredentialConfigurationIds =
+      issuerFaultProfile?.type === 'unsupported-credential-offer'
+        ? [issuerFaultProfile.credentialConfigurationId]
+        : selectedCredentialConfigurationIds;
     return {
       correlationId,
-      credentialConfigurationId:
-        issuerFaultProfile?.type === 'unsupported-credential-offer'
-          ? issuerFaultProfile.credentialConfigurationId
-          : selectedCredentialConfigurationId,
+      credentialConfigurationId: effectiveCredentialConfigurationIds[0],
+      credentialConfigurationIds: effectiveCredentialConfigurationIds,
       stimulus: { type: 'credential-offer', uri, qrCode: uri }
     };
   }
@@ -225,10 +241,41 @@ function showPrompt(
   write(`${chalk.bold('Timeout')} ${chalk.yellow(`${testerActionTimeoutSeconds} seconds`)}`);
 }
 
+function createCredentialOfferPageUrl(credentialIssuer: string, credentialOfferUri: string): string {
+  const pageUrl = new URL('/credential-offer', credentialIssuer);
+  pageUrl.searchParams.set('credential_offer_uri', credentialOfferUri);
+
+  return pageUrl.toString();
+}
+
+async function openCredentialOfferPage(
+  stimulus: ScenarioStimulus,
+  endpoints: LocalServiceEndpoints,
+  browserOpener: BrowserOpener,
+  write: (message: string) => void
+): Promise<void> {
+  if (stimulus.type !== 'credential-offer') return;
+
+  const credentialIssuer = endpoints.credentialIssuer;
+  if (!credentialIssuer) return;
+
+  const pageUrl = createCredentialOfferPageUrl(credentialIssuer, stimulus.uri);
+
+  try {
+    await browserOpener(pageUrl);
+  } catch (error) {
+    write(chalk.yellow('Could not open the credential offer page in the default browser.'));
+    write(chalk.dim(`Open it manually if needed: ${pageUrl}`));
+    write(chalk.dim(error instanceof Error ? error.message : String(error)));
+    write('');
+  }
+}
+
 export function createProtocolObservedScenarioRunner(
   options: CreateProtocolObservedScenarioRunnerOptions
 ): ScenarioRunner {
   const write = options.write ?? defaultWrite;
+  const browserOpener = options.browserOpener ?? defaultBrowserOpener;
   const verdictEngine = options.verdictEngine ?? createProtocolObservedVerdictEngine();
   const activeSessions = new Set<InteractiveScenarioSession>();
 
@@ -247,6 +294,7 @@ export function createProtocolObservedScenarioRunner(
       let eventSubscription: Disposable | undefined;
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
+      let credentialOfferPageOpened = false;
 
       const issuerFaultProfile = definition.setup?.issuerFault;
       const issuerConfig = definition.setup?.issuerConfig;
@@ -299,7 +347,7 @@ export function createProtocolObservedScenarioRunner(
           issuerConfigActive = true;
         }
 
-        const { correlationId, credentialConfigurationId, stimulus } = await createStimulus(
+        const { correlationId, credentialConfigurationId, credentialConfigurationIds, stimulus } = await createStimulus(
           definition,
           endpoints,
           initialCorrelationId,
@@ -334,7 +382,12 @@ export function createProtocolObservedScenarioRunner(
                 : 'credential_offer.generated',
             correlationId,
             service: 'collector',
-            diagnostic: { stimulusType: stimulus.type, credentialConfigurationId, ...appliedIssuerFaultDiagnostic }
+            diagnostic: {
+              stimulusType: stimulus.type,
+              credentialConfigurationId,
+              credentialConfigurationIds,
+              ...appliedIssuerFaultDiagnostic
+            }
           })
         );
 
@@ -348,6 +401,10 @@ export function createProtocolObservedScenarioRunner(
           async showInstructions() {
             showPrompt(definition, stimulus, endpoints, write);
             await copyQrPayloadToClipboard(stimulus, write);
+            if (!credentialOfferPageOpened) {
+              credentialOfferPageOpened = true;
+              await openCredentialOfferPage(stimulus, endpoints, browserOpener, write);
+            }
             eventSubscription?.dispose();
             eventSubscription = eventStore.subscribe((event) => {
               write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);

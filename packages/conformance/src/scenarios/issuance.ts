@@ -7,7 +7,7 @@ import { wp060Scenarios } from './factories/wp-060.js';
 import { wp061Scenario } from './factories/wp-061.js';
 import { wp062aScenario } from './factories/wp-062a.js';
 import { wp062bScenario } from './factories/wp-062b.js';
-import { wp065Wp066Scenario } from './factories/wp-065-wp-066.js';
+import { wpDeferredScenario } from './factories/wp-deferred.js';
 import { wpCiHappyScenario } from './factories/wp-ci-happy.js';
 import { wpUnsupportedCredentialOfferScenario } from './factories/wp-unsupported-credential-offer.js';
 import { createScenarioRegistry } from './registry.js';
@@ -22,7 +22,7 @@ export const issuanceScenarios: ProtocolObservedScenarioDefinition[] = [
   wp061Scenario,
   wp062aScenario,
   wp062bScenario,
-  wp065Wp066Scenario,
+  wpDeferredScenario,
   wpUnsupportedCredentialOfferScenario,
   ...wp054Scenarios,
   wp054aInvalidStateScenario,

@@ -9,7 +9,12 @@ export type LocalServiceName = 'credentialIssuer' | 'federation' | 'relyingParty
 export type LocalServiceEndpoints = Partial<Record<LocalServiceName, string>>;
 
 export type StimulusDefinition =
-  | { type: 'credential-offer'; credentialConfigurationId?: string; delivery: ('deep-link' | 'qr')[] }
+  | {
+      type: 'credential-offer';
+      credentialConfigurationId?: string;
+      credentialConfigurationIds?: string[];
+      delivery: ('deep-link' | 'qr')[];
+    }
   | { type: 'manual-instruction'; text: string }
   | { type: 'presentation-request'; delivery: ('deep-link' | 'qr')[] }
   | { type: 'web-url'; delivery: ('deep-link' | 'qr')[] };

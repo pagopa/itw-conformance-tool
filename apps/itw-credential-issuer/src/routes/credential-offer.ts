@@ -1,6 +1,10 @@
 import QRCode from 'qrcode';
 
+import { CREDENTIAL_OFFER_QUERY_PARAM, CREDENTIAL_OFFER_URI_SCHEME } from '../domain/credential-offer.js';
+
 import type { FastifyPluginAsync } from 'fastify';
+
+const SCENARIO_CREDENTIAL_OFFER_QUERY_PARAM = 'credential_offer_uri';
 
 const HTML_ESCAPE_MAP: Record<string, string> = {
   '&': '&amp;',
@@ -23,6 +27,31 @@ function escapeHtml(value: string): string {
  */
 function toInlineScriptStringLiteral(value: string): string {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isValidCredentialOfferUri(uri: string): boolean {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(uri);
+  } catch {
+    return false;
+  }
+
+  if (`${parsed.protocol}//` !== CREDENTIAL_OFFER_URI_SCHEME) return false;
+
+  const credentialOffer = parsed.searchParams.get(CREDENTIAL_OFFER_QUERY_PARAM);
+  if (!credentialOffer) return false;
+
+  try {
+    return isRecord(JSON.parse(credentialOffer));
+  } catch {
+    return false;
+  }
 }
 
 async function renderCredentialOfferPage(uri: string): Promise<string> {
@@ -118,13 +147,32 @@ const credentialOfferRoute: FastifyPluginAsync = async (app) => {
     url: '/credential-offer',
     method: 'GET',
     schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          [SCENARIO_CREDENTIAL_OFFER_QUERY_PARAM]: { type: 'string' }
+        },
+        additionalProperties: false
+      },
       tags: ['Credential Offer']
     },
-    handler: async (_request, reply) => {
-      const uri = app.config.CREDENTIAL_OFFER_URI;
+    handler: async (request, reply) => {
+      const query = request.query as { [SCENARIO_CREDENTIAL_OFFER_QUERY_PARAM]?: unknown };
+      const scenarioCredentialOfferUri = query[SCENARIO_CREDENTIAL_OFFER_QUERY_PARAM];
+      if (scenarioCredentialOfferUri !== undefined && typeof scenarioCredentialOfferUri !== 'string') {
+        reply.code(400);
+        return { message: 'Invalid credential_offer_uri query parameter' };
+      }
+
+      const uri = scenarioCredentialOfferUri ?? app.config.CREDENTIAL_OFFER_URI;
       if (uri === undefined) {
         reply.code(404);
         return { message: 'Not Found' };
+      }
+
+      if (!isValidCredentialOfferUri(uri)) {
+        reply.code(400);
+        return { message: 'Invalid credential_offer_uri query parameter' };
       }
 
       const html = await renderCredentialOfferPage(uri);
