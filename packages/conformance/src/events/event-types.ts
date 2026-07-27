@@ -19,6 +19,7 @@ export const observedEventNames = [
   'issuer.token.requested',
   'issuer.nonce.requested',
   'issuer.credential.requested',
+  'issuer.credential.issued',
   'issuer.credential.deferred',
   'issuer.deferred_credential.requested',
   'issuer.deferred_credential.issued',

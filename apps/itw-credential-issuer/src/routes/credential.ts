@@ -44,6 +44,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Hashes the `notification_id` from a *final* (post-fault) Credential
+ * Response body, so `issuer.credential.issued` evidence can prove
+ * correlation with the Notification Request (WP_064a) without ever storing
+ * the raw value.
+ */
+function notificationIdSha256FromResponse(value: Record<string, unknown>): string | undefined {
+  const notificationId = value.notification_id;
+  return typeof notificationId === 'string' && notificationId.length > 0 ? sha256Base64Url(notificationId) : undefined;
+}
+
+function countResponseCredentials(value: Record<string, unknown>): number | undefined {
+  return Array.isArray(value.credentials) ? value.credentials.length : undefined;
+}
+
 function countProofJwts(requestBody: unknown): number | undefined {
   const body = typeof requestBody === 'string' ? credentialRequestDiagnosticBody(requestBody) : requestBody;
   if (!isRecord(body) || !isRecord(body.proofs) || !Array.isArray(body.proofs.jwt)) {
@@ -281,6 +296,25 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
                 proofCount,
                 credentialCount: proofCount,
                 credentialsPresent: Object.hasOwn(responseBody, 'credentials')
+              }
+            })
+          );
+        }
+
+        if (result.status === 'immediate' && isRecord(responseBody)) {
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.credential.issued',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/credential',
+                statusCode,
+                contentType: 'application/json',
+                responseKind: 'immediate',
+                credentialCount: countResponseCredentials(responseBody),
+                notificationIdSha256: notificationIdSha256FromResponse(responseBody)
               }
             })
           );
