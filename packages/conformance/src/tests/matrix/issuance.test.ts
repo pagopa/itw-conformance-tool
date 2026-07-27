@@ -291,6 +291,32 @@ describe('Test Cases for Issuance Phase', () => {
     }, wpCiHappyScenario.timeouts.vitestTestMs);
 
     test(
+      'WP_018: Wallet Instance periodically and successfully obtains a fresh Wallet Attestation from its Wallet Provider.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        // The Wallet Attestation payload's `cnf.jwk` is mandatory per the SDK's
+        // `zWalletAttestationJwtPayloadV1_0`/`V1_3`/`V1_4` schemas.
+        const { payload: attestationPayload } = decodeJwt({ jwt: clientAttestation.walletAttestationJwt });
+        expect(attestationPayload.iat, 'Wallet Attestation should carry an iat claim').toBeDefined();
+
+        const nowInSeconds = Math.floor(Date.now() / 1000);
+        const twentyFourHoursInSeconds = 24 * 60 * 60; // 86400 secondi
+
+        // Verify that iat does not get older than 24 hours
+        expect(
+          attestationPayload.iat,
+          'Wallet Attestation iat should be within the last 24 hours'
+        ).toBeGreaterThanOrEqual(nowInSeconds - twentyFourHoursInSeconds);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
       `WP_046: Wallet Instance successfully uses Federation API endpoints (.well-known/openid-federation, /fetch) to retrieve current metadata and configurations of the Credential Issuer.`,
       async () => {
         assertConformanceOutcome(outcome, { expected: 'PASS' });
