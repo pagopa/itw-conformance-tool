@@ -45,13 +45,7 @@ import {
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
 
-import type {
-  HttpRequestReceivedEvent,
-  HttpResponseSentEvent,
-  ObservedEvent,
-  ScenarioOutcome,
-  ScenarioRunner
-} from '../../index.js';
+import type { HttpResponseSentEvent, ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
 import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
 import type { CredentialRequestV1_3, ProofJwtHeaderV1_3, ProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 
@@ -91,16 +85,6 @@ function findHttpResponseSentEvent(
 ): HttpResponseSentEvent | undefined {
   return events.find(
     (event): event is HttpResponseSentEvent => event.name === 'http.response.sent' && event.requestId === requestId
-  );
-}
-
-function findHttpRequestReceivedEvent(
-  events: ObservedEvent[],
-  requestId: string | undefined
-): HttpRequestReceivedEvent | undefined {
-  return events.find(
-    (event): event is HttpRequestReceivedEvent =>
-      event.name === 'http.request.received' && event.requestId === requestId
   );
 }
 

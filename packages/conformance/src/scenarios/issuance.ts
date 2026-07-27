@@ -7,8 +7,8 @@ import { wp060Scenarios } from './factories/wp-060.js';
 import { wp061Scenario } from './factories/wp-061.js';
 import { wp062aScenario } from './factories/wp-062a.js';
 import { wp062bScenario } from './factories/wp-062b.js';
-import { wpDeferredScenario } from './factories/wp-deferred.js';
 import { wpCiHappyScenario } from './factories/wp-ci-happy.js';
+import { wpDeferredScenario } from './factories/wp-deferred.js';
 import { wpUnsupportedCredentialOfferScenario } from './factories/wp-unsupported-credential-offer.js';
 import { createScenarioRegistry } from './registry.js';
 
