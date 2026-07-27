@@ -154,10 +154,18 @@ jobs:
           # own federation servers (trust_anchor 3001, wallet provider 3002,
           # mock issuer 3003), which would collide with the runner. Remap wct's
           # servers into the 31xx range so both sets can run side by side.
+          #
+          # Also trust the local runner's Trust Anchor so wct (the wallet under
+          # test) can resolve the trust chain of our Relying Party's request.
+          # Our RP publishes authority_hints = [https://127.0.0.1:3001] and our
+          # Trust Anchor advertises that same value as its entity identifier
+          # (itw-trust-anchor derives iss/sub from [trust-anchor] url), so that
+          # exact URL must appear in wct's federation_trust_anchors set.
           sed -i \
             -e 's/^port = 3001$/port = 3101/' \
             -e 's/^port = 3002$/port = 3102/' \
             -e 's/^port = 3003$/port = 3103/' \
+            -e 's#^federation_trust_anchors\[\] = https://trust-anchor\.wct\.example\.org:3004$#&\nfederation_trust_anchors[] = https://127.0.0.1:3001#' \
             config.ini
           pnpm install
           pnpm build
