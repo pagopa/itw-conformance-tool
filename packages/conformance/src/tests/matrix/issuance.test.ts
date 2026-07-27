@@ -14,11 +14,13 @@ import {
   zDpopJwtPayload,
   zItWalletClientAttestationPopJwtHeader,
   zItWalletClientAttestationPopJwtPayload,
+  zWalletAttestationJwtHeaderV1_4,
+  zWalletAttestationJwtPayloadV1_4,
   IT_WALLET_CLIENT_ATTESTATION_POP_ALLOWED_ALG_VALUES
 } from '@pagopa/io-wallet-oauth2';
 import { zCredentialRequestV1_3, zProofJwtHeaderV1_3, zProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 import { IoWalletSdkConfig, ItWalletSpecsVersion, type HttpMethod } from '@pagopa/io-wallet-utils';
-import { calculateJwkThumbprint, importJWK, jwtVerify, type JWK } from 'jose';
+import { calculateJwkThumbprint, importJWK, importX509, jwtVerify, type JWK } from 'jose';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { trimTrailingSlash } from '../../helpers/general.js';
@@ -101,6 +103,15 @@ function decodeCredentialOfferUri(uri: string): { credential_configuration_ids?:
   return JSON.parse(credentialOffer) as { credential_configuration_ids?: string[] };
 }
 
+function pemFromX5cCertificate(certificate: string): string {
+  const lines = certificate.match(/.{1,64}/g);
+  if (!lines) {
+    throw new Error('Wallet Attestation x5c certificate is empty');
+  }
+
+  return ['-----BEGIN CERTIFICATE-----', ...lines, '-----END CERTIFICATE-----'].join('\n');
+}
+
 /**
  * Minimal jose-based `verifyJwt` callback adapter, local to this test file, so
  * that WP_052c can exercise `verifyClientAttestationPopJwt`'s cryptographic
@@ -129,6 +140,23 @@ const verifyJwtWithJwk: NonNullable<CallbackContext['verifyJwt']> = async (signe
 // matching the clock tolerance already used for JWT signature verification
 // in this file.
 const DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS = 300;
+
+const WALLET_ATTESTATION_NON_USER_PAYLOAD_CLAIMS = new Set([
+  'aud',
+  'cnf',
+  'eudi_wallet_info',
+  'exp',
+  'iat',
+  'iss',
+  'jti',
+  'nbf',
+  'nonce',
+  'status',
+  'sub',
+  'trust_chain',
+  'wallet_link',
+  'wallet_name'
+]);
 
 // Set by the CLI's local control relay (`itwct test issuance`/`itwct test`)
 // before spawning this Vitest process; see `apps/cli/src/commands/runTests.ts`.
@@ -312,6 +340,210 @@ describe('Test Cases for Issuance Phase', () => {
           attestationPayload.iat,
           'Wallet Attestation iat should be within the last 24 hours'
         ).toBeGreaterThanOrEqual(nowInSeconds - twentyFourHoursInSeconds);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      "WP_019: The Wallet Attestation contains all required claims and data points that attest to the device's integrity and security status.",
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        const { header: attestationHeader, payload: attestationPayload } = decodeJwt({
+          jwt: clientAttestation.walletAttestationJwt,
+          headerSchema: zWalletAttestationJwtHeaderV1_4,
+          payloadSchema: zWalletAttestationJwtPayloadV1_4
+        });
+
+        expect(attestationHeader.alg, 'Wallet Attestation alg should not be none').not.toBe('none');
+        expect(
+          attestationHeader.kid,
+          'Wallet Attestation should carry the Wallet Provider signing key id'
+        ).not.toHaveLength(0);
+        expect(attestationHeader.typ, 'Wallet Attestation typ should identify an OAuth client attestation').toBe(
+          'oauth-client-attestation+jwt'
+        );
+        expect(attestationHeader.x5c, 'Wallet Attestation should carry an X.509 certificate chain').not.toHaveLength(0);
+
+        expect(attestationPayload.iss, 'Wallet Attestation should carry the Wallet Provider issuer').toBe(
+          trimTrailingSlash(config['wallet-provider'].local_url)
+        );
+        expect(
+          attestationPayload.sub,
+          'Wallet Attestation should carry a non-empty subject thumbprint'
+        ).not.toHaveLength(0);
+        expect(attestationPayload.iat, 'Wallet Attestation should carry a numeric iat').toBeTypeOf('number');
+        expect(attestationPayload.exp, 'Wallet Attestation should carry a numeric exp').toBeTypeOf('number');
+        expect(attestationPayload.exp, 'Wallet Attestation exp should be after iat').toBeGreaterThan(
+          attestationPayload.iat
+        );
+
+        expect(attestationPayload.cnf.jwk, 'Wallet Attestation should carry cnf.jwk').toBeDefined();
+        expect(attestationPayload.cnf.jwk.kty, 'Wallet Attestation cnf.jwk should declare a key type').not.toHaveLength(
+          0
+        );
+        expect(
+          attestationPayload.cnf.jwk.d,
+          'Wallet Attestation cnf.jwk should not expose private key material'
+        ).toBeUndefined();
+        expect(
+          attestationPayload.cnf.jwk.k,
+          'Wallet Attestation cnf.jwk should not expose symmetric key material'
+        ).toBeUndefined();
+
+        expect(
+          attestationPayload.wallet_link,
+          'Wallet Attestation should carry the Wallet Provider information URL'
+        ).toBe(trimTrailingSlash(config['wallet-provider'].local_url));
+        expect(attestationPayload.wallet_name, 'Wallet Attestation should carry the Wallet name').toBe(
+          config.wallet.wallet_name
+        );
+        expect(
+          attestationPayload.status.status_list.uri,
+          'Wallet Attestation should carry a status list URI for revocation/security status'
+        ).toBeDefined();
+        expect(
+          attestationPayload.status.status_list.idx,
+          'Wallet Attestation should carry a status list index'
+        ).toBeTypeOf('number');
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      "WP_019b: The Wallet Attestation contains a cryptographic binding to Wallet Instance's ephemeral public key that is successfully verified.",
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        const { payload: attestationPayload } = decodeJwt({
+          jwt: clientAttestation.walletAttestationJwt,
+          payloadSchema: zWalletAttestationJwtPayloadV1_4
+        });
+
+        const cnfJwk = attestationPayload.cnf.jwk;
+        await expect(
+          calculateJwkThumbprint(cnfJwk),
+          'Wallet Attestation sub should be the thumbprint of cnf.jwk'
+        ).resolves.toBe(attestationPayload.sub);
+
+        const { header: popHeader } = decodeJwtHeader({ jwt: clientAttestation.clientAttestationPopJwt });
+        const publicKey = await importJWK(cnfJwk as JWK, popHeader.alg);
+        await expect(
+          jwtVerify(clientAttestation.clientAttestationPopJwt, publicKey),
+          'Wallet Instance PoP signature should verify with the Wallet Attestation cnf.jwk'
+        ).resolves.toBeDefined();
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_028: When no revocation check methods are supported, the Wallet Provider issues a Wallet Attestation with a defined expiration time and a short validity period.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        // The Wallet Attestation payload's `cnf.jwk` is mandatory per the SDK's
+        // `zWalletAttestationJwtPayloadV1_0`/`V1_3`/`V1_4` schemas.
+        const { payload: attestationPayload } = decodeJwt({ jwt: clientAttestation.walletAttestationJwt });
+
+        expect(attestationPayload.iat, 'Wallet Attestation should carry an iat claim').toBeDefined();
+        expect(attestationPayload.exp, 'Wallet Attestation should carry an exp claim').toBeDefined();
+
+        const maxValidityInSeconds = 24 * 60 * 60; // 86400 secondi
+        if (!attestationPayload.exp || !attestationPayload.iat) {
+          throw new Error('Wallet Attestation exp or iat claim is missing');
+        }
+        const validityDuration = attestationPayload.exp - attestationPayload.iat;
+
+        // Verifica che exp sia successivo a iat
+        expect(validityDuration, 'Wallet Attestation exp should be greater than iat').toBeGreaterThan(0);
+
+        // Verifica che la finestra di validità (exp - iat) sia al massimo di 24 ore
+        expect(
+          validityDuration,
+          'Wallet Attestation validity duration (exp - iat) should be at most 24 hours'
+        ).toBeLessThanOrEqual(maxValidityInSeconds);
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_029a: Wallet Provider provides the Wallet Attestation in JWT format signed by the Wallet Provider, and confirming the structures defined in Wallet Attestation JWT.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        const { header: attestationHeader, payload: attestationPayload } = decodeJwt({
+          jwt: clientAttestation.walletAttestationJwt,
+          headerSchema: zWalletAttestationJwtHeaderV1_4,
+          payloadSchema: zWalletAttestationJwtPayloadV1_4
+        });
+
+        expect(attestationHeader.typ, 'Wallet Attestation typ should identify an OAuth client attestation').toBe(
+          'oauth-client-attestation+jwt'
+        );
+        expect(attestationHeader.alg, 'Wallet Attestation alg should not be none').not.toBe('none');
+        expect(attestationHeader.x5c, 'Wallet Attestation should carry an X.509 certificate chain').not.toHaveLength(0);
+
+        const [leafCertificate] = attestationHeader.x5c;
+        if (!leafCertificate) {
+          throw new Error('Wallet Attestation header is missing the leaf x5c certificate');
+        }
+
+        const walletProviderPublicKey = await importX509(pemFromX5cCertificate(leafCertificate), attestationHeader.alg);
+        await expect(
+          jwtVerify(clientAttestation.walletAttestationJwt, walletProviderPublicKey, {
+            algorithms: [attestationHeader.alg],
+            issuer: trimTrailingSlash(config['wallet-provider'].local_url)
+          }),
+          'Wallet Attestation signature should verify with the Wallet Provider x5c certificate'
+        ).resolves.toMatchObject({
+          payload: expect.objectContaining({
+            cnf: expect.objectContaining({ jwk: attestationPayload.cnf.jwk }),
+            iss: trimTrailingSlash(config['wallet-provider'].local_url),
+            sub: attestationPayload.sub
+          })
+        });
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_029b: The Wallet Attestation payload contains no personally identifiable information (PII) about the User.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        const { payload: attestationPayload } = decodeJwt({
+          jwt: clientAttestation.walletAttestationJwt,
+          payloadSchema: zWalletAttestationJwtPayloadV1_4
+        });
+
+        const unexpectedPayloadClaims = Object.keys(attestationPayload).filter(
+          (claim) => !WALLET_ATTESTATION_NON_USER_PAYLOAD_CLAIMS.has(claim)
+        );
+
+        expect(
+          unexpectedPayloadClaims,
+          'Wallet Attestation payload should contain only non-user Wallet Attestation claims'
+        ).toEqual([]);
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );
