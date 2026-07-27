@@ -62,6 +62,10 @@ async function startServer() {
     endpoint: app.config.BASE_URL,
     service: 'credential-issuer',
     stop: () => app.close(),
+    issuerConfig: {
+      activate: async (request) => app.issuerRuntimeConfigStore.activate(request),
+      deactivate: async (request) => app.issuerRuntimeConfigStore.deactivate(request)
+    },
     issuerFaults: {
       activate: async (request) => app.issuerFaultStore.activate(request),
       deactivate: async (request) => app.issuerFaultStore.deactivate(request)

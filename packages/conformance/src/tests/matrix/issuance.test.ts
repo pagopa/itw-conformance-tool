@@ -37,6 +37,7 @@ import {
   wp061Scenario,
   wp062aScenario,
   wp062bScenario,
+  wp065Wp066Scenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -44,7 +45,13 @@ import {
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
 
-import type { ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
+import type {
+  HttpRequestReceivedEvent,
+  HttpResponseSentEvent,
+  ObservedEvent,
+  ScenarioOutcome,
+  ScenarioRunner
+} from '../../index.js';
 import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
 import type { CredentialRequestV1_3, ProofJwtHeaderV1_3, ProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 
@@ -67,6 +74,34 @@ function requiredDiagnosticString(event: ObservedEvent, key: string): string {
   }
 
   return value;
+}
+
+function requiredDiagnosticNumber(event: ObservedEvent, key: string): number {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'number') {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
+}
+
+function findHttpResponseSentEvent(
+  events: ObservedEvent[],
+  requestId: string | undefined
+): HttpResponseSentEvent | undefined {
+  return events.find(
+    (event): event is HttpResponseSentEvent => event.name === 'http.response.sent' && event.requestId === requestId
+  );
+}
+
+function findHttpRequestReceivedEvent(
+  events: ObservedEvent[],
+  requestId: string | undefined
+): HttpRequestReceivedEvent | undefined {
+  return events.find(
+    (event): event is HttpRequestReceivedEvent =>
+      event.name === 'http.request.received' && event.requestId === requestId
+  );
 }
 
 function sha256Base64Url(value: string): string {
@@ -1522,6 +1557,427 @@ describe('Test Cases for Issuance Phase', () => {
         expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('x5chain');
       },
       wp062bScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_065 / WP_066 deferred batch issuance', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let batchSize: number;
+    let allowedProofSigningAlgorithms: string[];
+    let offeredCredentialIdentifier: string;
+    let nonceEvent: ObservedEvent;
+    let credentialEvent: ObservedEvent;
+    let credentialRequestUrl: string;
+    let credentialRequest: CredentialRequestV1_3;
+    let cNonceSha256: string;
+    let credentialDpopJwt: string;
+    let credentialDpopHeader: DpopJwtHeader;
+    let credentialDpopPayload: DpopJwtPayload;
+    let credentialProofJwts: string[];
+    let credentialProofHeaders: ProofJwtHeaderV1_3[];
+    let credentialProofPayloads: ProofJwtPayload[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp065Wp066Scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+
+        const credentialOfferEvent = events.find((event) => event.name === 'credential_offer.generated');
+        const credentialConfigurationId = credentialOfferEvent?.diagnostic?.['credentialConfigurationId'];
+        if (typeof credentialConfigurationId !== 'string' || credentialConfigurationId.length === 0) {
+          throw new Error(
+            'credential_offer.generated evidence is missing the credentialConfigurationId required to assert WP_058'
+          );
+        }
+        offeredCredentialIdentifier = credentialConfigurationId;
+
+        const discoveryUrl = new URL('/.well-known/openid-federation', config['credential-issuer'].url);
+        const response = await httpsRequest({
+          method: 'GET',
+          hostname: discoveryUrl.hostname,
+          path: discoveryUrl.pathname,
+          port: discoveryUrl.port,
+          protocol: discoveryUrl.protocol,
+          rejectUnauthorized: false,
+          signal: AbortSignal.timeout(10_000)
+        });
+
+        if (response.statusCode !== 200) {
+          throw new Error(
+            `Unable to fetch Credential Issuer entity configuration while WP_065_WP_066 is active (${response.statusCode ?? 'unknown'}): ${response.body}`
+          );
+        }
+
+        const issuerMetadata = decodeEntityConfiguration(response.body).metadata?.openid_credential_issuer;
+        const publishedBatchSize = issuerMetadata?.batch_credential_issuance?.batch_size;
+        if (
+          typeof publishedBatchSize !== 'number' ||
+          !Number.isInteger(publishedBatchSize) ||
+          publishedBatchSize <= 0
+        ) {
+          throw new Error(
+            'Credential Issuer metadata must publish openid_credential_issuer.batch_credential_issuance.batch_size as a positive integer for WP_058'
+          );
+        }
+        if (publishedBatchSize < 2) {
+          throw new Error(
+            `Credential Issuer metadata batch_size must be at least 2 for batch issuance assertions, found ${publishedBatchSize}`
+          );
+        }
+        batchSize = publishedBatchSize;
+
+        const credentialConfiguration =
+          issuerMetadata?.credential_configurations_supported[offeredCredentialIdentifier];
+        if (!credentialConfiguration) {
+          throw new Error(
+            `Credential Issuer metadata is missing credential_configurations_supported.${offeredCredentialIdentifier} for WP_058a`
+          );
+        }
+        allowedProofSigningAlgorithms = [
+          ...credentialConfiguration.proof_types_supported.jwt.proof_signing_alg_values_supported
+        ];
+
+        const foundNonceEvent = events.find((event) => event.name === 'issuer.nonce.requested');
+        if (!foundNonceEvent) {
+          throw new Error('Missing issuer.nonce.requested evidence required to assert WP_058b requirements');
+        }
+        nonceEvent = foundNonceEvent;
+        cNonceSha256 = requiredDiagnosticString(nonceEvent, 'cNonceSha256');
+
+        const foundCredentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        if (!foundCredentialEvent) {
+          throw new Error('Missing issuer.credential.requested evidence required to assert WP_058 requirements');
+        }
+        credentialEvent = foundCredentialEvent;
+
+        const credentialEndpoint = requiredDiagnosticString(credentialEvent, 'endpoint');
+        credentialRequestUrl = `${config['credential-issuer'].url}${credentialEndpoint}`;
+
+        const credentialRequestParseResult = zCredentialRequestV1_3.safeParse(credentialEvent.diagnostic?.['body']);
+        if (!credentialRequestParseResult.success) {
+          throw new Error(
+            `issuer.credential.requested evidence body is not a valid IT-Wallet v1.3/v1.4 Credential Request: ${credentialRequestParseResult.error.message}`
+          );
+        }
+        credentialRequest = credentialRequestParseResult.data;
+        credentialProofJwts = credentialRequest.proofs.jwt;
+
+        credentialDpopJwt = requiredDiagnosticString(credentialEvent, 'dpopProof');
+        ({ header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
+          jwt: credentialDpopJwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        }));
+
+        const proofArtifacts = credentialProofJwts.map((jwt) =>
+          decodeJwt({
+            jwt,
+            headerSchema: zProofJwtHeaderV1_3,
+            payloadSchema: zProofJwtPayload
+          })
+        );
+        credentialProofHeaders = proofArtifacts.map(({ header }) => header);
+        credentialProofPayloads = proofArtifacts.map(({ payload }) => payload);
+      } finally {
+        await session.stop();
+      }
+    }, wp065Wp066Scenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_058: Wallet Instance sends a complete Batch Credential Request bound to DPoP access-token authentication and the offered credential identifier.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(credentialEvent.diagnostic?.['endpoint'], 'Batch Credential Request should call /credential').toBe(
+          '/credential'
+        );
+        expect(credentialEvent.diagnostic?.['method'], 'Batch Credential Request should use POST').toBe('POST');
+
+        const contentType = requiredDiagnosticString(credentialEvent, 'contentType');
+        expect(contentType.toLowerCase(), 'Batch Credential Request should use JSON content').toContain(
+          'application/json'
+        );
+
+        expect(
+          credentialEvent.diagnostic?.['authorizationScheme'],
+          'Batch Credential Request should use DPoP authorization'
+        ).toBe('DPoP');
+        expect(
+          requiredDiagnosticString(credentialEvent, 'accessTokenSha256'),
+          'Batch Credential Request evidence should include the access token hash'
+        ).not.toHaveLength(0);
+        expect(credentialDpopJwt, 'Batch Credential Request should include a DPoP proof JWT').not.toHaveLength(0);
+
+        expect(credentialDpopHeader.typ, 'Credential DPoP JWT typ should be dpop+jwt').toBe('dpop+jwt');
+        expect(credentialDpopHeader.alg, 'Credential DPoP JWT alg should not be none').not.toBe('none');
+        expect(credentialDpopHeader.jwk, 'Credential DPoP JWT header should include a public JWK').toBeDefined();
+        expect(credentialDpopHeader.jwk.kty, 'Credential DPoP key should not be symmetric').not.toBe('oct');
+        expect(
+          credentialDpopHeader.jwk.d,
+          'Credential DPoP JWT header should not expose private key material'
+        ).toBeUndefined();
+
+        const publicKey = await importJWK(credentialDpopHeader.jwk as JWK, credentialDpopHeader.alg);
+        await expect(
+          jwtVerify(credentialDpopJwt, publicKey),
+          'Credential DPoP proof signature should verify with the declared public JWK'
+        ).resolves.toBeDefined();
+
+        expect(credentialDpopPayload.htm, 'Credential DPoP proof should be bound to POST').toBe('POST');
+        expect(credentialDpopPayload.htu, 'Credential DPoP proof should be bound to the Credential Endpoint URL').toBe(
+          htuFromRequestUrl(credentialRequestUrl)
+        );
+        expect(credentialDpopPayload.iat, 'Credential DPoP proof should carry a numeric iat').toBeTypeOf('number');
+        const iatMs = credentialDpopPayload.iat * 1000;
+        const eventMs = new Date(credentialEvent.timestamp).getTime();
+        expect(
+          Math.abs(eventMs - iatMs),
+          'Credential DPoP proof iat should be fresh relative to the Credential Request event'
+        ).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+        expect(credentialDpopPayload.jti, 'Credential DPoP proof should carry a non-empty jti').not.toHaveLength(0);
+        expect(credentialDpopPayload.ath, 'Credential DPoP ath should match the access token hash').toBe(
+          requiredDiagnosticString(credentialEvent, 'accessTokenSha256')
+        );
+
+        expect(
+          credentialRequest.credential_identifier,
+          'Batch Credential Request should request the credential identifier from the shown offer'
+        ).toBe(offeredCredentialIdentifier);
+        expect(credentialProofJwts, 'Batch Credential Request should include proofs.jwt entries').toHaveLength(
+          batchSize
+        );
+      },
+      wp065Wp066Scenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_058a: Wallet Instance sends N fresh holder-binding proof keys that are public, asymmetric, distinct within the batch, and separate from the DPoP key.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(
+          credentialProofHeaders,
+          `Expected ${batchSize} decoded holder-binding proof JWT headers from the batch request`
+        ).toHaveLength(batchSize);
+
+        const credentialProofThumbprints: string[] = [];
+        for (const [index, proofHeader] of credentialProofHeaders.entries()) {
+          expect(proofHeader.typ, `Credential proof ${index} typ should identify an OID4VCI proof JWT`).toBe(
+            'openid4vci-proof+jwt'
+          );
+          expect(proofHeader.alg, `Credential proof ${index} alg should not be none`).not.toBe('none');
+          expect(
+            proofHeader.alg,
+            `Credential proof ${index} alg should be published for ${offeredCredentialIdentifier}`
+          ).toBeOneOf([...allowedProofSigningAlgorithms]);
+          expect(proofHeader.jwk, `Credential proof ${index} should include a public JWK`).toBeDefined();
+          expect(proofHeader.jwk.kty, `Credential proof ${index} JWK should not be symmetric`).not.toBe('oct');
+          expect(
+            proofHeader.jwk.k,
+            `Credential proof ${index} JWK should not expose symmetric key material`
+          ).toBeUndefined();
+          expect(
+            proofHeader.jwk.d,
+            `Credential proof ${index} JWK should not expose private key material`
+          ).toBeUndefined();
+
+          const publicKey = await importJWK(proofHeader.jwk as JWK, proofHeader.alg);
+          await expect(
+            jwtVerify(credentialProofJwts[index], publicKey),
+            `Credential proof ${index} signature should verify with the declared public JWK`
+          ).resolves.toBeDefined();
+
+          credentialProofThumbprints.push(await calculateJwkThumbprint(proofHeader.jwk as JWK));
+        }
+
+        expect(
+          credentialProofThumbprints,
+          `Expected ${batchSize} holder-binding JWK thumbprints from the batch request`
+        ).toHaveLength(batchSize);
+        expect(
+          new Set(credentialProofThumbprints).size,
+          'WP_058a can prove uniqueness within this observed batch request; prior wallet sessions are outside protocol-observed evidence'
+        ).toBe(batchSize);
+
+        const credentialDpopThumbprint = await calculateJwkThumbprint(credentialDpopHeader.jwk as JWK);
+        expect(
+          credentialProofThumbprints.includes(credentialDpopThumbprint),
+          'No holder-binding proof JWK should reuse the Credential Request DPoP key'
+        ).toBe(false);
+      },
+      wp065Wp066Scenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_058b: Wallet Instance signs all N holder-binding proof JWTs with the c_nonce obtained from the Nonce Endpoint and fresh iat claims.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(nonceEvent.diagnostic?.['endpoint'], 'should call the Nonce Endpoint').toBe('/nonce');
+        expect(nonceEvent.diagnostic?.['method'], 'Nonce Request should use POST').toBe('POST');
+        expect(nonceEvent.monotonicMs, 'Nonce Request should happen before the Credential Request').toBeLessThan(
+          credentialEvent.monotonicMs
+        );
+        expect(cNonceSha256, 'Nonce evidence should include a non-empty c_nonce hash').not.toHaveLength(0);
+        expect(
+          credentialProofPayloads,
+          `Expected ${batchSize} decoded holder-binding proof JWT payloads from the batch request`
+        ).toHaveLength(batchSize);
+
+        const proofNonceHashes = credentialProofPayloads.map((proofPayload, index) => {
+          expect(proofPayload.nonce, `Credential proof ${index} should carry a non-empty nonce`).not.toHaveLength(0);
+          expect(proofPayload.iat, `Credential proof ${index} should carry a numeric iat`).toBeTypeOf('number');
+
+          const proofIatMs = proofPayload.iat * 1000;
+          const credentialRequestMs = new Date(credentialEvent.timestamp).getTime();
+          expect(
+            Math.abs(credentialRequestMs - proofIatMs),
+            `Credential proof ${index} iat should be fresh relative to the Credential Request event`
+          ).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+
+          return sha256Base64Url(proofPayload.nonce);
+        });
+
+        expect(
+          new Set(proofNonceHashes).size,
+          'All holder-binding proof JWTs should reuse the same Nonce Endpoint c_nonce'
+        ).toBe(1);
+        for (const [index, proofNonceHash] of proofNonceHashes.entries()) {
+          expect(proofNonceHash, `Credential proof ${index} nonce hash should match issuer.nonce.requested`).toBe(
+            cNonceSha256
+          );
+        }
+      },
+      wp065Wp066Scenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_065: Wallet Instance recognizes a Credential Response containing transaction_id and interval as deferred issuance.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const proofCount = credentialProofJwts.length;
+        expect(proofCount, `The wallet must request exactly the published batch_size of ${batchSize}`).toBe(batchSize);
+
+        const deferredEvents = events.filter((event) => event.name === 'issuer.credential.deferred');
+        expect(deferredEvents, 'Exactly one initial deferred Credential Response must be observed').toHaveLength(1);
+        const [deferredEvent] = deferredEvents;
+        if (!deferredEvent) {
+          throw new Error('Missing issuer.credential.deferred evidence');
+        }
+
+        expect(deferredEvent.diagnostic?.['endpoint']).toBe('/credential');
+        expect(deferredEvent.diagnostic?.['statusCode']).toBe(202);
+        expect(deferredEvent.diagnostic?.['contentType']).toBe('application/json');
+        expect(deferredEvent.diagnostic?.['responseKind']).toBe('deferred');
+        expect(deferredEvent.diagnostic?.['credentialsPresent']).toBe(false);
+        expect(deferredEvent.diagnostic?.['proofCount']).toBe(proofCount);
+        expect(deferredEvent.diagnostic?.['credentialCount']).toBe(proofCount);
+
+        const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
+        expect(Number.isInteger(intervalSeconds), 'interval must be an integer number of seconds').toBe(true);
+        expect(intervalSeconds, 'interval must be positive').toBeGreaterThan(0);
+        expect(
+          requiredDiagnosticString(deferredEvent, 'transactionIdSha256'),
+          'Deferred response evidence must include a non-empty transaction_id hash'
+        ).not.toHaveLength(0);
+
+        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
+        expect(
+          initialCredentialResponse,
+          'The deferred semantic event must pair to the actual HTTP response'
+        ).toBeDefined();
+        expect(initialCredentialResponse?.http.statusCode).toBe(202);
+        expect(initialCredentialResponse?.http.contentType.toLowerCase()).toContain('application/json');
+
+        const credentialResponse = findHttpResponseSentEvent(events, credentialEvent.requestId);
+        expect(
+          credentialResponse?.http.statusCode,
+          'The /credential response for this scenario must not be an immediate HTTP 200 credential payload'
+        ).toBe(202);
+      },
+      wp065Wp066Scenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_066: Wallet Instance waits for the advertised interval before submitting the Deferred Credential Request.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const originalProofCount = credentialProofJwts.length;
+
+        const deferredEvent = events.find((event) => event.name === 'issuer.credential.deferred');
+        expect(deferredEvent, 'The initial HTTP 202 deferred response must be observed').toBeDefined();
+        if (!deferredEvent) {
+          throw new Error('Missing issuer.credential.deferred evidence');
+        }
+
+        const transactionIdSha256 = requiredDiagnosticString(deferredEvent, 'transactionIdSha256');
+        const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
+        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
+        expect(
+          initialCredentialResponse,
+          'The initial deferred event must pair to HTTP response-send evidence'
+        ).toBeDefined();
+        if (!initialCredentialResponse) {
+          throw new Error('Missing HTTP response evidence for the initial deferred response');
+        }
+
+        const matchingDeferredRequests = events.filter(
+          (event) =>
+            event.name === 'issuer.deferred_credential.requested' &&
+            event.diagnostic?.['endpoint'] === '/deferred' &&
+            event.diagnostic?.['transactionIdSha256'] === transactionIdSha256
+        );
+        expect(
+          matchingDeferredRequests.length,
+          'At least one matching Deferred Credential Request must be observed'
+        ).toBeGreaterThan(0);
+
+        for (const deferredRequest of matchingDeferredRequests) {
+          const httpRequest = findHttpRequestReceivedEvent(events, deferredRequest.requestId);
+          expect(
+            httpRequest,
+            'Every semantic Deferred Credential Request event must pair to HTTP request-arrival evidence'
+          ).toBeDefined();
+          if (!httpRequest) {
+            throw new Error('Missing HTTP request evidence for Deferred Credential Request');
+          }
+
+          expect(deferredRequest.diagnostic?.['transactionIdSha256']).toBe(transactionIdSha256);
+          expect(httpRequest.http.method).toBe('POST');
+          expect(httpRequest.http.path).toBe('/deferred');
+          expect(
+            httpRequest.monotonicMs - initialCredentialResponse.monotonicMs,
+            'Deferred Credential Request arrived before the advertised interval elapsed'
+          ).toBeGreaterThanOrEqual(intervalSeconds * 1000);
+        }
+
+        const issuedEvents = events.filter(
+          (event) =>
+            event.name === 'issuer.deferred_credential.issued' &&
+            event.diagnostic?.['endpoint'] === '/deferred' &&
+            event.diagnostic?.['transactionIdSha256'] === transactionIdSha256
+        );
+        expect(issuedEvents, 'Exactly one successful deferred credential issuance must be observed').toHaveLength(1);
+        const [issuedEvent] = issuedEvents;
+        if (!issuedEvent) {
+          throw new Error('Missing issuer.deferred_credential.issued evidence');
+        }
+
+        expect(issuedEvent.diagnostic?.['credentialCount']).toBe(originalProofCount);
+        expect(issuedEvent.diagnostic?.['notificationIdPresent']).toBe(true);
+
+        const issuedResponse = findHttpResponseSentEvent(events, issuedEvent.requestId);
+        expect(issuedResponse, 'The issued semantic event must pair to the actual HTTP 200 response').toBeDefined();
+        expect(issuedResponse?.http.statusCode).toBe(200);
+        expect(issuedResponse?.http.contentType.toLowerCase()).toContain('application/json');
+      },
+      wp065Wp066Scenario.timeouts.vitestTestMs
     );
   });
 });

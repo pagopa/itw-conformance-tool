@@ -5,6 +5,11 @@ export { parseIpcMessage } from './messages.js';
 
 export type {
   IpcMessage,
+  IssuerConfig,
+  IssuerConfigActivateMessage,
+  IssuerConfigActivatedMessage,
+  IssuerConfigDeactivateMessage,
+  IssuerConfigDeactivatedMessage,
   IssuerFaultActivateMessage,
   IssuerFaultActivatedMessage,
   IssuerFaultDeactivateMessage,
@@ -18,6 +23,10 @@ export type {
   ServiceStopMessage
 } from './messages.js';
 export type {
+  IssuerConfigActivationRequest,
+  IssuerConfigActivationResult,
+  IssuerConfigDeactivationRequest,
+  IssuerConfigHandlers,
   IssuerFaultActivationRequest,
   IssuerFaultActivationResult,
   IssuerFaultDeactivationRequest,

@@ -80,6 +80,10 @@ export interface RequiredEventEvidenceExpectation {
 
 export type RequiredEventExpectation = ObservedEventName | RequiredEventEvidenceExpectation;
 
+export interface IssuerRuntimeConfigSetup {
+  batchIssuanceByDeferred: boolean;
+}
+
 export function getRequiredEventName(expectation: RequiredEventExpectation): ObservedEventName {
   return typeof expectation === 'string' ? expectation : expectation.event;
 }
@@ -102,10 +106,12 @@ export function hasVerdictRule(
 
 /**
  * Typed scenario setup. `issuerFault` declares a Credential Issuer fault
- * profile that the runner must activate before showing the stimulus and
- * deactivate on cleanup; see `IssuerFaultController`.
+ * profile and `issuerConfig` declares an owned runtime configuration override
+ * that the runner must activate before showing the stimulus and deactivate on
+ * cleanup; see `IssuerFaultController`.
  */
 export interface ScenarioSetup {
+  issuerConfig?: IssuerRuntimeConfigSetup;
   issuerFault?: IssuerFaultProfile;
 }
 

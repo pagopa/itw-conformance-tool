@@ -12,6 +12,7 @@ export * from './signer.js';
 export * from './sd-jwt.js';
 export * from './crypto.js';
 export * from './credential-offer.js';
+export * from './issuer-runtime-config-store.js';
 
 // Faults
 export * from './faults/credential-response-fault.js';

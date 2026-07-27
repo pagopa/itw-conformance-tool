@@ -40,6 +40,19 @@ const credentialRequestDiagnosticBody = (requestBody: unknown): unknown => {
   return JSON.parse(requestBody) as unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function countProofJwts(requestBody: unknown): number | undefined {
+  const body = typeof requestBody === 'string' ? credentialRequestDiagnosticBody(requestBody) : requestBody;
+  if (!isRecord(body) || !isRecord(body.proofs) || !Array.isArray(body.proofs.jwt)) {
+    return undefined;
+  }
+
+  return body.proofs.jwt.length;
+}
+
 /** Narrows an active issuer fault to the Credential Response profile, so its `parameters` field is accessible. */
 function isCredentialResponseFault(
   fault: ActiveIssuerFault | undefined
@@ -126,7 +139,9 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
         );
         const result = await service.createCredential({
           baseURL,
-          batchIssuanceByDeferred: app.config.BATCH_ISSUANCE_BY_DEFERRED,
+          batchIssuanceByDeferred: app.issuerRuntimeConfigStore.resolveBatchIssuanceByDeferred(
+            app.config.BATCH_ISSUANCE_BY_DEFERRED
+          ),
           body,
           callbacks: {
             hash: oauthCallbacks.hash,
@@ -240,6 +255,32 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
                 statusCode,
                 contentType: 'application/json',
                 outcome: 'applied'
+              }
+            })
+          );
+        }
+
+        if (result.status === 'deferred' && isRecord(responseBody)) {
+          const transactionId = responseBody.transaction_id;
+          const interval = responseBody.interval;
+          const proofCount = countProofJwts(request.body);
+
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.credential.deferred',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/credential',
+                statusCode,
+                contentType: 'application/json',
+                responseKind: 'deferred',
+                intervalSeconds: typeof interval === 'number' ? interval : undefined,
+                transactionIdSha256: typeof transactionId === 'string' ? sha256Base64Url(transactionId) : undefined,
+                proofCount,
+                credentialCount: proofCount,
+                credentialsPresent: Object.hasOwn(responseBody, 'credentials')
               }
             })
           );

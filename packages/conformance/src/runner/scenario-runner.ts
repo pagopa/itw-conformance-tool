@@ -19,7 +19,7 @@ import {
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
-import { type IssuerFaultController } from '../services/issuer-fault-controller.js';
+import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
@@ -65,8 +65,8 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   registry: ScenarioRegistry;
   verdictEngine?: VerdictEngine;
   write?: (message: string) => void;
-  /** Required to run any scenario that declares `setup.issuerFault`. */
-  issuerFaultController?: IssuerFaultController;
+  /** Required to run any scenario that declares `setup.issuerFault` or `setup.issuerConfig`. */
+  issuerFaultController?: IssuerScenarioController;
   /** IT Wallet specification version reported when activating an issuer fault. Defaults to '1.4'. */
   issuerFaultSpecVersion?: string;
 }
@@ -249,7 +249,15 @@ export function createProtocolObservedScenarioRunner(
       let outcome: ScenarioOutcome | undefined;
 
       const issuerFaultProfile = definition.setup?.issuerFault;
+      const issuerConfig = definition.setup?.issuerConfig;
+      let issuerConfigActive = false;
       let issuerFaultActive = false;
+
+      const deactivateIssuerConfigIfActive = async (): Promise<void> => {
+        if (!issuerConfigActive) return;
+        issuerConfigActive = false;
+        await options.issuerFaultController?.deactivateIssuerConfig({ scenarioId: initialCorrelationId });
+      };
 
       const deactivateIssuerFaultIfActive = async (): Promise<void> => {
         if (!issuerFaultActive) return;
@@ -273,6 +281,22 @@ export function createProtocolObservedScenarioRunner(
             profile: issuerFaultProfile
           });
           issuerFaultActive = true;
+        }
+
+        if (issuerConfig) {
+          if (!options.issuerFaultController) {
+            throw new Error(
+              `Scenario ${definition.id} declares setup.issuerConfig, but no issuerFaultController is configured`
+            );
+          }
+
+          // Await activation before creating/showing the stimulus, so the
+          // Credential Issuer evaluates this run with the scenario override.
+          await options.issuerFaultController.activateIssuerConfig({
+            scenarioId: initialCorrelationId,
+            config: issuerConfig
+          });
+          issuerConfigActive = true;
         }
 
         const { correlationId, credentialConfigurationId, stimulus } = await createStimulus(
@@ -398,6 +422,7 @@ export function createProtocolObservedScenarioRunner(
             activeSessions.delete(session);
             if (!outcome) write(`Scenario ${definition.id} stopped before verdict.`);
             // Deactivate last so any deactivation failure still surfaces to the caller.
+            await deactivateIssuerConfigIfActive();
             await deactivateIssuerFaultIfActive();
           },
           async [Symbol.asyncDispose]() {
@@ -411,6 +436,7 @@ export function createProtocolObservedScenarioRunner(
         // Best-effort cleanup on any startup failure (including a missing
         // controller, activation failure, or a later error before the
         // session object exists) so a fault is never left dangling.
+        await deactivateIssuerConfigIfActive().catch(() => undefined);
         await deactivateIssuerFaultIfActive().catch(() => undefined);
         throw error;
       }

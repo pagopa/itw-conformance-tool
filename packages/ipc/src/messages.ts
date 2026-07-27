@@ -10,6 +10,12 @@ const protocolHeaderSchema = z.object({
 const serviceNameSchema = z.enum(localServiceNames);
 const requestIdSchema = z.string();
 
+const issuerConfigSchema = z
+  .object({
+    batchIssuanceByDeferred: z.boolean()
+  })
+  .strict();
+
 const serviceReadyMessageSchema = protocolHeaderSchema
   .extend({
     type: z.literal('service.ready'),
@@ -83,6 +89,39 @@ const issuerFaultDeactivatedMessageSchema = protocolHeaderSchema
   })
   .strict();
 
+const issuerConfigActivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.config.activate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string(),
+    config: issuerConfigSchema
+  })
+  .strict();
+
+const issuerConfigActivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.config.activated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const issuerConfigDeactivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.config.deactivate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const issuerConfigDeactivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('issuer.config.deactivated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
 const serviceErrorMessageSchema = protocolHeaderSchema
   .extend({
     type: z.literal('service.error'),
@@ -103,6 +142,10 @@ const ipcMessageSchema = z.union([
   issuerFaultActivatedMessageSchema,
   issuerFaultDeactivateMessageSchema,
   issuerFaultDeactivatedMessageSchema,
+  issuerConfigActivateMessageSchema,
+  issuerConfigActivatedMessageSchema,
+  issuerConfigDeactivateMessageSchema,
+  issuerConfigDeactivatedMessageSchema,
   serviceErrorMessageSchema
 ]);
 
@@ -116,6 +159,11 @@ export type IssuerFaultActivateMessage = z.infer<typeof issuerFaultActivateMessa
 export type IssuerFaultActivatedMessage = z.infer<typeof issuerFaultActivatedMessageSchema>;
 export type IssuerFaultDeactivateMessage = z.infer<typeof issuerFaultDeactivateMessageSchema>;
 export type IssuerFaultDeactivatedMessage = z.infer<typeof issuerFaultDeactivatedMessageSchema>;
+export type IssuerConfig = z.infer<typeof issuerConfigSchema>;
+export type IssuerConfigActivateMessage = z.infer<typeof issuerConfigActivateMessageSchema>;
+export type IssuerConfigActivatedMessage = z.infer<typeof issuerConfigActivatedMessageSchema>;
+export type IssuerConfigDeactivateMessage = z.infer<typeof issuerConfigDeactivateMessageSchema>;
+export type IssuerConfigDeactivatedMessage = z.infer<typeof issuerConfigDeactivatedMessageSchema>;
 export type ServiceErrorMessage = z.infer<typeof serviceErrorMessageSchema>;
 export type IpcMessage = z.infer<typeof ipcMessageSchema>;
 
