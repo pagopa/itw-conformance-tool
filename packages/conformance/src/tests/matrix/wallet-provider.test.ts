@@ -479,6 +479,62 @@ describe('Test Cases for Wallet Provider Backend', () => {
 
   // Wallet Instance Tests
 
+  test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
+    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
+
+    const invalidAssertionBody = new URLSearchParams({
+      assertion:
+        'eyJhbGciOiJFUzI1NiIsInR5cCI6IldBTExFVC1JTlNUQU5DRS1BVFRFU1RBVElPTitKV1QifQ.eyJpc3MiOiJpbnZhbGlkIiwic3ViIjoiaW52YWxpZCIsImF1ZCI6ImludmFsaWQifQ.invalid_signature'
+    });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: invalidAssertionBody.toString(),
+      signal: AbortSignal.timeout(10_000)
+    });
+
+    expect(
+      response.status,
+      'Wallet Provider must reject invalid attestation requests with a 4xx HTTP status code (e.g., 400 or 401)'
+    ).toBeGreaterThanOrEqual(400);
+
+    expect(
+      response.status,
+      'Wallet Provider must reject invalid attestation requests with a 4xx HTTP status code'
+    ).toBeLessThan(500);
+  });
+
+  test('WP_027: Wallet Provider verifies the device meets its minimum security requirements and is free of known security flaws; if not, the Wallet Attestation Request is rejected', async () => {
+    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
+    const assertion = await createWalletInstanceAttestationRequestAssertion(walletProviderUrl, 'invalid');
+
+    const integrityCheckErrorAttestation = await captureJsonResponse(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ assertion })
+    });
+
+    expect(
+      integrityCheckErrorAttestation.response.status,
+      'Wallet Provider must reject an attestation request with an invalid integrity_assertion using HTTP 403 Forbidden'
+    ).toBe(403);
+
+    const body = expectWalletInstanceManagementErrorBody(
+      integrityCheckErrorAttestation,
+      'Wallet Instance attestation device integrity error'
+    );
+
+    expect(
+      body.error,
+      'Wallet Provider must return error "integrity_check_error" when the device integrity assertion fails'
+    ).toBe('integrity_check_error');
+  });
+
   test('WP_035: Wallet Provider handles malformed Wallet Instance registration requests with the expected HTTP error status', () => {
     expect(
       malformedRegistration.response.status,
@@ -579,61 +635,5 @@ describe('Test Cases for Wallet Provider Backend', () => {
       body.error,
       'Wallet Instance revocation without valid authentication credentials must return error "unauthorized"'
     ).toBe('unauthorized');
-  });
-
-  test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
-    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
-
-    const invalidAssertionBody = new URLSearchParams({
-      assertion:
-        'eyJhbGciOiJFUzI1NiIsInR5cCI6IldBTExFVC1JTlNUQU5DRS1BVFRFU1RBVElPTitKV1QifQ.eyJpc3MiOiJpbnZhbGlkIiwic3ViIjoiaW52YWxpZCIsImF1ZCI6ImludmFsaWQifQ.invalid_signature'
-    });
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: invalidAssertionBody.toString(),
-      signal: AbortSignal.timeout(10_000)
-    });
-
-    expect(
-      response.status,
-      'Wallet Provider must reject invalid attestation requests with a 4xx HTTP status code (e.g., 400 or 401)'
-    ).toBeGreaterThanOrEqual(400);
-
-    expect(
-      response.status,
-      'Wallet Provider must reject invalid attestation requests with a 4xx HTTP status code'
-    ).toBeLessThan(500);
-  });
-
-  test('WP_027: Wallet Provider verifies the device meets its minimum security requirements and is free of known security flaws; if not, the Wallet Attestation Request is rejected', async () => {
-    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
-    const assertion = await createWalletInstanceAttestationRequestAssertion(walletProviderUrl, 'invalid');
-
-    const integrityCheckErrorAttestation = await captureJsonResponse(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ assertion })
-    });
-
-    expect(
-      integrityCheckErrorAttestation.response.status,
-      'Wallet Provider must reject an attestation request with an invalid integrity_assertion using HTTP 403 Forbidden'
-    ).toBe(403);
-
-    const body = expectWalletInstanceManagementErrorBody(
-      integrityCheckErrorAttestation,
-      'Wallet Instance attestation device integrity error'
-    );
-
-    expect(
-      body.error,
-      'Wallet Provider must return error "integrity_check_error" when the device integrity assertion fails'
-    ).toBe('integrity_check_error');
   });
 });
