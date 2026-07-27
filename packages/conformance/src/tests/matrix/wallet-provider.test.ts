@@ -13,6 +13,7 @@ import {
 const PERMITTED_ENTITY_CONFIGURATION_SIGNATURE_ALGORITHMS = ['ES256', 'ES384', 'ES512'];
 const SIGNING_OPERATIONS = ['sign', 'verify'];
 const ENCRYPTION_OPERATIONS = ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey', 'deriveKey', 'deriveBits'];
+const SYNTACTICALLY_VALID_WALLET_INSTANCE_ID = 'd2FsbGV0LWluc3RhbmNlLXdwLTA0MQ';
 
 type CapturedJsonResponse = {
   body: unknown;
@@ -21,16 +22,9 @@ type CapturedJsonResponse = {
   response: Response;
 };
 
-async function postWalletInstanceRegistration(
-  walletInstancesUrl: string,
-  body: Record<string, unknown>
-): Promise<CapturedJsonResponse> {
-  const response = await fetch(walletInstancesUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body),
+async function captureJsonResponse(url: string, init: RequestInit = {}): Promise<CapturedJsonResponse> {
+  const response = await fetch(url, {
+    ...init,
     redirect: 'manual',
     signal: AbortSignal.timeout(10_000)
   });
@@ -53,6 +47,19 @@ async function postWalletInstanceRegistration(
   }
 }
 
+async function postWalletInstanceRegistration(
+  walletInstancesUrl: string,
+  body: Record<string, unknown>
+): Promise<CapturedJsonResponse> {
+  return captureJsonResponse(walletInstancesUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+}
+
 describe('Test Cases for Wallet Provider Backend', () => {
   const config = loadConfig();
   const walletProviderUrl = config['wallet-provider'].url;
@@ -61,6 +68,8 @@ describe('Test Cases for Wallet Provider Backend', () => {
   let entityConfigurationResponse: Response;
   let integrityCheckErrorRegistration: CapturedJsonResponse;
   let malformedRegistration: CapturedJsonResponse;
+  let unauthenticatedRevocation: CapturedJsonResponse;
+  let unauthenticatedStatusRetrieval: CapturedJsonResponse;
   let validationErrorRegistration: CapturedJsonResponse;
 
   beforeAll(async () => {
@@ -83,12 +92,31 @@ describe('Test Cases for Wallet Provider Backend', () => {
       hardware_key_tag: 'WQhyDymFKsP95iFqpzdEDWW4l7aVna2Fn4JCeWHYtbU=',
       key_attestation: 'integrity_check_error'
     });
+
+    const walletInstanceUrl =
+      trimTrailingSlash(walletProviderUrl) +
+      '/wallet-instances/' +
+      encodeURIComponent(SYNTACTICALLY_VALID_WALLET_INSTANCE_ID);
+    unauthenticatedStatusRetrieval = await captureJsonResponse(walletInstanceUrl, { method: 'GET' });
+    unauthenticatedRevocation = await captureJsonResponse(walletInstanceUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'REVOKED' })
+    });
   });
 
-  const expectRegistrationErrorBody = (
+  const expectWalletInstanceManagementErrorBody = (
     capturedResponse: CapturedJsonResponse,
     errorContext: string
   ): Record<string, unknown> => {
+    const contentType = capturedResponse.response.headers.get('content-type') ?? '';
+
+    expect(contentType, `${errorContext} response must use the application/json media type`).toMatch(
+      /^application\/json(?:\s*;|$)/i
+    );
+
     expect(
       capturedResponse.bodyParseError,
       `${errorContext} response body must be valid JSON. Received: ${capturedResponse.bodyText}`
@@ -100,7 +128,21 @@ describe('Test Cases for Wallet Provider Backend', () => {
       throw new Error(`${errorContext} response body is not a JSON object`);
     }
 
-    return capturedResponse.body as Record<string, unknown>;
+    const body = capturedResponse.body as Record<string, unknown>;
+
+    expect(body.error, `${errorContext} response must contain a non-empty error`).toEqual(expect.any(String));
+    expect(body.error, `${errorContext} response error value must not be empty`).toSatisfy(
+      (value) => typeof value === 'string' && value.trim().length > 0
+    );
+
+    expect(body.error_description, `${errorContext} response must contain a non-empty error_description`).toEqual(
+      expect.any(String)
+    );
+    expect(body.error_description, `${errorContext} response error_description value must not be empty`).toSatisfy(
+      (value) => typeof value === 'string' && value.trim().length > 0
+    );
+
+    return body;
   };
 
   test('WP_001: Entity Configuration publication', () => {
@@ -414,30 +456,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
   });
 
   test('WP_035a: Wallet Provider error responses use application/json with error and error_description', () => {
-    const contentType = malformedRegistration.response.headers.get('content-type') ?? '';
-
-    expect(
-      contentType,
-      'Malformed Wallet Instance registration error response must use the application/json media type'
-    ).toMatch(/^application\/json(?:\s*;|$)/i);
-
-    const body = expectRegistrationErrorBody(malformedRegistration, 'Malformed Wallet Instance registration error');
-
-    expect(body.error, 'Malformed Wallet Instance registration error response must contain a non-empty error').toEqual(
-      expect.any(String)
-    );
-    expect(body.error, 'Malformed Wallet Instance registration error response error value must not be empty').toSatisfy(
-      (value) => typeof value === 'string' && value.trim().length > 0
-    );
-
-    expect(
-      body.error_description,
-      'Malformed Wallet Instance registration error response must contain a non-empty error_description'
-    ).toEqual(expect.any(String));
-    expect(
-      body.error_description,
-      'Malformed Wallet Instance registration error response error_description value must not be empty'
-    ).toSatisfy((value) => typeof value === 'string' && value.trim().length > 0);
+    expectWalletInstanceManagementErrorBody(malformedRegistration, 'Malformed Wallet Instance registration error');
   });
 
   test('WP_036: Wallet Provider maps malformed Wallet Instance registration requests to bad_request', () => {
@@ -446,7 +465,10 @@ describe('Test Cases for Wallet Provider Backend', () => {
       'Malformed Wallet Instance registration must return HTTP 400 Bad Request'
     ).toBe(400);
 
-    const body = expectRegistrationErrorBody(malformedRegistration, 'Malformed Wallet Instance registration error');
+    const body = expectWalletInstanceManagementErrorBody(
+      malformedRegistration,
+      'Malformed Wallet Instance registration error'
+    );
 
     expect(body.error, 'Malformed Wallet Instance registration must return error "bad_request"').toBe('bad_request');
   });
@@ -457,7 +479,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
       'Semantically invalid Wallet Instance registration must return HTTP 422 Unprocessable Content'
     ).toBe(422);
 
-    const body = expectRegistrationErrorBody(
+    const body = expectWalletInstanceManagementErrorBody(
       validationErrorRegistration,
       'Semantically invalid Wallet Instance registration error'
     );
@@ -473,7 +495,7 @@ describe('Test Cases for Wallet Provider Backend', () => {
       "Wallet Instance registration from a device that does not meet the provider's security requirements must return HTTP 403 Forbidden"
     ).toBe(403);
 
-    const body = expectRegistrationErrorBody(
+    const body = expectWalletInstanceManagementErrorBody(
       integrityCheckErrorRegistration,
       'Wallet Instance registration device integrity error'
     );
@@ -482,6 +504,40 @@ describe('Test Cases for Wallet Provider Backend', () => {
       body.error,
       'Wallet Instance registration device integrity failure must return error "integrity_check_error"'
     ).toBe('integrity_check_error');
+  });
+
+  test('WP_041: Wallet Provider rejects Wallet Instance status retrieval without valid authentication credentials', () => {
+    expect(
+      unauthenticatedStatusRetrieval.response.status,
+      'Wallet Instance status retrieval without valid authentication credentials must return HTTP 401 Unauthorized'
+    ).toBe(401);
+
+    const body = expectWalletInstanceManagementErrorBody(
+      unauthenticatedStatusRetrieval,
+      'Unauthenticated Wallet Instance status retrieval error'
+    );
+
+    expect(
+      body.error,
+      'Wallet Instance status retrieval without valid authentication credentials must return error "unauthorized"'
+    ).toBe('unauthorized');
+  });
+
+  test('WP_043: Wallet Provider rejects Wallet Instance revocation without valid authentication credentials', () => {
+    expect(
+      unauthenticatedRevocation.response.status,
+      'Wallet Instance revocation without valid authentication credentials must return HTTP 401 Unauthorized'
+    ).toBe(401);
+
+    const body = expectWalletInstanceManagementErrorBody(
+      unauthenticatedRevocation,
+      'Unauthenticated Wallet Instance revocation error'
+    );
+
+    expect(
+      body.error,
+      'Wallet Instance revocation without valid authentication credentials must return error "unauthorized"'
+    ).toBe('unauthorized');
   });
 
   test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
