@@ -108,7 +108,8 @@ export const registerWalletInstanceHandler = async (
   request.server.registeredWalletInstances.set(body.hardware_key_tag, {
     keyAttestation: body.key_attestation,
     nonce: body.nonce,
-    registeredAt: new Date().toISOString()
+    registeredAt: new Date().toISOString(),
+    status: 'ACTIVE'
   });
 
   return reply.code(204).send();

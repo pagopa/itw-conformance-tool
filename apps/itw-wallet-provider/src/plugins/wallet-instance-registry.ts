@@ -2,10 +2,13 @@ import fp from 'fastify-plugin';
 
 import type { FastifyPluginAsync } from 'fastify';
 
+export type WalletInstanceStatus = 'ACTIVE' | 'REVOKED';
+
 export type RegisteredWalletInstance = {
   keyAttestation: string;
   nonce: string;
   registeredAt: string;
+  status: WalletInstanceStatus;
 };
 
 export type RegisteredWalletInstances = Map<string, RegisteredWalletInstance>;
