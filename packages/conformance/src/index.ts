@@ -79,8 +79,6 @@ export { wp062aScenario } from './scenarios/factories/wp-062a.js';
 export { wp062bScenario } from './scenarios/factories/wp-062b.js';
 export { wpNotificationScenario } from './scenarios/factories/wp-notification.js';
 export { wpDeferredScenario } from './scenarios/factories/wp-deferred.js';
-export { wp077Scenario } from './scenarios/factories/wp-077.js';
-export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export type {
   ArtifactExpectation,
   AutomationMode,

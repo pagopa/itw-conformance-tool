@@ -148,7 +148,7 @@ export async function createSubordinate(options: {
 
   const trustAnchorPublicJwk = stripPrivateParams(federationPrivateJwk);
   const subjectPublicJwk =
-    subjectKind === 'rp' || subjectKind === 'wallet-provider'
+    subjectKind === 'wallet-provider'
       ? await toThumbprintPublicJwk(subjectPrivateJwk)
       : stripPrivateParams(subjectPrivateJwk);
 

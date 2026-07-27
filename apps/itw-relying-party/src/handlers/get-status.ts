@@ -38,8 +38,12 @@ export const getStatusHandler = async (
         };
       }
 
+      // Cross-device: the browser polling this endpoint lands on the static
+      // success page. The instrumented redirect_uri (/callback) is followed only
+      // by the wallet's user-agent in the same-device flow, where the full
+      // response_code query is preserved.
       return {
-        redirect_uri: `${redirectUri}?response_code=success`,
+        redirect_uri: 'success.html?response_code=success',
         values
       };
 
