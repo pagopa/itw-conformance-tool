@@ -142,12 +142,23 @@ jobs:
           sudo sh -c 'echo "127.0.0.1  trust-anchor.wct.example.org relying-party.wct.example.org wallet-provider.wct.example.org credential-issuer.wct.example.org" >> /etc/hosts'
 
       - name: Clone wallet-conformance-test
-        run: git clone --depth 1 https://github.com/pagopa/wallet-conformance-test.git /tmp/wct
+        run: git clone --depth 1 --branch WLEO-1355 https://github.com/pagopa/wallet-conformance-test.git /tmp/wct
 
       - name: Install wct dependencies
         working-directory: /tmp/wct
         run: |
           cp config.example.ini config.ini
+          # The local conformance runner owns the 3000-3003 port block for its
+          # own services (during presentation it binds trust-anchor on 3001 and
+          # relying-party on 3002). wct's global setup unconditionally binds its
+          # own federation servers (trust_anchor 3001, wallet provider 3002,
+          # mock issuer 3003), which would collide with the runner. Remap wct's
+          # servers into the 31xx range so both sets can run side by side.
+          sed -i \
+            -e 's/^port = 3001$/port = 3101/' \
+            -e 's/^port = 3002$/port = 3102/' \
+            -e 's/^port = 3003$/port = 3103/' \
+            config.ini
           pnpm install
           pnpm build
           chmod +x ./bin/wct
