@@ -132,6 +132,10 @@ export class DeferredCredentialService {
       return createCredentialResponse({ config, flow });
     }
 
+    if (config.isVersion(ItWalletSpecsVersion.V1_4)) {
+      return createCredentialResponse({ config, flow });
+    }
+
     if (config.isVersion(ItWalletSpecsVersion.V1_0)) {
       return createCredentialResponse({ config, flow });
     }

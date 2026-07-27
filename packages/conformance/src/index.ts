@@ -73,11 +73,17 @@ export {
   wpUnsupportedCredentialOfferScenario
 } from './scenarios/factories/wp-unsupported-credential-offer.js';
 export { wp059Scenario } from './scenarios/factories/wp-059.js';
+export { wp060Scenarios, wp060TypeMismatchScenario, type Wp060Variant } from './scenarios/factories/wp-060.js';
+export { wp061Scenario } from './scenarios/factories/wp-061.js';
+export { wp062aScenario } from './scenarios/factories/wp-062a.js';
+export { wp062bScenario } from './scenarios/factories/wp-062b.js';
+export { wpDeferredScenario } from './scenarios/factories/wp-deferred.js';
 export { wp077Scenario } from './scenarios/factories/wp-077.js';
 export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export type {
   ArtifactExpectation,
   AutomationMode,
+  IssuerRuntimeConfigSetup,
   LocalServiceName,
   LocalServiceEndpoints,
   ProtocolObservedPhase,
@@ -94,9 +100,14 @@ export type {
 } from './scenarios/definitions.js';
 export { getRequiredEventName, getRequiredEventNames } from './scenarios/definitions.js';
 export type {
+  ActivateIssuerConfigRequest,
   ActivateIssuerFaultRequest,
+  DeactivateIssuerConfigRequest,
   DeactivateIssuerFaultRequest,
-  IssuerFaultController
+  IssuerConfigController,
+  IssuerFaultController,
+  IssuerRuntimeConfig,
+  IssuerScenarioController
 } from './services/issuer-fault-controller.js';
 export {
   createConformanceInstrumentationPlugin,

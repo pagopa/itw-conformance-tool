@@ -12,6 +12,7 @@ import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/hel
 import sensiblePlugin from './plugins/external/sensible.js';
 import swaggerPlugin from './plugins/external/swagger.js';
 import issuerFaultsPlugin from './plugins/issuer-faults.js';
+import issuerRuntimeConfigPlugin from './plugins/issuer-runtime-config.js';
 import keysPlugin from './plugins/keys.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
@@ -19,6 +20,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
   await app.register(dbPlugin);
   await app.register(keysPlugin);
   await app.register(issuerFaultsPlugin);
+  await app.register(issuerRuntimeConfigPlugin);
   await app.register(conformancePlugin);
 
   await app.register(corsPlugin, corsConfig);

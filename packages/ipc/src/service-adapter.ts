@@ -2,6 +2,7 @@ import { parseIpcMessage } from './messages.js';
 import { SERVICE_PROTOCOL_VERSION } from './protocol.js';
 
 import type { IpcMessage, LocalServiceName } from './messages.js';
+import type { IssuerConfig } from './messages.js';
 import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
 
 export interface IssuerFaultActivationRequest {
@@ -25,10 +26,31 @@ export interface IssuerFaultHandlers {
   deactivate: (request: IssuerFaultDeactivationRequest) => Promise<IssuerFaultActivationResult>;
 }
 
+export interface IssuerConfigActivationRequest {
+  scenarioId: string;
+  config: IssuerConfig;
+}
+
+export interface IssuerConfigDeactivationRequest {
+  scenarioId: string;
+}
+
+export interface IssuerConfigActivationResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+}
+
+export interface IssuerConfigHandlers {
+  activate: (request: IssuerConfigActivationRequest) => Promise<IssuerConfigActivationResult>;
+  deactivate: (request: IssuerConfigDeactivationRequest) => Promise<IssuerConfigActivationResult>;
+}
+
 export interface ServiceIpcAdapterOptions {
   endpoint: string;
   service: LocalServiceName;
   stop: () => Promise<void>;
+  issuerConfig?: IssuerConfigHandlers;
   issuerFaults?: IssuerFaultHandlers;
 }
 
@@ -182,6 +204,100 @@ export function attachServiceIpcAdapter(options: ServiceIpcAdapterOptions): void
             service: options.service,
             code: 'FAULT_DEACTIVATION_FAILED',
             message: 'Issuer fault deactivation failed'
+          })
+      );
+      return;
+    }
+
+    if (message.type === 'issuer.config.activate') {
+      if (!options.issuerConfig) {
+        send({
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'service.error',
+          requestId: message.requestId,
+          service: options.service,
+          code: 'UNSUPPORTED_MESSAGE',
+          message: 'Issuer config controls are not configured'
+        });
+        return;
+      }
+
+      void options.issuerConfig.activate({ scenarioId: message.scenarioId, config: message.config }).then(
+        (result) => {
+          if (!result.ok) {
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'service.error',
+              requestId: message.requestId,
+              service: options.service,
+              code: result.code ?? 'CONFIG_ACTIVATION_FAILED',
+              message: result.message ?? 'Issuer config activation failed'
+            });
+            return;
+          }
+
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'issuer.config.activated',
+            requestId: message.requestId,
+            scenarioId: message.scenarioId
+          });
+        },
+        () =>
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'service.error',
+            requestId: message.requestId,
+            service: options.service,
+            code: 'CONFIG_ACTIVATION_FAILED',
+            message: 'Issuer config activation failed'
+          })
+      );
+      return;
+    }
+
+    if (message.type === 'issuer.config.deactivate') {
+      if (!options.issuerConfig) {
+        send({
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'service.error',
+          requestId: message.requestId,
+          service: options.service,
+          code: 'UNSUPPORTED_MESSAGE',
+          message: 'Issuer config controls are not configured'
+        });
+        return;
+      }
+
+      void options.issuerConfig.deactivate({ scenarioId: message.scenarioId }).then(
+        (result) => {
+          if (!result.ok) {
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'service.error',
+              requestId: message.requestId,
+              service: options.service,
+              code: result.code ?? 'CONFIG_DEACTIVATION_FAILED',
+              message: result.message ?? 'Issuer config deactivation failed'
+            });
+            return;
+          }
+
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'issuer.config.deactivated',
+            requestId: message.requestId,
+            scenarioId: message.scenarioId
+          });
+        },
+        () =>
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'service.error',
+            requestId: message.requestId,
+            service: options.service,
+            code: 'CONFIG_DEACTIVATION_FAILED',
+            message: 'Issuer config deactivation failed'
           })
       );
     }

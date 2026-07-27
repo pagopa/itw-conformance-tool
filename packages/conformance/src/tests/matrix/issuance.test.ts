@@ -33,6 +33,11 @@ import {
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario,
   wp059Scenario,
+  wp060TypeMismatchScenario,
+  wp061Scenario,
+  wp062aScenario,
+  wp062bScenario,
+  wpDeferredScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
@@ -40,7 +45,7 @@ import {
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
 
-import type { ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
+import type { HttpResponseSentEvent, ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
 import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
 import type { CredentialRequestV1_3, ProofJwtHeaderV1_3, ProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 
@@ -65,8 +70,35 @@ function requiredDiagnosticString(event: ObservedEvent, key: string): string {
   return value;
 }
 
+function requiredDiagnosticNumber(event: ObservedEvent, key: string): number {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'number') {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
+}
+
+function findHttpResponseSentEvent(
+  events: ObservedEvent[],
+  requestId: string | undefined
+): HttpResponseSentEvent | undefined {
+  return events.find(
+    (event): event is HttpResponseSentEvent => event.name === 'http.response.sent' && event.requestId === requestId
+  );
+}
+
 function sha256Base64Url(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('base64url');
+}
+
+function decodeCredentialOfferUri(uri: string): { credential_configuration_ids?: string[] } {
+  const credentialOffer = new URL(uri).searchParams.get('credential_offer');
+  if (!credentialOffer) {
+    throw new Error('Credential offer URI is missing the credential_offer parameter');
+  }
+
+  return JSON.parse(credentialOffer) as { credential_configuration_ids?: string[] };
 }
 
 /**
@@ -115,7 +147,7 @@ describe('Test Cases for Issuance Phase', () => {
     const controlEndpoint = process.env[SERVICE_CONTROL_ENDPOINT_ENV_VAR];
     if (!controlEndpoint) {
       throw new Error(
-        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by WP_046a, WP_050b and WP_054.`
+        `Missing ${SERVICE_CONTROL_ENDPOINT_ENV_VAR}: run this suite via the itwct CLI (e.g. itwct test issuance), which starts the local service control relay required by the interactive issuance scenarios.`
       );
     }
     issuerFaultController = createServiceControlClient({ endpoint: controlEndpoint });
@@ -1232,18 +1264,730 @@ describe('Test Cases for Issuance Phase', () => {
           'The malformed immediate response must still be served as HTTP 200'
         ).toBe(200);
         expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
-
-        // Protocol-observed evidence proves the malformed response was delivered exactly as
-        // configured; it cannot inspect the wallet UI or secure storage, so the PASS above only
-        // certifies fault delivery. The operator-facing instructions above require confirming the
-        // wallet's visible error/rejection separately (see instructions.steps in wp-059.ts).
-        //
-        // A full authenticated HTTP replay of /credential to prove cleanup is infeasible without a
-        // real wallet's DPoP proof, nonce, and access token; deactivation/restoration of the nominal
-        // (unfaulted) response path is instead proven by the focused unit test in
-        // apps/itw-credential-issuer/src/domain/faults/credential-response-fault.test.ts.
       },
       wp059Scenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe.each([
+    {
+      scenario: wp060TypeMismatchScenario,
+      label: 'type-mismatch',
+      testTitle: "WP_060: Wallet Instance rejects a Digital Credential whose 'vct' does not match the requested type."
+    }
+  ])('WP_060 ($label)', ({ scenario, label, testTitle }) => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, scenario.timeouts.vitestTestMs);
+
+    test(
+      testTitle,
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The digital-credential-claims-invalid fault must have been applied while serving the Credential Response'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('digital-credential-claims-invalid');
+        expect(faultAppliedEvent?.diagnostic?.['variant']).toBe(label);
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        if (label === 'type-mismatch') {
+          const expectedVct = faultAppliedEvent?.diagnostic?.['expectedVct'];
+          const injectedVct = faultAppliedEvent?.diagnostic?.['injectedVct'];
+
+          expect(typeof expectedVct).toBe('string');
+          expect(typeof injectedVct).toBe('string');
+          expect(
+            injectedVct,
+            'The injected vct must differ from the nominal/requested Digital Credential type'
+          ).not.toBe(expectedVct);
+        } else {
+          expect(
+            faultAppliedEvent?.diagnostic?.['omittedClaim'],
+            'The fault must report issuing_country as the only omitted required claim'
+          ).toBe('issuing_country');
+        }
+      },
+      scenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_061', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp061Scenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp061Scenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_061: Wallet Instance rejects a Digital Credential whose header x5c does not chain to the Trust Anchor.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvent = events.find((event) => event.name === 'issuer.fault.applied');
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvent,
+          'The edc-invalid-trust-chain fault must have been applied while serving the Credential Response'
+        ).toBeDefined();
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('edc-invalid-trust-chain');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        expect(faultAppliedEvent?.diagnostic?.['mutationTarget']).toBe('x5c');
+        expect(faultAppliedEvent?.diagnostic?.['strategy']).toBe('self-signed-untrusted-leaf');
+        expect(
+          faultAppliedEvent?.diagnostic?.['chainLength'],
+          'The injected x5c must be a single self-signed leaf certificate (no intermediate)'
+        ).toBe(1);
+        expect(faultAppliedEvent?.diagnostic?.['certificateThumbprintSha256']).toMatch(/^[0-9a-f]{64}$/);
+      },
+      wp061Scenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_062a', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp062aScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp062aScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_062a: Wallet Instance rejects a Digital Credential whose SD-JWT signature verification fails.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvents = events.filter((event) => event.name === 'issuer.fault.applied');
+        const [faultAppliedEvent] = faultAppliedEvents;
+
+        expect(
+          credentialEvent,
+          'Wallet must send the Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          faultAppliedEvents,
+          'The edc-invalid-signature fault must have been applied exactly once while serving the Credential Response'
+        ).toHaveLength(1);
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('edc-invalid-signature');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+
+        expect(faultAppliedEvent?.diagnostic?.['mutationTarget']).toBe('jws-signature');
+        expect(faultAppliedEvent?.diagnostic?.['strategy']).toBe('flip-last-signature-byte-low-bit');
+        expect(
+          faultAppliedEvent?.diagnostic?.['signatureByteLength'],
+          'The fault must report the decoded signature byte length without exposing signature material'
+        ).toBeGreaterThan(0);
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('credential');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('signature');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('disclosures');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('x5c');
+      },
+      wp062aScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_062b', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let credentialOfferUri: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wp062bScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+      } finally {
+        // Deactivating the fault (last step of `session.stop()`) must happen
+        // even if the assertions below fail, so later scenarios never observe
+        // leaked fault state.
+        await session.stop();
+      }
+    }, wp062bScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_062b: Wallet Instance rejects an mDL mdoc-CBOR credential whose MSO COSE signature verification fails.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const credentialOfferGeneratedEvent = events.find((event) => event.name === 'credential_offer.generated');
+        const credentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        const faultAppliedEvents = events.filter((event) => event.name === 'issuer.fault.applied');
+        const [faultAppliedEvent] = faultAppliedEvents;
+
+        expect(
+          credentialOfferGeneratedEvent,
+          'The runner must record safe evidence for the mDL Credential Offer shown to the wallet'
+        ).toBeDefined();
+        expect(credentialOfferGeneratedEvent?.diagnostic?.['credentialConfigurationId']).toBe('org.iso.18013.5.1.mDL');
+
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        expect(
+          offerPayload.credential_configuration_ids,
+          'The shown Credential Offer must contain exactly the mDL configuration id'
+        ).toEqual(['org.iso.18013.5.1.mDL']);
+
+        expect(
+          credentialEvent,
+          'Wallet must send the mDL Credential Request through the full happy-path flow before this scenario can pass'
+        ).toBeDefined();
+        const credentialRequestParseResult = zCredentialRequestV1_3.safeParse(credentialEvent?.diagnostic?.['body']);
+        expect(
+          credentialRequestParseResult.success,
+          'issuer.credential.requested evidence body must be a valid IT-Wallet v1.3/v1.4 Credential Request'
+        ).toBe(true);
+        if (!credentialRequestParseResult.success) {
+          throw new Error(credentialRequestParseResult.error.message);
+        }
+        expect(credentialRequestParseResult.data.credential_identifier).toBe('org.iso.18013.5.1.mDL');
+
+        expect(
+          faultAppliedEvents,
+          'The mdl-invalid-signature fault must have been applied exactly once while serving the Credential Response'
+        ).toHaveLength(1);
+        expect(faultAppliedEvent?.diagnostic?.['faultProfileType']).toBe('mdl-invalid-signature');
+        expect(faultAppliedEvent?.diagnostic?.['endpoint']).toBe('/credential');
+        expect(faultAppliedEvent?.diagnostic?.['resolvedSpecVersion']).toBe('1.4');
+        expect(
+          faultAppliedEvent?.diagnostic?.['statusCode'],
+          'The defective immediate response must still be served as HTTP 200'
+        ).toBe(200);
+        expect(faultAppliedEvent?.diagnostic?.['contentType']).toBe('application/json');
+        expect(faultAppliedEvent?.diagnostic?.['credentialConfigurationId']).toBe('org.iso.18013.5.1.mDL');
+        expect(faultAppliedEvent?.diagnostic?.['mutationTarget']).toBe('issuerAuth.cose-signature');
+        expect(faultAppliedEvent?.diagnostic?.['strategy']).toBe('flip-last-signature-byte-low-bit');
+        expect(
+          faultAppliedEvent?.diagnostic?.['signatureByteLength'],
+          'The fault must report the decoded COSE signature byte length without exposing signature material'
+        ).toBeGreaterThan(0);
+
+        // The matrix cannot inspect wallet secure storage. Cryptographic
+        // single-defect isolation is covered by the focused issuer unit tests;
+        // this assertion block proves protocol delivery of the controlled
+        // mdoc-CBOR fault and leaves UI/storage rejection to the operator.
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('credential');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('issuerAuth');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('signature');
+        expect(faultAppliedEvent?.diagnostic).not.toHaveProperty('x5chain');
+      },
+      wp062bScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_065 / WP_066 deferred batch issuance', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let batchSize: number;
+    let allowedProofSigningAlgorithms: string[];
+    let offeredCredentialIdentifiers: string[];
+    let requestedCredentialIdentifier: string;
+    let nonceEvent: ObservedEvent;
+    let credentialEvent: ObservedEvent;
+    let credentialRequestUrl: string;
+    let credentialRequest: CredentialRequestV1_3;
+    let cNonceSha256: string;
+    let credentialDpopJwt: string;
+    let credentialDpopHeader: DpopJwtHeader;
+    let credentialDpopPayload: DpopJwtPayload;
+    let credentialProofJwts: string[];
+    let credentialProofHeaders: ProofJwtHeaderV1_3[];
+    let credentialProofPayloads: ProofJwtPayload[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wpDeferredScenario.id);
+      const credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        if (
+          !Array.isArray(offerPayload.credential_configuration_ids) ||
+          offerPayload.credential_configuration_ids.length !== 2
+        ) {
+          throw new Error(
+            'WP_Deferred Credential Offer must contain exactly 2 credential_configuration_ids to enable batch issuance'
+          );
+        }
+        offeredCredentialIdentifiers = offerPayload.credential_configuration_ids;
+
+        const credentialOfferEvent = events.find((event) => event.name === 'credential_offer.generated');
+        const credentialConfigurationIds = credentialOfferEvent?.diagnostic?.['credentialConfigurationIds'];
+        if (
+          !Array.isArray(credentialConfigurationIds) ||
+          !credentialConfigurationIds.every(
+            (credentialConfigurationId) => typeof credentialConfigurationId === 'string'
+          )
+        ) {
+          throw new Error(
+            'credential_offer.generated evidence is missing the credentialConfigurationIds required to assert WP_058'
+          );
+        }
+        expect(credentialConfigurationIds).toEqual(offeredCredentialIdentifiers);
+
+        const discoveryUrl = new URL('/.well-known/openid-federation', config['credential-issuer'].url);
+        const response = await httpsRequest({
+          method: 'GET',
+          hostname: discoveryUrl.hostname,
+          path: discoveryUrl.pathname,
+          port: discoveryUrl.port,
+          protocol: discoveryUrl.protocol,
+          rejectUnauthorized: false,
+          signal: AbortSignal.timeout(10_000)
+        });
+
+        if (response.statusCode !== 200) {
+          throw new Error(
+            `Unable to fetch Credential Issuer entity configuration while WP_Deferred is active (${response.statusCode ?? 'unknown'}): ${response.body}`
+          );
+        }
+
+        const issuerMetadata = decodeEntityConfiguration(response.body).metadata?.openid_credential_issuer;
+        const publishedBatchSize = issuerMetadata?.batch_credential_issuance?.batch_size;
+        if (
+          typeof publishedBatchSize !== 'number' ||
+          !Number.isInteger(publishedBatchSize) ||
+          publishedBatchSize <= 0
+        ) {
+          throw new Error(
+            'Credential Issuer metadata must publish openid_credential_issuer.batch_credential_issuance.batch_size as a positive integer for WP_058'
+          );
+        }
+        if (publishedBatchSize < 2) {
+          throw new Error(
+            `Credential Issuer metadata batch_size must be at least 2 for batch issuance assertions, found ${publishedBatchSize}`
+          );
+        }
+        batchSize = publishedBatchSize;
+
+        const foundNonceEvent = events.find((event) => event.name === 'issuer.nonce.requested');
+        if (!foundNonceEvent) {
+          throw new Error('Missing issuer.nonce.requested evidence required to assert WP_058b requirements');
+        }
+        nonceEvent = foundNonceEvent;
+        cNonceSha256 = requiredDiagnosticString(nonceEvent, 'cNonceSha256');
+
+        const foundCredentialEvent = events.find((event) => event.name === 'issuer.credential.requested');
+        if (!foundCredentialEvent) {
+          throw new Error('Missing issuer.credential.requested evidence required to assert WP_058 requirements');
+        }
+        credentialEvent = foundCredentialEvent;
+
+        const credentialEndpoint = requiredDiagnosticString(credentialEvent, 'endpoint');
+        credentialRequestUrl = `${config['credential-issuer'].url}${credentialEndpoint}`;
+
+        const credentialRequestParseResult = zCredentialRequestV1_3.safeParse(credentialEvent.diagnostic?.['body']);
+        if (!credentialRequestParseResult.success) {
+          throw new Error(
+            `issuer.credential.requested evidence body is not a valid IT-Wallet v1.3/v1.4 Credential Request: ${credentialRequestParseResult.error.message}`
+          );
+        }
+        credentialRequest = credentialRequestParseResult.data;
+        if (!credentialRequest.credential_identifier) {
+          throw new Error('Batch Credential Request is missing credential_identifier');
+        }
+        requestedCredentialIdentifier = credentialRequest.credential_identifier;
+        if (!offeredCredentialIdentifiers.includes(requestedCredentialIdentifier)) {
+          throw new Error(
+            `Batch Credential Request used ${requestedCredentialIdentifier}, which is not one of the shown Credential Offer identifiers: ${offeredCredentialIdentifiers.join(', ')}`
+          );
+        }
+        credentialProofJwts = credentialRequest.proofs.jwt;
+
+        const credentialConfiguration =
+          issuerMetadata?.credential_configurations_supported[requestedCredentialIdentifier];
+        if (!credentialConfiguration) {
+          throw new Error(
+            `Credential Issuer metadata is missing credential_configurations_supported.${requestedCredentialIdentifier} for WP_058a`
+          );
+        }
+        allowedProofSigningAlgorithms = [
+          ...credentialConfiguration.proof_types_supported.jwt.proof_signing_alg_values_supported
+        ];
+
+        credentialDpopJwt = requiredDiagnosticString(credentialEvent, 'dpopProof');
+        ({ header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
+          jwt: credentialDpopJwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        }));
+
+        const proofArtifacts = credentialProofJwts.map((jwt) =>
+          decodeJwt({
+            jwt,
+            headerSchema: zProofJwtHeaderV1_3,
+            payloadSchema: zProofJwtPayload
+          })
+        );
+        credentialProofHeaders = proofArtifacts.map(({ header }) => header);
+        credentialProofPayloads = proofArtifacts.map(({ payload }) => payload);
+      } finally {
+        await session.stop();
+      }
+    }, wpDeferredScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_058: Wallet Instance sends a complete Batch Credential Request bound to DPoP access-token authentication and one of the offered credential identifiers.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(credentialEvent.diagnostic?.['endpoint'], 'Batch Credential Request should call /credential').toBe(
+          '/credential'
+        );
+        expect(credentialEvent.diagnostic?.['method'], 'Batch Credential Request should use POST').toBe('POST');
+
+        const contentType = requiredDiagnosticString(credentialEvent, 'contentType');
+        expect(contentType.toLowerCase(), 'Batch Credential Request should use JSON content').toContain(
+          'application/json'
+        );
+
+        expect(
+          credentialEvent.diagnostic?.['authorizationScheme'],
+          'Batch Credential Request should use DPoP authorization'
+        ).toBe('DPoP');
+        expect(
+          requiredDiagnosticString(credentialEvent, 'accessTokenSha256'),
+          'Batch Credential Request evidence should include the access token hash'
+        ).not.toHaveLength(0);
+        expect(credentialDpopJwt, 'Batch Credential Request should include a DPoP proof JWT').not.toHaveLength(0);
+
+        expect(credentialDpopHeader.typ, 'Credential DPoP JWT typ should be dpop+jwt').toBe('dpop+jwt');
+        expect(credentialDpopHeader.alg, 'Credential DPoP JWT alg should not be none').not.toBe('none');
+        expect(credentialDpopHeader.jwk, 'Credential DPoP JWT header should include a public JWK').toBeDefined();
+        expect(credentialDpopHeader.jwk.kty, 'Credential DPoP key should not be symmetric').not.toBe('oct');
+        expect(
+          credentialDpopHeader.jwk.d,
+          'Credential DPoP JWT header should not expose private key material'
+        ).toBeUndefined();
+
+        const publicKey = await importJWK(credentialDpopHeader.jwk as JWK, credentialDpopHeader.alg);
+        await expect(
+          jwtVerify(credentialDpopJwt, publicKey),
+          'Credential DPoP proof signature should verify with the declared public JWK'
+        ).resolves.toBeDefined();
+
+        expect(credentialDpopPayload.htm, 'Credential DPoP proof should be bound to POST').toBe('POST');
+        expect(credentialDpopPayload.htu, 'Credential DPoP proof should be bound to the Credential Endpoint URL').toBe(
+          htuFromRequestUrl(credentialRequestUrl)
+        );
+        expect(credentialDpopPayload.iat, 'Credential DPoP proof should carry a numeric iat').toBeTypeOf('number');
+        const iatMs = credentialDpopPayload.iat * 1000;
+        const eventMs = new Date(credentialEvent.timestamp).getTime();
+        expect(
+          Math.abs(eventMs - iatMs),
+          'Credential DPoP proof iat should be fresh relative to the Credential Request event'
+        ).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+        expect(credentialDpopPayload.jti, 'Credential DPoP proof should carry a non-empty jti').not.toHaveLength(0);
+        expect(credentialDpopPayload.ath, 'Credential DPoP ath should match the access token hash').toBe(
+          requiredDiagnosticString(credentialEvent, 'accessTokenSha256')
+        );
+
+        expect(
+          credentialRequest.credential_identifier,
+          'Batch Credential Request should request the credential identifier from the shown offer'
+        ).toBeOneOf([...offeredCredentialIdentifiers]);
+        expect(credentialProofJwts, 'Batch Credential Request should include proofs.jwt entries').toHaveLength(
+          batchSize
+        );
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_058a: Wallet Instance sends N fresh holder-binding proof keys that are public, asymmetric, distinct within the batch, and separate from the DPoP key.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(
+          credentialProofHeaders,
+          `Expected ${batchSize} decoded holder-binding proof JWT headers from the batch request`
+        ).toHaveLength(batchSize);
+
+        const credentialProofThumbprints: string[] = [];
+        for (const [index, proofHeader] of credentialProofHeaders.entries()) {
+          expect(proofHeader.typ, `Credential proof ${index} typ should identify an OID4VCI proof JWT`).toBe(
+            'openid4vci-proof+jwt'
+          );
+          expect(proofHeader.alg, `Credential proof ${index} alg should not be none`).not.toBe('none');
+          expect(
+            proofHeader.alg,
+            `Credential proof ${index} alg should be published for ${requestedCredentialIdentifier}`
+          ).toBeOneOf([...allowedProofSigningAlgorithms]);
+          expect(proofHeader.jwk, `Credential proof ${index} should include a public JWK`).toBeDefined();
+          expect(proofHeader.jwk.kty, `Credential proof ${index} JWK should not be symmetric`).not.toBe('oct');
+          expect(
+            proofHeader.jwk.k,
+            `Credential proof ${index} JWK should not expose symmetric key material`
+          ).toBeUndefined();
+          expect(
+            proofHeader.jwk.d,
+            `Credential proof ${index} JWK should not expose private key material`
+          ).toBeUndefined();
+
+          const publicKey = await importJWK(proofHeader.jwk as JWK, proofHeader.alg);
+          await expect(
+            jwtVerify(credentialProofJwts[index], publicKey),
+            `Credential proof ${index} signature should verify with the declared public JWK`
+          ).resolves.toBeDefined();
+
+          credentialProofThumbprints.push(await calculateJwkThumbprint(proofHeader.jwk as JWK));
+        }
+
+        expect(
+          credentialProofThumbprints,
+          `Expected ${batchSize} holder-binding JWK thumbprints from the batch request`
+        ).toHaveLength(batchSize);
+        expect(
+          new Set(credentialProofThumbprints).size,
+          'WP_058a can prove uniqueness within this observed batch request; prior wallet sessions are outside protocol-observed evidence'
+        ).toBe(batchSize);
+
+        const credentialDpopThumbprint = await calculateJwkThumbprint(credentialDpopHeader.jwk as JWK);
+        expect(
+          credentialProofThumbprints.includes(credentialDpopThumbprint),
+          'No holder-binding proof JWK should reuse the Credential Request DPoP key'
+        ).toBe(false);
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_058b: Wallet Instance signs all N holder-binding proof JWTs with the c_nonce obtained from the Nonce Endpoint and fresh iat claims.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(nonceEvent.diagnostic?.['endpoint'], 'should call the Nonce Endpoint').toBe('/nonce');
+        expect(nonceEvent.diagnostic?.['method'], 'Nonce Request should use POST').toBe('POST');
+        expect(nonceEvent.monotonicMs, 'Nonce Request should happen before the Credential Request').toBeLessThan(
+          credentialEvent.monotonicMs
+        );
+        expect(cNonceSha256, 'Nonce evidence should include a non-empty c_nonce hash').not.toHaveLength(0);
+        expect(
+          credentialProofPayloads,
+          `Expected ${batchSize} decoded holder-binding proof JWT payloads from the batch request`
+        ).toHaveLength(batchSize);
+
+        const proofNonceHashes = credentialProofPayloads.map((proofPayload, index) => {
+          expect(proofPayload.nonce, `Credential proof ${index} should carry a non-empty nonce`).not.toHaveLength(0);
+          expect(proofPayload.iat, `Credential proof ${index} should carry a numeric iat`).toBeTypeOf('number');
+
+          const proofIatMs = proofPayload.iat * 1000;
+          const credentialRequestMs = new Date(credentialEvent.timestamp).getTime();
+          expect(
+            Math.abs(credentialRequestMs - proofIatMs),
+            `Credential proof ${index} iat should be fresh relative to the Credential Request event`
+          ).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+
+          return sha256Base64Url(proofPayload.nonce);
+        });
+
+        expect(
+          new Set(proofNonceHashes).size,
+          'All holder-binding proof JWTs should reuse the same Nonce Endpoint c_nonce'
+        ).toBe(1);
+        for (const [index, proofNonceHash] of proofNonceHashes.entries()) {
+          expect(proofNonceHash, `Credential proof ${index} nonce hash should match issuer.nonce.requested`).toBe(
+            cNonceSha256
+          );
+        }
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_065: Wallet Instance recognizes a Credential Response containing transaction_id and interval as deferred issuance.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const proofCount = credentialProofJwts.length;
+        expect(proofCount, `The wallet must request exactly the published batch_size of ${batchSize}`).toBe(batchSize);
+
+        const deferredEvents = events.filter((event) => event.name === 'issuer.credential.deferred');
+        expect(deferredEvents, 'Exactly one initial deferred Credential Response must be observed').toHaveLength(1);
+        const [deferredEvent] = deferredEvents;
+        if (!deferredEvent) {
+          throw new Error('Missing issuer.credential.deferred evidence');
+        }
+
+        expect(deferredEvent.diagnostic?.['endpoint']).toBe('/credential');
+        expect(deferredEvent.diagnostic?.['statusCode']).toBe(202);
+        expect(deferredEvent.diagnostic?.['contentType']).toBe('application/json');
+        expect(deferredEvent.diagnostic?.['responseKind']).toBe('deferred');
+        expect(deferredEvent.diagnostic?.['credentialsPresent']).toBe(false);
+        expect(deferredEvent.diagnostic?.['proofCount']).toBe(proofCount);
+        expect(deferredEvent.diagnostic?.['credentialCount']).toBe(proofCount);
+
+        const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
+        expect(Number.isInteger(intervalSeconds), 'interval must be an integer number of seconds').toBe(true);
+        expect(intervalSeconds, 'interval must be positive').toBeGreaterThan(0);
+        expect(
+          requiredDiagnosticString(deferredEvent, 'transactionIdSha256'),
+          'Deferred response evidence must include a non-empty transaction_id hash'
+        ).not.toHaveLength(0);
+
+        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
+        expect(
+          initialCredentialResponse,
+          'The deferred semantic event must pair to the actual HTTP response'
+        ).toBeDefined();
+        expect(initialCredentialResponse?.http.statusCode).toBe(202);
+        expect(initialCredentialResponse?.http.contentType.toLowerCase()).toContain('application/json');
+
+        const credentialResponse = findHttpResponseSentEvent(events, credentialEvent.requestId);
+        expect(
+          credentialResponse?.http.statusCode,
+          'The /credential response for this scenario must not be an immediate HTTP 200 credential payload'
+        ).toBe(202);
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_066: Wallet Instance submits a Deferred Credential Request only after the required interval has passed.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const originalProofCount = credentialProofJwts.length;
+
+        const deferredEvent = events.find((event) => event.name === 'issuer.credential.deferred');
+        expect(deferredEvent, 'The initial HTTP 202 deferred response must be observed').toBeDefined();
+        if (!deferredEvent) {
+          throw new Error('Missing issuer.credential.deferred evidence');
+        }
+
+        const transactionIdSha256 = requiredDiagnosticString(deferredEvent, 'transactionIdSha256');
+        const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
+
+        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
+        expect(
+          initialCredentialResponse,
+          'The initial deferred event must pair to HTTP response-send evidence'
+        ).toBeDefined();
+        if (!initialCredentialResponse) {
+          throw new Error('Missing HTTP response evidence for the initial deferred response');
+        }
+
+        const issuedEvents = events.filter(
+          (event) =>
+            event.name === 'issuer.deferred_credential.issued' &&
+            event.diagnostic?.['endpoint'] === '/deferred' &&
+            event.diagnostic?.['transactionIdSha256'] === transactionIdSha256
+        );
+        expect(issuedEvents, 'Exactly one successful deferred credential issuance must be observed').toHaveLength(1);
+        const [issuedEvent] = issuedEvents;
+        if (!issuedEvent) {
+          throw new Error('Missing issuer.deferred_credential.issued evidence');
+        }
+
+        const timestampStr = requiredDiagnosticString(deferredEvent, 'timestamp');
+        const timestampMs = new Date(timestampStr).getTime();
+        const now = Date.now();
+
+        // Controllo che now sia maggiore del timestamp dell'evento + i secondi di attesa (convertiti in ms)
+        expect(
+          now,
+          'The current test execution time must be strictly greater than the deferred event timestamp plus the interval'
+        ).toBeGreaterThan(timestampMs + intervalSeconds * 1000);
+
+        expect(issuedEvent.diagnostic?.['credentialCount']).toBe(originalProofCount);
+        expect(issuedEvent.diagnostic?.['notificationIdPresent']).toBe(true);
+
+        const issuedResponse = findHttpResponseSentEvent(events, issuedEvent.requestId);
+        expect(issuedResponse, 'The issued semantic event must pair to the actual HTTP 200 response').toBeDefined();
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_066a: Wallet Instance sends a Deferred Credential Request as an HTTP POST with Content-Type: application/json, and the request body contains the required transaction_id',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const deferredEvent = events.find((event) => event.name === 'issuer.credential.deferred');
+        expect(deferredEvent, 'The initial HTTP 202 deferred response must be observed').toBeDefined();
+        if (!deferredEvent) {
+          throw new Error('Missing issuer.credential.deferred evidence');
+        }
+
+        const transactionIdSha256 = requiredDiagnosticString(deferredEvent, 'transactionIdSha256');
+        expect(
+          transactionIdSha256,
+          'Deferred response evidence must include a non-empty transaction_id hash'
+        ).not.toHaveLength(0);
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
     );
   });
 });

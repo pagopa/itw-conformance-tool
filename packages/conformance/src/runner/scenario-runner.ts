@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { sha256HashArtifact } from '@itw-conformance-tool/utils';
 import chalk from 'chalk';
+import open from 'open';
 
 import { createObservedEvent } from '../events/event-bus.js';
 import {
@@ -11,7 +12,7 @@ import {
   type Disposable,
   type ScenarioEventStore
 } from '../events/event-store.js';
-import { createCredentialOfferUri } from '../helpers/issuance.js';
+import { NOMINAL_CREDENTIAL_CONFIGURATION_ID, createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
 import { getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
 import {
@@ -19,7 +20,7 @@ import {
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
-import { type IssuerFaultController } from '../services/issuer-fault-controller.js';
+import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
@@ -39,6 +40,8 @@ export interface StartScenarioOptions {
 export interface AwaitVerdictOptions {
   signal?: AbortSignal;
 }
+
+export type BrowserOpener = (url: string) => Promise<void>;
 
 export interface ScenarioRunner extends AsyncDisposable {
   start(id: string, options?: StartScenarioOptions): Promise<InteractiveScenarioSession>;
@@ -65,15 +68,21 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   registry: ScenarioRegistry;
   verdictEngine?: VerdictEngine;
   write?: (message: string) => void;
-  /** Required to run any scenario that declares `setup.issuerFault`. */
-  issuerFaultController?: IssuerFaultController;
+  /** Required to run any scenario that declares `setup.issuerFault` or `setup.issuerConfig`. */
+  issuerFaultController?: IssuerScenarioController;
   /** IT Wallet specification version reported when activating an issuer fault. Defaults to '1.4'. */
   issuerFaultSpecVersion?: string;
+  /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
+  browserOpener?: BrowserOpener;
 }
 
 function defaultWrite(message: string): void {
   // eslint-disable-next-line no-console
   console.log(message);
+}
+
+async function defaultBrowserOpener(url: string): Promise<void> {
+  await open(url);
 }
 
 function resolveScenarioEndpoints(
@@ -93,6 +102,8 @@ function resolveScenarioEndpoints(
 
 interface CreatedStimulus {
   correlationId: string;
+  credentialConfigurationId?: string;
+  credentialConfigurationIds?: string[];
   stimulus: ScenarioStimulus;
 }
 
@@ -105,8 +116,28 @@ async function createStimulus(
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
     if (!credentialIssuer) throw new Error(`Scenario ${definition.id} requires a Credential Issuer endpoint`);
-    const uri = createCredentialOfferUri(credentialIssuer, correlationId, issuerFaultProfile);
-    return { correlationId, stimulus: { type: 'credential-offer', uri, qrCode: uri } };
+    if (definition.stimulus.credentialConfigurationIds?.length === 0) {
+      throw new Error(`Scenario ${definition.id} declares an empty credentialConfigurationIds list`);
+    }
+    const selectedCredentialConfigurationIds = definition.stimulus.credentialConfigurationIds
+      ? [...definition.stimulus.credentialConfigurationIds]
+      : [definition.stimulus.credentialConfigurationId ?? NOMINAL_CREDENTIAL_CONFIGURATION_ID];
+    const uri = createCredentialOfferUri(
+      credentialIssuer,
+      correlationId,
+      issuerFaultProfile,
+      selectedCredentialConfigurationIds
+    );
+    const effectiveCredentialConfigurationIds =
+      issuerFaultProfile?.type === 'unsupported-credential-offer'
+        ? [issuerFaultProfile.credentialConfigurationId]
+        : selectedCredentialConfigurationIds;
+    return {
+      correlationId,
+      credentialConfigurationId: effectiveCredentialConfigurationIds[0],
+      credentialConfigurationIds: effectiveCredentialConfigurationIds,
+      stimulus: { type: 'credential-offer', uri, qrCode: uri }
+    };
   }
 
   if (definition.stimulus.type === 'manual-instruction') {
@@ -210,10 +241,41 @@ function showPrompt(
   write(`${chalk.bold('Timeout')} ${chalk.yellow(`${testerActionTimeoutSeconds} seconds`)}`);
 }
 
+function createCredentialOfferPageUrl(credentialIssuer: string, credentialOfferUri: string): string {
+  const pageUrl = new URL('/credential-offer', credentialIssuer);
+  pageUrl.searchParams.set('credential_offer_uri', credentialOfferUri);
+
+  return pageUrl.toString();
+}
+
+async function openCredentialOfferPage(
+  stimulus: ScenarioStimulus,
+  endpoints: LocalServiceEndpoints,
+  browserOpener: BrowserOpener,
+  write: (message: string) => void
+): Promise<void> {
+  if (stimulus.type !== 'credential-offer') return;
+
+  const credentialIssuer = endpoints.credentialIssuer;
+  if (!credentialIssuer) return;
+
+  const pageUrl = createCredentialOfferPageUrl(credentialIssuer, stimulus.uri);
+
+  try {
+    await browserOpener(pageUrl);
+  } catch (error) {
+    write(chalk.yellow('Could not open the credential offer page in the default browser.'));
+    write(chalk.dim(`Open it manually if needed: ${pageUrl}`));
+    write(chalk.dim(error instanceof Error ? error.message : String(error)));
+    write('');
+  }
+}
+
 export function createProtocolObservedScenarioRunner(
   options: CreateProtocolObservedScenarioRunnerOptions
 ): ScenarioRunner {
   const write = options.write ?? defaultWrite;
+  const browserOpener = options.browserOpener ?? defaultBrowserOpener;
   const verdictEngine = options.verdictEngine ?? createProtocolObservedVerdictEngine();
   const activeSessions = new Set<InteractiveScenarioSession>();
 
@@ -232,9 +294,18 @@ export function createProtocolObservedScenarioRunner(
       let eventSubscription: Disposable | undefined;
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
+      let credentialOfferPageOpened = false;
 
       const issuerFaultProfile = definition.setup?.issuerFault;
+      const issuerConfig = definition.setup?.issuerConfig;
+      let issuerConfigActive = false;
       let issuerFaultActive = false;
+
+      const deactivateIssuerConfigIfActive = async (): Promise<void> => {
+        if (!issuerConfigActive) return;
+        issuerConfigActive = false;
+        await options.issuerFaultController?.deactivateIssuerConfig({ scenarioId: initialCorrelationId });
+      };
 
       const deactivateIssuerFaultIfActive = async (): Promise<void> => {
         if (!issuerFaultActive) return;
@@ -260,7 +331,23 @@ export function createProtocolObservedScenarioRunner(
           issuerFaultActive = true;
         }
 
-        const { correlationId, stimulus } = await createStimulus(
+        if (issuerConfig) {
+          if (!options.issuerFaultController) {
+            throw new Error(
+              `Scenario ${definition.id} declares setup.issuerConfig, but no issuerFaultController is configured`
+            );
+          }
+
+          // Await activation before creating/showing the stimulus, so the
+          // Credential Issuer evaluates this run with the scenario override.
+          await options.issuerFaultController.activateIssuerConfig({
+            scenarioId: initialCorrelationId,
+            config: issuerConfig
+          });
+          issuerConfigActive = true;
+        }
+
+        const { correlationId, credentialConfigurationId, credentialConfigurationIds, stimulus } = await createStimulus(
           definition,
           endpoints,
           initialCorrelationId,
@@ -282,7 +369,6 @@ export function createProtocolObservedScenarioRunner(
         if (stimulus.type === 'credential-offer' && issuerFaultProfile?.type === 'unsupported-credential-offer') {
           appliedIssuerFaultDiagnostic = {
             faultProfileType: issuerFaultProfile.type,
-            credentialConfigurationId: issuerFaultProfile.credentialConfigurationId,
             artifactHash: sha256HashArtifact(stimulus.uri),
             outcome: 'applied'
           };
@@ -296,7 +382,12 @@ export function createProtocolObservedScenarioRunner(
                 : 'credential_offer.generated',
             correlationId,
             service: 'collector',
-            diagnostic: { stimulusType: stimulus.type, ...appliedIssuerFaultDiagnostic }
+            diagnostic: {
+              stimulusType: stimulus.type,
+              credentialConfigurationId,
+              credentialConfigurationIds,
+              ...appliedIssuerFaultDiagnostic
+            }
           })
         );
 
@@ -310,6 +401,10 @@ export function createProtocolObservedScenarioRunner(
           async showInstructions() {
             showPrompt(definition, stimulus, endpoints, write);
             await copyQrPayloadToClipboard(stimulus, write);
+            if (!credentialOfferPageOpened) {
+              credentialOfferPageOpened = true;
+              await openCredentialOfferPage(stimulus, endpoints, browserOpener, write);
+            }
             eventSubscription?.dispose();
             eventSubscription = eventStore.subscribe((event) => {
               write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
@@ -384,6 +479,7 @@ export function createProtocolObservedScenarioRunner(
             activeSessions.delete(session);
             if (!outcome) write(`Scenario ${definition.id} stopped before verdict.`);
             // Deactivate last so any deactivation failure still surfaces to the caller.
+            await deactivateIssuerConfigIfActive();
             await deactivateIssuerFaultIfActive();
           },
           async [Symbol.asyncDispose]() {
@@ -397,6 +493,7 @@ export function createProtocolObservedScenarioRunner(
         // Best-effort cleanup on any startup failure (including a missing
         // controller, activation failure, or a later error before the
         // session object exists) so a fault is never left dangling.
+        await deactivateIssuerConfigIfActive().catch(() => undefined);
         await deactivateIssuerFaultIfActive().catch(() => undefined);
         throw error;
       }

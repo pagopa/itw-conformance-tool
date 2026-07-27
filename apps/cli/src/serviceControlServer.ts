@@ -44,9 +44,9 @@ async function allocateEndpoint(): Promise<string> {
 
 /**
  * Local-only control relay between the Vitest conformance runner process and
- * the CLI-owned service children. Only `issuer.fault.activate` /
- * `issuer.fault.deactivate` messages are relayed, and only to the managed
- * `credential-issuer` child. This is never exposed as an HTTP route, uses a
+ * the CLI-owned service children. Only issuer fault/config control messages
+ * are relayed, and only to the managed `credential-issuer` child. This is
+ * never exposed as an HTTP route, uses a
  * random endpoint in a private temporary directory, owner-only permissions
  * where supported, newline-delimited framing, bounded frame sizes, and
  * request-ID correlation.
@@ -60,6 +60,8 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
     if (
       message.type !== 'issuer.fault.activated' &&
       message.type !== 'issuer.fault.deactivated' &&
+      message.type !== 'issuer.config.activated' &&
+      message.type !== 'issuer.config.deactivated' &&
       message.type !== 'service.error'
     ) {
       return;
@@ -99,14 +101,19 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       return;
     }
 
-    if (message.type !== 'issuer.fault.activate' && message.type !== 'issuer.fault.deactivate') {
+    if (
+      message.type !== 'issuer.fault.activate' &&
+      message.type !== 'issuer.fault.deactivate' &&
+      message.type !== 'issuer.config.activate' &&
+      message.type !== 'issuer.config.deactivate'
+    ) {
       if ('requestId' in message) {
         writeFrame(socket, {
           version: SERVICE_PROTOCOL_VERSION,
           type: 'service.error',
           requestId: message.requestId,
           code: 'UNSUPPORTED_MESSAGE',
-          message: 'Only issuer fault controls are relayed'
+          message: 'Only issuer fault/config controls are relayed'
         });
       }
       return;
