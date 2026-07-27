@@ -138,9 +138,10 @@ When `credential-issuer.credential_identifiers` is set in `config.ini`, starting
 
 - builds an OpenID4VCI Credential Offer URI referencing those credential configuration IDs
 - serves it at `GET /credential-offer` on the issuer, as an HTML page with a scannable QR code and a "Copy URI" button
-- opens that page in the default browser once the issuer is listening
 
-`credential-issuer.credential_identifiers` must be comma-separated, non-empty, without duplicates, and each ID must match a key of the issuer's `credential_configurations_supported` metadata — otherwise startup fails with an explicit error. If it is not set, startup behaves as before (no QR page, no browser opened).
+The issuer does not open this static page automatically when it starts. In `itwct test issuance`, the conformance runner opens `GET /credential-offer?credential_offer_uri=...` for each scenario that uses a Credential Offer stimulus, so the browser page contains that scenario's current `issuer_state` and any scenario-specific offer mutation.
+
+`credential-issuer.credential_identifiers` must be comma-separated, non-empty, without duplicates, and each ID must match a key of the issuer's `credential_configurations_supported` metadata — otherwise startup fails with an explicit error. If it is not set, startup behaves as before and no static QR page is available.
 
 Example (`config.ini`):
 

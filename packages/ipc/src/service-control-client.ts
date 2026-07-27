@@ -5,7 +5,12 @@ import { parseIpcMessage } from './messages.js';
 import { SERVICE_PROTOCOL_VERSION } from './protocol.js';
 
 import type { IpcMessage } from './messages.js';
-import type { IssuerFaultActivationRequest, IssuerFaultDeactivationRequest } from './service-adapter.js';
+import type {
+  IssuerConfigActivationRequest,
+  IssuerConfigDeactivationRequest,
+  IssuerFaultActivationRequest,
+  IssuerFaultDeactivationRequest
+} from './service-adapter.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const FRAME_DELIMITER = '\n';
@@ -18,6 +23,8 @@ export interface ServiceControlClientOptions {
 }
 
 export interface ServiceControlClient {
+  activateIssuerConfig(request: IssuerConfigActivationRequest): Promise<void>;
+  deactivateIssuerConfig(request: IssuerConfigDeactivationRequest): Promise<void>;
   activateIssuerFault(request: IssuerFaultActivationRequest): Promise<void>;
   deactivateIssuerFault(request: IssuerFaultDeactivationRequest): Promise<void>;
   close(): Promise<void>;
@@ -89,7 +96,12 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
     const request = pending.get(message.requestId);
     if (!request) return;
 
-    if (message.type === 'issuer.fault.activated' || message.type === 'issuer.fault.deactivated') {
+    if (
+      message.type === 'issuer.fault.activated' ||
+      message.type === 'issuer.fault.deactivated' ||
+      message.type === 'issuer.config.activated' ||
+      message.type === 'issuer.config.deactivated'
+    ) {
       clearTimeout(request.timeout);
       pending.delete(message.requestId);
       request.resolve();
@@ -99,7 +111,7 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
     if (message.type === 'service.error') {
       clearTimeout(request.timeout);
       pending.delete(message.requestId);
-      request.reject(new Error(`Issuer fault control request failed: ${message.code}`));
+      request.reject(new Error(`Service control request failed: ${message.code}`));
     }
   }
 
@@ -122,6 +134,33 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
   }
 
   return {
+    async activateIssuerConfig(request: IssuerConfigActivationRequest): Promise<void> {
+      const requestId = randomUUID();
+      await send(
+        {
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'issuer.config.activate',
+          requestId,
+          scenarioId: request.scenarioId,
+          config: request.config
+        },
+        requestId
+      );
+    },
+
+    async deactivateIssuerConfig(request: IssuerConfigDeactivationRequest): Promise<void> {
+      const requestId = randomUUID();
+      await send(
+        {
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'issuer.config.deactivate',
+          requestId,
+          scenarioId: request.scenarioId
+        },
+        requestId
+      );
+    },
+
     async activateIssuerFault(request: IssuerFaultActivationRequest): Promise<void> {
       const requestId = randomUUID();
       await send(

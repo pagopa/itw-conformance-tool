@@ -65,6 +65,16 @@ const edcMissingRequiredClaimsProfileSchema = z
   })
   .strict();
 
+/**
+ * WP_061: replaces the issued Digital Credential's JOSE header `x5c` with a
+ * self-signed leaf certificate generated from the same issuer signing key,
+ * so the SD-JWT signature remains verifiable with the (now untrusted)
+ * header's public key, but the certificate cannot be chained to the
+ * configured Trust Anchor. Mutated before signing (see `mutationTiming:
+ * 'pre-signature'` in the catalog), isolating trust-chain validation from
+ * both `digital-credential-claims-invalid` (WP_060) and
+ * `edc-invalid-signature` (WP_062a), and `mdl-invalid-signature` (WP_062b).
+ */
 const edcInvalidTrustChainProfileSchema = z
   .object({
     type: z.literal('edc-invalid-trust-chain')
@@ -84,12 +94,36 @@ const mdlInvalidSignatureProfileSchema = z
   .strict();
 
 /**
+ * WP_060 variants: `type-mismatch` replaces the issued Digital Credential's
+ * `vct` with a reserved, collision-resistant test URN so it no longer
+ * matches the requested/published Credential type; `schema-invalid` keeps
+ * the nominal `vct` but omits the required, non-selectively-disclosable
+ * `issuing_country` Digital Credential Data Model claim. Both are mutated
+ * before signing (see `mutationTiming: 'pre-signature'` in the catalog) so
+ * the resulting SD-JWT VC remains validly signed; only its semantic content
+ * is defective.
+ */
+export const digitalCredentialClaimsFaultVariants = ['type-mismatch', 'schema-invalid'] as const;
+
+export type DigitalCredentialClaimsFaultVariant = (typeof digitalCredentialClaimsFaultVariants)[number];
+
+const digitalCredentialClaimsInvalidProfileSchema = z
+  .object({
+    type: z.literal('digital-credential-claims-invalid'),
+    variant: z.enum(digitalCredentialClaimsFaultVariants)
+  })
+  .strict();
+
+/**
  * Runtime-validated, discriminated catalog of Credential Issuer fault
  * profiles. `invalid-trust-anchor`, `authorization-response-missing-claim`,
- * `authorization-response-invalid-state`, and
- * `authorization-response-invalid-issuer` are wired to a mutation today; the
- * remaining variants are reserved so the shared type, IPC protocol, and
- * catalog metadata do not drift as future fault scenarios are implemented.
+ * `authorization-response-invalid-state`,
+ * `authorization-response-invalid-issuer`,
+ * `digital-credential-claims-invalid`, `edc-invalid-trust-chain`, and
+ * `edc-invalid-signature`, and `mdl-invalid-signature` are wired to a
+ * mutation today; the remaining variants are reserved so the shared type, IPC
+ * protocol, and catalog metadata do not drift as future fault scenarios are
+ * implemented.
  */
 export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   invalidTrustAnchorProfileSchema,
@@ -101,7 +135,8 @@ export const issuerFaultProfileSchema = z.discriminatedUnion('type', [
   edcMissingRequiredClaimsProfileSchema,
   edcInvalidTrustChainProfileSchema,
   edcInvalidSignatureProfileSchema,
-  mdlInvalidSignatureProfileSchema
+  mdlInvalidSignatureProfileSchema,
+  digitalCredentialClaimsInvalidProfileSchema
 ]);
 
 export type IssuerFaultProfile = z.infer<typeof issuerFaultProfileSchema>;

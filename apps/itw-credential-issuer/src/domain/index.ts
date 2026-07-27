@@ -12,10 +12,15 @@ export * from './signer.js';
 export * from './sd-jwt.js';
 export * from './crypto.js';
 export * from './credential-offer.js';
+export * from './issuer-runtime-config-store.js';
 
 // Faults
 export * from './faults/credential-response-fault.js';
+export * from './faults/digital-credential-claims-fault.js';
+export * from './faults/digital-credential-signature-fault.js';
+export * from './faults/digital-credential-trust-chain-fault.js';
 export * from './faults/issuer-fault-store.js';
+export * from './faults/mdoc-signature-fault.js';
 
 // Utils
 export * from './utils/status-list.js';

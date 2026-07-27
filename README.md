@@ -87,7 +87,7 @@ pnpm run init
 pnpm test:issuance
 ```
 
-During an interactive scenario, follow the terminal instructions: use the displayed QR code/deep link with the Wallet Solution, complete the requested wallet operation, and leave the process running until it records a verdict.
+During an interactive scenario, follow the terminal instructions: use the displayed QR code/deep link with the Wallet Solution, complete the requested wallet operation, and leave the process running until it records a verdict. Issuance scenarios that use a Credential Offer also open the local Credential Offer page in the default browser for each scenario, using that scenario's current `issuer_state`.
 
 > [!TIP]
 > The generated `config.ini` and `.itw-conformance-tool/` directory contain environment-specific settings, private keys, certificates, a local database, and captured data. Both are ignored by Git. Never commit or share them as a default troubleshooting artifact.
@@ -249,7 +249,7 @@ The default endpoints are:
 | Relying Party          | `https://127.0.0.1:3002` | `GET /health`; interactive API documentation at `/api/docs` |
 | Wallet Provider helper | `https://127.0.0.1:3003` | `GET /health`; `GET /.well-known/openid-federation`         |
 
-If `credential_identifiers` is populated, the Credential Issuer opens `https://127.0.0.1:3000/credential-offer` after it starts. That page shows a scannable OpenID4VCI Credential Offer and a copyable URI.
+If `credential_identifiers` is populated, the Credential Issuer serves `https://127.0.0.1:3000/credential-offer` as a manual static Credential Offer page with a scannable QR code and copyable URI. The issuer does not open this page automatically on startup; CLI-managed issuance tests open a scenario-specific page when each Credential Offer stimulus is shown.
 
 ## CLI reference
 

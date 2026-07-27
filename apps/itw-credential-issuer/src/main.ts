@@ -4,7 +4,6 @@ import { logger } from '@itw-conformance-tool/logger';
 import closeWithGrace from 'close-with-grace';
 import Fastify from 'fastify';
 import fp from 'fastify-plugin';
-import open from 'open';
 
 import bootstrap from './app.js';
 
@@ -62,25 +61,15 @@ async function startServer() {
     endpoint: app.config.BASE_URL,
     service: 'credential-issuer',
     stop: () => app.close(),
+    issuerConfig: {
+      activate: async (request) => app.issuerRuntimeConfigStore.activate(request),
+      deactivate: async (request) => app.issuerRuntimeConfigStore.deactivate(request)
+    },
     issuerFaults: {
       activate: async (request) => app.issuerFaultStore.activate(request),
       deactivate: async (request) => app.issuerFaultStore.deactivate(request)
     }
   });
-
-  // Only opens a browser tab when at least one credential identifier is
-  // configured (see plugins/config.ts). A browser-launch failure terminates
-  // startup, consistent with the app.listen() error handling above.
-  if (app.config.CREDENTIAL_OFFER_URI !== undefined) {
-    const credentialOfferPageUrl = `${app.config.BASE_URL}/credential-offer`;
-
-    try {
-      await open(credentialOfferPageUrl);
-    } catch (err) {
-      app.log.error(err, `Failed to open the credential offer page in the default browser: ${credentialOfferPageUrl}`);
-      process.exit(1);
-    }
-  }
 }
 
 startServer();

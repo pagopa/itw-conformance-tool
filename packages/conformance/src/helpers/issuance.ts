@@ -1,6 +1,6 @@
 import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
 
-/** The only `credential_configuration_id` nominally published by the local Credential Issuer today. */
+/** The default `credential_configuration_id` used by legacy interactive issuance scenarios. */
 export const NOMINAL_CREDENTIAL_CONFIGURATION_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
 
 export interface CredentialOfferPayload {
@@ -13,11 +13,26 @@ export interface CredentialOfferPayload {
   };
 }
 
+function toCredentialConfigurationIds(credentialConfigurationIds: string | readonly string[]): string[] {
+  const ids = Array.isArray(credentialConfigurationIds)
+    ? [...credentialConfigurationIds]
+    : [credentialConfigurationIds];
+  if (ids.length === 0) {
+    throw new Error('Credential Offer must contain at least one credential_configuration_id');
+  }
+
+  return ids;
+}
+
 /** Builds the nominal, unmutated Credential Offer for a `credential-offer` stimulus. */
-export function buildCredentialOffer(credentialIssuer: string, correlationId: string): CredentialOfferPayload {
+export function buildCredentialOffer(
+  credentialIssuer: string,
+  correlationId: string,
+  credentialConfigurationIds: string | readonly string[] = NOMINAL_CREDENTIAL_CONFIGURATION_ID
+): CredentialOfferPayload {
   return {
     credential_issuer: credentialIssuer,
-    credential_configuration_ids: [NOMINAL_CREDENTIAL_CONFIGURATION_ID],
+    credential_configuration_ids: toCredentialConfigurationIds(credentialConfigurationIds),
     grants: {
       authorization_code: {
         issuer_state: correlationId
@@ -75,9 +90,13 @@ export function serializeCredentialOfferUri(offer: CredentialOfferPayload): stri
 export function createCredentialOfferUri(
   credentialIssuer: string,
   correlationId: string,
-  issuerFault?: IssuerFaultProfile
+  issuerFault?: IssuerFaultProfile,
+  credentialConfigurationIds: string | readonly string[] = NOMINAL_CREDENTIAL_CONFIGURATION_ID
 ): string {
-  const offer = applyIssuerFaultToCredentialOffer(buildCredentialOffer(credentialIssuer, correlationId), issuerFault);
+  const offer = applyIssuerFaultToCredentialOffer(
+    buildCredentialOffer(credentialIssuer, correlationId, credentialConfigurationIds),
+    issuerFault
+  );
   return serializeCredentialOfferUri(offer);
 }
 
