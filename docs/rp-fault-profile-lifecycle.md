@@ -3,7 +3,7 @@
 Questo documento descrive il meccanismo che attiva, applica e infine disattiva un profilo di fault sul
 Relying Party durante uno scenario di conformita della fase di presentazione.
 
-Il ciclo di vita e volutamente identico a quello del Credential Issuer descritto in
+Il ciclo di vita è volutamente identico a quello del Credential Issuer descritto in
 [`issuer-fault-profile-lifecycle.md`](./issuer-fault-profile-lifecycle.md): scenario che dichiara il
 profilo, attivazione dal runner prima dello stimolo, mutazione applicata nel punto di risposta,
 evidenza osservata, disattivazione in cleanup. Qui vengono descritte le sole parti specifiche del
@@ -44,17 +44,33 @@ e osservare che il wallet **non** prosegua. Ogni scenario negativo dichiara quin
 Il Relying Party locale e fissato alla versione IT Wallet `1.3` (vedi `src/plugins/sdk.ts`), quindi
 tutti i profili dichiarano `supportedSpecVersions: ['1.3']`.
 
-| Profilo                            | Punto di applicazione | Effetto                                                                               | Test Matrix |
-| ---------------------------------- | --------------------- | ------------------------------------------------------------------------------------- | ----------- |
-| `invalid-trust-anchor`             | Entity Configuration  | `authority_hints` sostituito con un Entity ID `.invalid` che non risolve              | WP_079      |
-| `invalid-trust-mark`               | Entity Configuration  | Trust Mark nominale ma firmato con una chiave effimera non pubblicata                 | WP_080      |
-| `unattested-request-uri`           | Entity Configuration  | `request_uris` non contiene il `request_uri` consegnato nell'engagement               | WP_081      |
-| `missing-presentation-trust-mark`  | Entity Configuration  | nessun Trust Mark: la federazione non autorizza le presentazioni                      | WP_087      |
-| `unattested-response-uri`          | Entity Configuration  | `response_uris` non contiene il `response_uri` del Request Object                     | WP_091a     |
-| `request-object-invalid-signature` | Request Object        | header nominale, firma prodotta con una chiave effimera                               | WP_085      |
-| `request-object-invalid-client-id` | Request Object        | `iss` diverso dal `client_id` dell'engagement e dal `sub` della Entity Configuration  | WP_086      |
-| `request-object-missing-parameter` | Request Object        | omette un parametro REQUIRED (`nonce` oppure `response_type`)                         | WP_090      |
-| `unattested-redirect-uri`          | Entity Configuration  | `redirect_uris` non contiene il `redirect_uri` restituito dall'Authorization Response | WP_094a     |
+| Profilo                            | Punto di applicazione | Effetto                                                                                                                                 | Test Matrix |
+| ---------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `invalid-trust-anchor`             | Entity Configuration  | `authority_hints` sostituito con un Entity ID `.invalid` che non risolve                                                                | WP_079      |
+| `invalid-trust-mark`               | Entity Configuration  | Trust Mark nominale (emesso dal Trust Anchor) ma firmato con una chiave effimera non pubblicata                                         | WP_080      |
+| `unattested-request-uri`           | Entity Configuration  | `request_uris` non contiene il `request_uri` consegnato nell'engagement                                                                 | WP_081      |
+| `missing-presentation-trust-mark`  | Entity Configuration  | nessun Trust Mark: la federazione non autorizza le presentazioni                                                                        | WP_087      |
+| `unattested-response-uri`          | Entity Configuration  | `response_uris` non contiene il `response_uri` del Request Object                                                                       | WP_091a     |
+| `request-object-invalid-signature` | Request Object        | header nominale, firma prodotta con una chiave effimera                                                                                 | WP_085      |
+| `request-object-invalid-client-id` | Request Object        | `iss` diverso dal `client_id` dell'engagement e dal `sub` della Entity Configuration                                                    | WP_086      |
+| `request-object-federation-key`    | Request Object        | header senza `x5c` e `client_id` con prefisso `openid_federation`: la chiave di firma resta pubblicata solo nei metadata di federazione | WP_084      |
+| `request-object-missing-parameter` | Request Object        | omette un parametro REQUIRED (`nonce` oppure `response_type`)                                                                           | WP_090      |
+| `unattested-redirect-uri`          | Entity Configuration  | `redirect_uris` non contiene il `redirect_uri` restituito dall'Authorization Response                                                   | WP_094a     |
+
+Non tutti i profili producono un artefatto difettoso. `request-object-federation-key` (WP_084) serve
+un Request Object perfettamente valido: rimuove solo le fonti alternative della chiave di verifica
+(`x5c` e un eventuale `trust_chain` inline) e sposta il `client_id` sul prefisso `openid_federation`,
+cosi che l'unico modo per verificare la firma sia risolvere la Entity Configuration del Relying Party
+e cercare il `kid` in `metadata.openid_credential_verifier.jwks`. Lo scenario corrispondente e quindi
+un Happy Path: un wallet conforme completa la presentazione, e proprio il completamento prova che la
+chiave e stata presa dai metadata di federazione.
+
+> **Attenzione (versione delle specifiche).** Lo schema dell'header JAR della SDK richiede `x5c` per
+> IT Wallet `1.3` e `trust_chain` per `1.0`: un header con solo `alg`/`kid`/`typ` non e valido per
+> nessuna delle due. Un wallet che valida l'header secondo lo schema `1.3` rifiuta quindi il Request
+> Object prima ancora di risolvere la chiave, e lo scenario risulta inconclusivo invece di provare
+> WP_084. Il profilo implementa quanto richiede la Test Matrix (la chiave presente solo nei metadata
+> di federazione), ma resta da decidere come conciliarlo con il vincolo `1.3`.
 
 Tre principi guidano queste mutazioni:
 

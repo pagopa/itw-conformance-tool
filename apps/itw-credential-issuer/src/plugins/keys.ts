@@ -1,9 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { validateCertificateMatchesJwk, validateJWKS } from '@itw-conformance-tool/crypto';
+import {
+  loadTrustAnchorFederationJwk,
+  validateCertificateMatchesJwk,
+  validateJWKS
+} from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
 
+import type { TrustAnchorFederationJwk } from '@itw-conformance-tool/crypto';
 import type { JWK } from 'jose';
 
 export type IssuerKeys = {
@@ -17,6 +22,10 @@ export type IssuerKeys = {
   };
   issuerCertPem: string;
   issuerIntermediateCertPem: string;
+  /** The Trust Anchor's federation private key, read from the shared `data_dir`. Used
+   * only to sign the Trust Anchor-issued Trust Mark the issuer embeds in its own Entity
+   * Configuration; every issuer artifact is still signed with the issuer's own key. */
+  trustAnchorFederationJwk: TrustAnchorFederationJwk;
 };
 
 declare module 'fastify' {
@@ -137,10 +146,13 @@ export default fp(
     const signingJwk = findEcSigningKey(parsedJwks.keys) as StoredJwk;
     await validateCertificateMatchesJwk(certPem, signingJwk as unknown as JWK);
 
+    const trustAnchorFederationJwk = await loadTrustAnchorFederationJwk(app.config.DATA_DIR);
+
     app.decorate('issuerKeys', {
       signingKeysJwks: parsedJwks,
       issuerCertPem: certPem,
-      issuerIntermediateCertPem: intermediateCertPem
+      issuerIntermediateCertPem: intermediateCertPem,
+      trustAnchorFederationJwk
     });
   },
   { name: 'keys', dependencies: ['config'] }

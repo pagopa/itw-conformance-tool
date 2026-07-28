@@ -6,8 +6,9 @@ import {
 
 /**
  * WP_080: the Relying Party Entity Configuration carries a Trust Mark of the
- * nominal type, with nominal claims and `kid`, but signed with an ephemeral key
- * published nowhere in the federation, so its signature cannot be verified.
+ * nominal type, naming the Trust Anchor as issuer and keeping its nominal claims
+ * and `kid`, but signed with an ephemeral key published nowhere in the
+ * federation, so its signature cannot be verified.
  *
  * The Trust Chain itself stays intact, which isolates Trust Mark validation from
  * WP_079; and the Trust Mark is present, which isolates it from WP_087, where
@@ -22,7 +23,7 @@ export const wp080Scenario = createNegativePresentationScenario({
   instructions: {
     goal: 'Verify that the Wallet Instance evaluates the Trust Marks in the Relying Party Entity Configuration and stops when one cannot be validated.',
     expectedBehavior:
-      'The wallet requests the Relying Party Entity Configuration and finds a Trust Mark whose signature does not verify against any key the federation publishes for the Relying Party. It must terminate the presentation without retrieving the Request Object. Successful conformance is rejection, not presentation.',
+      'The wallet requests the Relying Party Entity Configuration and finds a Trust Mark whose signature does not verify against any key the federation publishes for the Trust Mark issuer named in it. It must terminate the presentation without retrieving the Request Object. Successful conformance is rejection, not presentation.',
     observation: [
       'Keep the wallet and the test process running while the wallet resolves the Trust Anchor and evaluates the Relying Party Trust Mark.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports a trust error and stops.'

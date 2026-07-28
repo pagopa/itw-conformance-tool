@@ -32,7 +32,10 @@ export const DEFAULT_CONFIG = {
     credential_identifiers: '',
     batch_issuance_by_deferred: false,
     trusted_wallet_provider_issuers: DEFAULT_TRUSTED_WALLET_PROVIDER_ISSUERS.join(','),
-    trust_anchor_url: 'https://localhost:3001'
+    // Must match `trust-anchor.url` exactly: it is the Trust Anchor Entity Identifier the
+    // issuer puts in `authority_hints` and the namespace its Trust Mark type is built
+    // from, and the Trust Anchor keys `trust_mark_issuers` by its own URL.
+    trust_anchor_url: 'https://127.0.0.1:3001'
   },
   'relying-party': {
     url: 'https://127.0.0.1:3002',
@@ -41,7 +44,7 @@ export const DEFAULT_CONFIG = {
   },
   'trust-anchor': {
     url: 'https://127.0.0.1:3001',
-    entity_id: 'https://localhost:3001'
+    entity_id: 'https://127.0.0.1:3001'
   }
 } as const;
 

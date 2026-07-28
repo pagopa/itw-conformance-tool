@@ -17,8 +17,8 @@ const invalidTrustAnchorProfileSchema = z
 /**
  * WP_080: keeps the nominal Trust Mark type and claims but signs the Trust
  * Mark with an ephemeral key that is published nowhere in the federation, so
- * its signature cannot be verified against the Relying Party's federation
- * JWKS. Isolates Trust Mark validation from
+ * its signature cannot be verified against the federation JWKS of the Trust
+ * Mark issuer it names — the Trust Anchor. Isolates Trust Mark validation from
  * `missing-presentation-trust-mark` (WP_087), where the Trust Mark is absent
  * rather than unverifiable.
  */
@@ -93,6 +93,32 @@ const requestObjectInvalidClientIdProfileSchema = z
   .strict();
 
 /**
+ * WP_084: serves a Request Object signed the OpenID Federation way instead of
+ * the X.509 way. The JOSE header carries only `alg`, `kid` and `typ` — no `x5c`
+ * certificate chain and no embedded `trust_chain` — and the `client_id` switches
+ * from the `x509_hash` Client Identifier Prefix to `openid_federation`.
+ *
+ * Nothing about the Request Object is defective: it stays validly signed with
+ * the same Relying Party key, and that key is published in
+ * `metadata.openid_credential_verifier.jwks`. What changes is that the key is
+ * published *only* there — with the certificate chain gone from the header, the
+ * sole way to obtain it is to resolve the Relying Party Entity Configuration
+ * through the Trust Chain and select the key by the header's `kid`. A wallet
+ * that never fetches that metadata cannot verify the Request Object at all.
+ *
+ * The Client Identifier Prefix has to change with it: `x509_hash` tells a wallet
+ * to take the key from the header's `x5c`, which is exactly the path this
+ * profile removes. The prefixed and unprefixed identifiers still resolve to the
+ * same entity, so the engagement `client_id`, the Request Object `iss` and the
+ * Entity Configuration `sub` stay consistent (WP_086).
+ */
+const requestObjectFederationKeyProfileSchema = z
+  .object({
+    type: z.literal('request-object-federation-key')
+  })
+  .strict();
+
+/**
  * WP_090: serves a validly signed Request Object that omits one required
  * OpenID4VP parameter, so the wallet must reject it and report the failure to
  * the `response_uri` as an Authorization Error Response. Kept intentionally
@@ -139,6 +165,7 @@ export const rpFaultProfileSchema = z.discriminatedUnion('type', [
   missingPresentationTrustMarkProfileSchema,
   requestObjectInvalidSignatureProfileSchema,
   requestObjectInvalidClientIdProfileSchema,
+  requestObjectFederationKeyProfileSchema,
   requestObjectMissingParameterProfileSchema,
   unattestedRedirectUriProfileSchema
 ]);

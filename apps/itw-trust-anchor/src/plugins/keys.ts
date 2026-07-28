@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import { isValidJwk, validateJWKS } from '@itw-conformance-tool/crypto';
+import { isValidJwk, TRUST_ANCHOR_FEDERATION_KEY_FILE, validateJWKS } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
 
 export interface JwkKey {
@@ -177,7 +177,7 @@ export default fp(
 
     const [federationPrivateJwk, issuerFederationJwk, rpFederationJwk, walletProviderFederationJwk] = await Promise.all(
       [
-        loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
+        loadFederationJwk(dataDir, TRUST_ANCHOR_FEDERATION_KEY_FILE),
         loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
         loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 'rp-federation-key'),
         loadFederationJwkFromJwks(dataDir, join('wallet-provider', 'jwks.json'), 'wallet-provider-signing-key')

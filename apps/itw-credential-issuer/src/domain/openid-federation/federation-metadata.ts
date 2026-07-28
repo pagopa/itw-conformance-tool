@@ -1,7 +1,6 @@
-import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
+import { convertPemToBase64Der, createTrustMark } from '@itw-conformance-tool/crypto';
 import { createItWalletEntityConfiguration } from '@pagopa/io-wallet-oid-federation';
 import { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
-import { importJWK, SignJWT, type JWK } from 'jose';
 
 import { signCallback } from '../signer.js';
 import { getEntityConfigurationClaimsMetadata } from './entity-configuration-metadata.js';
@@ -14,32 +13,11 @@ const ENTITY_STATEMENT_SIGNING_ALG = 'ES256';
 const CREDENTIAL_ISSUER_TRUST_MARK_TYPE_SUFFIX = 'trust_marks/issuance/credential_issuer';
 
 /** Builds the fully qualified Credential Issuer Trust Mark type from the configured
- * Trust Anchor entity ID. The Trust Anchor must advertise this exact same value in its
- * `trust_mark_issuers` claim (see apps/itw-trust-anchor/src/federation/statements.ts). */
+ * Trust Anchor entity ID. The Trust Anchor owns this type identifier and must advertise
+ * this exact same value in its `trust_mark_issuers` claim
+ * (see apps/itw-trust-anchor/src/federation/statements.ts). */
 export function getCredentialIssuerTrustMarkType(trustAnchorEntityId: string): string {
   return `${trustAnchorEntityId}/${CREDENTIAL_ISSUER_TRUST_MARK_TYPE_SUFFIX}`;
-}
-
-async function createCredentialIssuerTrustMark(options: {
-  entityId: string;
-  issuedAt: number;
-  signingJwk: JWK;
-  trustMarkType: string;
-}): Promise<string> {
-  const { entityId, issuedAt, signingJwk, trustMarkType } = options;
-  const alg = signingJwk.alg ?? ENTITY_STATEMENT_SIGNING_ALG;
-  const key = await importJWK(signingJwk, alg);
-
-  return new SignJWT({
-    ref: `${trustMarkType}/compliance`,
-    trust_mark_type: trustMarkType
-  })
-    .setProtectedHeader({ alg, kid: signingJwk.kid, typ: 'trust-mark+jwt' })
-    .setIssuedAt(issuedAt)
-    .setIssuer(entityId)
-    .setSubject(entityId)
-    .setExpirationTime(issuedAt + ENTITY_STATEMENT_TTL_SECONDS)
-    .sign(key);
 }
 
 export interface GetFederationMetadataOptions {
@@ -63,11 +41,16 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
 
   const issuedAt = Math.floor(Date.now() / 1000);
   const credentialIssuerTrustMarkType = getCredentialIssuerTrustMarkType(options.trustAnchorEntityId);
-  const credentialIssuerTrustMark = await createCredentialIssuerTrustMark({
-    entityId: options.baseURL,
+  // Issued by the Trust Anchor about this Credential Issuer and signed with the Trust
+  // Anchor's federation key, so a wallet verifies it against the Trust Anchor Entity
+  // Configuration it already fetched while building the Trust Chain.
+  const credentialIssuerTrustMark = await createTrustMark({
     issuedAt,
-    signingJwk: jwk.private,
-    trustMarkType: credentialIssuerTrustMarkType
+    issuerEntityId: options.trustAnchorEntityId,
+    signingJwk: options.jwksRepository.getTrustAnchorFederation(),
+    subjectEntityId: options.baseURL,
+    trustMarkType: credentialIssuerTrustMarkType,
+    ttlSeconds: ENTITY_STATEMENT_TTL_SECONDS
   });
 
   return await createItWalletEntityConfiguration({

@@ -18,6 +18,7 @@ import {
   wp079Scenario,
   wp080Scenario,
   wp081Scenario,
+  wp084Scenario,
   wp085Scenario,
   wp086Scenario,
   wp087Scenario,
@@ -297,6 +298,42 @@ describe('Test Cases for Presentation Phase', () => {
     }
   }
 
+  /**
+   * Fetches the Relying Party Entity Configuration the wallet resolves.
+   *
+   * Local services use ephemeral, self-signed certificates (see
+   * @itw-conformance-tool/crypto's createHttpsOptions), so a plain global
+   * `fetch()` fails TLS verification. Use `httpsRequest` with
+   * `rejectUnauthorized: false`, matching the convention used for these hosts.
+   */
+  async function fetchRelyingPartyEntityConfiguration(): Promise<ReturnType<typeof decodeEntityConfiguration>> {
+    const discoveryUrl = new URL('/.well-known/openid-federation', config['relying-party'].url);
+    const response = await httpsRequest({
+      method: 'GET',
+      hostname: discoveryUrl.hostname,
+      path: discoveryUrl.pathname,
+      port: discoveryUrl.port,
+      protocol: discoveryUrl.protocol,
+      rejectUnauthorized: false,
+      signal: AbortSignal.timeout(10_000)
+    });
+
+    if (response.statusCode !== 200) {
+      throw new Error(
+        `Unable to fetch Relying Party entity configuration (${response.statusCode ?? 'unknown'}): ${response.body}`
+      );
+    }
+
+    return decodeEntityConfiguration(response.body);
+  }
+
+  /** The signing/encryption keys the Relying Party publishes for verifiers. */
+  function verifierJwks(claims: ReturnType<typeof decodeEntityConfiguration>): { kid?: string }[] {
+    const verifier = claims.metadata?.openid_credential_verifier as
+      { jwks?: { keys?: { kid?: string }[] } } | undefined;
+    return verifier?.jwks?.keys ?? [];
+  }
+
   /** Asserts the wallet never sent an Authorization Response carrying a vp_token. */
   function expectNoPresentation(events: ObservedEvent[], reason: string): void {
     const presentation = events.find(
@@ -515,8 +552,22 @@ describe('Test Cases for Presentation Phase', () => {
       const redirectEvent = requireEvent('rp.redirect.followed');
       expect(redirectEvent.diagnostic?.['method'], 'redirect_uri should be followed via GET').toBe('GET');
       expect(redirectEvent.diagnostic?.['endpoint'], 'redirect should land on the RP callback endpoint').toBe(
-        '/callback/:state'
+        '/callback'
       );
+
+      // The followed URI must be the attested `redirect_uris` entry with only
+      // query parameters added, otherwise a wallet comparing it against the
+      // Entity Configuration could not have accepted it (WP_094a).
+      const followed = new URL(requiredDiagnosticString(redirectEvent, 'redirectUri'));
+      expect(
+        `${followed.origin}${followed.pathname}`,
+        'the redirect_uri path must match the attested callback endpoint exactly'
+      ).toBe(`${trimTrailingSlash(config['relying-party'].url)}/callback`);
+      expect(followed.searchParams.get('state'), 'the session is identified in the query string').toBeTruthy();
+      expect(
+        followed.searchParams.get('response_code'),
+        'the response_code binds the redirect to the session'
+      ).toBeTruthy();
     });
   });
 
@@ -732,6 +783,64 @@ describe('Test Cases for Presentation Phase', () => {
     }
   );
 
+  // WP_084 is a happy path, not a negative one: the wallet is expected to
+  // complete the presentation. What makes the case conclusive is that the
+  // Relying Party removed every key source except the federation metadata, so a
+  // completed flow can only mean the wallet resolved the key from there.
+  describe.skipIf(!isSelected(wp084Scenario))(
+    'Happy path — Relying Party key published only in the federation metadata',
+    () => {
+      let run: PresentationRun;
+
+      beforeAll(async () => {
+        run = await runPresentationScenario(wp084Scenario);
+      }, wp084Scenario.timeouts.vitestTestMs);
+
+      test(
+        '[WP_084]: Wallet Instance resolves the Relying Party public key from metadata.openid_credential_verifier.jwks using the Request Object kid',
+        async () => {
+          assertConformanceOutcome(run.outcome, { expected: 'PASS' });
+
+          // The served Request Object really did carry no certificate chain,
+          // and the kid the wallet had to resolve is recorded alongside it.
+          expectFaultApplied(run.events, 'request-object-federation-key', {
+            hasX5c: false,
+            keyResolution: 'federation'
+          });
+
+          const faultApplied = findEvent(run.events, 'rp.fault.applied');
+          const signingKeyId = faultApplied?.diagnostic?.['signingKeyId'];
+          expect(
+            typeof signingKeyId === 'string' && signingKeyId.length > 0,
+            'The Request Object must keep a kid: with no x5c it is the only handle on the signing key'
+          ).toBe(true);
+
+          expect(
+            faultApplied?.diagnostic?.['clientId'],
+            'The client_id must carry the openid_federation prefix so the wallet resolves the key through the Trust Chain'
+          ).toMatch(/^openid_federation:/);
+
+          // The kid must actually resolve in the Entity Configuration the wallet
+          // fetched, otherwise the scenario would be unsatisfiable rather than
+          // conclusive.
+          const entityConfiguration = await fetchRelyingPartyEntityConfiguration();
+          expect(
+            verifierJwks(entityConfiguration).map((key) => key.kid),
+            'The Request Object signing key must be published in metadata.openid_credential_verifier.jwks'
+          ).toContain(signingKeyId);
+
+          // The presentation completed, so the wallet verified a Request Object
+          // it could only have verified with that key.
+          expect(
+            findEvent(run.events, 'vp_token.validation.succeeded'),
+            'The Relying Party must have verified a presentation for the federation-signed Request Object'
+          ).toBeDefined();
+        },
+        wp084Scenario.timeouts.vitestTestMs
+      );
+    }
+  );
+
   describe.skipIf(!isSelected(wp085Scenario))('Negative path — Request Object with an unverifiable signature', () => {
     let run: PresentationRun;
 
@@ -862,11 +971,14 @@ describe('Test Cases for Presentation Phase', () => {
 
           // The Relying Party keeps answering with its live callback endpoint,
           // which the fault removed from the attested redirect_uris — so this is
-          // the URI the wallet had to reject.
+          // the URI the wallet had to reject. Its path is the one the nominal
+          // Entity Configuration attests, so only the fault's replacement of the
+          // attested list can make the wallet reject it.
+          const returned = new URL(String(verified?.diagnostic?.['redirectUri'] ?? ''));
           expect(
-            String(verified?.diagnostic?.['redirectUri'] ?? ''),
+            `${returned.origin}${returned.pathname}`,
             'The Relying Party should return its live callback endpoint as the redirect_uri'
-          ).toContain('/callback/');
+          ).toBe(`${trimTrailingSlash(config['relying-party'].url)}/callback`);
 
           expect(
             findEvent(run.events, 'rp.redirect.followed'),
@@ -880,29 +992,8 @@ describe('Test Cases for Presentation Phase', () => {
 
   describe('Relying Party fault cleanup', () => {
     test('deactivated faults leave the Relying Party serving its nominal Entity Configuration', async () => {
-      // Local services use ephemeral, self-signed certificates (see
-      // @itw-conformance-tool/crypto's createHttpsOptions), so a plain global
-      // `fetch()` fails TLS verification. Use `httpsRequest` with
-      // `rejectUnauthorized: false`, matching the convention used for these hosts.
       const relyingPartyUrl = config['relying-party'].url;
-      const discoveryUrl = new URL('/.well-known/openid-federation', relyingPartyUrl);
-      const response = await httpsRequest({
-        method: 'GET',
-        hostname: discoveryUrl.hostname,
-        path: discoveryUrl.pathname,
-        port: discoveryUrl.port,
-        protocol: discoveryUrl.protocol,
-        rejectUnauthorized: false,
-        signal: AbortSignal.timeout(10_000)
-      });
-
-      if (response.statusCode !== 200) {
-        throw new Error(
-          `Unable to fetch Relying Party entity configuration (${response.statusCode ?? 'unknown'}): ${response.body}`
-        );
-      }
-
-      const claims = decodeEntityConfiguration(response.body);
+      const claims = await fetchRelyingPartyEntityConfiguration();
       const verifier = claims.metadata?.openid_credential_verifier as
         { redirect_uris?: string[]; request_uris?: string[]; response_uris?: string[] } | undefined;
 

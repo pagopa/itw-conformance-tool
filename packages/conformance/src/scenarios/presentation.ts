@@ -1,6 +1,7 @@
 import { wp079Scenario } from './factories/wp-079.js';
 import { wp080Scenario } from './factories/wp-080.js';
 import { wp081Scenario } from './factories/wp-081.js';
+import { wp084Scenario } from './factories/wp-084.js';
 import { wp085Scenario } from './factories/wp-085.js';
 import { wp086Scenario } from './factories/wp-086.js';
 import { wp087Scenario } from './factories/wp-087.js';
@@ -19,6 +20,7 @@ export const presentationScenarios: ProtocolObservedScenarioDefinition[] = [
   wp079Scenario,
   wp080Scenario,
   wp081Scenario,
+  wp084Scenario,
   wp085Scenario,
   wp086Scenario,
   wp087Scenario,

@@ -1,6 +1,7 @@
 import { createPrivateKey, sign } from 'node:crypto';
 
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
+import { createTrustMark } from '@itw-conformance-tool/crypto';
 import {
   createItWalletEntityConfiguration,
   itWalletMetadataV1_3,
@@ -8,7 +9,7 @@ import {
   type SignCallback
 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
-import { generateKeyPair, importJWK, SignJWT, type JWK } from 'jose';
+import { generateKeyPair } from 'jose';
 import z from 'zod';
 
 import { emitRpFaultApplied } from '../faults/rp-fault-evidence.js';
@@ -67,39 +68,11 @@ const UNATTESTED_REQUEST_URI_PATH = '/auth/request-unattested';
 const UNATTESTED_RESPONSE_URI_PATH = '/auth/response-unattested';
 const UNATTESTED_REDIRECT_URI_PATH = '/callback-unattested';
 
-/** Private key produced by `generateKeyPair`, kept in memory and never exported. */
-type EphemeralSigningKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
-
-function getTrustMarkType(entityId: string): string {
-  return `${entityId}/trust_marks/${RELYING_PARTY_TRUST_MARK_PURPOSE}/${RELYING_PARTY_TRUST_MARK_ENTITY_TYPE}`;
-}
-
-async function createRelyingPartyTrustMark(options: {
-  entityId: string;
-  issuedAt: number;
-  signingJwk: JWK;
-  /**
-   * Signs in place of `signingJwk`, whose `kid` and `alg` the Trust Mark still
-   * advertises. Used by the `invalid-trust-mark` fault (WP_080) to produce a
-   * Trust Mark no federation-published key can verify.
-   */
-  signingKeyOverride?: EphemeralSigningKey;
-  trustMarkType: string;
-}): Promise<string> {
-  const { entityId, issuedAt, signingJwk, trustMarkType } = options;
-  const alg = signingJwk.alg ?? ENTITY_STATEMENT_SIGNING_ALG;
-  const key = options.signingKeyOverride ?? (await importJWK(signingJwk, alg));
-
-  return new SignJWT({
-    ref: `${trustMarkType}/compliance`,
-    trust_mark_type: trustMarkType
-  })
-    .setProtectedHeader({ alg, kid: signingJwk.kid, typ: 'trust-mark+jwt' })
-    .setIssuedAt(issuedAt)
-    .setIssuer(entityId)
-    .setSubject(entityId)
-    .setExpirationTime(issuedAt + ENTITY_STATEMENT_TTL_SECONDS)
-    .sign(key);
+/** Builds the presentation Trust Mark type identifier. It lives in the Trust Anchor's
+ * namespace because the Trust Anchor owns and issues it; the Trust Anchor advertises the
+ * same value under `trust_mark_issuers` (see apps/itw-trust-anchor/src/federation/statements.ts). */
+function getTrustMarkType(trustAnchorEntityId: string): string {
+  return `${trustAnchorEntityId}/trust_marks/${RELYING_PARTY_TRUST_MARK_PURPOSE}/${RELYING_PARTY_TRUST_MARK_ENTITY_TYPE}`;
 }
 
 export const entityConfigurationResponseSchema = z.string().describe('Signed OpenID Federation entity statement JWT.');
@@ -155,20 +128,27 @@ export const createEntityConfigurationHandler = async (
 
   const activeFault = findEntityConfigurationFault(req.server.rpFaultStore.getActive());
 
-  // WP_080: the Trust Mark keeps its nominal type, claims and `kid`, but is
-  // signed with an ephemeral key that is published nowhere in the federation,
-  // so a wallet that verifies Trust Marks cannot validate it.
+  // WP_080: the Trust Mark keeps its nominal type, claims and `kid` — it still names the
+  // Trust Anchor as issuer — but is signed with an ephemeral key in place of the Trust
+  // Anchor's federation key, so it cannot be verified against anything the federation
+  // publishes for that issuer.
   const trustMarkSigningKeyOverride =
     activeFault?.type === 'invalid-trust-mark'
       ? (await generateKeyPair(ENTITY_STATEMENT_SIGNING_ALG)).privateKey
       : undefined;
 
-  const trustMark = await createRelyingPartyTrustMark({
-    entityId: BASE_URL,
+  // The Trust Mark is issued by the Trust Anchor about this Relying Party and signed with
+  // the Trust Anchor's federation key, so a wallet verifies it against the Trust Anchor
+  // Entity Configuration it already fetched while building the Trust Chain.
+  const trustMarkType = getTrustMarkType(TRUST_ANCHOR_URL);
+  const trustMark = await createTrustMark({
     issuedAt,
-    signingJwk: federationPrivateJwk,
+    issuerEntityId: TRUST_ANCHOR_URL,
+    signingJwk: req.server.trustAnchorFederationJwk,
     signingKeyOverride: trustMarkSigningKeyOverride,
-    trustMarkType: getTrustMarkType(TRUST_ANCHOR_URL)
+    subjectEntityId: BASE_URL,
+    trustMarkType,
+    ttlSeconds: ENTITY_STATEMENT_TTL_SECONDS
   });
 
   const metadata = {
@@ -240,7 +220,7 @@ export const createEntityConfigurationHandler = async (
           : [
               {
                 trust_mark: trustMark,
-                trust_mark_type: getTrustMarkType(TRUST_ANCHOR_URL)
+                trust_mark_type: trustMarkType
               }
             ],
       // WP_079: an authority hint that can never resolve leaves the wallet

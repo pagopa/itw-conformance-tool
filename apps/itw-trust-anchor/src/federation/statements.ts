@@ -87,11 +87,9 @@ function toSigningJwk(privateJwk: JwkKey, publicJwk: JsonWebKey): JsonWebKey {
  */
 export async function createTrustAnchorEntityConfiguration(options: {
   federationPrivateJwk: JwkKey;
-  issuerEntityId: string;
-  relyingPartyEntityId: string;
   trustAnchorBaseUrl: string;
 }): Promise<string> {
-  const { federationPrivateJwk, issuerEntityId, relyingPartyEntityId, trustAnchorBaseUrl } = options;
+  const { federationPrivateJwk, trustAnchorBaseUrl } = options;
   const publicJwk = stripPrivateParams(federationPrivateJwk);
   const issuedAt = Math.floor(Date.now() / 1000);
 
@@ -119,9 +117,13 @@ export async function createTrustAnchorEntityConfiguration(options: {
       jwks: { keys: [publicJwk] },
       metadata: parsedMetadata.data as ItWalletEntityConfigurationClaimsOptions['metadata'],
       sub: trustAnchorBaseUrl,
+      // The Trust Anchor both owns these Trust Mark type identifiers (they live in its
+      // own namespace) and issues the Trust Marks itself, so it is the only legitimate
+      // issuer for each type. Because issuer and owner coincide, no `trust_mark_owners`
+      // entry and no `delegation` claim are required.
       trust_mark_issuers: {
-        [`${trustAnchorBaseUrl}/${CREDENTIAL_ISSUER_TRUST_MARK_TYPE}`]: [issuerEntityId],
-        [`${trustAnchorBaseUrl}/${RELYING_PARTY_TRUST_MARK_TYPE}`]: [relyingPartyEntityId]
+        [`${trustAnchorBaseUrl}/${CREDENTIAL_ISSUER_TRUST_MARK_TYPE}`]: [trustAnchorBaseUrl],
+        [`${trustAnchorBaseUrl}/${RELYING_PARTY_TRUST_MARK_TYPE}`]: [trustAnchorBaseUrl]
       }
     },
     header: {

@@ -3,14 +3,17 @@ import z from 'zod';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-export const getCallbackParamsSchema = z.object({
-  state: z.uuid().describe('Authorization request state identifier bound to the presentation.')
-});
-
-export type GetCallbackParams = z.infer<typeof getCallbackParamsSchema>;
-
+/**
+ * Both members travel in the query string rather than the path so the callback
+ * endpoint the wallet is handed keeps the exact base URI the Relying Party
+ * attests in `openid_credential_verifier.redirect_uris` (WP_094a). OpenID4VP
+ * already requires the returned `redirect_uri` to carry the `response_code`, so
+ * a wallet compares scheme, host and path and ignores the query — a session
+ * identifier in the path would make that comparison fail for a nominal flow.
+ */
 export const getCallbackQuerystringSchema = z.object({
-  response_code: z.string().min(1).describe('Opaque code issued in the authorization response redirect_uri.')
+  response_code: z.string().min(1).describe('Opaque code issued in the authorization response redirect_uri.'),
+  state: z.uuid().describe('Authorization request state identifier bound to the presentation.')
 });
 
 export type GetCallbackQuerystring = z.infer<typeof getCallbackQuerystringSchema>;
@@ -25,11 +28,10 @@ function extractResponseCode(redirectUri: string | undefined): string | null {
 }
 
 export const getCallbackHandler = async (
-  req: FastifyRequest<{ Params: GetCallbackParams; Querystring: GetCallbackQuerystring }>,
+  req: FastifyRequest<{ Querystring: GetCallbackQuerystring }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { state } = req.params;
-  const { response_code } = req.query;
+  const { response_code, state } = req.query;
   const requestObjectRepository = req.server.repository.requestObject;
 
   const requestObject = (() => {
@@ -68,7 +70,7 @@ export const getCallbackHandler = async (
       service: 'relying-party',
       requestId: req.id,
       diagnostic: {
-        endpoint: '/callback/:state',
+        endpoint: '/callback',
         method: req.method,
         redirectUri: requestObject?.redirectUri ?? null,
         responseCode: response_code

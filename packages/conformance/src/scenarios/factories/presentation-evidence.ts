@@ -91,7 +91,7 @@ export const attestedRedirectFollowed: RequiredEventEvidenceExpectation = {
   event: 'rp.redirect.followed',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
-  match: { endpoint: '/callback/:state', method: 'GET' }
+  match: { endpoint: '/callback', method: 'GET' }
 };
 
 /** WP_090: the wallet reported a rejected Request Object to the `response_uri`. */
@@ -155,7 +155,7 @@ export const unattestedRedirectFollowForbidden: ForbiddenEventExpectation = {
   event: 'rp.redirect.followed',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
-  match: { endpoint: '/callback/:state', method: 'GET' }
+  match: { endpoint: '/callback', method: 'GET' }
 };
 
 /**

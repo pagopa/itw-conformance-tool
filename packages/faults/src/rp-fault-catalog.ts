@@ -87,6 +87,15 @@ export const rpFaultCatalog: Readonly<Record<RpFaultProfileType, RpFaultCatalogE
     mutationTiming: 'pre-signature',
     implemented: true
   },
+  'request-object-federation-key': {
+    type: 'request-object-federation-key',
+    applicationPoint: 'rp-request-object',
+    supportedSpecVersions: RELYING_PARTY_TESTED_SPEC_VERSIONS,
+    // The header and the `client_id` claim are rewritten before signing; the
+    // signature itself stays valid and is produced with the nominal key.
+    mutationTiming: 'pre-signature',
+    implemented: true
+  },
   'request-object-missing-parameter': {
     type: 'request-object-missing-parameter',
     applicationPoint: 'rp-request-object',

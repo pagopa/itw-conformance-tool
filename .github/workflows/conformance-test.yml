@@ -193,7 +193,7 @@ jobs:
           # otherwise only burn its tester timeout here. Run the rest
           # interactively (`itwct test presentation` with no allow-list), or add
           # their IDs once the driver covers them.
-          ITWCT_PRESENTATION_SCENARIO_IDS: WP_RP_HAPPY
+          ITWCT_PRESENTATION_SCENARIO_IDS: WP_RP_HAPPY,WP_079,WP_085,WP_094a
         run: |
           set -euo pipefail
 

@@ -173,8 +173,14 @@ export const getAuthorizationResponseHandler = async (
   const vpToken = authorizationResponsePayload.vp_token;
   const { clientId } = extractClientIdPrefix(authorizationRequestPayload.client_id);
 
-  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback/${authorizationRequest.id}`);
+  // The path is exactly the attested `redirect_uris` entry; the session is
+  // identified by query parameters alone. OpenID4VP requires the returned
+  // `redirect_uri` to carry the `response_code`, so a wallet has to compare the
+  // base URI and ignore the query — putting the state in the path instead would
+  // make a nominal redirect fail that comparison (WP_094 / WP_094a).
+  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback`);
   const responseCode = randomBytes(32).toString('hex');
+  redirectUri.searchParams.set('state', authorizationRequest.id);
   redirectUri.searchParams.set('response_code', responseCode);
 
   await req.server.conformanceEventSink.emit(

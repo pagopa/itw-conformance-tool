@@ -2,7 +2,11 @@ import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
 import { emitRpFaultApplied } from '../faults/rp-fault-evidence.js';
-import { reissueRequestObjectJwt, type RequestObjectMutation } from '../utils/request-object.js';
+import {
+  describeFederationKeyRequestObject,
+  reissueRequestObjectJwt,
+  type RequestObjectMutation
+} from '../utils/request-object.js';
 
 import type { ActiveRpFault } from '../faults/rp-fault-store.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -43,6 +47,8 @@ function resolveRequestObjectMutation(
       return { fault, mutation: { type: 'invalid-signature' } };
     case 'request-object-invalid-client-id':
       return { fault, mutation: { type: 'mismatched-issuer' } };
+    case 'request-object-federation-key':
+      return { fault, mutation: { type: 'federation-key' } };
     case 'request-object-missing-parameter':
       return { fault, mutation: { type: 'omit-parameter', parameter: fault.profile.parameter } };
     default:
@@ -137,7 +143,12 @@ export const getAuthorizationRequestHandler = async (
           ? { omittedParameter: activeFault.mutation.parameter }
           : activeFault.mutation.type === 'mismatched-issuer'
             ? { mutatedClaim: 'iss' }
-            : { mutatedArtifactPart: 'signature' })
+            : activeFault.mutation.type === 'federation-key'
+              ? // WP_084: proves what the wallet was handed — no `x5c` to verify
+                // with, and the `kid` it must look up in
+                // `metadata.openid_credential_verifier.jwks`.
+                { keyResolution: 'federation', ...describeFederationKeyRequestObject(jwt) }
+              : { mutatedArtifactPart: 'signature' })
       }
     });
   }

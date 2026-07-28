@@ -86,6 +86,7 @@ export { wpRpHappyPostScenario } from './scenarios/factories/wp-rp-happy-post.js
 export { wp079Scenario } from './scenarios/factories/wp-079.js';
 export { wp080Scenario } from './scenarios/factories/wp-080.js';
 export { wp081Scenario } from './scenarios/factories/wp-081.js';
+export { wp084Scenario } from './scenarios/factories/wp-084.js';
 export { wp085Scenario } from './scenarios/factories/wp-085.js';
 export { wp086Scenario } from './scenarios/factories/wp-086.js';
 export { wp087Scenario } from './scenarios/factories/wp-087.js';
