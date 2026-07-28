@@ -8,19 +8,21 @@ import { createObservedEvent } from '../events/event-bus.js';
 import {
   EventStoreAbortedError,
   EventStoreTimeoutError,
+  ForbiddenObservedEventError,
   createInMemoryScenarioEventStore,
   type Disposable,
   type ScenarioEventStore
 } from '../events/event-store.js';
 import { NOMINAL_CREDENTIAL_CONFIGURATION_ID, createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
-import { getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
+import { getForbiddenEventNames, getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
 import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
+import { type RpFaultController } from '../services/rp-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
@@ -32,6 +34,13 @@ import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
 
 /** Default IT Wallet specification version reported at issuer fault activation when not overridden. */
 const DEFAULT_ISSUER_FAULT_SPEC_VERSION = '1.4';
+
+/**
+ * Default IT Wallet specification version reported at Relying Party fault
+ * activation when not overridden. The local Relying Party is pinned to `1.3`
+ * (see `apps/itw-relying-party/src/plugins/sdk.ts`).
+ */
+const DEFAULT_RP_FAULT_SPEC_VERSION = '1.3';
 
 export interface StartScenarioOptions {
   signal?: AbortSignal;
@@ -72,6 +81,10 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   issuerFaultController?: IssuerScenarioController;
   /** IT Wallet specification version reported when activating an issuer fault. Defaults to '1.4'. */
   issuerFaultSpecVersion?: string;
+  /** Required to run any scenario that declares `setup.rpFault`. */
+  rpFaultController?: RpFaultController;
+  /** IT Wallet specification version reported when activating a Relying Party fault. Defaults to '1.3'. */
+  rpFaultSpecVersion?: string;
   /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
   browserOpener?: BrowserOpener;
 }
@@ -152,7 +165,7 @@ async function createStimulus(
     // flow (the verifier polls status). This decides whether a redirect_uri
     // follow is expected.
     const flowType = definition.stimulus.delivery.includes('deep-link') ? 'same-device' : 'cross-device';
-    const uri = await createPresentationRequestUri(relyingParty, flowType);
+    const uri = await createPresentationRequestUri(relyingParty, flowType, definition.stimulus.requestUriMethod);
     return {
       correlationId: extractPresentationCorrelationId(uri),
       stimulus: { type: 'presentation-request', uri, qrCode: uri }
@@ -303,8 +316,10 @@ export function createProtocolObservedScenarioRunner(
 
       const issuerFaultProfile = definition.setup?.issuerFault;
       const issuerConfig = definition.setup?.issuerConfig;
+      const rpFaultProfile = definition.setup?.rpFault;
       let issuerConfigActive = false;
       let issuerFaultActive = false;
+      let rpFaultActive = false;
 
       const deactivateIssuerConfigIfActive = async (): Promise<void> => {
         if (!issuerConfigActive) return;
@@ -316,6 +331,12 @@ export function createProtocolObservedScenarioRunner(
         if (!issuerFaultActive) return;
         issuerFaultActive = false;
         await options.issuerFaultController?.deactivateIssuerFault({ scenarioId: initialCorrelationId });
+      };
+
+      const deactivateRpFaultIfActive = async (): Promise<void> => {
+        if (!rpFaultActive) return;
+        rpFaultActive = false;
+        await options.rpFaultController?.deactivateRpFault({ scenarioId: initialCorrelationId });
       };
 
       try {
@@ -334,6 +355,21 @@ export function createProtocolObservedScenarioRunner(
             profile: issuerFaultProfile
           });
           issuerFaultActive = true;
+        }
+
+        if (rpFaultProfile) {
+          if (!options.rpFaultController) {
+            throw new Error(`Scenario ${definition.id} declares setup.rpFault, but no rpFaultController is configured`);
+          }
+
+          // Await activation before creating the presentation request, so the
+          // Relying Party never serves a nominal artifact for this run.
+          await options.rpFaultController.activateRpFault({
+            scenarioId: initialCorrelationId,
+            specVersion: options.rpFaultSpecVersion ?? DEFAULT_RP_FAULT_SPEC_VERSION,
+            profile: rpFaultProfile
+          });
+          rpFaultActive = true;
         }
 
         if (issuerConfig) {
@@ -452,15 +488,20 @@ export function createProtocolObservedScenarioRunner(
                 }
               }
 
-              if (definition.forbiddenEvents && definition.forbiddenEvents.length > 0) {
+              const forbiddenEventNames = getForbiddenEventNames(definition.forbiddenEvents);
+              if (forbiddenEventNames.length > 0) {
                 try {
-                  await eventStore.expectNone(definition.forbiddenEvents, {
+                  await eventStore.expectNone(forbiddenEventNames, {
                     after: entryEvent,
                     timeoutMs: definition.timeouts.forbiddenObservationMs ?? definition.timeouts.protocolStepMs,
                     signal
                   });
                 } catch (error) {
-                  if (!isControlledWaitError(error)) throw error;
+                  // Observing a forbidden event is a scenario outcome, not a
+                  // runner failure: stop waiting and let the verdict engine
+                  // report it as a FAIL, with the event as evidence, from the
+                  // same event store.
+                  if (!isControlledWaitError(error) && !(error instanceof ForbiddenObservedEventError)) throw error;
                 }
               }
             }
@@ -486,6 +527,7 @@ export function createProtocolObservedScenarioRunner(
             // Deactivate last so any deactivation failure still surfaces to the caller.
             await deactivateIssuerConfigIfActive();
             await deactivateIssuerFaultIfActive();
+            await deactivateRpFaultIfActive();
           },
           async [Symbol.asyncDispose]() {
             await this.stop();
@@ -500,6 +542,7 @@ export function createProtocolObservedScenarioRunner(
         // session object exists) so a fault is never left dangling.
         await deactivateIssuerConfigIfActive().catch(() => undefined);
         await deactivateIssuerFaultIfActive().catch(() => undefined);
+        await deactivateRpFaultIfActive().catch(() => undefined);
         throw error;
       }
     },

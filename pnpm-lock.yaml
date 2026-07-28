@@ -365,6 +365,9 @@ importers:
       '@itw-conformance-tool/database':
         specifier: 'workspace:'
         version: link:../../packages/database
+      '@itw-conformance-tool/faults':
+        specifier: workspace:*
+        version: link:../../packages/faults
       '@itw-conformance-tool/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc

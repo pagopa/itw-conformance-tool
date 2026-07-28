@@ -23,3 +23,23 @@ export {
   type IssuerFaultValidationSuccess,
   type SupportedItWalletSpecVersion
 } from './issuer-fault-catalog.js';
+export {
+  parseRpFaultProfile,
+  requestObjectOmittedParameters,
+  rpFaultProfileSchema,
+  type RequestObjectOmittedParameter,
+  type RpFaultProfile,
+  type RpFaultProfileType
+} from './rp-fault-profile.js';
+export {
+  getRpFaultCatalogEntry,
+  rpFaultCatalog,
+  validateRpFaultActivation,
+  type RpFaultApplicationPoint,
+  type RpFaultCatalogEntry,
+  type RpFaultMutationTiming,
+  type RpFaultValidationFailure,
+  type RpFaultValidationFailureCode,
+  type RpFaultValidationResult,
+  type RpFaultValidationSuccess
+} from './rp-fault-catalog.js';

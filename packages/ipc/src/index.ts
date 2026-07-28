@@ -15,6 +15,10 @@ export type {
   IssuerFaultDeactivateMessage,
   IssuerFaultDeactivatedMessage,
   LocalServiceName,
+  RpFaultActivateMessage,
+  RpFaultActivatedMessage,
+  RpFaultDeactivateMessage,
+  RpFaultDeactivatedMessage,
   ServiceErrorMessage,
   ServiceHealthMessage,
   ServiceHealthResponse,
@@ -31,6 +35,10 @@ export type {
   IssuerFaultActivationResult,
   IssuerFaultDeactivationRequest,
   IssuerFaultHandlers,
+  RpFaultActivationRequest,
+  RpFaultActivationResult,
+  RpFaultDeactivationRequest,
+  RpFaultHandlers,
   ServiceIpcAdapterOptions
 } from './service-adapter.js';
 export type { ServiceControlClient, ServiceControlClientOptions } from './service-control-client.js';

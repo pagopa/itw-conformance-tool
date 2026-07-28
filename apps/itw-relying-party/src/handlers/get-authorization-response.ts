@@ -32,7 +32,7 @@ const responseBodySchema = z.object({
 const errorResponseBodySchema = z.object({
   error: errorSchema.describe('OpenID4VP authorization error code.'),
   error_description: z.string().optional().describe('Human-readable authorization error details.'),
-  state: z.uuid().optional().describe('Wallet session state identifier.')
+  state: z.string().optional().describe('Wallet session state identifier.')
 });
 
 export const authorizationResponsePayloadSchema = z.union([responseBodySchema, errorResponseBodySchema]);
@@ -88,6 +88,7 @@ export const getAuthorizationResponseHandler = async (
       diagnostic: {
         endpoint: '/auth/response',
         method: req.method,
+        outcome: 'error' in req.body ? 'error' : 'response',
         response: 'response' in req.body ? req.body.response : undefined,
         state: req.body.state ?? null
       }
@@ -95,6 +96,26 @@ export const getAuthorizationResponseHandler = async (
   );
 
   if ('error' in req.body) {
+    // WP_090: the wallet rejected the Request Object and reported the failure to
+    // the response_uri as an Authorization Error Response. Emitted as its own
+    // event so a negative scenario can require the error report without also
+    // accepting a completed presentation.
+    await req.server.conformanceEventSink.emit(
+      createObservedEvent({
+        name: 'rp.presentation_error.received',
+        correlationId: null,
+        service: 'relying-party',
+        requestId: req.id,
+        diagnostic: {
+          endpoint: '/auth/response',
+          method: req.method,
+          error: req.body.error,
+          errorDescription: req.body.error_description ?? null,
+          state: req.body.state ?? null
+        }
+      })
+    );
+
     requestObjectRepository.update(authorizationRequest.id, 'rejected');
     return reply.status(200).send();
   }
@@ -152,6 +173,10 @@ export const getAuthorizationResponseHandler = async (
   const vpToken = authorizationResponsePayload.vp_token;
   const { clientId } = extractClientIdPrefix(authorizationRequestPayload.client_id);
 
+  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback/${authorizationRequest.id}`);
+  const responseCode = randomBytes(32).toString('hex');
+  redirectUri.searchParams.set('response_code', responseCode);
+
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'vp_token.validation.succeeded',
@@ -166,14 +191,14 @@ export const getAuthorizationResponseHandler = async (
         vpTokenCredentialIds: Object.keys(vpToken as Record<string, unknown>),
         nonce: authorizationRequestPayload.nonce ?? null,
         clientId,
+        // WP_094 / WP_094a: the redirect_uri handed back to the wallet, so a test
+        // can check it against the redirect_uris the Relying Party attested.
+        redirectUri: redirectUri.toString(),
         vpToken
       }
     })
   );
 
-  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback/${authorizationRequest.id}`);
-  const responseCode = randomBytes(32).toString('hex');
-  redirectUri.searchParams.set('response_code', responseCode);
   requestObjectRepository.update(
     authorizationRequest.id,
     'verified',

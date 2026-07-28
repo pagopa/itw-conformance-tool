@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { parseIpcMessage, SERVICE_PROTOCOL_VERSION } from '@itw-conformance-tool/ipc';
 
-import type { ServiceSupervisor } from './supervisor.js';
+import type { ServiceSupervisor, SupervisedService } from './supervisor.js';
 import type { IpcMessage } from '@itw-conformance-tool/ipc';
 
 const FRAME_DELIMITER = '\n';
@@ -28,6 +28,37 @@ interface PendingChildResponse {
   timeout: NodeJS.Timeout;
 }
 
+/** Control requests the relay forwards, and the child that owns each of them. */
+const CONTROL_REQUEST_TARGETS = {
+  'issuer.config.activate': 'credential-issuer',
+  'issuer.config.deactivate': 'credential-issuer',
+  'issuer.fault.activate': 'credential-issuer',
+  'issuer.fault.deactivate': 'credential-issuer',
+  'rp.fault.activate': 'relying-party',
+  'rp.fault.deactivate': 'relying-party'
+} as const satisfies Partial<Record<IpcMessage['type'], SupervisedService>>;
+
+type ControlRequestType = keyof typeof CONTROL_REQUEST_TARGETS;
+
+/** Acknowledgements (plus errors) the relay correlates back to the caller. */
+const CONTROL_RESPONSE_TYPES = [
+  'issuer.config.activated',
+  'issuer.config.deactivated',
+  'issuer.fault.activated',
+  'issuer.fault.deactivated',
+  'rp.fault.activated',
+  'rp.fault.deactivated',
+  'service.error'
+] as const satisfies readonly IpcMessage['type'][];
+
+function isControlRequest(message: IpcMessage): message is IpcMessage & { type: ControlRequestType } {
+  return message.type in CONTROL_REQUEST_TARGETS;
+}
+
+function isControlResponse(message: IpcMessage): boolean {
+  return (CONTROL_RESPONSE_TYPES as readonly string[]).includes(message.type);
+}
+
 function writeFrame(socket: net.Socket, message: IpcMessage): void {
   if (socket.writable) socket.write(`${JSON.stringify(message)}${FRAME_DELIMITER}`);
 }
@@ -44,9 +75,9 @@ async function allocateEndpoint(): Promise<string> {
 
 /**
  * Local-only control relay between the Vitest conformance runner process and
- * the CLI-owned service children. Only issuer fault/config control messages
- * are relayed, and only to the managed `credential-issuer` child. This is
- * never exposed as an HTTP route, uses a
+ * the CLI-owned service children. Only fault/config control messages are
+ * relayed, and only to the managed child that owns each message type (see
+ * `CONTROL_REQUEST_TARGETS`). This is never exposed as an HTTP route, uses a
  * random endpoint in a private temporary directory, owner-only permissions
  * where supported, newline-delimited framing, bounded frame sizes, and
  * request-ID correlation.
@@ -55,24 +86,19 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
   const endpoint = await allocateEndpoint();
   const pendingByRequestId = new Map<string, PendingChildResponse>();
 
-  const unsubscribe = options.supervisor.onChildMessage('credential-issuer', (message) => {
-    if (!('requestId' in message) || !message.requestId) return;
-    if (
-      message.type !== 'issuer.fault.activated' &&
-      message.type !== 'issuer.fault.deactivated' &&
-      message.type !== 'issuer.config.activated' &&
-      message.type !== 'issuer.config.deactivated' &&
-      message.type !== 'service.error'
-    ) {
-      return;
-    }
+  const relayedServices = [...new Set(Object.values(CONTROL_REQUEST_TARGETS))];
+  const unsubscribers = relayedServices.map((service) =>
+    options.supervisor.onChildMessage(service, (message) => {
+      if (!('requestId' in message) || !message.requestId) return;
+      if (!isControlResponse(message)) return;
 
-    const pending = pendingByRequestId.get(message.requestId);
-    if (!pending) return;
-    clearTimeout(pending.timeout);
-    pendingByRequestId.delete(message.requestId);
-    writeFrame(pending.socket, message);
-  });
+      const pending = pendingByRequestId.get(message.requestId);
+      if (!pending) return;
+      clearTimeout(pending.timeout);
+      pendingByRequestId.delete(message.requestId);
+      writeFrame(pending.socket, message);
+    })
+  );
 
   function handleFrame(socket: net.Socket, frame: string): void {
     if (!frame) return;
@@ -101,32 +127,29 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       return;
     }
 
-    if (
-      message.type !== 'issuer.fault.activate' &&
-      message.type !== 'issuer.fault.deactivate' &&
-      message.type !== 'issuer.config.activate' &&
-      message.type !== 'issuer.config.deactivate'
-    ) {
+    if (!isControlRequest(message)) {
       if ('requestId' in message) {
         writeFrame(socket, {
           version: SERVICE_PROTOCOL_VERSION,
           type: 'service.error',
           requestId: message.requestId,
           code: 'UNSUPPORTED_MESSAGE',
-          message: 'Only issuer fault/config controls are relayed'
+          message: 'Only issuer fault/config and relying party fault controls are relayed'
         });
       }
       return;
     }
 
-    const forwarded = options.supervisor.sendToChild('credential-issuer', message);
+    const target = CONTROL_REQUEST_TARGETS[message.type];
+    const forwarded = options.supervisor.sendToChild(target, message);
     if (!forwarded) {
       writeFrame(socket, {
         version: SERVICE_PROTOCOL_VERSION,
         type: 'service.error',
         requestId: message.requestId,
+        service: target,
         code: 'SERVICE_UNAVAILABLE',
-        message: 'credential-issuer is not managed by this supervisor'
+        message: `${target} is not managed by this supervisor`
       });
       return;
     }
@@ -138,8 +161,9 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
         version: SERVICE_PROTOCOL_VERSION,
         type: 'service.error',
         requestId,
+        service: target,
         code: 'FAULT_CONTROL_TIMEOUT',
-        message: 'Timed out waiting for credential-issuer response'
+        message: `Timed out waiting for ${target} response`
       });
     }, CHILD_RESPONSE_TIMEOUT_MS);
 
@@ -192,7 +216,7 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
   return {
     endpoint,
     close: async () => {
-      unsubscribe();
+      for (const unsubscribe of unsubscribers) unsubscribe();
       for (const pending of pendingByRequestId.values()) clearTimeout(pending.timeout);
       pendingByRequestId.clear();
       await new Promise<void>((resolve) => server.close(() => resolve()));

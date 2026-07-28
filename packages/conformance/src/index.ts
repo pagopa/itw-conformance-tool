@@ -16,7 +16,9 @@ export {
   EventStoreAbortedError,
   EventStoreTimeoutError,
   ForbiddenObservedEventError,
+  compareEventOrder,
   createInMemoryScenarioEventStore,
+  isEventAfter,
   type Disposable,
   type EventPredicate,
   type NoEventOptions,
@@ -79,9 +81,21 @@ export { wp062aScenario } from './scenarios/factories/wp-062a.js';
 export { wp062bScenario } from './scenarios/factories/wp-062b.js';
 export { wpNotificationScenario } from './scenarios/factories/wp-notification.js';
 export { wpDeferredScenario } from './scenarios/factories/wp-deferred.js';
+export { wpRpHappyScenario } from './scenarios/factories/wp-rp-happy.js';
+export { wpRpHappyPostScenario } from './scenarios/factories/wp-rp-happy-post.js';
+export { wp079Scenario } from './scenarios/factories/wp-079.js';
+export { wp080Scenario } from './scenarios/factories/wp-080.js';
+export { wp081Scenario } from './scenarios/factories/wp-081.js';
+export { wp085Scenario } from './scenarios/factories/wp-085.js';
+export { wp086Scenario } from './scenarios/factories/wp-086.js';
+export { wp087Scenario } from './scenarios/factories/wp-087.js';
+export { wp090Scenario } from './scenarios/factories/wp-090.js';
+export { wp091aScenario } from './scenarios/factories/wp-091a.js';
+export { wp094aScenario } from './scenarios/factories/wp-094a.js';
 export type {
   ArtifactExpectation,
   AutomationMode,
+  ForbiddenEventExpectation,
   IssuerRuntimeConfigSetup,
   LocalServiceName,
   LocalServiceEndpoints,
@@ -97,7 +111,7 @@ export type {
   TimeoutProfile,
   VerdictRule
 } from './scenarios/definitions.js';
-export { getRequiredEventName, getRequiredEventNames } from './scenarios/definitions.js';
+export { getForbiddenEventNames, getRequiredEventName, getRequiredEventNames } from './scenarios/definitions.js';
 export {
   evaluateUserNeutralEventDescription,
   type UserNeutralEventDescriptionReasonCode,
@@ -113,6 +127,11 @@ export type {
   IssuerRuntimeConfig,
   IssuerScenarioController
 } from './services/issuer-fault-controller.js';
+export type {
+  ActivateRpFaultRequest,
+  DeactivateRpFaultRequest,
+  RpFaultController
+} from './services/rp-fault-controller.js';
 export {
   createConformanceInstrumentationPlugin,
   type InstrumentationOptions

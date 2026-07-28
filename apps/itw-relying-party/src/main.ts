@@ -54,7 +54,11 @@ async function startServer() {
   attachServiceIpcAdapter({
     endpoint: app.config.BASE_URL,
     service: 'relying-party',
-    stop: () => app.close()
+    stop: () => app.close(),
+    rpFaults: {
+      activate: async (request) => app.rpFaultStore.activate(request),
+      deactivate: async (request) => app.rpFaultStore.deactivate(request)
+    }
   });
 }
 

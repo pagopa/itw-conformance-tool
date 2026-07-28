@@ -1,5 +1,5 @@
 import type { ObservedEventName, ObservedServiceName } from '../events/event-types.js';
-import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
+import type { IssuerFaultProfile, RpFaultProfile } from '@itw-conformance-tool/faults';
 
 export type ProtocolObservedPhase = 'ISSUANCE' | 'PRESENTATION' | 'WALLET_INSTANCE';
 
@@ -16,7 +16,16 @@ export type StimulusDefinition =
       delivery: ('deep-link' | 'qr')[];
     }
   | { type: 'manual-instruction'; text: string }
-  | { type: 'presentation-request'; delivery: ('deep-link' | 'qr')[] }
+  | {
+      type: 'presentation-request';
+      delivery: ('deep-link' | 'qr')[];
+      /**
+       * Retrieval method advertised for the `request_uri` in the engagement.
+       * Omitted leaves it unset, so a wallet defaults to `get` (WP_082);
+       * `'post'` exercises the POST retrieval (WP_083).
+       */
+      requestUriMethod?: 'get' | 'post';
+    }
   | { type: 'web-url'; delivery: ('deep-link' | 'qr')[] };
 
 export type ScenarioStimulus =
@@ -85,6 +94,14 @@ export interface RequiredEventEvidenceExpectation {
 
 export type RequiredEventExpectation = ObservedEventName | RequiredEventEvidenceExpectation;
 
+/**
+ * An event whose observation after the entry event fails the scenario. It takes
+ * the same shape as a required-event expectation so a negative scenario can
+ * forbid one narrowly matched continuation (e.g. a request on a specific
+ * endpoint) instead of every occurrence of an event name.
+ */
+export type ForbiddenEventExpectation = RequiredEventExpectation;
+
 export interface IssuerRuntimeConfigSetup {
   batchIssuanceByDeferred: boolean;
 }
@@ -95,6 +112,10 @@ export function getRequiredEventName(expectation: RequiredEventExpectation): Obs
 
 export function getRequiredEventNames(requiredEvents: RequiredEventExpectation[] | undefined): ObservedEventName[] {
   return (requiredEvents ?? []).map(getRequiredEventName);
+}
+
+export function getForbiddenEventNames(forbiddenEvents: ForbiddenEventExpectation[] | undefined): ObservedEventName[] {
+  return (forbiddenEvents ?? []).map(getRequiredEventName);
 }
 
 /**
@@ -111,13 +132,15 @@ export function hasVerdictRule(
 
 /**
  * Typed scenario setup. `issuerFault` declares a Credential Issuer fault
- * profile and `issuerConfig` declares an owned runtime configuration override
- * that the runner must activate before showing the stimulus and deactivate on
- * cleanup; see `IssuerFaultController`.
+ * profile, `rpFault` declares a Relying Party fault profile, and
+ * `issuerConfig` declares an owned runtime configuration override; the runner
+ * must activate each of them before showing the stimulus and deactivate them on
+ * cleanup (see `IssuerFaultController` and `RpFaultController`).
  */
 export interface ScenarioSetup {
   issuerConfig?: IssuerRuntimeConfigSetup;
   issuerFault?: IssuerFaultProfile;
+  rpFault?: RpFaultProfile;
 }
 
 export interface ProtocolObservedScenarioDefinition {
@@ -129,7 +152,7 @@ export interface ProtocolObservedScenarioDefinition {
   stimulus: StimulusDefinition;
   entryEvent: ObservedEventName;
   requiredEvents?: RequiredEventExpectation[];
-  forbiddenEvents?: ObservedEventName[];
+  forbiddenEvents?: ForbiddenEventExpectation[];
   artifactExpectations?: ArtifactExpectation[];
   timeouts: TimeoutProfile;
   verdictRules: VerdictRule[];

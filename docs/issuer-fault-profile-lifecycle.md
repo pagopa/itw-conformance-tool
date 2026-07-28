@@ -21,7 +21,7 @@ dal runner prima dello stimolo e applicati dalla route `/code/jwt` prima della f
 - `packages/ipc`: definisce i messaggi `issuer.fault.activate`, `issuer.fault.activated`,
   `issuer.fault.deactivate` e `issuer.fault.deactivated`, piu il client usato dal runner.
 - `apps/cli`: avvia i servizi locali, apre un canale di controllo locale e inoltra i comandi dal runner
-  al processo figlio `credential-issuer`.
+  al processo figlio che li possiede, in questo caso `credential-issuer`.
 - `apps/itw-credential-issuer`: mantiene lo stato del profilo attivo in memoria e applica la mutazione
   al punto giusto della risposta.
 
@@ -84,8 +84,10 @@ Quando viene eseguito `itwct test issuance` oppure la matrice completa:
    - named pipe su Windows.
 4. L'endpoint viene passato al processo Vitest tramite `ITWCT_SERVICE_CONTROL_ENDPOINT`.
 
-Il canale non e una route HTTP pubblica. Il relay accetta solo messaggi di fault dell'issuer e li
-inoltra solo al processo gestito `credential-issuer`.
+Il canale non e una route HTTP pubblica. Il relay accetta solo messaggi di controllo dei fault e della
+configurazione e li inoltra al solo processo gestito che li possiede: i messaggi `issuer.*` al
+`credential-issuer`, i messaggi `rp.fault.*` al `relying-party` (vedi
+[`rp-fault-profile-lifecycle.md`](./rp-fault-profile-lifecycle.md)).
 
 ## 3. Il test crea il controller del runner
 
@@ -124,14 +126,16 @@ runner, viene richiesta una disattivazione best-effort prima di propagare l'erro
 
 ## 5. Il relay inoltra solo comandi ammessi
 
-Il `ServiceControlServer` riceve il frame dal runner, lo valida con `parseIpcMessage` e accetta solo:
+Il `ServiceControlServer` riceve il frame dal runner, lo valida con `parseIpcMessage` e accetta solo i
+tipi elencati in `CONTROL_REQUEST_TARGETS`, fra cui:
 
 - `issuer.fault.activate`;
 - `issuer.fault.deactivate`.
 
 Qualsiasi altro messaggio riceve `service.error` con `UNSUPPORTED_MESSAGE`.
 
-Per i comandi ammessi, il relay usa `ServiceSupervisor.sendToChild('credential-issuer', message)`.
+Per i comandi ammessi, il relay usa `ServiceSupervisor.sendToChild(<servizio proprietario>, message)`,
+che per i fault dell'issuer e `credential-issuer`.
 Se il processo `credential-issuer` non e gestito o non e piu disponibile, il relay risponde con
 `SERVICE_UNAVAILABLE`.
 

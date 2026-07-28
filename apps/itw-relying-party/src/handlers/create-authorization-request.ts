@@ -64,6 +64,10 @@ export const createAuthorizationRequestPayloadSchema = z.object({
     })
     .describe('DCQL query describing the verifiable presentations required by the relying party.'),
   flow_type: z.enum(['same-device', 'cross-device']).describe('Presentation flow type expected by the relying party.'),
+  request_uri_method: z
+    .enum(['get', 'post'])
+    .optional()
+    .describe('Retrieval method advertised for the request_uri; omitted from the engagement URL when not set.'),
   wallet_auth_base_uri: z
     .url()
     .trim()
@@ -88,7 +92,8 @@ export const createAuthorizationRequestHandler = async (
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
-  const { dcqlQuery, flow_type, wallet_auth_base_uri } = createAuthorizationRequestPayloadSchema.parse(req.body);
+  const { dcqlQuery, flow_type, request_uri_method, wallet_auth_base_uri } =
+    createAuthorizationRequestPayloadSchema.parse(req.body);
 
   let parsedQuery: DcqlQuery.Output;
 
@@ -171,9 +176,13 @@ export const createAuthorizationRequestHandler = async (
   });
 
   const requestUri = `${BASE_URL}/auth/request/${state}`;
+  // `request_uri_method` is only advertised when the
+  // caller asked for a specific retrieval method, leaving the default (`get`,
+  // WP_082) implicit as before.
   const presentationParams = new URLSearchParams({
     client_id: BASE_URL,
-    request_uri: requestUri
+    request_uri: requestUri,
+    ...(request_uri_method ? { request_uri_method } : {})
   });
 
   const baseUrl = new URL(wallet_auth_base_uri);

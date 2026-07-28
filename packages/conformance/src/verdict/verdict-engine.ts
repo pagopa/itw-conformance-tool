@@ -1,4 +1,5 @@
-import { getRequiredEventNames, hasVerdictRule } from '../scenarios/definitions.js';
+import { compareEventOrder, isEventAfter } from '../events/event-store.js';
+import { getForbiddenEventNames, getRequiredEventNames, hasVerdictRule } from '../scenarios/definitions.js';
 
 import type { ObservedEvent, ObservedEventName } from '../events/event-types.js';
 import type { ProtocolObservedScenarioDefinition } from '../scenarios/definitions.js';
@@ -40,11 +41,11 @@ function findRequiredEventOrderViolation(
     if (name === entry.name) continue;
 
     const firstOccurrence = events
-      .filter((event) => event.name === name && event.monotonicMs > entry.monotonicMs)
-      .sort((a, b) => a.monotonicMs - b.monotonicMs)[0];
+      .filter((event) => event.name === name && isEventAfter(event, entry))
+      .sort(compareEventOrder)[0];
     if (!firstOccurrence) continue;
 
-    if (previous && firstOccurrence.monotonicMs < previous.event.monotonicMs) {
+    if (previous && isEventAfter(previous.event, firstOccurrence)) {
       return { expectedName: previous.name, observedEvent: firstOccurrence, observedName: name };
     }
 
@@ -76,9 +77,12 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         };
       }
 
+      // Only events the scenario's own event bridge adopted reach this point, so
+      // a forbidden expectation's `match` narrowing has already been applied
+      // (see `matchesScenarioEventEvidence`); matching by name is enough here.
+      const forbiddenEventNames = getForbiddenEventNames(input.definition.forbiddenEvents);
       const forbiddenEvents = input.events.filter(
-        (event) =>
-          (input.definition.forbiddenEvents ?? []).includes(event.name) && event.monotonicMs > entry.monotonicMs
+        (event) => forbiddenEventNames.includes(event.name) && isEventAfter(event, entry)
       );
       if (forbiddenEvents.length > 0) {
         return {
@@ -115,7 +119,7 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
 
       const missingRequiredEvents = requiredEventNames.filter((name) => {
         if (name === entry.name) return false;
-        return !input.events.some((event) => event.name === name && event.monotonicMs > entry.monotonicMs);
+        return !input.events.some((event) => event.name === name && isEventAfter(event, entry));
       });
       if (missingRequiredEvents.length > 0) {
         const verdict = input.definition.missingRequiredEventPolicy === 'fail' ? 'FAIL' : 'INCONCLUSIVE';
@@ -166,7 +170,7 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         entry,
         ...requiredEventNames
           .filter((name) => name !== entry.name)
-          .map((name) => input.events.find((event) => event.name === name && event.monotonicMs > entry.monotonicMs))
+          .map((name) => input.events.find((event) => event.name === name && isEventAfter(event, entry)))
           .filter((event): event is ObservedEvent => event !== undefined)
       ];
 

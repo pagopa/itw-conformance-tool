@@ -55,6 +55,12 @@ export const getCallbackHandler = async (
   // user-agent back on the Relying Party. Correlation is disabled, so the event
   // is emitted uncorrelated and adopted as post-start evidence narrowed by the
   // endpoint/method diagnostics.
+  //
+  // WP_094a reuses this very evidence with the opposite meaning: when the
+  // `unattested-redirect-uri` fault publishes a `redirect_uris` list that does
+  // not contain this endpoint, a request here means the wallet followed a
+  // redirect_uri the federation never attested (see the WP_094a scenario, which
+  // declares it as a forbidden continuation).
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.redirect.followed',
