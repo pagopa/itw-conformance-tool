@@ -16,6 +16,11 @@ export interface VerdictEngine {
   evaluate(input: VerdictInput): ScenarioOutcome;
 }
 
+interface RequiredEventOccurrenceMatch {
+  name: ObservedEventName;
+  event: ObservedEvent | undefined;
+}
+
 interface RequiredEventOrderViolation {
   expectedName: ObservedEventName;
   observedEvent: ObservedEvent;
@@ -23,32 +28,70 @@ interface RequiredEventOrderViolation {
 }
 
 /**
- * Finds the first required event that was observed before an earlier-declared
- * required event, when the scenario opts in to the 'required-events-in-order'
- * verdict rule. Only called once every required event's presence has already
- * been confirmed, so each name is guaranteed to have at least one occurrence
- * after the entry event.
+ * Assigns each declared required-event occurrence (in declaration order,
+ * skipping the entry event's own name) to a distinct observed event of the
+ * same name, so that repeated required-event declarations - e.g. two
+ * `issuer.credential.requested` entries for a scenario that must observe two
+ * separate Credential Requests - are each matched to a distinct occurrence
+ * instead of both resolving to the same first-seen event.
+ *
+ * The i-th declared occurrence of a given name is assigned the i-th
+ * chronological (`monotonicMs`) observed occurrence of that name after the
+ * entry event. A declared occurrence with no corresponding observed event
+ * yields `event: undefined`, signalling a missing occurrence. Scenarios whose
+ * required event names are all unique are unaffected: each name simply
+ * resolves to its (only) first occurrence, matching prior behavior.
  */
-function findRequiredEventOrderViolation(
+function matchRequiredEventOccurrences(
   requiredEventNames: ObservedEventName[],
   events: ObservedEvent[],
   entry: ObservedEvent
-): RequiredEventOrderViolation | undefined {
-  let previous: { event: ObservedEvent; name: ObservedEventName } | undefined;
+): RequiredEventOccurrenceMatch[] {
+  const occurrencesByName = new Map<ObservedEventName, ObservedEvent[]>();
+  const consumedByName = new Map<ObservedEventName, number>();
 
+  const matches: RequiredEventOccurrenceMatch[] = [];
   for (const name of requiredEventNames) {
     if (name === entry.name) continue;
 
-    const firstOccurrence = events
-      .filter((event) => event.name === name && event.monotonicMs > entry.monotonicMs)
-      .sort((a, b) => a.monotonicMs - b.monotonicMs)[0];
-    if (!firstOccurrence) continue;
-
-    if (previous && firstOccurrence.monotonicMs < previous.event.monotonicMs) {
-      return { expectedName: previous.name, observedEvent: firstOccurrence, observedName: name };
+    let occurrences = occurrencesByName.get(name);
+    if (!occurrences) {
+      occurrences = events
+        .filter((event) => event.name === name && event.monotonicMs > entry.monotonicMs)
+        .sort((a, b) => a.monotonicMs - b.monotonicMs);
+      occurrencesByName.set(name, occurrences);
     }
 
-    previous = { event: firstOccurrence, name };
+    const consumed = consumedByName.get(name) ?? 0;
+    matches.push({ name, event: occurrences[consumed] });
+    consumedByName.set(name, consumed + 1);
+  }
+
+  return matches;
+}
+
+/**
+ * Finds the first required-event occurrence that was observed before an
+ * earlier-declared occurrence, when the scenario opts in to the
+ * 'required-events-in-order' verdict rule. Only called once every declared
+ * occurrence has already been matched to a distinct observed event (see
+ * `matchRequiredEventOccurrences`), so unmatched (missing) occurrences are
+ * simply skipped here - they are already reported as missing evidence.
+ */
+function findRequiredEventOrderViolation(
+  requiredEventMatches: RequiredEventOccurrenceMatch[]
+): RequiredEventOrderViolation | undefined {
+  let previous: { event: ObservedEvent; name: ObservedEventName } | undefined;
+
+  for (const match of requiredEventMatches) {
+    const observedEvent = match.event;
+    if (!observedEvent) continue;
+
+    if (previous && observedEvent.monotonicMs < previous.event.monotonicMs) {
+      return { expectedName: previous.name, observedEvent, observedName: match.name };
+    }
+
+    previous = { event: observedEvent, name: match.name };
   }
 
   return undefined;
@@ -113,10 +156,8 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
         };
       }
 
-      const missingRequiredEvents = requiredEventNames.filter((name) => {
-        if (name === entry.name) return false;
-        return !input.events.some((event) => event.name === name && event.monotonicMs > entry.monotonicMs);
-      });
+      const requiredEventMatches = matchRequiredEventOccurrences(requiredEventNames, input.events, entry);
+      const missingRequiredEvents = requiredEventMatches.filter((match) => !match.event).map((match) => match.name);
       if (missingRequiredEvents.length > 0) {
         const verdict = input.definition.missingRequiredEventPolicy === 'fail' ? 'FAIL' : 'INCONCLUSIVE';
         return {
@@ -136,7 +177,7 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
       }
 
       if (hasVerdictRule(input.definition, 'required-events-in-order')) {
-        const violation = findRequiredEventOrderViolation(requiredEventNames, input.events, entry);
+        const violation = findRequiredEventOrderViolation(requiredEventMatches);
         if (violation) {
           return {
             testCaseId: input.definition.id,
@@ -164,9 +205,8 @@ export function createProtocolObservedVerdictEngine(): VerdictEngine {
 
       const evidenceEvents = [
         entry,
-        ...requiredEventNames
-          .filter((name) => name !== entry.name)
-          .map((name) => input.events.find((event) => event.name === name && event.monotonicMs > entry.monotonicMs))
+        ...requiredEventMatches
+          .map((match) => match.event)
           .filter((event): event is ObservedEvent => event !== undefined)
       ];
 
