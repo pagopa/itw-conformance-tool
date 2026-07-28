@@ -198,7 +198,7 @@ async function issueWalletInstanceAttestation(
       alg: 'ES256',
       kid: signingPublicJwk.kid,
       method: 'x5c',
-      x5c: [options.config.WALLET_PROVIDER_X509]
+      x5c: options.config.WALLET_PROVIDER_X509_CHAIN
     },
     status: {
       status_list: {

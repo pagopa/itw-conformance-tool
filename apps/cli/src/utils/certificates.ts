@@ -32,6 +32,7 @@ type IssuerChainCertificateOptions = {
 
 type IssuerCertificateOptions = {
   altNames?: string[];
+  commonName?: string;
   organizationName?: string;
 };
 
@@ -203,6 +204,59 @@ export async function createIntermediateCertificateFromJwk(
   return certificate.toString();
 }
 
+/** Creates a leaf certificate signed by an intermediate CA.
+ *
+ * Its subject public key comes from the runtime ES256 signing key, while its
+ * issuer DN and signature come from the intermediate CA key/certificate.
+ *
+ * @param signingJwk - The entity's private ES256 signing JWK; its public key becomes the certificate's subject key.
+ * @param intermediateJwk - The intermediate CA's private ES256 JWK, used to sign the certificate.
+ * @param intermediateCertificatePem - The intermediate CA certificate, used for the issuer DN.
+ * @param entityUrl - The configured entity URL, used to derive the subject CN and SAN.
+ * @param options - Optional subject overrides.
+ * @returns A PEM-encoded leaf certificate.
+ */
+export async function createLeafCertificateFromJwk(
+  signingJwk: Jwk,
+  intermediateJwk: Jwk,
+  intermediateCertificatePem: string,
+  entityUrl: string,
+  { altNames = [], commonName, organizationName = 'ITW Conformance Tool' }: IssuerCertificateOptions = {}
+): Promise<string> {
+  const { publicKey: entityPublicKey } = await importEcKeyPairFromJwk(signingJwk);
+  const { privateKey: intermediatePrivateKey, publicKey: intermediatePublicKey } =
+    await importEcKeyPairFromJwk(intermediateJwk);
+
+  const intermediateCertificate = new X509Certificate(intermediateCertificatePem);
+  const subjectCommonName = commonName ?? new URL(entityUrl).hostname;
+  const uniqueAltNames = [...new Set([new URL(entityUrl).hostname, ...altNames])];
+
+  const now = new Date();
+  const notAfter = new Date(now);
+  notAfter.setFullYear(notAfter.getFullYear() + 1);
+
+  const certificate = await X509CertificateGenerator.create({
+    issuer: intermediateCertificate.subject,
+    subject: `C=IT, O=${organizationName}, CN=${subjectCommonName}`,
+    notBefore: now,
+    notAfter,
+    publicKey: entityPublicKey,
+    signingKey: intermediatePrivateKey,
+    signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
+    extensions: [
+      new BasicConstraintsExtension(false, undefined, true),
+      new KeyUsagesExtension(KeyUsageFlags.digitalSignature, true),
+      new SubjectAlternativeNameExtension(
+        uniqueAltNames.map((name) => ({ type: isIP(name) ? 'ip' : 'dns', value: name }))
+      ),
+      await SubjectKeyIdentifierExtension.create(entityPublicKey),
+      await AuthorityKeyIdentifierExtension.create(intermediatePublicKey)
+    ]
+  });
+
+  return certificate.toString();
+}
+
 /** Creates the issuer leaf certificate (`issuer/cert.pem`).
  *
  * Its subject public key comes from the ES256 signing key in
@@ -222,38 +276,13 @@ export async function createIssuerCertificateFromJwk(
   intermediateJwk: Jwk,
   intermediateCertificatePem: string,
   credentialIssuerUrl: string,
-  { altNames = [], organizationName = 'ITW Conformance Tool' }: IssuerCertificateOptions = {}
+  options: IssuerCertificateOptions = {}
 ): Promise<string> {
-  const { publicKey: issuerPublicKey } = await importEcKeyPairFromJwk(issuerSigningJwk);
-  const { privateKey: intermediatePrivateKey, publicKey: intermediatePublicKey } =
-    await importEcKeyPairFromJwk(intermediateJwk);
-
-  const intermediateCertificate = new X509Certificate(intermediateCertificatePem);
-  const commonName = new URL(credentialIssuerUrl).hostname;
-  const uniqueAltNames = [...new Set([commonName, ...altNames])];
-
-  const now = new Date();
-  const notAfter = new Date(now);
-  notAfter.setFullYear(notAfter.getFullYear() + 1);
-
-  const certificate = await X509CertificateGenerator.create({
-    issuer: intermediateCertificate.subject,
-    subject: `C=IT, O=${organizationName}, CN=${commonName}`,
-    notBefore: now,
-    notAfter,
-    publicKey: issuerPublicKey,
-    signingKey: intermediatePrivateKey,
-    signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
-    extensions: [
-      new BasicConstraintsExtension(false, undefined, true),
-      new KeyUsagesExtension(KeyUsageFlags.digitalSignature, true),
-      new SubjectAlternativeNameExtension(
-        uniqueAltNames.map((name) => ({ type: isIP(name) ? 'ip' : 'dns', value: name }))
-      ),
-      await SubjectKeyIdentifierExtension.create(issuerPublicKey),
-      await AuthorityKeyIdentifierExtension.create(intermediatePublicKey)
-    ]
-  });
-
-  return certificate.toString();
+  return createLeafCertificateFromJwk(
+    issuerSigningJwk,
+    intermediateJwk,
+    intermediateCertificatePem,
+    credentialIssuerUrl,
+    options
+  );
 }

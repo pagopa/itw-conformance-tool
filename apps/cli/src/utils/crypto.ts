@@ -69,7 +69,7 @@ export function createRelyingPartyPrivateKeys() {
   return { keys: [signing, encryption, federation] };
 }
 
-/** Generates a JWKS containing the Wallet Provider federation signing key. */
+/** Generates a JWKS containing the Wallet Provider attestation signing key. */
 export function createWalletProviderPrivateKeys() {
   return {
     keys: [
@@ -94,6 +94,23 @@ export function createWalletProviderPrivateKeys() {
 export function createIssuerIntermediateKey() {
   return createEcPrivateJwk({
     kid: 'issuer-intermediate-key',
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
+}
+
+/** Generates and returns an EC P-256 private ES256 signing key for the
+ * Wallet Provider intermediate CA.
+ *
+ * The intermediate CA's private key signs `wallet-provider/cert.pem` and its
+ * public key is embedded in `wallet-provider/intermediate-cert.pem`.
+ *
+ * @returns A JSON string representing the Wallet Provider intermediate CA JWK.
+ */
+export function createWalletProviderIntermediateKey() {
+  return createEcPrivateJwk({
+    kid: 'wallet-provider-intermediate-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']

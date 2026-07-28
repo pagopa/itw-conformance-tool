@@ -6,6 +6,7 @@ import { ConfigIniTemplate, loadConfig, type ConfigSchemaType } from '@itw-confo
 import {
   createIntermediateCertificateFromJwk,
   createIssuerCertificateFromJwk,
+  createLeafCertificateFromJwk,
   createSelfSignedCertificateFromJwk,
   createTrustAnchorCertificateFromJwk,
   selectEs256SigningJwk
@@ -15,6 +16,7 @@ import {
   createIssuerPrivateKeys,
   createRelyingPartyPrivateKeys,
   createTrustAnchorFederationKey,
+  createWalletProviderIntermediateKey,
   createWalletProviderPrivateKeys
 } from '../utils/crypto.js';
 import { existsFileSync } from '../utils/search.js';
@@ -98,7 +100,9 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
   }
 
   const trustAnchorFederationCertPath = join(trustAnchorDirPath, 'federation-cert.pem');
-  if (!existsFileSync(trustAnchorFederationCertPath) || flags.force || trustAnchorFederationKeyGenerated) {
+  const trustAnchorFederationCertGenerated =
+    !existsFileSync(trustAnchorFederationCertPath) || flags.force || trustAnchorFederationKeyGenerated;
+  if (trustAnchorFederationCertGenerated) {
     const trustAnchorFederationKeyContent = readFileSync(trustAnchorFederationKeyPath, 'utf8');
     const trustAnchorFederationKey = JSON.parse(trustAnchorFederationKeyContent) as Parameters<
       typeof createTrustAnchorCertificateFromJwk
@@ -145,7 +149,8 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     !existsFileSync(intermediateCertPath) ||
     flags.force ||
     issuerIntermediateKeysGenerated ||
-    trustAnchorFederationKeyGenerated;
+    trustAnchorFederationKeyGenerated ||
+    trustAnchorFederationCertGenerated;
   if (issuerIntermediateCertGenerated) {
     const intermediateJwk = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Record<string, unknown>;
 
@@ -218,22 +223,86 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     process.stdout.write(`⚠ Wallet-provider keys already exist → skipped (use --force to regenerate)\n`);
   }
 
+  const walletProviderIntermediateKeysPath = join(walletProviderDirPath, 'jwks-intermediate.json');
+  const walletProviderIntermediateKeysGenerated = !existsFileSync(walletProviderIntermediateKeysPath) || flags.force;
+  if (walletProviderIntermediateKeysGenerated) {
+    const walletProviderIntermediateKey = createWalletProviderIntermediateKey();
+    writeFileSync(walletProviderIntermediateKeysPath, JSON.stringify(walletProviderIntermediateKey, null, 2), {
+      encoding: 'utf8',
+      flag: 'w'
+    });
+    process.stdout.write(
+      `✓ Generated wallet-provider intermediate signing key → ${walletProviderIntermediateKeysPath}\n`
+    );
+  } else {
+    process.stdout.write(
+      `⚠ Wallet-provider intermediate signing key already exists → skipped (use --force to regenerate)\n`
+    );
+  }
+
+  const walletProviderIntermediateCertPath = join(walletProviderDirPath, 'intermediate-cert.pem');
+  const walletProviderIntermediateCertGenerated =
+    !existsFileSync(walletProviderIntermediateCertPath) ||
+    flags.force ||
+    walletProviderIntermediateKeysGenerated ||
+    trustAnchorFederationKeyGenerated ||
+    trustAnchorFederationCertGenerated;
+  if (walletProviderIntermediateCertGenerated) {
+    const walletProviderIntermediateJwk = JSON.parse(
+      readFileSync(walletProviderIntermediateKeysPath, 'utf8')
+    ) as Record<string, unknown>;
+    const trustAnchorFederationKey = JSON.parse(readFileSync(trustAnchorFederationKeyPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    const trustAnchorFederationCertificatePem = readFileSync(trustAnchorFederationCertPath, 'utf8');
+    const walletProviderIntermediateCertificate = await createIntermediateCertificateFromJwk(
+      walletProviderIntermediateJwk,
+      trustAnchorFederationKey,
+      trustAnchorFederationCertificatePem,
+      { commonName: 'Wallet Provider Intermediate CA' }
+    );
+
+    writeFileSync(walletProviderIntermediateCertPath, walletProviderIntermediateCertificate, {
+      encoding: 'utf8',
+      flag: 'w'
+    });
+    process.stdout.write(
+      `✓ Generated wallet-provider intermediate certificate → ${walletProviderIntermediateCertPath}\n`
+    );
+  } else {
+    process.stdout.write(
+      `⚠ Wallet-provider intermediate certificate already exists → skipped (use --force to regenerate)\n`
+    );
+  }
+
   const walletProviderCertPath = join(walletProviderDirPath, 'cert.pem');
-  if (!existsFileSync(walletProviderCertPath) || flags.force || walletProviderSigningKeysGenerated) {
+  if (
+    !existsFileSync(walletProviderCertPath) ||
+    flags.force ||
+    walletProviderSigningKeysGenerated ||
+    walletProviderIntermediateKeysGenerated ||
+    walletProviderIntermediateCertGenerated
+  ) {
     const walletProviderJwks = JSON.parse(readFileSync(walletProviderKeysPath, 'utf8')) as Parameters<
       typeof selectEs256SigningJwk
     >[0];
     const walletProviderSigningJwk = selectEs256SigningJwk(walletProviderJwks, 'wallet-provider-signing-key');
-    const commonName = new URL(configs['wallet-provider'].local_url).hostname;
-    const walletProviderCertificate = await createSelfSignedCertificateFromJwk(walletProviderSigningJwk, {
-      commonName,
-      organizationalUnitName: 'Wallet Provider'
-    });
+    const walletProviderIntermediateJwk = JSON.parse(
+      readFileSync(walletProviderIntermediateKeysPath, 'utf8')
+    ) as Record<string, unknown>;
+    const walletProviderIntermediateCertificatePem = readFileSync(walletProviderIntermediateCertPath, 'utf8');
+    const walletProviderCertificate = await createLeafCertificateFromJwk(
+      walletProviderSigningJwk,
+      walletProviderIntermediateJwk,
+      walletProviderIntermediateCertificatePem,
+      configs['wallet-provider'].local_url
+    );
 
     writeFileSync(walletProviderCertPath, walletProviderCertificate, { encoding: 'utf8', flag: 'w' });
-    process.stdout.write(`✓ Generated wallet-provider certificate → ${walletProviderCertPath}\n`);
+    process.stdout.write(`✓ Generated wallet-provider leaf certificate → ${walletProviderCertPath}\n`);
   } else {
-    process.stdout.write(`⚠ Wallet-provider certificate already exists → skipped (use --force to regenerate)\n`);
+    process.stdout.write(`⚠ Wallet-provider leaf certificate already exists → skipped (use --force to regenerate)\n`);
   }
 
   const rpCertPath = join(rpDirPath, 'cert.pem');

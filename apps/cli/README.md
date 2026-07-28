@@ -81,8 +81,10 @@ When executed, it:
 - generates the trust-anchor federation key and self-signed federation certificate
 - generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
 - generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
+- generates the wallet provider intermediate CA certificate, chained to the trust-anchor federation certificate
+- generates the wallet provider leaf certificate (`cert.pem`), chained to the wallet provider intermediate CA certificate and bound to the Wallet Instance Attestation ES256 signing key in `jwks.json`
 - generates relying party authentication keys and a self-signed certificate
-- generates wallet provider signing keys and a self-signed certificate
+- generates wallet provider runtime and intermediate signing keys
 - creates or overwrites the config file when needed
 
 Generated structure:
@@ -96,7 +98,9 @@ Generated structure:
 - `<data_dir>/rp/federation-key.jwk.json`
 - `<data_dir>/rp/cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
 - `<data_dir>/wallet-provider/jwks.json` — wallet provider signing key used for Wallet Instance Attestations
-- `<data_dir>/wallet-provider/cert.pem` — self-signed X.509 certificate whose public key corresponds to the wallet provider signing key and is used in Wallet Instance Attestation `x5c` headers
+- `<data_dir>/wallet-provider/jwks-intermediate.json` — wallet provider intermediate CA signing key, used only to sign `cert.pem`
+- `<data_dir>/wallet-provider/intermediate-cert.pem` — wallet provider intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
+- `<data_dir>/wallet-provider/cert.pem` — wallet provider leaf certificate; its public key corresponds to the Wallet Instance Attestation ES256 signing key in `jwks.json`
 - `<data_dir>/trust-anchor/federation-key.jwk.json`
 - `<data_dir>/trust-anchor/federation-cert.pem` — self-signed X.509 certificate generated from the federation key
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
@@ -107,7 +111,7 @@ Default locations:
 - config file: `<project-root>/config.ini`
 - data directory: `<project-root>/.itw-conformance-tool`
 
-If a config file already exists and `--force` is not used, `init` reuses the configured `global.data_dir` and does not overwrite existing generated files unless required.
+If a config file already exists and `--force` is not used, `init` reuses the configured `global.data_dir` and does not overwrite existing generated files unless required. Missing or rotated dependencies are propagated through issuer and wallet-provider certificate chains: rotating the Trust Anchor key regenerates intermediate and leaf certificates, rotating an intermediate key regenerates its intermediate and leaf certificates, and rotating a runtime signing key regenerates the corresponding leaf certificate.
 
 Wallet URL behavior during `init`:
 

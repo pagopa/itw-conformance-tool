@@ -119,10 +119,15 @@ pnpm run init:force
 │   ├── federation-key.jwk.json
 │   └── federation-cert.pem
 └── wallet-provider/
-    └── jwks.json                  # Wallet Provider federation signing key
+    ├── jwks.json                  # Wallet Provider attestation signing key
+    ├── jwks-intermediate.json     # Wallet Provider intermediate-CA key
+    ├── intermediate-cert.pem      # Wallet Provider intermediate certificate
+    └── cert.pem                   # Wallet Provider leaf certificate
 ```
 
-Without `--force`, existing generated files are retained. Use `--force` only when rotating all local test material is intended; it invalidates state that depends on the replaced keys.
+The Credential Issuer and Wallet Provider both use the local Trust Anchor as their root. For the Wallet Provider, `cert.pem` is the Wallet Instance Attestation leaf certificate, `intermediate-cert.pem` is signed by `trust-anchor/federation-cert.pem`, and the attestation JWT `x5c` header contains `[leaf, intermediate]` without duplicating the root Trust Anchor certificate.
+
+Without `--force`, existing generated files are retained unless a dependent artifact is missing. Use `--force` only when rotating all local test material is intended; it rotates the Trust Anchor, issuer, and Wallet Provider chains and invalidates state that depends on the replaced keys.
 
 Each running service also creates an in-memory, localhost TLS configuration. The endpoints in the default configuration use `https://127.0.0.1` and `https://localhost`; their certificates are not trusted by default, so use a Wallet Solution's explicitly test-only unsafe-TLS mode where supported.
 
