@@ -39,6 +39,7 @@ import {
   wp061Scenario,
   wp062aScenario,
   wp062bScenario,
+  wpNotificationScenario,
   wpDeferredScenario,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
@@ -53,7 +54,13 @@ import {
   trustAnchorCertificateFromConfig
 } from '../../utils/x509.js';
 
-import type { HttpResponseSentEvent, ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
+import type {
+  HttpRequestReceivedEvent,
+  HttpResponseSentEvent,
+  ObservedEvent,
+  ScenarioOutcome,
+  ScenarioRunner
+} from '../../index.js';
 import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
 import type { CredentialRequestV1_3, ProofJwtHeaderV1_3, ProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 
@@ -93,6 +100,16 @@ function findHttpResponseSentEvent(
 ): HttpResponseSentEvent | undefined {
   return events.find(
     (event): event is HttpResponseSentEvent => event.name === 'http.response.sent' && event.requestId === requestId
+  );
+}
+
+function findHttpRequestReceivedEvent(
+  events: ObservedEvent[],
+  requestId: string | undefined
+): HttpRequestReceivedEvent | undefined {
+  return events.find(
+    (event): event is HttpRequestReceivedEvent =>
+      event.name === 'http.request.received' && event.requestId === requestId
   );
 }
 
@@ -2291,7 +2308,10 @@ describe('Test Cases for Issuance Phase', () => {
         ).toBeGreaterThan(timestampMs + intervalSeconds * 1000);
 
         expect(issuedEvent.diagnostic?.['credentialCount']).toBe(originalProofCount);
-        expect(issuedEvent.diagnostic?.['notificationIdPresent']).toBe(true);
+        expect(
+          requiredDiagnosticString(issuedEvent, 'notificationIdSha256'),
+          'issuer.deferred_credential.issued evidence must include a non-empty notification_id hash'
+        ).not.toHaveLength(0);
 
         const issuedResponse = findHttpResponseSentEvent(events, issuedEvent.requestId);
         expect(issuedResponse, 'The issued semantic event must pair to the actual HTTP 200 response').toBeDefined();
@@ -2317,6 +2337,111 @@ describe('Test Cases for Issuance Phase', () => {
         ).not.toHaveLength(0);
       },
       wpDeferredScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_064 / WP_064a / WP_064b', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wpNotificationScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        await session.stop();
+      }
+    }, wpNotificationScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_064: Wallet Instance sends the Notification Request as an HTTP POST to /notification with a JSON media type.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const notificationEvent = events.find((event) => event.name === 'issuer.notification.received');
+        expect(notificationEvent, 'issuer.notification.received evidence must be observed').toBeDefined();
+        if (!notificationEvent) {
+          throw new Error('Missing issuer.notification.received evidence');
+        }
+
+        expect(notificationEvent.diagnostic?.['endpoint']).toBe('/notification');
+        expect(notificationEvent.diagnostic?.['method']).toBe('POST');
+
+        const notificationRequest = findHttpRequestReceivedEvent(events, notificationEvent.requestId);
+        expect(
+          notificationRequest,
+          'The notification semantic event must pair to the actual HTTP request evidence'
+        ).toBeDefined();
+        expect(notificationRequest?.http.method).toBe('POST');
+        expect(notificationRequest?.http.path).toBe('/notification');
+
+        const contentTypeHeader = notificationRequest?.http.headers['content-type'];
+        const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+        expect(contentType, 'Notification Request must declare a content type').toBeDefined();
+
+        // Normalize away an optional charset parameter instead of requiring an exact string match.
+        const mediaType = contentType?.split(';')[0]?.trim().toLowerCase();
+        expect(mediaType).toBe('application/json');
+      },
+      wpNotificationScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_064a: Notification Request notification_id matches the Credential Response and event is one of the allowed case-sensitive values.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const issuedEvent = events.find((event) => event.name === 'issuer.credential.issued');
+        expect(issuedEvent, 'issuer.credential.issued evidence must be observed').toBeDefined();
+        const notificationEvent = events.find((event) => event.name === 'issuer.notification.received');
+        expect(notificationEvent, 'issuer.notification.received evidence must be observed').toBeDefined();
+        if (!issuedEvent || !notificationEvent) {
+          throw new Error('Missing issuer.credential.issued or issuer.notification.received evidence');
+        }
+
+        const issuedNotificationIdSha256 = requiredDiagnosticString(issuedEvent, 'notificationIdSha256');
+        const receivedNotificationIdSha256 = requiredDiagnosticString(notificationEvent, 'notificationIdSha256');
+        expect(
+          receivedNotificationIdSha256,
+          'Notification Request notification_id must match the one issued in the Credential Response'
+        ).toBe(issuedNotificationIdSha256);
+
+        expect(
+          ['credential_accepted', 'credential_deleted', 'credential_failure'],
+          'event must be one of the three case-sensitive enum values'
+        ).toContain(notificationEvent.diagnostic?.['event']);
+      },
+      wpNotificationScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_064b: an optional event_description, when present, is generic and user-neutral rather than a privacy-sensitive disclosure.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const notificationEvent = events.find((event) => event.name === 'issuer.notification.received');
+        expect(notificationEvent, 'issuer.notification.received evidence must be observed').toBeDefined();
+        if (!notificationEvent) {
+          throw new Error('Missing issuer.notification.received evidence');
+        }
+
+        const eventDescriptionPresent = notificationEvent.diagnostic?.['eventDescriptionPresent'];
+        if (!eventDescriptionPresent) {
+          // event_description is optional: omitting it trivially satisfies this criterion.
+          return;
+        }
+
+        expect(
+          notificationEvent.diagnostic?.['eventDescriptionUserNeutral'],
+          `event_description must be generic and user-neutral; reason codes: ${JSON.stringify(
+            notificationEvent.diagnostic?.['eventDescriptionReasonCodes']
+          )}`
+        ).toBe(true);
+      },
+      wpNotificationScenario.timeouts.vitestTestMs
     );
   });
 });

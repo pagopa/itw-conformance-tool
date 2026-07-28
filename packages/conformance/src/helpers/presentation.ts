@@ -13,7 +13,12 @@ export function createDefaultPresentationDcqlQuery(): Record<string, unknown> {
   };
 }
 
-export async function createPresentationRequestUri(baseURL: string): Promise<string> {
+export type PresentationFlowType = 'cross-device' | 'same-device';
+
+export async function createPresentationRequestUri(
+  baseURL: string,
+  flowType: PresentationFlowType = 'cross-device'
+): Promise<string> {
   const endpoint = new URL('/create-authorization-request', baseURL);
 
   const response = await httpsRequest<{ url: string }>({
@@ -25,7 +30,7 @@ export async function createPresentationRequestUri(baseURL: string): Promise<str
     headers: { 'content-type': 'application/json' },
     body: {
       dcqlQuery: createDefaultPresentationDcqlQuery(),
-      flow_type: 'cross-device'
+      flow_type: flowType
     },
     rejectUnauthorized: false
   });

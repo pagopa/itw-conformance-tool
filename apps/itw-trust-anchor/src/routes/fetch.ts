@@ -54,20 +54,18 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           trustAnchorBaseUrl: baseUrl
         });
 
-        if (subjectKind === 'issuer' || subjectKind === 'wallet-provider') {
-          await app.conformanceEventSink?.emit(
-            createObservedEvent({
-              name: 'federation.fetch.requested',
-              correlationId: request.conformance?.correlation?.correlationId ?? null,
-              service: 'federation',
-              requestId: request.id,
-              diagnostic: {
-                endpoint: '/fetch',
-                sub
-              }
-            })
-          );
-        }
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'federation.fetch.requested',
+            correlationId: request.conformance?.correlation?.correlationId ?? null,
+            service: 'federation',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/fetch',
+              sub
+            }
+          })
+        );
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(subordinateStatement);
       } catch (error) {
