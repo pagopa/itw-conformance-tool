@@ -60,7 +60,11 @@ async function startServer() {
   attachServiceIpcAdapter({
     endpoint: app.config.baseUrl,
     service: 'trust-anchor',
-    stop: () => app.close()
+    stop: () => app.close(),
+    trustAnchorFaults: {
+      activate: async (request) => app.trustAnchorFaultStore.activate(request),
+      deactivate: async (request) => app.trustAnchorFaultStore.deactivate(request)
+    }
   });
 }
 
