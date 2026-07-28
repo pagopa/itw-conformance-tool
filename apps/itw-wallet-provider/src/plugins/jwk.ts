@@ -56,16 +56,12 @@ const parseJwks = (content: string, filePath: string): Jwk[] => {
   });
 };
 
-const getKeyPair = async (
-  jwks: Jwk[],
-  selector: { kid: string; use: JwkUse },
-  filePath: string
-): Promise<JwkKeyPair> => {
-  const matchingKeys = jwks.filter((jwk) => jwk.kid === selector.kid);
+const getKeyPair = async (jwks: Jwk[], selector: { use: JwkUse }, filePath: string): Promise<JwkKeyPair> => {
+  const matchingKeys = jwks.filter((jwk) => jwk.use === selector.use);
   const [jwk] = matchingKeys;
 
-  if (matchingKeys.length !== 1 || jwk.use !== selector.use) {
-    throw new Error(`${filePath} must contain exactly one ${selector.use} JWK with kid ${selector.kid}`);
+  if (matchingKeys.length !== 1) {
+    throw new Error(`${filePath} must contain exactly one ${selector.use} JWK`);
   }
 
   const kid = await calculateJwkThumbprint(jwk as JWK);
@@ -83,8 +79,8 @@ const getKeyPair = async (
 const JWK_FILE = 'wallet-provider/jwks.json';
 
 const JWK_SELECTORS = {
-  sig: { kid: 'wallet-provider-signing-key', use: 'sig' }
-} as const satisfies Record<keyof JwksByUse, { kid: string; use: JwkUse }>;
+  sig: { use: 'sig' }
+} as const satisfies Record<keyof JwksByUse, { use: JwkUse }>;
 
 const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
   const filePath = path.join(dataDir, JWK_FILE);

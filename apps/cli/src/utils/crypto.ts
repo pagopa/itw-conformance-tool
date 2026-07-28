@@ -1,17 +1,22 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 
 function createEcPrivateJwk(descriptor: {
   alg: 'ES256' | 'ECDH-ES';
   keyOps: string[];
-  kid: string;
   use: 'sig' | 'enc';
 }) {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const privateJwk = privateKey.export({ format: 'jwk' });
+  const thumbprintPayload = JSON.stringify({
+    crv: privateJwk.crv,
+    kty: privateJwk.kty,
+    x: privateJwk.x,
+    y: privateJwk.y
+  });
 
   return {
     ...privateJwk,
-    kid: descriptor.kid,
+    kid: createHash('sha256').update(thumbprintPayload).digest('base64url'),
     alg: descriptor.alg,
     use: descriptor.use,
     key_ops: descriptor.keyOps
@@ -28,14 +33,12 @@ function createEcPrivateJwk(descriptor: {
  */
 export function createIssuerPrivateKeys() {
   const signing = createEcPrivateJwk({
-    kid: 'issuer-signing-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
 
   const encryption = createEcPrivateJwk({
-    kid: 'issuer-encryption-key',
     use: 'enc',
     alg: 'ECDH-ES',
     keyOps: ['deriveBits']
@@ -46,21 +49,18 @@ export function createIssuerPrivateKeys() {
 
 export function createRelyingPartyPrivateKeys() {
   const signing = createEcPrivateJwk({
-    kid: 'rp-signing-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
 
   const encryption = createEcPrivateJwk({
-    kid: 'rp-encryption-key',
     use: 'enc',
     alg: 'ECDH-ES',
     keyOps: ['deriveBits']
   });
 
   const federation = createEcPrivateJwk({
-    kid: 'rp-federation-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
@@ -74,7 +74,6 @@ export function createWalletProviderPrivateKeys() {
   return {
     keys: [
       createEcPrivateJwk({
-        kid: 'wallet-provider-signing-key',
         use: 'sig',
         alg: 'ES256',
         keyOps: ['sign']
@@ -93,7 +92,6 @@ export function createWalletProviderPrivateKeys() {
  */
 export function createIssuerIntermediateKey() {
   return createEcPrivateJwk({
-    kid: 'issuer-intermediate-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
@@ -110,7 +108,6 @@ export function createIssuerIntermediateKey() {
  */
 export function createWalletProviderIntermediateKey() {
   return createEcPrivateJwk({
-    kid: 'wallet-provider-intermediate-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
@@ -122,7 +119,6 @@ export function createWalletProviderIntermediateKey() {
  */
 export function createTrustAnchorFederationKey() {
   return createEcPrivateJwk({
-    kid: 'trust-anchor-federation-key',
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']

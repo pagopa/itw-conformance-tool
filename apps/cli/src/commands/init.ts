@@ -9,6 +9,7 @@ import {
   createLeafCertificateFromJwk,
   createSelfSignedCertificateFromJwk,
   createTrustAnchorCertificateFromJwk,
+  selectFirstEs256SigningJwk,
   selectEs256SigningJwk
 } from '../utils/certificates.js';
 import {
@@ -287,7 +288,7 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     const walletProviderJwks = JSON.parse(readFileSync(walletProviderKeysPath, 'utf8')) as Parameters<
       typeof selectEs256SigningJwk
     >[0];
-    const walletProviderSigningJwk = selectEs256SigningJwk(walletProviderJwks, 'wallet-provider-signing-key');
+    const walletProviderSigningJwk = selectEs256SigningJwk(walletProviderJwks);
     const walletProviderIntermediateJwk = JSON.parse(
       readFileSync(walletProviderIntermediateKeysPath, 'utf8')
     ) as Record<string, unknown>;
@@ -308,7 +309,7 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
   const rpCertPath = join(rpDirPath, 'cert.pem');
   if (!existsFileSync(rpCertPath) || flags.force || rpSigningKeysGenerated) {
     const rpJwks = JSON.parse(readFileSync(rpKeysPath, 'utf8')) as Parameters<typeof selectEs256SigningJwk>[0];
-    const rpSigningJwk = selectEs256SigningJwk(rpJwks, 'rp-signing-key');
+    const rpSigningJwk = selectFirstEs256SigningJwk(rpJwks);
     const commonName = new URL(configs['relying-party'].url).hostname;
     const rpCertificate = await createSelfSignedCertificateFromJwk(rpSigningJwk, {
       commonName,

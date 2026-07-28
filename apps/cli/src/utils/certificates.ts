@@ -105,6 +105,23 @@ export function selectEs256SigningJwk(jwks: Jwks, kid?: string): Jwk {
   return candidates[0];
 }
 
+/** Selects the first private ES256 signing key from a JWKS.
+ *
+ * This is used when a JWKS intentionally contains multiple signing keys and
+ * their runtime role is determined by the generated key order.
+ */
+export function selectFirstEs256SigningJwk(jwks: Jwks): Jwk {
+  const candidate = jwks.keys.find(
+    (key) => key.kty === 'EC' && key.alg === 'ES256' && key.use === 'sig' && typeof key.d === 'string'
+  );
+
+  if (!candidate) {
+    throw new Error('No private ES256 signing key (kty=EC, alg=ES256, use=sig) found in JWKS');
+  }
+
+  return candidate;
+}
+
 export async function createSelfSignedCertificateFromJwk(
   jwk: Record<string, unknown>,
   {
