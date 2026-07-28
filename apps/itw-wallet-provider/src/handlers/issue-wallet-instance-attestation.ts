@@ -113,6 +113,10 @@ async function calculateAssertionJwkThumbprint(jwk: Jwk): Promise<string> {
   return calculateJwkThumbprint({ hashAlgorithm: HashAlgorithm.Sha256, hashCallback, jwk });
 }
 
+function hasPrivateOrSymmetricKeyMaterial(jwk: Jwk): boolean {
+  return 'd' in jwk || 'k' in jwk || 'p' in jwk || 'q' in jwk || 'dp' in jwk || 'dq' in jwk || 'qi' in jwk;
+}
+
 function validationErrorForPayload(error: z.ZodError<AttestationRequestPayload>): AttestationError {
   const invalidPaths = new Set(error.issues.map((issue) => issue.path.join('.')));
 
@@ -283,9 +287,16 @@ export const issueWalletInstanceAttestationHandler = async (
       service: 'wallet-provider',
       requestId: request.id,
       diagnostic: {
+        assertionAlg: header.alg,
+        assertionKid: header.kid,
+        assertionKidMatchesCnfJwkThumbprint: true,
+        cnfJwkAsymmetric: payload.cnf.jwk.kty !== 'oct',
+        cnfJwkPublicOnly: !hasPrivateOrSymmetricKeyMaterial(payload.cnf.jwk),
+        cnfJwkThumbprint: jwkThumbprint.value,
         endpoint: '/wallet-instance-attestation',
         method: 'POST',
         outcome: 'success',
+        proofVerifiedWithCnfJwk: true,
         statusCode: 200
       }
     })

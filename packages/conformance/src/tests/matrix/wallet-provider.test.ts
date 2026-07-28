@@ -66,6 +66,24 @@ async function captureJsonResponse(url: string, init: RequestInit = {}): Promise
   }
 }
 
+function requiredDiagnosticBoolean(event: ObservedEvent, key: string): boolean {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'boolean') {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
+}
+
+function requiredDiagnosticString(event: ObservedEvent, key: string): string {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
+}
+
 async function postWalletInstanceRegistration(
   walletInstancesUrl: string,
   body: Record<string, unknown>
@@ -527,6 +545,48 @@ describe('Test Cases for Wallet Provider Backend', () => {
       () => {
         expect(events, 'Happy-path scenario should capture protocol evidence').not.toHaveLength(0);
         assertConformanceOutcome(outcome, { expected: 'PASS' });
+      },
+      wpWalletProviderHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_026: To perform a Wallet Attestation request, Wallet Instance successfully generates a new ephemeral asymmetric key pair.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const attestationEvent = events.find((event) => event.name === 'wallet_attestation.requested');
+        expect(attestationEvent, 'Happy-path scenario must observe the Wallet Attestation request').toBeDefined();
+        if (!attestationEvent) {
+          throw new Error('Missing wallet_attestation.requested evidence');
+        }
+
+        expect(requiredDiagnosticString(attestationEvent, 'endpoint')).toBe('/wallet-instance-attestation');
+        expect(requiredDiagnosticString(attestationEvent, 'method')).toBe('POST');
+        expect(requiredDiagnosticString(attestationEvent, 'outcome')).toBe('success');
+        expect(requiredDiagnosticString(attestationEvent, 'assertionAlg')).toBeOneOf(
+          PERMITTED_ENTITY_CONFIGURATION_SIGNATURE_ALGORITHMS
+        );
+
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'cnfJwkAsymmetric'),
+          'Wallet Attestation request cnf.jwk must identify an asymmetric public key'
+        ).toBe(true);
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'cnfJwkPublicOnly'),
+          'Wallet Attestation request cnf.jwk must not expose private or symmetric key material'
+        ).toBe(true);
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'assertionKidMatchesCnfJwkThumbprint'),
+          'Wallet Attestation request kid must identify the cnf.jwk thumbprint'
+        ).toBe(true);
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'proofVerifiedWithCnfJwk'),
+          'Wallet Attestation request signature must verify with the cnf.jwk public key'
+        ).toBe(true);
+
+        const assertionKid = requiredDiagnosticString(attestationEvent, 'assertionKid');
+        const cnfJwkThumbprint = requiredDiagnosticString(attestationEvent, 'cnfJwkThumbprint');
+        expect(assertionKid, 'Wallet Attestation request kid must equal the cnf.jwk thumbprint').toBe(cnfJwkThumbprint);
       },
       wpWalletProviderHappyScenario.timeouts.vitestTestMs
     );
