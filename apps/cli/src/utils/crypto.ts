@@ -1,10 +1,6 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
 
-function createEcPrivateJwk(descriptor: {
-  alg: 'ES256' | 'ECDH-ES';
-  keyOps: string[];
-  use: 'sig' | 'enc';
-}) {
+function createEcPrivateJwk(descriptor: { alg: 'ES256' | 'ECDH-ES'; keyOps: string[]; use: 'sig' | 'enc' }) {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const privateJwk = privateKey.export({ format: 'jwk' });
   const thumbprintPayload = JSON.stringify({

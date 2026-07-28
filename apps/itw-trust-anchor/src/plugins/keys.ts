@@ -130,11 +130,7 @@ async function loadFederationJwk(dataDir: string, relativeFile: string): Promise
  * The RP keeps this key in `rp/jwks.json`, alongside its authorization-request
  * signing and encryption keys.
  */
-async function loadFederationJwkFromJwks(
-  dataDir: string,
-  relativeFile: string,
-  signingKeyIndex = 0
-): Promise<JwkKey> {
+async function loadFederationJwkFromJwks(dataDir: string, relativeFile: string, signingKeyIndex = 0): Promise<JwkKey> {
   const jwksPath = resolve(dataDir, relativeFile);
   let content: string;
 
