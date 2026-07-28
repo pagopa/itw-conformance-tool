@@ -2,7 +2,11 @@ import { randomBytes } from 'node:crypto';
 
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { toResult } from '@itw-conformance-tool/utils';
-import { parseAuthorizationResponse, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
+import {
+  extractClientIdPrefix,
+  parseAuthorizationResponse,
+  type Openid4vpAuthorizationRequestPayload
+} from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt } from 'jose';
 import z from 'zod';
 
@@ -44,6 +48,23 @@ export const sessionIdQuerystringSchema = z.object({
 
 type SessionIdQuerystring = z.infer<typeof sessionIdQuerystringSchema>;
 
+function readField(source: unknown, key: string): unknown {
+  return typeof source === 'object' && source !== null ? (source as Record<string, unknown>)[key] : undefined;
+}
+
+// Collects the credential query identifiers declared in the Request Object's
+// DCQL query so a test can assert one vp_token entry exists per requested
+// credential (WP_093).
+function extractRequestedCredentialIds(dcqlQuery: unknown): string[] {
+  const credentials = readField(dcqlQuery, 'credentials');
+  if (!Array.isArray(credentials)) return [];
+
+  return credentials.flatMap((credential) => {
+    const id = readField(credential, 'id');
+    return typeof id === 'string' ? [id] : [];
+  });
+}
+
 export const getAuthorizationResponseHandler = async (
   req: FastifyRequest<{
     Body: AuthorizationResponsePayload;
@@ -53,15 +74,23 @@ export const getAuthorizationResponseHandler = async (
 ): Promise<FastifyReply> => {
   const requestObjectRepository = req.server.repository.requestObject;
   const authorizationRequest = requestObjectRepository.getBySessionId(req.query.session_id);
-  const correlationId = authorizationRequest.id;
 
+  // WP_091 / WP_092: the wallet posts the encrypted Authorization Response to the
+  // response_uri. Correlation is disabled, so the event is emitted uncorrelated;
+  // the raw JWE is forwarded so tests can assert the POST method and inspect the
+  // JWE protected header (readable without the decryption key).
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'rp.presentation_response.received',
-      correlationId,
+      correlationId: null,
       service: 'relying-party',
       requestId: req.id,
-      diagnostic: { endpoint: '/auth/response' }
+      diagnostic: {
+        endpoint: '/auth/response',
+        method: req.method,
+        response: 'response' in req.body ? req.body.response : undefined,
+        state: req.body.state ?? null
+      }
     })
   );
 
@@ -93,12 +122,17 @@ export const getAuthorizationResponseHandler = async (
     verifierEncryptionPublicJwk: req.server.jwks.enc.public
   });
 
-  const verificationResult = await toResult(verifier.verifyCredentials());
+  const verificationPromise = async () => ({
+    vpToken: await verifier.verifyCredentials(),
+    state: authResponseResult.value.authorizationResponsePayload.state !== authorizationRequestPayload.state
+  });
+
+  const verificationResult = await toResult(verificationPromise());
   if (!verificationResult.ok) {
     await req.server.conformanceEventSink.emit(
       createObservedEvent({
         name: 'vp_token.validation.failed',
-        correlationId,
+        correlationId: null,
         service: 'relying-party',
         requestId: req.id,
         validation: { reason: verificationResult.error.message }
@@ -110,19 +144,42 @@ export const getAuthorizationResponseHandler = async (
     return reply.status(403).send({ error: 'invalid_request', error_description: verificationResult.error.message });
   }
 
+  // WP_093 / WP_093a / WP_093b / WP_093c: forward the decrypted Authorization
+  // Response evidence — the echoed state, the vp_token structure and the raw
+  // SD-JWT presentations — so tests can assert the vp_token shape, SD-JWT
+  // disclosures and KB-JWT format by decoding the tokens themselves.
+  const authorizationResponsePayload = authResponseResult.value.authorizationResponsePayload;
+  const vpToken = authorizationResponsePayload.vp_token;
+  const { clientId } = extractClientIdPrefix(authorizationRequestPayload.client_id);
+
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
       name: 'vp_token.validation.succeeded',
-      correlationId,
+      correlationId: null,
       service: 'relying-party',
-      requestId: req.id
+      requestId: req.id,
+      diagnostic: {
+        endpoint: '/auth/response',
+        state: readField(authorizationResponsePayload, 'state') ?? null,
+        requestObjectState: authorizationRequestPayload.state ?? null,
+        requestedCredentialIds: extractRequestedCredentialIds(authorizationRequestPayload.dcql_query),
+        vpTokenCredentialIds: Object.keys(vpToken as Record<string, unknown>),
+        nonce: authorizationRequestPayload.nonce ?? null,
+        clientId,
+        vpToken
+      }
     })
   );
 
-  const redirectUri = new URL(`${req.server.config.BASE_URL}/success.html`);
+  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback/${authorizationRequest.id}`);
   const responseCode = randomBytes(32).toString('hex');
   redirectUri.searchParams.set('response_code', responseCode);
-  requestObjectRepository.update(authorizationRequest.id, 'verified', redirectUri.toString(), verificationResult.value);
+  requestObjectRepository.update(
+    authorizationRequest.id,
+    'verified',
+    redirectUri.toString(),
+    verificationResult.value.vpToken
+  );
 
   return reply.status(200).send({ redirect_uri: redirectUri.toString() });
 };

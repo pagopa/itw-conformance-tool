@@ -323,11 +323,18 @@ export class CredentialService {
       throw new CreateCredentialError('Expected at least one credential to build the response');
     }
 
+    // Every immediate Credential Response gets an issuer-generated
+    // notification_id, mirroring the deferred flow below, so the
+    // Notification Endpoint (WP_064) can be exercised without requiring a
+    // batch/deferred issuance.
+    const notificationId = randomBytes(32).toString('hex');
+
     const flow = {
       credentials: [{ credential: firstCredential }, ...restCredentials.map((credential) => ({ credential }))] as [
         { credential: string },
         ...{ credential: string }[]
-      ]
+      ],
+      notificationId
     };
 
     if (config.isVersion(ItWalletSpecsVersion.V1_3)) {

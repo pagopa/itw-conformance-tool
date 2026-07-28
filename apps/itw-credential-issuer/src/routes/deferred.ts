@@ -38,8 +38,16 @@ function countResponseCredentials(value: unknown): number | undefined {
   return value.credentials.length;
 }
 
-function hasNotificationId(value: unknown): boolean {
-  return isRecord(value) && typeof value['notification_id'] === 'string';
+/**
+ * Hashes the `notification_id` from the final deferred Credential Response
+ * body, so `issuer.deferred_credential.issued` evidence can prove
+ * correlation with the Notification Request (WP_064a) without ever storing
+ * the raw value.
+ */
+function notificationIdSha256FromResponse(value: unknown): string | undefined {
+  if (!isRecord(value) || typeof value['notification_id'] !== 'string') return undefined;
+  const notificationId = value['notification_id'];
+  return notificationId.length > 0 ? sha256Base64Url(notificationId) : undefined;
 }
 
 const deferredRoute: FastifyPluginAsync = async (app) => {
@@ -106,7 +114,7 @@ const deferredRoute: FastifyPluginAsync = async (app) => {
               contentType: 'application/json',
               transactionIdSha256: transactionId ? sha256Base64Url(transactionId) : undefined,
               credentialCount: countResponseCredentials(responseBody),
-              notificationIdPresent: hasNotificationId(responseBody)
+              notificationIdSha256: notificationIdSha256FromResponse(responseBody)
             }
           })
         );
