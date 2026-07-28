@@ -46,6 +46,12 @@ import {
   wpCiHappyScenario
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
+import {
+  certificateFromBase64Der,
+  expectCertificateIssuedBy,
+  expectCertificateValidAt,
+  trustAnchorCertificateFromConfig
+} from '../../utils/x509.js';
 
 import type { HttpResponseSentEvent, ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
 import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
@@ -439,6 +445,71 @@ describe('Test Cases for Issuance Phase', () => {
         await expect(
           jwtVerify(clientAttestation.clientAttestationPopJwt, publicKey),
           'Wallet Instance PoP signature should verify with the Wallet Attestation cnf.jwk'
+        ).resolves.toBeDefined();
+      },
+      wpCiHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_020: The Wallet Attestation is signed by its authorized Wallet Provider.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+        expect(clientAttestation, 'should parse the client attestation headers from PAR').toBeDefined();
+        if (!clientAttestation) {
+          throw new Error('PAR request is missing client attestation headers');
+        }
+
+        const { header: attestationHeader, payload: attestationPayload } = decodeJwt({
+          jwt: clientAttestation.walletAttestationJwt,
+          headerSchema: zWalletAttestationJwtHeaderV1_4,
+          payloadSchema: zWalletAttestationJwtPayloadV1_4
+        });
+
+        expect(attestationHeader.x5c, 'Wallet Attestation should carry an X.509 certificate chain').not.toHaveLength(0);
+
+        const certificates = attestationHeader.x5c.map((certificate, index) =>
+          certificateFromBase64Der(certificate, `Wallet Attestation x5c[${index}]`)
+        );
+        const [leafCertificate] = certificates;
+        if (!leafCertificate) {
+          throw new Error('Wallet Attestation header is missing the leaf x5c certificate');
+        }
+
+        const validationDate = new Date(attestationPayload.iat * 1000);
+        certificates.forEach((certificate, index) =>
+          expectCertificateValidAt(certificate, validationDate, `Wallet Attestation x5c[${index}]`)
+        );
+
+        for (let index = 0; index < certificates.length - 1; index++) {
+          const certificate = certificates[index];
+          const issuerCertificate = certificates[index + 1];
+          if (!certificate || !issuerCertificate) {
+            throw new Error(`Wallet Attestation x5c chain is missing certificate at index ${index}`);
+          }
+
+          expectCertificateIssuedBy(certificate, issuerCertificate, `Wallet Attestation x5c[${index}]`);
+        }
+
+        const lastCertificate = certificates.at(-1);
+        if (!lastCertificate) {
+          throw new Error('Wallet Attestation x5c chain is empty');
+        }
+
+        const trustAnchorCertificate = trustAnchorCertificateFromConfig(config.global.trust_anchor_certificate);
+        expectCertificateValidAt(trustAnchorCertificate, validationDate, 'Configured Trust Anchor certificate');
+        expectCertificateIssuedBy(
+          lastCertificate,
+          trustAnchorCertificate,
+          `Wallet Attestation x5c[${certificates.length - 1}]`
+        );
+
+        const walletProviderPublicKey = await importX509(leafCertificate.toString(), attestationHeader.alg);
+        await expect(
+          jwtVerify(clientAttestation.walletAttestationJwt, walletProviderPublicKey, {
+            algorithms: [attestationHeader.alg],
+            issuer: trimTrailingSlash(config['wallet-provider'].local_url)
+          }),
+          'Wallet Attestation signature should verify with the authorized Wallet Provider x5c leaf certificate'
         ).resolves.toBeDefined();
       },
       wpCiHappyScenario.timeouts.vitestTestMs

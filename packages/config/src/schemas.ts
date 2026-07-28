@@ -14,7 +14,8 @@ export const DEFAULT_CONFIG = {
   global: {
     organization_name: 'PagoPA S.p.A.',
     data_dir: '.itw-conformance-tool',
-    log_level: 'info'
+    log_level: 'info',
+    trust_anchor_certificate: ''
   },
   wallet: {
     wallet_name: 'My Wallet Solution',
@@ -60,6 +61,10 @@ data_dir = ${globalDefaults.data_dir}
 ; Logging level: debug | info | warn | error
 ; Default: ${globalDefaults.log_level}
 log_level = ${globalDefaults.log_level}
+; Trust Anchor X.509 certificate obtained out-of-band by the Wallet Instance.
+; Use a single-line base64 DER value, or a quoted PEM value with escaped newlines.
+; Default: (empty)
+trust_anchor_certificate = ${globalDefaults.trust_anchor_certificate}
 
 [wallet]
 ; Wallet name (used in conformance test reports)
@@ -206,7 +211,8 @@ const GlobalConfigSchema = z
   .object({
     organization_name: nonEmptyString.default(globalDefaults.organization_name),
     data_dir: nonEmptyString.default(globalDefaults.data_dir),
-    log_level: z.preprocess(trimLowercaseString, z.enum(LOG_LEVELS)).default(globalDefaults.log_level)
+    log_level: z.preprocess(trimLowercaseString, z.enum(LOG_LEVELS)).default(globalDefaults.log_level),
+    trust_anchor_certificate: z.string().trim().default(globalDefaults.trust_anchor_certificate)
   })
   .default(globalDefaults);
 
