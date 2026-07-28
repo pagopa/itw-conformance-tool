@@ -20,7 +20,11 @@ export type {
   ServiceHealthResponse,
   ServiceReadyMessage,
   ServiceStoppedMessage,
-  ServiceStopMessage
+  ServiceStopMessage,
+  TrustAnchorFaultActivateMessage,
+  TrustAnchorFaultActivatedMessage,
+  TrustAnchorFaultDeactivateMessage,
+  TrustAnchorFaultDeactivatedMessage
 } from './messages.js';
 export type {
   IssuerConfigActivationRequest,
@@ -31,6 +35,10 @@ export type {
   IssuerFaultActivationResult,
   IssuerFaultDeactivationRequest,
   IssuerFaultHandlers,
-  ServiceIpcAdapterOptions
+  ServiceIpcAdapterOptions,
+  TrustAnchorFaultActivationRequest,
+  TrustAnchorFaultActivationResult,
+  TrustAnchorFaultDeactivationRequest,
+  TrustAnchorFaultHandlers
 } from './service-adapter.js';
 export type { ServiceControlClient, ServiceControlClientOptions } from './service-control-client.js';
