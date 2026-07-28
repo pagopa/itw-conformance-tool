@@ -183,7 +183,7 @@ itwct report:list
 
 `test <category>` launches Vitest on one conformance test matrix category. A category is required: `issuance`, `presentation`, `wallet-instance`, or `wallet-provider`.
 
-The CLI is the lifecycle supervisor in test mode: it directly forks the already compiled service entrypoints (not `nx serve`), waits for their IPC `service.ready` messages, passes their actual endpoints to Vitest, and always requests graceful shutdown afterwards. The selected local stack is minimal: issuance starts Trust Anchor + Issuer, presentation starts Trust Anchor + RP, wallet-instance starts all three, and wallet-provider starts none. On test failure, timeout, SIGINT, SIGTERM, or child crash the CLI cleans up children, escalating from IPC shutdown to termination if necessary. Do not start these services manually for `itwct test`.
+The CLI is the lifecycle supervisor in test mode: it directly forks the already compiled service entrypoints (not `nx serve`), waits for their IPC `service.ready` messages, passes their actual endpoints to Vitest, and always requests graceful shutdown afterwards. The selected local stack is minimal: issuance starts Trust Anchor + Issuer, presentation starts Trust Anchor + RP, wallet-instance starts Trust Anchor + Wallet Provider, and wallet-provider starts Trust Anchor + Wallet Provider. On test failure, timeout, SIGINT, SIGTERM, or child crash the CLI cleans up children, escalating from IPC shutdown to termination if necessary. Do not start these services manually for `itwct test`.
 
 `start` remains the manual-development mode and retains its Nx-based behaviour. Its services are not owned by a later `test` command.
 

@@ -1,3 +1,4 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { hashCallback } from '@itw-conformance-tool/crypto';
 import { toResult } from '@itw-conformance-tool/utils';
 import {
@@ -274,6 +275,21 @@ export const issueWalletInstanceAttestationHandler = async (
   }
 
   const walletInstanceAttestation = await issueWalletInstanceAttestation(request.server, payload);
+
+  await request.server.conformanceEventSink?.emit(
+    createObservedEvent({
+      name: 'wallet_attestation.requested',
+      correlationId: request.conformance?.correlation?.correlationId ?? null,
+      service: 'wallet-provider',
+      requestId: request.id,
+      diagnostic: {
+        endpoint: '/wallet-instance-attestation',
+        method: 'POST',
+        outcome: 'success',
+        statusCode: 200
+      }
+    })
+  );
 
   return reply.code(200).type('application/json').send({ wallet_instance_attestation: walletInstanceAttestation });
 };

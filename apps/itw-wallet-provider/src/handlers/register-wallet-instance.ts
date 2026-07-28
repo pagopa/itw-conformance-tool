@@ -1,3 +1,4 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -111,6 +112,21 @@ export const registerWalletInstanceHandler = async (
     registeredAt: new Date().toISOString(),
     status: 'ACTIVE'
   });
+
+  await request.server.conformanceEventSink?.emit(
+    createObservedEvent({
+      name: 'wallet_instance.registration.requested',
+      correlationId: request.conformance?.correlation?.correlationId ?? null,
+      service: 'wallet-provider',
+      requestId: request.id,
+      diagnostic: {
+        endpoint: '/wallet-instances',
+        method: 'POST',
+        outcome: 'success',
+        statusCode: 204
+      }
+    })
+  );
 
   return reply.code(204).send();
 };
