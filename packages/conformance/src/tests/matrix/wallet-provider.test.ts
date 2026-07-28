@@ -482,17 +482,15 @@ describe('Test Cases for Wallet Provider Backend', () => {
   test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
     const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
 
-    const invalidAssertionBody = new URLSearchParams({
-      assertion:
-        'eyJhbGciOiJFUzI1NiIsInR5cCI6IldBTExFVC1JTlNUQU5DRS1BVFRFU1RBVElPTitKV1QifQ.eyJpc3MiOiJpbnZhbGlkIiwic3ViIjoiaW52YWxpZCIsImF1ZCI6ImludmFsaWQifQ.invalid_signature'
-    });
+    const assertion =
+      'eyJhbGciOiJFUzI1NiIsInR5cCI6IldBTExFVC1JTlNUQU5DRS1BVFRFU1RBVElPTitKV1QifQ.eyJpc3MiOiJpbnZhbGlkIiwic3ViIjoiaW52YWxpZCIsImF1ZCI6ImludmFsaWQifQ.invalid_signature';
 
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/json'
       },
-      body: invalidAssertionBody.toString(),
+      body: JSON.stringify({ assertion }),
       signal: AbortSignal.timeout(10_000)
     });
 
