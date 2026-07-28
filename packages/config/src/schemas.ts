@@ -61,7 +61,7 @@ data_dir = ${globalDefaults.data_dir}
 ; Logging level: debug | info | warn | error
 ; Default: ${globalDefaults.log_level}
 log_level = ${globalDefaults.log_level}
-; Trust Anchor X.509 certificate obtained out-of-band by the Wallet Instance.
+; Production Trust Anchor X.509 certificate obtained out-of-band by the Wallet Instance.
 ; Use a single-line base64 DER value, or a quoted PEM value with escaped newlines.
 ; Default: (empty)
 trust_anchor_certificate = ${globalDefaults.trust_anchor_certificate}
