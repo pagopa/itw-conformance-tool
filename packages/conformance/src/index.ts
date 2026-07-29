@@ -64,6 +64,7 @@ export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuanc
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
+export { wp017Scenario } from './scenarios/factories/wp-017.js';
 export { wpWalletProviderHappyScenario } from './scenarios/factories/wp-wallet-provider-happy.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';
 export { wp054MissingCodeScenario, wp054Scenarios, type Wp054MissingClaim } from './scenarios/factories/wp-054.js';
@@ -73,6 +74,7 @@ export {
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario
 } from './scenarios/factories/wp-unsupported-credential-offer.js';
+export { wp057Scenario } from './scenarios/factories/wp-057.js';
 export { wp059Scenario } from './scenarios/factories/wp-059.js';
 export { wp060Scenarios, wp060TypeMismatchScenario, type Wp060Variant } from './scenarios/factories/wp-060.js';
 export { wp061Scenario } from './scenarios/factories/wp-061.js';
@@ -114,6 +116,11 @@ export type {
   IssuerRuntimeConfig,
   IssuerScenarioController
 } from './services/issuer-fault-controller.js';
+export type {
+  ActivateTrustAnchorFaultRequest,
+  DeactivateTrustAnchorFaultRequest,
+  TrustAnchorFaultController
+} from './services/trust-anchor-fault-controller.js';
 export {
   createConformanceInstrumentationPlugin,
   type InstrumentationOptions
