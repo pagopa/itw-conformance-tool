@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
+
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
 import { StatusListService } from '../domain/index.js';
+import { STATUS_LIST_TESTED_CREDENTIAL_INDEX } from '../domain/models/status-list.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -15,7 +20,28 @@ const statusListRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const service = new StatusListService(makeJwksRepository(app));
-        const jwt = await service.getStatusListJwt(baseURL);
+        const settings = app.issuerRuntimeConfigStore.resolveStatusList({
+          bits: 1 as const,
+          values: [0, 0, 0, 0, 0]
+        });
+        const jwt = await service.getStatusListJwt(baseURL, settings);
+
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.status_list.requested',
+            correlationId: request.conformance?.correlation?.correlationId ?? null,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/statuslist/1',
+              method: request.method,
+              bits: settings.bits,
+              credentialIndex: STATUS_LIST_TESTED_CREDENTIAL_INDEX,
+              statusValue: settings.values[STATUS_LIST_TESTED_CREDENTIAL_INDEX],
+              tokenHash: createHash('sha256').update(jwt, 'utf8').digest('base64url')
+            }
+          })
+        );
 
         return reply.code(200).header('Content-Type', 'application/statuslist+jwt').send(jwt);
       } catch (error) {
