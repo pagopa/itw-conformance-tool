@@ -30,6 +30,7 @@ export const observedEventNames = [
   'rp.request_object.requested',
   'rp.presentation_response.received',
   'rp.redirect.followed',
+  'wallet_instance.registration.requested',
   'wallet_attestation.requested',
   'wallet_instance.status_retrieval.requested',
   'wallet_instance.revocation.requested',
