@@ -35,6 +35,7 @@ import {
   wp046aScenario,
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario,
+  wp057Scenario,
   wp059Scenario,
   wp060TypeMismatchScenario,
   wp061Scenario,
@@ -1192,6 +1193,217 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
+  describe('WP_057', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let offeredCredentialIdentifiers: string[];
+    let credentialRequestedEvents: ObservedEvent[];
+    let credentialIssuedEvents: ObservedEvent[];
+    let credentialRequests: CredentialRequestV1_3[];
+    let requestedCredentialIdentifiers: string[];
+    let credentialProofJwts: string[];
+    let credentialProofHeaders: ProofJwtHeaderV1_3[];
+    let credentialProofPayloads: ProofJwtPayload[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wp057Scenario.id);
+      const credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        if (
+          !Array.isArray(offerPayload.credential_configuration_ids) ||
+          offerPayload.credential_configuration_ids.length !== 2 ||
+          new Set(offerPayload.credential_configuration_ids).size !== 2
+        ) {
+          throw new Error('WP_057 Credential Offer must contain exactly 2 distinct credential_configuration_ids');
+        }
+        offeredCredentialIdentifiers = offerPayload.credential_configuration_ids;
+
+        const credentialOfferEvent = events.find((event) => event.name === 'credential_offer.generated');
+        const credentialConfigurationIds = credentialOfferEvent?.diagnostic?.['credentialConfigurationIds'];
+        if (
+          !Array.isArray(credentialConfigurationIds) ||
+          !credentialConfigurationIds.every(
+            (credentialConfigurationId) => typeof credentialConfigurationId === 'string'
+          )
+        ) {
+          throw new Error(
+            'credential_offer.generated evidence is missing the credentialConfigurationIds required to assert WP_057'
+          );
+        }
+        expect(credentialConfigurationIds).toEqual(offeredCredentialIdentifiers);
+
+        credentialRequestedEvents = events
+          .filter((event) => event.name === 'issuer.credential.requested')
+          .sort((a, b) => a.monotonicMs - b.monotonicMs);
+        if (credentialRequestedEvents.length !== 2) {
+          throw new Error(
+            `WP_057 requires exactly 2 issuer.credential.requested events, found ${credentialRequestedEvents.length}`
+          );
+        }
+
+        if (new Set(credentialRequestedEvents.map((event) => event.requestId)).size !== 2) {
+          throw new Error('WP_057 Credential Requests must be two separate HTTP requests with distinct request IDs');
+        }
+
+        credentialIssuedEvents = events
+          .filter((event) => event.name === 'issuer.credential.issued')
+          .sort((a, b) => a.monotonicMs - b.monotonicMs);
+        if (credentialIssuedEvents.length !== 2) {
+          throw new Error(
+            `WP_057 requires exactly 2 issuer.credential.issued events, found ${credentialIssuedEvents.length}`
+          );
+        }
+
+        credentialRequests = credentialRequestedEvents.map((event) => {
+          const parseResult = zCredentialRequestV1_3.safeParse(event.diagnostic?.['body']);
+          if (!parseResult.success) {
+            throw new Error(
+              `issuer.credential.requested evidence body is not a valid IT-Wallet v1.3/v1.4 Credential Request: ${parseResult.error.message}`
+            );
+          }
+          return parseResult.data;
+        });
+
+        requestedCredentialIdentifiers = credentialRequests.map((request) => {
+          if (!request.credential_identifier) {
+            throw new Error('WP_057 Credential Request is missing credential_identifier');
+          }
+          return request.credential_identifier;
+        });
+
+        credentialProofJwts = credentialRequests.map((request) => {
+          if (request.proofs.jwt.length !== 1) {
+            throw new Error(
+              `WP_057 Credential Request must carry exactly one proofs.jwt entry, preventing a batch-style request; found ${request.proofs.jwt.length}`
+            );
+          }
+          return request.proofs.jwt[0];
+        });
+
+        const proofArtifacts = credentialProofJwts.map((jwt) =>
+          decodeJwt({
+            jwt,
+            headerSchema: zProofJwtHeaderV1_3,
+            payloadSchema: zProofJwtPayload
+          })
+        );
+        credentialProofHeaders = proofArtifacts.map(({ header }) => header);
+        credentialProofPayloads = proofArtifacts.map(({ payload }) => payload);
+      } finally {
+        await session.stop();
+      }
+    }, wp057Scenario.timeouts.vitestTestMs);
+
+    test('WP_057: the Credential Offer contains two distinct offered Digital Credentials.', () => {
+      assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+      expect(offeredCredentialIdentifiers, 'Credential Offer should contain exactly 2 identifiers').toHaveLength(2);
+      expect(new Set(offeredCredentialIdentifiers).size, 'Credential Offer identifiers should be distinct').toBe(2);
+    });
+
+    test('WP_057: the Wallet Instance sends a separate, DPoP-authenticated Credential Request for each offered credential.', () => {
+      assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+      expect(credentialRequestedEvents, 'exactly two Credential Requests should be observed').toHaveLength(2);
+      expect(
+        new Set(credentialRequestedEvents.map((event) => event.requestId)).size,
+        'the two Credential Requests should be two separate HTTP requests'
+      ).toBe(2);
+
+      for (const event of credentialRequestedEvents) {
+        expect(event.diagnostic?.['endpoint'], 'each Credential Request should call /credential').toBe('/credential');
+        expect(event.diagnostic?.['method'], 'each Credential Request should use POST').toBe('POST');
+
+        const contentType = requiredDiagnosticString(event, 'contentType');
+        expect(contentType.toLowerCase(), 'each Credential Request should use JSON content').toContain(
+          'application/json'
+        );
+
+        expect(event.diagnostic?.['authorizationScheme'], 'each Credential Request should use DPoP authorization').toBe(
+          'DPoP'
+        );
+        expect(
+          requiredDiagnosticString(event, 'accessTokenSha256'),
+          'each Credential Request evidence should include the access token hash'
+        ).not.toHaveLength(0);
+        expect(
+          requiredDiagnosticString(event, 'dpopProof'),
+          'each Credential Request should include a DPoP proof'
+        ).not.toHaveLength(0);
+      }
+    });
+
+    test('WP_057: each Credential Request is schema-valid and requests exactly one credential identifier with one proof, preventing a batch-style request.', () => {
+      assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+      for (const request of credentialRequests) {
+        expect(
+          request.credential_identifier,
+          'each Credential Request should carry exactly one credential_identifier'
+        ).toBeTypeOf('string');
+        expect(request.proofs.jwt, 'each Credential Request should carry exactly one proofs.jwt entry').toHaveLength(1);
+      }
+    });
+
+    test('WP_057: the two Credential Requests, taken as a set, request exactly the two offered credential identifiers.', () => {
+      assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+      expect(
+        new Set(requestedCredentialIdentifiers).size,
+        'the two Credential Requests should request distinct identifiers'
+      ).toBe(2);
+      expect(
+        [...requestedCredentialIdentifiers].sort(),
+        'the requested identifiers should equal the offered identifiers, independent of order'
+      ).toEqual([...offeredCredentialIdentifiers].sort());
+    });
+
+    test('WP_057: each Credential Request proof JWT is well-formed and verifies against the public JWK declared in its header.', async () => {
+      assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+      for (let index = 0; index < credentialProofJwts.length; index += 1) {
+        const header = credentialProofHeaders[index];
+        const payload = credentialProofPayloads[index];
+
+        expect(header.jwk, 'proof JWT header should include a public JWK').toBeDefined();
+        expect(header.jwk.kty, 'proof JWT key should not be symmetric').not.toBe('oct');
+        expect(header.jwk.d, 'proof JWT header should not expose private key material').toBeUndefined();
+        expect(payload.nonce, 'proof JWT should carry a non-empty nonce').not.toHaveLength(0);
+
+        const publicKey = await importJWK(header.jwk as JWK, header.alg);
+        await expect(
+          jwtVerify(credentialProofJwts[index], publicKey),
+          'proof JWT signature should verify with the declared public JWK'
+        ).resolves.toBeDefined();
+      }
+    });
+
+    test('WP_057: both Credential Requests are independently accepted, each producing a correlated issuer.credential.issued event.', () => {
+      assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+      expect(credentialIssuedEvents, 'exactly two issuer.credential.issued events should be observed').toHaveLength(2);
+
+      const requestedIds = credentialRequestedEvents.map((event) => event.requestId).sort();
+      const issuedIds = credentialIssuedEvents.map((event) => event.requestId).sort();
+      expect(issuedIds, 'issued events should correlate 1:1 with the requestId of the two Credential Requests').toEqual(
+        requestedIds
+      );
+
+      for (const event of credentialIssuedEvents) {
+        expect(event.diagnostic?.['statusCode'], 'each issued response should be HTTP 200').toBe(200);
+        expect(event.diagnostic?.['responseKind'], 'each issued response should be immediate (non-deferred)').toBe(
+          'immediate'
+        );
+      }
+    });
+  });
+
   describe('WP_017', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
@@ -1269,7 +1481,7 @@ describe('Test Cases for Issuance Phase', () => {
     }, 10_000);
   });
 
-  describe.skip.skip('WP_046a', () => {
+  describe('WP_046a', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1356,7 +1568,7 @@ describe('Test Cases for Issuance Phase', () => {
   // if any variant leaked its active fault, activating a fresh profile for an
   // unrelated scenario ID would be rejected by the Credential Issuer's
   // single-active-fault store.
-  describe.skip('WP_054 (missing code)', () => {
+  describe('WP_054 (missing code)', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1410,7 +1622,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_054a (invalid state)', () => {
+  describe('WP_054a (invalid state)', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1464,7 +1676,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_054b (invalid issuer)', () => {
+  describe('WP_054b (invalid issuer)', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1518,7 +1730,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('Authorization Response fault cleanup', () => {
+  describe('Authorization Response fault cleanup', () => {
     test('authorization-response faults are deactivated and a later scenario can activate a fresh profile', async () => {
       // Each `session.stop()` above already deactivates its own fault, but if
       // any Authorization Response negative scenario had leaked its active
@@ -1539,7 +1751,7 @@ describe('Test Cases for Issuance Phase', () => {
     }, 10_000);
   });
 
-  describe.skip('WP_Unsupported_Credential_Offer', () => {
+  describe('WP_Unsupported_Credential_Offer', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
     let credentialOfferUri: string;
@@ -1699,7 +1911,7 @@ describe('Test Cases for Issuance Phase', () => {
     }, 10_000);
   });
 
-  describe.skip('WP_Credential_Response_Claims_Missed', () => {
+  describe('WP_Credential_Response_Claims_Missed', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1750,7 +1962,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip.each([
+  describe.each([
     {
       scenario: wp060TypeMismatchScenario,
       label: 'type-mismatch',
@@ -1821,7 +2033,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_061', () => {
+  describe('WP_061', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1876,7 +2088,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_062a', () => {
+  describe('WP_062a', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 
@@ -1935,7 +2147,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_062b', () => {
+  describe('WP_062b', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
     let credentialOfferUri: string;
@@ -2025,7 +2237,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_065 / WP_066 deferred batch issuance', () => {
+  describe('WP_065 / WP_066 deferred batch issuance', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
     let batchSize: number;
@@ -2777,7 +2989,7 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
-  describe.skip('WP_064 / WP_064a / WP_064b', () => {
+  describe('WP_064 / WP_064a / WP_064b', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
 

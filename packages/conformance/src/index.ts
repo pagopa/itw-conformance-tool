@@ -73,6 +73,7 @@ export {
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario
 } from './scenarios/factories/wp-unsupported-credential-offer.js';
+export { wp057Scenario } from './scenarios/factories/wp-057.js';
 export { wp059Scenario } from './scenarios/factories/wp-059.js';
 export { wp060Scenarios, wp060TypeMismatchScenario, type Wp060Variant } from './scenarios/factories/wp-060.js';
 export { wp061Scenario } from './scenarios/factories/wp-061.js';
