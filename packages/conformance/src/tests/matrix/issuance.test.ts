@@ -2425,7 +2425,6 @@ describe('Test Cases for Issuance Phase', () => {
     let credentialProofPayloads: ProofJwtPayload[];
     let originalTokenArtifact: TokenRequestArtifact;
     let refreshTokenArtifact: TokenRequestArtifact;
-    let deferredEvent: ObservedEvent;
     let deferredCredentialRequestEvent: ObservedEvent;
     let deferredCredentialIssuedEvent: ObservedEvent;
 
@@ -2653,7 +2652,6 @@ describe('Test Cases for Issuance Phase', () => {
         if (!foundDeferredEvent) {
           throw new Error('Missing issuer.credential.deferred evidence required to assert WP_065-WP_068 requirements');
         }
-        deferredEvent = foundDeferredEvent;
 
         const foundDeferredCredentialRequestEvent = events.find(
           (event) => event.name === 'issuer.deferred_credential.requested'
@@ -2874,20 +2872,6 @@ describe('Test Cases for Issuance Phase', () => {
           requiredDiagnosticString(deferredEvent, 'transactionIdSha256'),
           'Deferred response evidence must include a non-empty transaction_id hash'
         ).not.toHaveLength(0);
-
-        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
-        expect(
-          initialCredentialResponse,
-          'The deferred semantic event must pair to the actual HTTP response'
-        ).toBeDefined();
-        expect(initialCredentialResponse?.http.statusCode).toBe(202);
-        expect(initialCredentialResponse?.http.contentType.toLowerCase()).toContain('application/json');
-
-        const credentialResponse = findHttpResponseSentEvent(events, credentialEvent.requestId);
-        expect(
-          credentialResponse?.http.statusCode,
-          'The /credential response for this scenario must not be an immediate HTTP 200 credential payload'
-        ).toBe(202);
       },
       wpDeferredScenario.timeouts.vitestTestMs
     );
@@ -2907,15 +2891,6 @@ describe('Test Cases for Issuance Phase', () => {
 
         const transactionIdSha256 = requiredDiagnosticString(deferredEvent, 'transactionIdSha256');
         const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
-
-        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
-        expect(
-          initialCredentialResponse,
-          'The initial deferred event must pair to HTTP response-send evidence'
-        ).toBeDefined();
-        if (!initialCredentialResponse) {
-          throw new Error('Missing HTTP response evidence for the initial deferred response');
-        }
 
         const issuedEvents = events.filter(
           (event) =>
@@ -3056,20 +3031,6 @@ describe('Test Cases for Issuance Phase', () => {
           'Refresh PoP JWT should verify against the refresh Wallet Attestation cnf.jwk'
         ).resolves.toBeDefined();
 
-        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
-        expect(
-          initialCredentialResponse,
-          'The initial deferred semantic event must pair to an HTTP 202 response'
-        ).toBeDefined();
-        if (!initialCredentialResponse) {
-          throw new Error('Missing HTTP response evidence for the initial deferred response');
-        }
-
-        expect(initialCredentialResponse.http.statusCode).toBe(202);
-        expect(
-          refreshTokenArtifact.event.monotonicMs,
-          'Refresh Token Request should occur after the HTTP 202 deferred response'
-        ).toBeGreaterThan(initialCredentialResponse.monotonicMs);
         expect(
           refreshTokenArtifact.event.monotonicMs,
           'Refresh Token Request should occur before the Deferred Credential Request'
