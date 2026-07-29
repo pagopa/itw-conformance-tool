@@ -1,3 +1,4 @@
+import { wp017Scenario } from './factories/wp-017.js';
 import { wp046aScenario } from './factories/wp-046a.js';
 import { wp054Scenarios } from './factories/wp-054.js';
 import { wp054aInvalidStateScenario } from './factories/wp-054a.js';
@@ -18,6 +19,7 @@ import type { ProtocolObservedScenarioDefinition } from './definitions.js';
 
 export const issuanceScenarios: ProtocolObservedScenarioDefinition[] = [
   wpCiHappyScenario,
+  wp017Scenario,
   wp046aScenario,
   wp057Scenario,
   wp059Scenario,

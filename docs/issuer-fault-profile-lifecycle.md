@@ -21,7 +21,8 @@ dal runner prima dello stimolo e applicati dalla route `/code/jwt` prima della f
 - `packages/ipc`: definisce i messaggi `issuer.fault.activate`, `issuer.fault.activated`,
   `issuer.fault.deactivate` e `issuer.fault.deactivated`, piu il client usato dal runner.
 - `apps/cli`: avvia i servizi locali, apre un canale di controllo locale e inoltra i comandi dal runner
-  al processo figlio `credential-issuer`.
+  al processo figlio proprietario del messaggio. I comandi Issuer restano diretti a `credential-issuer`;
+  i comandi Trust Anchor sono descritti in `docs/trust-anchor-fault-profile-lifecycle.md`.
 - `apps/itw-credential-issuer`: mantiene lo stato del profilo attivo in memoria e applica la mutazione
   al punto giusto della risposta.
 
@@ -84,8 +85,11 @@ Quando viene eseguito `itwct test issuance` oppure la matrice completa:
    - named pipe su Windows.
 4. L'endpoint viene passato al processo Vitest tramite `ITWCT_SERVICE_CONTROL_ENDPOINT`.
 
-Il canale non e una route HTTP pubblica. Il relay accetta solo messaggi di fault dell'issuer e li
-inoltra solo al processo gestito `credential-issuer`.
+Il canale non e una route HTTP pubblica. Il relay accetta solo messaggi allow-listed e li inoltra al
+processo gestito proprietario del controllo:
+
+- `issuer.fault.*` e `issuer.config.*` verso `credential-issuer`;
+- `trust-anchor.fault.*` verso `trust-anchor`.
 
 ## 3. Il test crea il controller del runner
 
@@ -135,9 +139,10 @@ Per i comandi ammessi, il relay usa `ServiceSupervisor.sendToChild('credential-i
 Se il processo `credential-issuer` non e gestito o non e piu disponibile, il relay risponde con
 `SERVICE_UNAVAILABLE`.
 
-Per ogni richiesta inoltrata, il relay conserva `requestId`, socket del chiamante e timeout. Quando il
-Credential Issuer risponde con `issuer.fault.activated`, `issuer.fault.deactivated` oppure
-`service.error`, il relay rimanda la risposta al client giusto usando lo stesso `requestId`.
+Per ogni richiesta inoltrata, il relay conserva `requestId`, servizio atteso, socket del chiamante e
+timeout. Quando il Credential Issuer risponde con `issuer.fault.activated`, `issuer.fault.deactivated`
+oppure `service.error`, il relay rimanda la risposta al client giusto usando lo stesso `requestId`. Una
+risposta proveniente da un servizio diverso non puo chiudere la pending request.
 
 ## 6. Il Credential Issuer registra il profilo attivo
 
