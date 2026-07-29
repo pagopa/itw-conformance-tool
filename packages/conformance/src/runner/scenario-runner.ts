@@ -21,6 +21,7 @@ import {
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
 import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
+import { type TrustAnchorFaultController } from '../services/trust-anchor-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
@@ -72,6 +73,10 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   issuerFaultController?: IssuerScenarioController;
   /** IT Wallet specification version reported when activating an issuer fault. Defaults to '1.4'. */
   issuerFaultSpecVersion?: string;
+  /** Required to run any scenario that declares `setup.trustAnchorFault`. */
+  trustAnchorFaultController?: TrustAnchorFaultController;
+  /** IT Wallet specification version reported when activating a Trust Anchor fault. Defaults to '1.4'. */
+  trustAnchorFaultSpecVersion?: string;
   /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
   browserOpener?: BrowserOpener;
 }
@@ -303,8 +308,10 @@ export function createProtocolObservedScenarioRunner(
 
       const issuerFaultProfile = definition.setup?.issuerFault;
       const issuerConfig = definition.setup?.issuerConfig;
+      const trustAnchorFaultProfile = definition.setup?.trustAnchorFault;
       let issuerConfigActive = false;
       let issuerFaultActive = false;
+      let trustAnchorFaultActive = false;
 
       const deactivateIssuerConfigIfActive = async (): Promise<void> => {
         if (!issuerConfigActive) return;
@@ -316,6 +323,12 @@ export function createProtocolObservedScenarioRunner(
         if (!issuerFaultActive) return;
         issuerFaultActive = false;
         await options.issuerFaultController?.deactivateIssuerFault({ scenarioId: initialCorrelationId });
+      };
+
+      const deactivateTrustAnchorFaultIfActive = async (): Promise<void> => {
+        if (!trustAnchorFaultActive) return;
+        trustAnchorFaultActive = false;
+        await options.trustAnchorFaultController?.deactivateTrustAnchorFault({ scenarioId: initialCorrelationId });
       };
 
       try {
@@ -334,6 +347,23 @@ export function createProtocolObservedScenarioRunner(
             profile: issuerFaultProfile
           });
           issuerFaultActive = true;
+        }
+
+        if (trustAnchorFaultProfile) {
+          if (!options.trustAnchorFaultController) {
+            throw new Error(
+              `Scenario ${definition.id} declares setup.trustAnchorFault, but no trustAnchorFaultController is configured`
+            );
+          }
+
+          // Await activation before creating/showing the stimulus, so the
+          // Trust Anchor never serves a nominal Entity Configuration for this run.
+          await options.trustAnchorFaultController.activateTrustAnchorFault({
+            scenarioId: initialCorrelationId,
+            specVersion: options.trustAnchorFaultSpecVersion ?? DEFAULT_ISSUER_FAULT_SPEC_VERSION,
+            profile: trustAnchorFaultProfile
+          });
+          trustAnchorFaultActive = true;
         }
 
         if (issuerConfig) {
@@ -486,6 +516,7 @@ export function createProtocolObservedScenarioRunner(
             // Deactivate last so any deactivation failure still surfaces to the caller.
             await deactivateIssuerConfigIfActive();
             await deactivateIssuerFaultIfActive();
+            await deactivateTrustAnchorFaultIfActive();
           },
           async [Symbol.asyncDispose]() {
             await this.stop();
@@ -500,6 +531,7 @@ export function createProtocolObservedScenarioRunner(
         // session object exists) so a fault is never left dangling.
         await deactivateIssuerConfigIfActive().catch(() => undefined);
         await deactivateIssuerFaultIfActive().catch(() => undefined);
+        await deactivateTrustAnchorFaultIfActive().catch(() => undefined);
         throw error;
       }
     },
