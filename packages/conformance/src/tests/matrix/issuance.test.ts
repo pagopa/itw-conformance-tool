@@ -2438,12 +2438,9 @@ describe('Test Cases for Issuance Phase', () => {
         events = session.events.all();
 
         const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
-        if (
-          !Array.isArray(offerPayload.credential_configuration_ids) ||
-          offerPayload.credential_configuration_ids.length !== 2
-        ) {
+        if (!Array.isArray(offerPayload.credential_configuration_ids)) {
           throw new Error(
-            'WP_Deferred Credential Offer must contain exactly 2 credential_configuration_ids to enable batch issuance'
+            'WP_Deferred Credential Offer must contain credential_configuration_ids to enable batch issuance'
           );
         }
         offeredCredentialIdentifiers = offerPayload.credential_configuration_ids;

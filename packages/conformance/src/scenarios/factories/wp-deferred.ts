@@ -9,7 +9,7 @@ export const wpDeferredScenario: ProtocolObservedScenarioDefinition = {
   services: ['credentialIssuer', 'federation'],
   stimulus: {
     type: 'credential-offer',
-    credentialConfigurationIds: ['mso_mdoc_CompanyBadge'],
+    credentialConfigurationIds: ['org.iso.18013.5.1.mDL'],
     delivery: ['deep-link', 'qr']
   },
   setup: {
