@@ -64,6 +64,16 @@ export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuanc
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
+export {
+  WP_CREDENTIAL_REISSUANCE_EXPIRED_TOKENS,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_REFRESHED_REFRESH_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_STATUS_INDEX,
+  WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS,
+  wpCredentialReissuanceScenario,
+  wpCredentialReissuanceUpdatedIssuerConfig
+} from './scenarios/factories/wp-credential-reissuance.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';
 export { wp054MissingCodeScenario, wp054Scenarios, type Wp054MissingClaim } from './scenarios/factories/wp-054.js';
 export { wp054aInvalidStateScenario } from './scenarios/factories/wp-054a.js';

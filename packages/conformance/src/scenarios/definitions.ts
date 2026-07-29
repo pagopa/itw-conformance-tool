@@ -70,6 +70,8 @@ export interface ScenarioInstructions {
 }
 
 export type RequiredEventMatchValue =
+  | boolean
+  | number
   | string
   | {
       endpoint: LocalServiceName;
@@ -87,6 +89,12 @@ export type RequiredEventExpectation = ObservedEventName | RequiredEventEvidence
 
 export interface IssuerRuntimeConfigSetup {
   batchIssuanceByDeferred: boolean;
+  accessTokenTtlSeconds?: number;
+  refreshTokenTtlSeconds?: number;
+  statusList?: {
+    bits: 4;
+    values: number[];
+  };
 }
 
 export function getRequiredEventName(expectation: RequiredEventExpectation): ObservedEventName {
