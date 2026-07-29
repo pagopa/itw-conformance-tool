@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 
@@ -45,6 +47,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
       const { baseURL, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
       const form = new URLSearchParams(bodyString);
       const grantType = form.get('grant_type') ?? undefined;
+      const presentedRefreshToken = form.get('refresh_token') ?? undefined;
       const scenarioCorrelationId = request.conformance?.correlation?.correlationId ?? null;
       const dpopHeaderPresent = request.headers.dpop !== undefined;
 
@@ -84,7 +87,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             .filter(([, value]) => typeof value === 'string' || Array.isArray(value))
             .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value] as [string, string])
         );
-        const { issuedAccessToken, issuerState, response } = await service.createAccessToken({
+        const { issuedAccessToken, issuedRefreshToken, issuerState, response } = await service.createAccessToken({
           baseURL,
           callbacks: {
             generateRandom: oauthCallbacks.generateRandom,
@@ -114,7 +117,12 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
               accessTokenSha256: issuedAccessToken.sha256,
               body: request.body,
               grantType,
-              headers: Object.fromEntries(tokenRequestHeaders.entries())
+              headers: Object.fromEntries(tokenRequestHeaders.entries()),
+              method: request.method,
+              presentedRefreshTokenSha256: presentedRefreshToken ? sha256Base64Url(presentedRefreshToken) : undefined,
+              refreshTokenExp: issuedRefreshToken?.exp,
+              refreshTokenSha256: issuedRefreshToken?.sha256,
+              tokenType: typeof response.token_type === 'string' ? response.token_type : undefined
             }
           })
         );
@@ -167,3 +175,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
 };
 
 export default tokenRoute;
+
+function sha256Base64Url(value: string): string {
+  return createHash('sha256').update(value, 'ascii').digest('base64url');
+}

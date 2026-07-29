@@ -107,6 +107,10 @@ export interface CreateAccessTokenResult {
     readonly expiresIn?: number;
     readonly sha256: string;
   };
+  readonly issuedRefreshToken?: {
+    readonly exp: number;
+    readonly sha256: string;
+  };
   readonly response: Record<string, unknown>;
 }
 
@@ -318,6 +322,9 @@ export class TokenService {
     return {
       issuerState: parRequest.issuer_state ?? null,
       issuedAccessToken: describeIssuedAccessToken(accessTokenResponse.access_token, accessTokenResponse.expires_in),
+      issuedRefreshToken: accessTokenResponse.refresh_token
+        ? describeIssuedRefreshToken(accessTokenResponse.refresh_token)
+        : undefined,
       response: accessTokenResponse
     };
   }
@@ -473,7 +480,7 @@ export class TokenService {
       throw new CreateAccessTokenError('Refresh token issuance failed');
     }
 
-    const newRefreshToken = decodeIssuedRefreshToken(accessTokenResponse.refresh_token);
+    const newRefreshToken = describeIssuedRefreshToken(accessTokenResponse.refresh_token);
 
     // Finalize the rotation: swap the throwaway placeholder for the real new
     // entry now that its jti/expiry are known. This always succeeds because
@@ -493,6 +500,7 @@ export class TokenService {
     return {
       issuerState: null,
       issuedAccessToken: describeIssuedAccessToken(accessTokenResponse.access_token, accessTokenResponse.expires_in),
+      issuedRefreshToken: describeIssuedRefreshToken(accessTokenResponse.refresh_token),
       response: accessTokenResponse
     };
   }
@@ -506,7 +514,7 @@ export class TokenService {
     scope?: string;
     subject: string;
   }): Promise<void> {
-    const { jti, exp } = decodeIssuedRefreshToken(input.refreshTokenJwt);
+    const { jti, exp } = describeIssuedRefreshToken(input.refreshTokenJwt);
 
     const entry: RefreshTokenEntry = {
       authFlow: input.authFlow,
@@ -563,14 +571,14 @@ function describeIssuedAccessToken(
  * minted via `createAccessTokenResponse`. Failures here indicate a bug in the
  * SDK/issuer rather than an untrusted client input.
  */
-function decodeIssuedRefreshToken(refreshTokenJwt: string): { exp: number; jti: string } {
+function describeIssuedRefreshToken(refreshTokenJwt: string): { exp: number; jti: string; sha256: string } {
   try {
     const { payload } = decodeJwt({
       headerSchema: zRefreshTokenProfileJwtHeader,
       jwt: refreshTokenJwt,
       payloadSchema: zRefreshTokenProfileJwtPayload
     });
-    return { exp: payload.exp, jti: payload.jti };
+    return { exp: payload.exp, jti: payload.jti, sha256: sha256Base64Url(refreshTokenJwt) };
   } catch {
     throw new CreateAccessTokenError('Issued refresh token failed profile validation');
   }

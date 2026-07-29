@@ -1,8 +1,10 @@
 import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
 
 export const WP_CREDENTIAL_REISSUANCE_EXPIRED_TOKENS = 'WP_CREDENTIAL_REISSUANCE_EXPIRED_TOKENS';
+export const WP_CREDENTIAL_REISSUANCE_REFRESH_ACCESS_TOKEN = 'WP_CREDENTIAL_REISSUANCE_REFRESH_ACCESS_TOKEN';
 export const WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN = 'WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN';
 export const WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS = 5;
+export const WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS = 900;
 export const WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN_TTL_SECONDS = 900;
 export const WP_CREDENTIAL_REISSUANCE_INITIAL_STATUS_LIST_TTL_SECONDS = 10;
 export const WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS = 300;
@@ -173,6 +175,95 @@ export const wpCredentialReissuanceScenario: ProtocolObservedScenarioDefinition 
 };
 
 export const wpCredentialReissuanceUpdatedIssuerConfig = {
+  batchIssuanceByDeferred: false,
+  accessTokenTtlSeconds: WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
+  refreshTokenTtlSeconds: WP_CREDENTIAL_REISSUANCE_REFRESHED_REFRESH_TOKEN_TTL_SECONDS,
+  statusList: {
+    bits: 4,
+    values: updatedStatusList
+  }
+} as const;
+
+export const wpCredentialReissuanceRefreshAccessTokenScenario: ProtocolObservedScenarioDefinition = {
+  id: WP_CREDENTIAL_REISSUANCE_REFRESH_ACCESS_TOKEN,
+  title: 'Refresh-token credential re-issuance after Status List UPDATE',
+  phase: 'ISSUANCE',
+  automationMode: 'interactive-protocol-observed',
+  services: ['credentialIssuer', 'federation'],
+  stimulus: {
+    type: 'credential-offer',
+    credentialConfigurationId: 'dc_sd_jwt_EuropeanDisabilityCard',
+    delivery: ['deep-link', 'qr']
+  },
+  setup: {
+    issuerConfig: {
+      batchIssuanceByDeferred: false,
+      accessTokenTtlSeconds: WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
+      refreshTokenTtlSeconds: WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS,
+      statusList: {
+        bits: 4,
+        ttlSeconds: WP_CREDENTIAL_REISSUANCE_INITIAL_STATUS_LIST_TTL_SECONDS,
+        values: initialStatusList
+      }
+    }
+  },
+  entryEvent: 'issuer.entity_configuration.requested',
+  requiredEvents: [
+    ...initialIssuanceRequiredEvents,
+    updatedStatusListRequiredEvent,
+    {
+      event: 'issuer.token.requested',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/token', grantType: 'refresh_token' }
+    },
+    {
+      event: 'issuer.nonce.requested',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/nonce' }
+    },
+    {
+      event: 'issuer.credential.requested',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/credential' }
+    },
+    {
+      event: 'issuer.credential.issued',
+      service: 'credential-issuer',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/credential', responseKind: 'immediate' }
+    }
+  ],
+  timeouts: {
+    testerActionMs: 300_000,
+    protocolStepMs: 120_000,
+    vitestTestMs: 720_000
+  },
+  verdictRules: [{ type: 'entry-event-required' }, { type: 'required-events-in-order' }],
+  instructions: {
+    goal: 'Verify that a Wallet Instance detects a Status List UPDATE after the original Access Token expires and uses the still-valid Refresh Token to obtain a new DPoP-bound Access Token.',
+    expectedBehavior:
+      'After the first credential is issued, keep the wallet and test runner active. The test waits until the original Access Token and any nominal Status List Token cache have expired, switches credential status index 1 to UPDATE, and asks you to reopen or foreground the wallet. The wallet must request the updated Status List, perform one successful refresh_token exchange with the originally issued Refresh Token, obtain a fresh nonce, and retrieve a newly issued DPoP-bound Digital Credential with the refreshed Access Token. It must not start a second PAR or Authorization flow during this re-issuance window.',
+    prerequisites: [
+      'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
+      'The wallet must check Status List Tokens and support automatic Refresh Token flow for credential re-issuance.',
+      'Run the test from the workspace root, where config.ini and the compiled local services are available.',
+      'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
+    ],
+    steps: [
+      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services with a short-lived Access Token, a long-lived Refresh Token, and nominal status index 1.',
+      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance and complete the first issuance.',
+      'Keep the wallet and test process active after the first credential. The test waits until the original Access Token and any observed nominal Status List Token have expired, then switches status index 1 to UPDATE.',
+      'When the tool announces the status transition, reopen or foreground the wallet so it checks the Status List and continues automatic re-issuance.',
+      'Do not start a new issuance flow manually. The runner continues after observing the updated Status List, successful Refresh Token exchange, second Nonce request, second DPoP Credential Request, and updated credential issuance.'
+    ]
+  },
+  missingRequiredEventPolicy: 'inconclusive'
+};
+
+export const wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig = {
   batchIssuanceByDeferred: false,
   accessTokenTtlSeconds: WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
   refreshTokenTtlSeconds: WP_CREDENTIAL_REISSUANCE_REFRESHED_REFRESH_TOKEN_TTL_SECONDS,

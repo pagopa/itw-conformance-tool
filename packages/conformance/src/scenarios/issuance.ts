@@ -9,6 +9,7 @@ import { wp062aScenario } from './factories/wp-062a.js';
 import { wp062bScenario } from './factories/wp-062b.js';
 import { wpCiHappyScenario } from './factories/wp-ci-happy.js';
 import {
+  wpCredentialReissuanceRefreshAccessTokenScenario,
   wpCredentialReissuanceScenario,
   wpCredentialReissuanceValidAccessTokenScenario
 } from './factories/wp-credential-reissuance.js';
@@ -29,6 +30,7 @@ export const issuanceScenarios: ProtocolObservedScenarioDefinition[] = [
   wp062bScenario,
   wpNotificationScenario,
   wpCredentialReissuanceScenario,
+  wpCredentialReissuanceRefreshAccessTokenScenario,
   wpCredentialReissuanceValidAccessTokenScenario,
   wpDeferredScenario,
   wpUnsupportedCredentialOfferScenario,
