@@ -106,19 +106,29 @@ export interface CreateAccessTokenResult {
 type FederationMetadata = ReturnType<typeof getEntityConfigurationClaimsMetadata>;
 type AuthorizationServerMetadata = NonNullable<NonNullable<FederationMetadata>['oauth_authorization_server']>;
 
+export interface TokenServiceOptions {
+  accessTokenTtlSeconds?: number;
+  refreshTokenTtlSeconds?: number;
+}
+
 export class TokenService {
   readonly #parLookup: ITokenParRepository;
   readonly #jwksRepository: JwksRepository;
   readonly #refreshTokenRepository: IRefreshTokenRepository;
+  readonly #accessTokenTtlSeconds: number;
+  readonly #refreshTokenTtlSeconds: number;
 
   constructor(
     parLookup: ITokenParRepository,
     jwksRepository: JwksRepository,
-    refreshTokenRepository: IRefreshTokenRepository
+    refreshTokenRepository: IRefreshTokenRepository,
+    options: TokenServiceOptions = {}
   ) {
     this.#parLookup = parLookup;
     this.#jwksRepository = jwksRepository;
     this.#refreshTokenRepository = refreshTokenRepository;
+    this.#accessTokenTtlSeconds = options.accessTokenTtlSeconds ?? ACCESS_TOKEN_TTL_SECONDS;
+    this.#refreshTokenTtlSeconds = options.refreshTokenTtlSeconds ?? REFRESH_TOKEN_TTL_SECONDS;
   }
 
   async createAccessToken(options: CreateAccessTokenOptions): Promise<CreateAccessTokenResult> {
@@ -278,8 +288,8 @@ export class TokenService {
       callbacks: options.callbacks,
       clientId: parRequest.client_id,
       dpop: verifyAccessToken.dpop,
-      expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
-      refreshTokenExpiresInSeconds: REFRESH_TOKEN_TTL_SECONDS,
+      expiresInSeconds: this.#accessTokenTtlSeconds,
+      refreshTokenExpiresInSeconds: this.#refreshTokenTtlSeconds,
       scope: parRequest.scope,
       signer,
       subject: parRequest.client_id,
@@ -440,8 +450,8 @@ export class TokenService {
       callbacks: options.callbacks,
       clientId: payload.client_id,
       dpop: { jwk: dpopVerification.header.jwk },
-      expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
-      refreshTokenExpiresInSeconds: REFRESH_TOKEN_TTL_SECONDS,
+      expiresInSeconds: this.#accessTokenTtlSeconds,
+      refreshTokenExpiresInSeconds: this.#refreshTokenTtlSeconds,
       scope,
       signer,
       subject: payload.sub,

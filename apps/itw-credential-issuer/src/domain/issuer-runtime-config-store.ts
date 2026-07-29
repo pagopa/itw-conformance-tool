@@ -1,5 +1,11 @@
 export interface IssuerRuntimeConfig {
   batchIssuanceByDeferred: boolean;
+  accessTokenTtlSeconds?: number;
+  refreshTokenTtlSeconds?: number;
+  statusList?: {
+    bits: 4;
+    values: number[];
+  };
 }
 
 export interface ActiveIssuerRuntimeConfig {
@@ -37,11 +43,32 @@ export interface IssuerRuntimeConfigStore {
   deactivate(input: DeactivateIssuerRuntimeConfigInput): IssuerRuntimeConfigStoreResult;
   getActive(): ActiveIssuerRuntimeConfig | undefined;
   resolveBatchIssuanceByDeferred(staticValue: boolean): boolean;
+  resolveAccessTokenTtlSeconds(staticValue: number): number;
+  resolveRefreshTokenTtlSeconds(staticValue: number): number;
+  resolveStatusList<T extends { bits: number; values: number[] }>(staticValue: T): T;
   clear(): void;
 }
 
 function isValidConfig(config: IssuerRuntimeConfig): boolean {
-  return typeof config.batchIssuanceByDeferred === 'boolean';
+  return (
+    typeof config.batchIssuanceByDeferred === 'boolean' &&
+    isValidOptionalPositiveInteger(config.accessTokenTtlSeconds) &&
+    isValidOptionalPositiveInteger(config.refreshTokenTtlSeconds) &&
+    isValidStatusListConfig(config.statusList)
+  );
+}
+
+function isValidOptionalPositiveInteger(value: number | undefined): boolean {
+  return value === undefined || (Number.isInteger(value) && value > 0);
+}
+
+function isValidStatusListConfig(config: IssuerRuntimeConfig['statusList']): boolean {
+  if (config === undefined) return true;
+  if (config.bits !== 4) return false;
+  if (!Array.isArray(config.values) || config.values.length === 0) return false;
+
+  const maxValue = 2 ** config.bits - 1;
+  return config.values.every((value) => Number.isInteger(value) && value >= 0 && value <= maxValue);
 }
 
 export function createIssuerRuntimeConfigStore(): IssuerRuntimeConfigStore {
@@ -94,6 +121,21 @@ export function createIssuerRuntimeConfigStore(): IssuerRuntimeConfigStore {
     },
     resolveBatchIssuanceByDeferred(staticValue) {
       return active?.config.batchIssuanceByDeferred ?? staticValue;
+    },
+    resolveAccessTokenTtlSeconds(staticValue) {
+      return active?.config.accessTokenTtlSeconds ?? staticValue;
+    },
+    resolveRefreshTokenTtlSeconds(staticValue) {
+      return active?.config.refreshTokenTtlSeconds ?? staticValue;
+    },
+    resolveStatusList(staticValue) {
+      const override = active?.config.statusList;
+      if (!override) return staticValue;
+
+      return {
+        bits: override.bits,
+        values: [...override.values]
+      } as typeof staticValue;
     },
     clear() {
       active = undefined;
