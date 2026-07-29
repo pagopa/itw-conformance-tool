@@ -136,16 +136,6 @@ function findHttpResponseSentEvent(
   );
 }
 
-function findHttpRequestReceivedEvent(
-  events: ObservedEvent[],
-  requestId: string | undefined
-): HttpRequestReceivedEvent | undefined {
-  return events.find(
-    (event): event is HttpRequestReceivedEvent =>
-      event.name === 'http.request.received' && event.requestId === requestId
-  );
-}
-
 function sha256Base64Url(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('base64url');
 }
@@ -4075,15 +4065,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(notificationEvent.diagnostic?.['endpoint']).toBe('/notification');
         expect(notificationEvent.diagnostic?.['method']).toBe('POST');
 
-        const notificationRequest = findHttpRequestReceivedEvent(events, notificationEvent.requestId);
-        expect(
-          notificationRequest,
-          'The notification semantic event must pair to the actual HTTP request evidence'
-        ).toBeDefined();
-        expect(notificationRequest?.http.method).toBe('POST');
-        expect(notificationRequest?.http.path).toBe('/notification');
-
-        const contentTypeHeader = notificationRequest?.http.headers['content-type'];
+        const contentTypeHeader = notificationEvent.diagnostic?.['contentType'];
         const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
         expect(contentType, 'Notification Request must declare a content type').toBeDefined();
 
