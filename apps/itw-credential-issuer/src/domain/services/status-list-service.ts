@@ -10,6 +10,7 @@ import type { BitsPerStatus } from '@sd-jwt/jwt-status-list';
 
 export interface StatusListSettings {
   bits: BitsPerStatus;
+  ttlSeconds?: number;
   values: number[];
 }
 
@@ -26,15 +27,16 @@ export class StatusListService {
   ): Promise<string> {
     const statusList = createStatusList(settings.values, settings.bits);
     const lst = statusList.compressStatusList();
+    const ttlSeconds = settings.ttlSeconds ?? STATUS_LIST_TTL_SECONDS;
 
     const now = Math.floor(Date.now() / 1000);
     const payload: JWTPayload = {
-      exp: now + STATUS_LIST_TTL_SECONDS,
+      exp: now + ttlSeconds,
       iat: now,
       iss: baseURL,
       status_list: { bits: settings.bits, lst },
       sub: STATUS_LIST_URI(baseURL),
-      ttl: STATUS_LIST_TTL_SECONDS
+      ttl: ttlSeconds
     };
 
     const { private: privateSig } = this.jwksRepository.getSign();

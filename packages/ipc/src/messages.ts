@@ -18,6 +18,7 @@ const issuerConfigSchema = z
     statusList: z
       .object({
         bits: z.literal(4),
+        ttlSeconds: z.number().int().positive().optional(),
         values: z.array(z.number().int().min(0).max(15)).nonempty()
       })
       .strict()

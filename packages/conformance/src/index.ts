@@ -67,12 +67,17 @@ export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
 export {
   WP_CREDENTIAL_REISSUANCE_EXPIRED_TOKENS,
   WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_STATUS_LIST_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_REFRESHED_REFRESH_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_STATUS_INDEX,
   WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS,
+  WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN,
+  WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN_TTL_SECONDS,
   wpCredentialReissuanceScenario,
-  wpCredentialReissuanceUpdatedIssuerConfig
+  wpCredentialReissuanceUpdatedIssuerConfig,
+  wpCredentialReissuanceValidAccessTokenScenario,
+  wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig
 } from './scenarios/factories/wp-credential-reissuance.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';
 export { wp054MissingCodeScenario, wp054Scenarios, type Wp054MissingClaim } from './scenarios/factories/wp-054.js';

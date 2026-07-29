@@ -4,6 +4,7 @@ export interface IssuerRuntimeConfig {
   refreshTokenTtlSeconds?: number;
   statusList?: {
     bits: 4;
+    ttlSeconds?: number;
     values: number[];
   };
 }
@@ -65,6 +66,7 @@ function isValidOptionalPositiveInteger(value: number | undefined): boolean {
 function isValidStatusListConfig(config: IssuerRuntimeConfig['statusList']): boolean {
   if (config === undefined) return true;
   if (config.bits !== 4) return false;
+  if (!isValidOptionalPositiveInteger(config.ttlSeconds)) return false;
   if (!Array.isArray(config.values) || config.values.length === 0) return false;
 
   const maxValue = 2 ** config.bits - 1;
@@ -134,6 +136,7 @@ export function createIssuerRuntimeConfigStore(): IssuerRuntimeConfigStore {
 
       return {
         bits: override.bits,
+        ...(override.ttlSeconds !== undefined && { ttlSeconds: override.ttlSeconds }),
         values: [...override.values]
       } as typeof staticValue;
     },

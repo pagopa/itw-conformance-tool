@@ -84,7 +84,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             .filter(([, value]) => typeof value === 'string' || Array.isArray(value))
             .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value] as [string, string])
         );
-        const { issuerState, response } = await service.createAccessToken({
+        const { issuedAccessToken, issuerState, response } = await service.createAccessToken({
           baseURL,
           callbacks: {
             generateRandom: oauthCallbacks.generateRandom,
@@ -109,7 +109,11 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             requestId: request.id,
             diagnostic: {
               endpoint: '/token',
+              accessTokenExp: issuedAccessToken.exp,
+              accessTokenExpiresIn: issuedAccessToken.expiresIn,
+              accessTokenSha256: issuedAccessToken.sha256,
               body: request.body,
+              grantType,
               headers: Object.fromEntries(tokenRequestHeaders.entries())
             }
           })

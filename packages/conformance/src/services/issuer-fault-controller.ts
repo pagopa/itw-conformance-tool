@@ -19,6 +19,7 @@ export interface IssuerRuntimeConfig {
   refreshTokenTtlSeconds?: number;
   statusList?: {
     bits: 4;
+    ttlSeconds?: number;
     values: number[];
   };
 }

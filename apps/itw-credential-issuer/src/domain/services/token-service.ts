@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   createAccessTokenResponse,
@@ -9,6 +9,8 @@ import {
   verifyTokenDPoP,
   Oauth2Error,
   PkceCodeChallengeMethod,
+  zAccessTokenProfileJwtHeader,
+  zAccessTokenProfileJwtPayload,
   zRefreshTokenProfileJwtHeader,
   zRefreshTokenProfileJwtPayload
 } from '@pagopa/io-wallet-oauth2';
@@ -100,6 +102,11 @@ export interface CreateAccessTokenResult {
    * `null` for the refresh_token grant, which has no associated PAR request.
    */
   readonly issuerState: string | null;
+  readonly issuedAccessToken: {
+    readonly exp: number;
+    readonly expiresIn?: number;
+    readonly sha256: string;
+  };
   readonly response: Record<string, unknown>;
 }
 
@@ -308,7 +315,11 @@ export class TokenService {
       });
     }
 
-    return { issuerState: parRequest.issuer_state ?? null, response: accessTokenResponse };
+    return {
+      issuerState: parRequest.issuer_state ?? null,
+      issuedAccessToken: describeIssuedAccessToken(accessTokenResponse.access_token, accessTokenResponse.expires_in),
+      response: accessTokenResponse
+    };
   }
 
   async #exchangeRefreshToken(input: {
@@ -479,7 +490,11 @@ export class TokenService {
       subject: payload.sub
     });
 
-    return { issuerState: null, response: accessTokenResponse };
+    return {
+      issuerState: null,
+      issuedAccessToken: describeIssuedAccessToken(accessTokenResponse.access_token, accessTokenResponse.expires_in),
+      response: accessTokenResponse
+    };
   }
 
   async #persistIssuedRefreshToken(input: {
@@ -521,6 +536,26 @@ function buildAdditionalPayload(authorizationDetails: unknown, authFlow?: string
     authorization_details: authorizationDetails,
     ...(authFlow && { auth_flow: authFlow })
   };
+}
+
+function sha256Base64Url(value: string): string {
+  return createHash('sha256').update(value, 'ascii').digest('base64url');
+}
+
+function describeIssuedAccessToken(
+  accessTokenJwt: string,
+  expiresIn: number | undefined
+): CreateAccessTokenResult['issuedAccessToken'] {
+  try {
+    const { payload } = decodeJwt({
+      headerSchema: zAccessTokenProfileJwtHeader,
+      jwt: accessTokenJwt,
+      payloadSchema: zAccessTokenProfileJwtPayload
+    });
+    return { exp: payload.exp, expiresIn, sha256: sha256Base64Url(accessTokenJwt) };
+  } catch {
+    throw new CreateAccessTokenError('Issued access token failed profile validation');
+  }
 }
 
 /**
