@@ -10,10 +10,12 @@ import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/hel
 import sensiblePlugin from './plugins/external/sensible.js';
 import swaggerPlugin from './plugins/external/swagger.js';
 import keysPlugin from './plugins/keys.js';
+import trustAnchorFaultsPlugin from './plugins/trust-anchor-faults.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
   await app.register(keysPlugin);
+  await app.register(trustAnchorFaultsPlugin);
   await app.register(conformancePlugin);
 
   await app.register(corsPlugin, corsConfig);

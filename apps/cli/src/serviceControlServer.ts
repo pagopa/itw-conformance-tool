@@ -7,7 +7,7 @@ import path from 'node:path';
 import { parseIpcMessage, SERVICE_PROTOCOL_VERSION } from '@itw-conformance-tool/ipc';
 
 import type { ServiceSupervisor, SupervisedService } from './supervisor.js';
-import type { IpcMessage } from '@itw-conformance-tool/ipc';
+import type { IpcMessage, LocalServiceName } from '@itw-conformance-tool/ipc';
 
 const FRAME_DELIMITER = '\n';
 const MAX_FRAME_BYTES = 64 * 1024;
@@ -24,6 +24,7 @@ export interface ServiceControlServer {
 }
 
 interface PendingChildResponse {
+  expectedService: LocalServiceName;
   socket: net.Socket;
   timeout: NodeJS.Timeout;
 }
@@ -35,7 +36,9 @@ const CONTROL_REQUEST_TARGETS = {
   'issuer.fault.activate': 'credential-issuer',
   'issuer.fault.deactivate': 'credential-issuer',
   'rp.fault.activate': 'relying-party',
-  'rp.fault.deactivate': 'relying-party'
+  'rp.fault.deactivate': 'relying-party',
+  'trust-anchor.fault.activate': 'trust-anchor',
+  'trust-anchor.fault.deactivate': 'trust-anchor'
 } as const satisfies Partial<Record<IpcMessage['type'], SupervisedService>>;
 
 type ControlRequestType = keyof typeof CONTROL_REQUEST_TARGETS;
@@ -48,6 +51,8 @@ const CONTROL_RESPONSE_TYPES = [
   'issuer.fault.deactivated',
   'rp.fault.activated',
   'rp.fault.deactivated',
+  'trust-anchor.fault.activated',
+  'trust-anchor.fault.deactivated',
   'service.error'
 ] as const satisfies readonly IpcMessage['type'][];
 
@@ -59,18 +64,50 @@ function isControlResponse(message: IpcMessage): boolean {
   return (CONTROL_RESPONSE_TYPES as readonly string[]).includes(message.type);
 }
 
+interface EndpointAllocation {
+  cleanup: () => Promise<void>;
+  listenOptions: string | net.ListenOptions;
+  resolveEndpoint: (server: net.Server) => string;
+  shouldChmodSocket: boolean;
+}
+
 function writeFrame(socket: net.Socket, message: IpcMessage): void {
   if (socket.writable) socket.write(`${JSON.stringify(message)}${FRAME_DELIMITER}`);
 }
 
-async function allocateEndpoint(): Promise<string> {
-  if (process.platform === 'win32') {
-    return `\\\\.\\pipe\\itwct-control-${randomUUID()}`;
+async function allocateEndpoint(): Promise<EndpointAllocation> {
+  if (process.env.ITWCT_CONTROL_TCP === '1') {
+    return {
+      cleanup: async () => undefined,
+      listenOptions: { host: '127.0.0.1', port: 0 },
+      resolveEndpoint: (server) => {
+        const address = server.address();
+        if (!address || typeof address === 'string') throw new Error('Unable to resolve TCP control endpoint');
+        return `tcp://${address.address}:${address.port}`;
+      },
+      shouldChmodSocket: false
+    };
   }
 
-  const dir = await mkdtemp(path.join(tmpdir(), `itwct-control-}`));
+  if (process.platform === 'win32') {
+    const endpoint = `\\\\.\\pipe\\itwct-control-${randomUUID()}`;
+    return {
+      cleanup: async () => undefined,
+      listenOptions: endpoint,
+      resolveEndpoint: () => endpoint,
+      shouldChmodSocket: false
+    };
+  }
+
+  const dir = await mkdtemp(path.join(process.env.ITWCT_CONTROL_TMPDIR ?? tmpdir(), 'itwct-control-'));
   await chmod(dir, 0o700);
-  return path.join(dir, 'control.sock');
+  const endpoint = path.join(dir, 'control.sock');
+  return {
+    cleanup: () => rm(dir, { recursive: true, force: true }),
+    listenOptions: endpoint,
+    resolveEndpoint: () => endpoint,
+    shouldChmodSocket: true
+  };
 }
 
 /**
@@ -83,7 +120,7 @@ async function allocateEndpoint(): Promise<string> {
  * request-ID correlation.
  */
 export async function startServiceControlServer(options: ServiceControlServerOptions): Promise<ServiceControlServer> {
-  const endpoint = await allocateEndpoint();
+  const endpointAllocation = await allocateEndpoint();
   const pendingByRequestId = new Map<string, PendingChildResponse>();
 
   const relayedServices = [...new Set(Object.values(CONTROL_REQUEST_TARGETS))];
@@ -93,7 +130,8 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       if (!isControlResponse(message)) return;
 
       const pending = pendingByRequestId.get(message.requestId);
-      if (!pending) return;
+      if (!pending || pending.expectedService !== service) return;
+
       clearTimeout(pending.timeout);
       pendingByRequestId.delete(message.requestId);
       writeFrame(pending.socket, message);
@@ -134,19 +172,20 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
           type: 'service.error',
           requestId: message.requestId,
           code: 'UNSUPPORTED_MESSAGE',
-          message: 'Only issuer fault/config and relying party fault controls are relayed'
+          message: 'Only issuer fault/config, relying party fault, and Trust Anchor fault controls are relayed'
         });
       }
       return;
     }
 
+    const requestId = message.requestId;
     const target = CONTROL_REQUEST_TARGETS[message.type];
     const forwarded = options.supervisor.sendToChild(target, message);
     if (!forwarded) {
       writeFrame(socket, {
         version: SERVICE_PROTOCOL_VERSION,
         type: 'service.error',
-        requestId: message.requestId,
+        requestId,
         service: target,
         code: 'SERVICE_UNAVAILABLE',
         message: `${target} is not managed by this supervisor`
@@ -154,7 +193,6 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       return;
     }
 
-    const requestId = message.requestId;
     const timeout = setTimeout(() => {
       pendingByRequestId.delete(requestId);
       writeFrame(socket, {
@@ -167,7 +205,7 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       });
     }, CHILD_RESPONSE_TIMEOUT_MS);
 
-    pendingByRequestId.set(requestId, { socket, timeout });
+    pendingByRequestId.set(requestId, { expectedService: target, socket, timeout });
   }
 
   const server = net.createServer((socket) => {
@@ -206,10 +244,12 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(endpoint, () => resolve());
+    server.listen(endpointAllocation.listenOptions, () => resolve());
   });
 
-  if (process.platform !== 'win32') {
+  const endpoint = endpointAllocation.resolveEndpoint(server);
+
+  if (endpointAllocation.shouldChmodSocket) {
     await chmod(endpoint, 0o600);
   }
 
@@ -220,9 +260,7 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       for (const pending of pendingByRequestId.values()) clearTimeout(pending.timeout);
       pendingByRequestId.clear();
       await new Promise<void>((resolve) => server.close(() => resolve()));
-      if (process.platform !== 'win32') {
-        await rm(path.dirname(endpoint), { recursive: true, force: true });
-      }
+      await endpointAllocation.cleanup();
     }
   };
 }

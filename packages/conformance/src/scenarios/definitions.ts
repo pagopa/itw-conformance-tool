@@ -1,5 +1,5 @@
 import type { ObservedEventName, ObservedServiceName } from '../events/event-types.js';
-import type { IssuerFaultProfile, RpFaultProfile } from '@itw-conformance-tool/faults';
+import type { IssuerFaultProfile, RpFaultProfile, TrustAnchorFaultProfile } from '@itw-conformance-tool/faults';
 
 export type ProtocolObservedPhase = 'ISSUANCE' | 'PRESENTATION' | 'WALLET_INSTANCE';
 
@@ -141,6 +141,7 @@ export interface ScenarioSetup {
   issuerConfig?: IssuerRuntimeConfigSetup;
   issuerFault?: IssuerFaultProfile;
   rpFault?: RpFaultProfile;
+  trustAnchorFault?: TrustAnchorFaultProfile;
 }
 
 export interface ProtocolObservedScenarioDefinition {

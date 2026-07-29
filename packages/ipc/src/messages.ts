@@ -1,4 +1,8 @@
-import { issuerFaultProfileSchema, rpFaultProfileSchema } from '@itw-conformance-tool/faults';
+import {
+  issuerFaultProfileSchema,
+  rpFaultProfileSchema,
+  trustAnchorFaultProfileSchema
+} from '@itw-conformance-tool/faults';
 import { z } from 'zod';
 
 import { localServiceNames, SERVICE_PROTOCOL_VERSION } from './protocol.js';
@@ -84,6 +88,40 @@ const issuerFaultDeactivateMessageSchema = protocolHeaderSchema
 const issuerFaultDeactivatedMessageSchema = protocolHeaderSchema
   .extend({
     type: z.literal('issuer.fault.deactivated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const trustAnchorFaultActivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('trust-anchor.fault.activate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string(),
+    specVersion: z.string(),
+    profile: trustAnchorFaultProfileSchema
+  })
+  .strict();
+
+const trustAnchorFaultActivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('trust-anchor.fault.activated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const trustAnchorFaultDeactivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('trust-anchor.fault.deactivate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const trustAnchorFaultDeactivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('trust-anchor.fault.deactivated'),
     requestId: requestIdSchema,
     scenarioId: z.string()
   })
@@ -176,6 +214,10 @@ const ipcMessageSchema = z.union([
   issuerFaultActivatedMessageSchema,
   issuerFaultDeactivateMessageSchema,
   issuerFaultDeactivatedMessageSchema,
+  trustAnchorFaultActivateMessageSchema,
+  trustAnchorFaultActivatedMessageSchema,
+  trustAnchorFaultDeactivateMessageSchema,
+  trustAnchorFaultDeactivatedMessageSchema,
   issuerConfigActivateMessageSchema,
   issuerConfigActivatedMessageSchema,
   issuerConfigDeactivateMessageSchema,
@@ -197,6 +239,10 @@ export type IssuerFaultActivateMessage = z.infer<typeof issuerFaultActivateMessa
 export type IssuerFaultActivatedMessage = z.infer<typeof issuerFaultActivatedMessageSchema>;
 export type IssuerFaultDeactivateMessage = z.infer<typeof issuerFaultDeactivateMessageSchema>;
 export type IssuerFaultDeactivatedMessage = z.infer<typeof issuerFaultDeactivatedMessageSchema>;
+export type TrustAnchorFaultActivateMessage = z.infer<typeof trustAnchorFaultActivateMessageSchema>;
+export type TrustAnchorFaultActivatedMessage = z.infer<typeof trustAnchorFaultActivatedMessageSchema>;
+export type TrustAnchorFaultDeactivateMessage = z.infer<typeof trustAnchorFaultDeactivateMessageSchema>;
+export type TrustAnchorFaultDeactivatedMessage = z.infer<typeof trustAnchorFaultDeactivatedMessageSchema>;
 export type IssuerConfig = z.infer<typeof issuerConfigSchema>;
 export type IssuerConfigActivateMessage = z.infer<typeof issuerConfigActivateMessageSchema>;
 export type IssuerConfigActivatedMessage = z.infer<typeof issuerConfigActivatedMessageSchema>;

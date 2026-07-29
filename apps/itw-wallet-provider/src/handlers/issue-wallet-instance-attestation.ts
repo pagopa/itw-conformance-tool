@@ -1,3 +1,4 @@
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { hashCallback } from '@itw-conformance-tool/crypto';
 import { toResult } from '@itw-conformance-tool/utils';
 import {
@@ -112,6 +113,10 @@ async function calculateAssertionJwkThumbprint(jwk: Jwk): Promise<string> {
   return calculateJwkThumbprint({ hashAlgorithm: HashAlgorithm.Sha256, hashCallback, jwk });
 }
 
+function hasPrivateOrSymmetricKeyMaterial(jwk: Jwk): boolean {
+  return 'd' in jwk || 'k' in jwk || 'p' in jwk || 'q' in jwk || 'dp' in jwk || 'dq' in jwk || 'qi' in jwk;
+}
+
 function validationErrorForPayload(error: z.ZodError<AttestationRequestPayload>): AttestationError {
   const invalidPaths = new Set(error.issues.map((issue) => issue.path.join('.')));
 
@@ -193,7 +198,7 @@ async function issueWalletInstanceAttestation(
       alg: 'ES256',
       kid: signingPublicJwk.kid,
       method: 'x5c',
-      x5c: [options.config.WALLET_PROVIDER_X509]
+      x5c: options.config.WALLET_PROVIDER_X509_CHAIN
     },
     status: {
       status_list: {
@@ -274,6 +279,28 @@ export const issueWalletInstanceAttestationHandler = async (
   }
 
   const walletInstanceAttestation = await issueWalletInstanceAttestation(request.server, payload);
+
+  await request.server.conformanceEventSink?.emit(
+    createObservedEvent({
+      name: 'wallet_attestation.requested',
+      correlationId: request.conformance?.correlation?.correlationId ?? null,
+      service: 'wallet-provider',
+      requestId: request.id,
+      diagnostic: {
+        assertionAlg: header.alg,
+        assertionKid: header.kid,
+        assertionKidMatchesCnfJwkThumbprint: true,
+        cnfJwkAsymmetric: payload.cnf.jwk.kty !== 'oct',
+        cnfJwkPublicOnly: !hasPrivateOrSymmetricKeyMaterial(payload.cnf.jwk),
+        cnfJwkThumbprint: jwkThumbprint.value,
+        endpoint: '/wallet-instance-attestation',
+        method: 'POST',
+        outcome: 'success',
+        proofVerifiedWithCnfJwk: true,
+        statusCode: 200
+      }
+    })
+  );
 
   return reply.code(200).type('application/json').send({ wallet_instance_attestation: walletInstanceAttestation });
 };

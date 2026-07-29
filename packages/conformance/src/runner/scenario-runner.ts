@@ -23,6 +23,7 @@ import {
 } from '../scenarios/definitions.js';
 import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
 import { type RpFaultController } from '../services/rp-fault-controller.js';
+import { type TrustAnchorFaultController } from '../services/trust-anchor-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
 import { createScenarioPromptModel } from './prompts.js';
@@ -85,6 +86,10 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   rpFaultController?: RpFaultController;
   /** IT Wallet specification version reported when activating a Relying Party fault. Defaults to '1.3'. */
   rpFaultSpecVersion?: string;
+  /** Required to run any scenario that declares `setup.trustAnchorFault`. */
+  trustAnchorFaultController?: TrustAnchorFaultController;
+  /** IT Wallet specification version reported when activating a Trust Anchor fault. Defaults to '1.4'. */
+  trustAnchorFaultSpecVersion?: string;
   /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
   browserOpener?: BrowserOpener;
 }
@@ -320,6 +325,8 @@ export function createProtocolObservedScenarioRunner(
       let issuerConfigActive = false;
       let issuerFaultActive = false;
       let rpFaultActive = false;
+      const trustAnchorFaultProfile = definition.setup?.trustAnchorFault;
+      let trustAnchorFaultActive = false;
 
       const deactivateIssuerConfigIfActive = async (): Promise<void> => {
         if (!issuerConfigActive) return;
@@ -337,6 +344,12 @@ export function createProtocolObservedScenarioRunner(
         if (!rpFaultActive) return;
         rpFaultActive = false;
         await options.rpFaultController?.deactivateRpFault({ scenarioId: initialCorrelationId });
+      };
+
+      const deactivateTrustAnchorFaultIfActive = async (): Promise<void> => {
+        if (!trustAnchorFaultActive) return;
+        trustAnchorFaultActive = false;
+        await options.trustAnchorFaultController?.deactivateTrustAnchorFault({ scenarioId: initialCorrelationId });
       };
 
       try {
@@ -370,6 +383,23 @@ export function createProtocolObservedScenarioRunner(
             profile: rpFaultProfile
           });
           rpFaultActive = true;
+        }
+
+        if (trustAnchorFaultProfile) {
+          if (!options.trustAnchorFaultController) {
+            throw new Error(
+              `Scenario ${definition.id} declares setup.trustAnchorFault, but no trustAnchorFaultController is configured`
+            );
+          }
+
+          // Await activation before creating/showing the stimulus, so the
+          // Trust Anchor never serves a nominal Entity Configuration for this run.
+          await options.trustAnchorFaultController.activateTrustAnchorFault({
+            scenarioId: initialCorrelationId,
+            specVersion: options.trustAnchorFaultSpecVersion ?? DEFAULT_ISSUER_FAULT_SPEC_VERSION,
+            profile: trustAnchorFaultProfile
+          });
+          trustAnchorFaultActive = true;
         }
 
         if (issuerConfig) {
@@ -528,6 +558,7 @@ export function createProtocolObservedScenarioRunner(
             await deactivateIssuerConfigIfActive();
             await deactivateIssuerFaultIfActive();
             await deactivateRpFaultIfActive();
+            await deactivateTrustAnchorFaultIfActive();
           },
           async [Symbol.asyncDispose]() {
             await this.stop();
@@ -543,6 +574,7 @@ export function createProtocolObservedScenarioRunner(
         await deactivateIssuerConfigIfActive().catch(() => undefined);
         await deactivateIssuerFaultIfActive().catch(() => undefined);
         await deactivateRpFaultIfActive().catch(() => undefined);
+        await deactivateTrustAnchorFaultIfActive().catch(() => undefined);
         throw error;
       }
     },

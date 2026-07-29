@@ -73,12 +73,10 @@ function normalizeVpTokenEntry(value: unknown): string[] {
 
 // The Relying Party loads its encryption key pair from `<data_dir>/rp/jwks.json`
 // at startup (apps/itw-relying-party/src/plugins/jwk.ts) and decrypts the
-// Authorization Response JWE with the private key whose kid is
-// `rp-encryption-key`. WP_092 reads the key from that same file — rather than
-// from the SQLite event store — so the test decrypts with the exact key
-// material the RP itself uses.
+// Authorization Response JWE with its private ECDH-ES key. WP_092 reads the key
+// from that same file, rather than from the SQLite event store, so the test
+// decrypts with the exact key material the RP itself uses.
 const RP_JWKS_FILE = 'rp/jwks.json';
-const RP_ENCRYPTION_KID = 'rp-encryption-key';
 
 async function loadRpEncryptionPrivateJwk(dataDir: string): Promise<JWK> {
   const filePath = path.join(dataDir, RP_JWKS_FILE);
@@ -92,12 +90,12 @@ async function loadRpEncryptionPrivateJwk(dataDir: string): Promise<JWK> {
     (key): key is JWK =>
       typeof key === 'object' &&
       key !== null &&
-      (key as JWK).kid === RP_ENCRYPTION_KID &&
+      (key as JWK).alg === 'ECDH-ES' &&
       (key as { use?: unknown }).use === 'enc'
   );
 
   if (!encryptionJwk) {
-    throw new Error(`${filePath} must contain an 'enc' JWK with kid ${RP_ENCRYPTION_KID}`);
+    throw new Error(`${filePath} must contain an ECDH-ES 'enc' JWK`);
   }
   if (typeof encryptionJwk.d !== 'string') {
     throw new Error(`${filePath} encryption JWK is missing its private component`);
@@ -452,13 +450,13 @@ describe('Test Cases for Presentation Phase', () => {
       const header = decodeProtectedHeader(rawResponse);
       expect(header.alg, 'JWE should declare a key-management alg').toBeTypeOf('string');
       expect(header.enc, 'JWE should declare a content-encryption enc').toBeTypeOf('string');
-      expect(header.kid, 'JWE should target the RP encryption key').toBe(RP_ENCRYPTION_KID);
 
       // Decrypt with the RP's own encryption private key, loaded from the same
       // `rp/jwks.json` the RP reads at startup and imported the same way the RP
       // imports it (ECDH-ES). A successful decryption proves the wallet encrypted
       // the Authorization Response to the Relying Party's advertised key.
       const encryptionJwk = await loadRpEncryptionPrivateJwk(dataDir);
+      expect(header.kid, 'JWE should target the RP encryption key').toBe(encryptionJwk.kid);
       const privateKey = await importJWK(encryptionJwk, 'ECDH-ES');
 
       const decrypted = await compactDecrypt(rawResponse, privateKey);

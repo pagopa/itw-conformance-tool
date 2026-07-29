@@ -56,12 +56,9 @@ const parseJwks = (content: string, filePath: string): Jwk[] => {
   });
 };
 
-const getKeyPair = (jwks: Jwk[], selector: { kid: string; use: JwkUse }, filePath: string): JwkKeyPair => {
-  const matchingKeys = jwks.filter((jwk) => jwk.kid === selector.kid);
-  const [jwk] = matchingKeys;
-
-  if (matchingKeys.length !== 1 || jwk.use !== selector.use) {
-    throw new Error(`${filePath} must contain exactly one ${selector.use} JWK with kid ${selector.kid}`);
+const getKeyPair = async (jwk: Jwk | undefined, filePath: string, description: string): Promise<JwkKeyPair> => {
+  if (!jwk) {
+    throw new Error(`${filePath} must contain ${description}`);
   }
 
   const privateJwk = jwk as PrivateJwk;
@@ -75,13 +72,17 @@ const getKeyPair = (jwks: Jwk[], selector: { kid: string; use: JwkUse }, filePat
   };
 };
 
-const JWK_FILE = 'rp/jwks.json';
+const selectEncryptionJwk = (jwks: Jwk[]): Jwk | undefined =>
+  jwks.find((jwk) => jwk.kty === 'EC' && jwk.alg === 'ECDH-ES' && jwk.use === 'enc' && typeof jwk.d === 'string');
 
-const JWK_SELECTORS = {
-  enc: { kid: 'rp-encryption-key', use: 'enc' },
-  federation: { kid: 'rp-federation-key', use: 'sig' },
-  sig: { kid: 'rp-signing-key', use: 'sig' }
-} as const satisfies Record<keyof JwksByUse, { kid: string; use: JwkUse }>;
+const selectSigningJwk = (jwks: Jwk[], index: number): Jwk | undefined => {
+  const signingJwks = jwks.filter(
+    (jwk) => jwk.kty === 'EC' && jwk.alg === 'ES256' && jwk.use === 'sig' && typeof jwk.d === 'string'
+  );
+  return signingJwks[index];
+};
+
+const JWK_FILE = 'rp/jwks.json';
 
 const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
   const filePath = path.join(dataDir, JWK_FILE);
@@ -89,9 +90,9 @@ const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
   const jwks = parseJwks(content, filePath);
 
   return {
-    enc: getKeyPair(jwks, JWK_SELECTORS.enc, filePath),
-    federation: getKeyPair(jwks, JWK_SELECTORS.federation, filePath),
-    sig: getKeyPair(jwks, JWK_SELECTORS.sig, filePath)
+    enc: await getKeyPair(selectEncryptionJwk(jwks), filePath, 'one private ECDH-ES encryption JWK'),
+    federation: await getKeyPair(selectSigningJwk(jwks, 1), filePath, 'a second private ES256 signing JWK'),
+    sig: await getKeyPair(selectSigningJwk(jwks, 0), filePath, 'a first private ES256 signing JWK')
   };
 };
 

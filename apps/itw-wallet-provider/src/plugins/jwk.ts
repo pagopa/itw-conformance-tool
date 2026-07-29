@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { validateCertificateMatchesJwk } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
 import { calculateJwkThumbprint, type JWK } from 'jose';
 
@@ -55,16 +56,12 @@ const parseJwks = (content: string, filePath: string): Jwk[] => {
   });
 };
 
-const getKeyPair = async (
-  jwks: Jwk[],
-  selector: { kid: string; use: JwkUse },
-  filePath: string
-): Promise<JwkKeyPair> => {
-  const matchingKeys = jwks.filter((jwk) => jwk.kid === selector.kid);
+const getKeyPair = async (jwks: Jwk[], selector: { use: JwkUse }, filePath: string): Promise<JwkKeyPair> => {
+  const matchingKeys = jwks.filter((jwk) => jwk.use === selector.use);
   const [jwk] = matchingKeys;
 
-  if (matchingKeys.length !== 1 || jwk.use !== selector.use) {
-    throw new Error(`${filePath} must contain exactly one ${selector.use} JWK with kid ${selector.kid}`);
+  if (matchingKeys.length !== 1) {
+    throw new Error(`${filePath} must contain exactly one ${selector.use} JWK`);
   }
 
   const kid = await calculateJwkThumbprint(jwk as JWK);
@@ -82,8 +79,8 @@ const getKeyPair = async (
 const JWK_FILE = 'wallet-provider/jwks.json';
 
 const JWK_SELECTORS = {
-  sig: { kid: 'wallet-provider-signing-key', use: 'sig' }
-} as const satisfies Record<keyof JwksByUse, { kid: string; use: JwkUse }>;
+  sig: { use: 'sig' }
+} as const satisfies Record<keyof JwksByUse, { use: JwkUse }>;
 
 const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
   const filePath = path.join(dataDir, JWK_FILE);
@@ -95,10 +92,26 @@ const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
   };
 };
 
+async function validateWalletProviderCertificateBinding(dataDir: string, signingPrivateJwk: PrivateJwk): Promise<void> {
+  const certificatePath = path.join(dataDir, 'wallet-provider', 'cert.pem');
+
+  try {
+    const certificatePem = await readFile(certificatePath, 'utf8');
+    await validateCertificateMatchesJwk(certificatePem, signingPrivateJwk as JWK);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Wallet Provider certificate chain is incompatible with wallet-provider/jwks.json. ` +
+        `Run itw-conformance-tool init --force to regenerate a coherent certificate chain. ${message}`
+    );
+  }
+}
+
 const jwkPlugin: FastifyPluginAsync = async (app) => {
   const dataDir = app.config.DATA_DIR;
 
   const jwks = await loadKeyPairs(dataDir);
+  await validateWalletProviderCertificateBinding(dataDir, jwks.sig.private);
 
   app.decorate('jwks', jwks);
 };

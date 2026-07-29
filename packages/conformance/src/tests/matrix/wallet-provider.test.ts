@@ -1,4 +1,5 @@
 import { loadConfig } from '@itw-conformance-tool/config';
+import { DatabaseClient } from '@itw-conformance-tool/database';
 import {
   SignJWT,
   calculateJwkThumbprint,
@@ -9,7 +10,7 @@ import {
   importJWK,
   jwtVerify
 } from 'jose';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { isHttpsUrl, isObject, trimTrailingSlash } from '../../helpers/general.js';
 import {
@@ -18,6 +19,15 @@ import {
   expectWalletMetadata,
   resolveWalletSolutionJwks
 } from '../../helpers/provider.js';
+import {
+  assertConformanceOutcome,
+  createProtocolObservedScenarioRunner,
+  createSqliteScenarioEventBridge,
+  walletInstanceScenarioRegistry,
+  wpWalletProviderHappyScenario
+} from '../../index.js';
+
+import type { ObservedEvent, ScenarioOutcome, ScenarioRunner } from '../../index.js';
 
 const PERMITTED_ENTITY_CONFIGURATION_SIGNATURE_ALGORITHMS = ['ES256', 'ES384', 'ES512'];
 const SIGNING_OPERATIONS = ['sign', 'verify'];
@@ -54,6 +64,24 @@ async function captureJsonResponse(url: string, init: RequestInit = {}): Promise
       response
     };
   }
+}
+
+function requiredDiagnosticBoolean(event: ObservedEvent, key: string): boolean {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'boolean') {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
+}
+
+function requiredDiagnosticString(event: ObservedEvent, key: string): string {
+  const value = event.diagnostic?.[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${event.name} evidence is missing the ${key} diagnostic`);
+  }
+
+  return value;
 }
 
 async function postWalletInstanceRegistration(
@@ -104,16 +132,29 @@ async function createWalletInstanceAttestationRequestAssertion(
 describe('Test Cases for Wallet Provider Backend', () => {
   const config = loadConfig();
   const walletProviderUrl = config['wallet-provider'].url;
+  const walletProviderLocalUrl = config['wallet-provider'].local_url;
 
+  let db: DatabaseClient;
   let entityConfiguration: string;
   let entityConfigurationResponse: Response;
   let integrityCheckErrorRegistration: CapturedJsonResponse;
   let malformedRegistration: CapturedJsonResponse;
+  let runner: ScenarioRunner;
   let unauthenticatedRevocation: CapturedJsonResponse;
   let unauthenticatedStatusRetrieval: CapturedJsonResponse;
   let validationErrorRegistration: CapturedJsonResponse;
 
   beforeAll(async () => {
+    db = new DatabaseClient(config.global.data_dir);
+    runner = createProtocolObservedScenarioRunner({
+      endpoints: {
+        federation: config['trust-anchor'].url,
+        walletProvider: walletProviderLocalUrl
+      },
+      eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
+      registry: walletInstanceScenarioRegistry
+    });
+
     const discoveryUrl = trimTrailingSlash(walletProviderUrl) + '/.well-known/openid-federation';
     entityConfigurationResponse = await fetch(discoveryUrl, {
       signal: AbortSignal.timeout(10_000)
@@ -146,6 +187,11 @@ describe('Test Cases for Wallet Provider Backend', () => {
       },
       body: JSON.stringify({ status: 'REVOKED' })
     });
+  });
+
+  afterAll(async () => {
+    await runner.close();
+    db.close();
   });
 
   const expectWalletInstanceManagementErrorBody = (
@@ -478,6 +524,73 @@ describe('Test Cases for Wallet Provider Backend', () => {
   });
 
   // Wallet Instance Tests
+
+  describe('Happy path', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+
+    beforeAll(async () => {
+      const session = await runner.start(wpWalletProviderHappyScenario.id);
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+      } finally {
+        await session.stop();
+      }
+    }, wpWalletProviderHappyScenario.timeouts.vitestTestMs);
+
+    test(
+      `WP_023: Wallet Instance successfully uses Federation API endpoints (.well-known/openid-federation, /fetch) to retrieve current metadata and configurations of the Wallet Provider.`,
+      () => {
+        expect(events, 'Happy-path scenario should capture protocol evidence').not.toHaveLength(0);
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+      },
+      wpWalletProviderHappyScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_026: To perform a Wallet Attestation request, Wallet Instance successfully generates a new ephemeral asymmetric key pair.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const attestationEvent = events.find((event) => event.name === 'wallet_attestation.requested');
+        expect(attestationEvent, 'Happy-path scenario must observe the Wallet Attestation request').toBeDefined();
+        if (!attestationEvent) {
+          throw new Error('Missing wallet_attestation.requested evidence');
+        }
+
+        expect(requiredDiagnosticString(attestationEvent, 'endpoint')).toBe('/wallet-instance-attestation');
+        expect(requiredDiagnosticString(attestationEvent, 'method')).toBe('POST');
+        expect(requiredDiagnosticString(attestationEvent, 'outcome')).toBe('success');
+        expect(requiredDiagnosticString(attestationEvent, 'assertionAlg')).toBeOneOf(
+          PERMITTED_ENTITY_CONFIGURATION_SIGNATURE_ALGORITHMS
+        );
+
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'cnfJwkAsymmetric'),
+          'Wallet Attestation request cnf.jwk must identify an asymmetric public key'
+        ).toBe(true);
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'cnfJwkPublicOnly'),
+          'Wallet Attestation request cnf.jwk must not expose private or symmetric key material'
+        ).toBe(true);
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'assertionKidMatchesCnfJwkThumbprint'),
+          'Wallet Attestation request kid must identify the cnf.jwk thumbprint'
+        ).toBe(true);
+        expect(
+          requiredDiagnosticBoolean(attestationEvent, 'proofVerifiedWithCnfJwk'),
+          'Wallet Attestation request signature must verify with the cnf.jwk public key'
+        ).toBe(true);
+
+        const assertionKid = requiredDiagnosticString(attestationEvent, 'assertionKid');
+        const cnfJwkThumbprint = requiredDiagnosticString(attestationEvent, 'cnfJwkThumbprint');
+        expect(assertionKid, 'Wallet Attestation request kid must equal the cnf.jwk thumbprint').toBe(cnfJwkThumbprint);
+      },
+      wpWalletProviderHappyScenario.timeouts.vitestTestMs
+    );
+  });
 
   test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
     const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
