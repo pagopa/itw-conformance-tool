@@ -621,7 +621,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(attestationHeader.x5c, 'Wallet Attestation should carry an X.509 certificate chain').not.toHaveLength(0);
 
         expect(attestationPayload.iss, 'Wallet Attestation should carry the Wallet Provider issuer').toBe(
-          trimTrailingSlash(config['wallet-provider'].local_url)
+          trimTrailingSlash(config['wallet-provider'].url)
         );
         expect(
           attestationPayload.sub,
@@ -649,7 +649,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(
           attestationPayload.wallet_link,
           'Wallet Attestation should carry the Wallet Provider information URL'
-        ).toBe(trimTrailingSlash(config['wallet-provider'].local_url));
+        ).toBe(trimTrailingSlash(config['wallet-provider'].url));
         expect(attestationPayload.wallet_name, 'Wallet Attestation should carry the Wallet name').toBe(
           config.wallet.wallet_name
         );
@@ -752,7 +752,7 @@ describe('Test Cases for Issuance Phase', () => {
         await expect(
           jwtVerify(clientAttestation.walletAttestationJwt, walletProviderPublicKey, {
             algorithms: [attestationHeader.alg],
-            issuer: trimTrailingSlash(config['wallet-provider'].local_url)
+            issuer: trimTrailingSlash(config['wallet-provider'].url)
           }),
           'Wallet Attestation signature should verify with the authorized Wallet Provider x5c leaf certificate'
         ).resolves.toBeDefined();
@@ -824,13 +824,13 @@ describe('Test Cases for Issuance Phase', () => {
         await expect(
           jwtVerify(clientAttestation.walletAttestationJwt, walletProviderPublicKey, {
             algorithms: [attestationHeader.alg],
-            issuer: trimTrailingSlash(config['wallet-provider'].local_url)
+            issuer: trimTrailingSlash(config['wallet-provider'].url)
           }),
           'Wallet Attestation signature should verify with the Wallet Provider x5c certificate'
         ).resolves.toMatchObject({
           payload: expect.objectContaining({
             cnf: expect.objectContaining({ jwk: attestationPayload.cnf.jwk }),
-            iss: trimTrailingSlash(config['wallet-provider'].local_url),
+            iss: trimTrailingSlash(config['wallet-provider'].url),
             sub: attestationPayload.sub
           })
         });
