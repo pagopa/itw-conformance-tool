@@ -11,6 +11,9 @@ import type { JWK } from 'jose';
 
 const RP_BASE_URL = 'https://rp.example.org';
 const TRUST_ANCHOR_URL = 'https://ta.example.org';
+/** The type identifier lives in the Trust Anchor's namespace even though the Relying
+ * Party issues the Trust Mark itself: the Trust Anchor owns the type and authorises the
+ * Relying Party as its issuer through `trust_mark_issuers`. */
 const TRUST_MARK_TYPE = `${TRUST_ANCHOR_URL}/trust_marks/presentation/relying_party`;
 
 function generateJwk(kid: string, use: 'enc' | 'sig'): JWK & { kid: string } {
@@ -29,9 +32,9 @@ function toPublicJwk(jwk: JWK): JWK {
 /** Boots a minimal Fastify instance decorated only with what the route under test needs,
  * instead of the full app bootstrap (which requires real config.ini and key files on
  * disk). Mirrors the Trust Anchor's route tests. */
-async function buildApp(options: { activeFault?: ActiveRpFault; trustAnchorFederationJwk: JWK & { kid: string } }) {
+async function buildApp(options: { activeFault?: ActiveRpFault } = {}) {
   const app = Fastify();
-  const federation = generateJwk('rp-federation-key', 'sig');
+  const federationJwk = generateJwk('rp-federation-key', 'sig');
 
   app.decorate('config', {
     BASE_URL: RP_BASE_URL,
@@ -45,23 +48,22 @@ async function buildApp(options: { activeFault?: ActiveRpFault; trustAnchorFeder
       private: generateJwk('rp-encryption-key', 'enc'),
       public: toPublicJwk(generateJwk('rp-encryption-key', 'enc'))
     },
-    federation: { private: federation, public: toPublicJwk(federation) },
+    federation: { private: federationJwk, public: toPublicJwk(federationJwk) },
     sig: { private: generateJwk('rp-signing-key', 'sig'), public: toPublicJwk(generateJwk('rp-signing-key', 'sig')) }
   });
 
-  app.decorate('trustAnchorFederationJwk', options.trustAnchorFederationJwk);
   app.decorate('rpFaultStore', { getActive: () => options.activeFault });
   app.decorate('conformanceEventSink', { emit: async () => undefined });
 
   await app.register(entityConfigurationRoute);
   await app.ready();
 
-  return app;
+  return { app, federationJwk };
 }
 
 type TrustMarkEntry = { trust_mark: string; trust_mark_type: string };
 
-async function getTrustMarks(app: Awaited<ReturnType<typeof buildApp>>): Promise<TrustMarkEntry[]> {
+async function getTrustMarks(app: Awaited<ReturnType<typeof buildApp>>['app']): Promise<TrustMarkEntry[]> {
   const response = await app.inject({ method: 'GET', url: '/.well-known/openid-federation' });
 
   expect(response.statusCode).toBe(200);
@@ -71,40 +73,36 @@ async function getTrustMarks(app: Awaited<ReturnType<typeof buildApp>>): Promise
 }
 
 describe('GET /.well-known/openid-federation', () => {
-  it('publishes a Trust Mark issued by the Trust Anchor about the Relying Party', async () => {
-    const trustAnchorJwk = generateJwk('trust-anchor-federation-key', 'sig');
-    const app = await buildApp({ trustAnchorFederationJwk: trustAnchorJwk });
+  it('publishes a Trust Mark the Relying Party issues about itself', async () => {
+    const { app, federationJwk } = await buildApp();
 
     const [entry] = await getTrustMarks(app);
 
     expect(entry.trust_mark_type).toBe(TRUST_MARK_TYPE);
 
     const claims = decodeJwt(entry.trust_mark);
-    expect(claims.iss, 'the Trust Anchor issues the Trust Mark, the Relying Party never self-issues it').toBe(
-      TRUST_ANCHOR_URL
-    );
+    expect(claims.iss, 'the Relying Party is both issuer and subject of its own Trust Mark').toBe(RP_BASE_URL);
     expect(claims.sub).toBe(RP_BASE_URL);
     expect(claims.trust_mark_type).toBe(TRUST_MARK_TYPE);
 
     const header = decodeProtectedHeader(entry.trust_mark);
     expect(header.typ).toBe('trust-mark+jwt');
-    expect(header.kid).toBe(trustAnchorJwk.kid);
+    expect(header.kid).toBe(federationJwk.kid);
 
     await app.close();
   });
 
-  it('signs the Trust Mark with a key the Trust Anchor publishes', async () => {
-    const trustAnchorJwk = generateJwk('trust-anchor-federation-key', 'sig');
-    const app = await buildApp({ trustAnchorFederationJwk: trustAnchorJwk });
+  it('signs the Trust Mark with the federation key the Relying Party publishes', async () => {
+    const { app, federationJwk } = await buildApp();
 
     const [entry] = await getTrustMarks(app);
 
-    // The wallet resolves the issuer's keys from the Trust Anchor Entity Configuration it
-    // already fetched for the Trust Chain, so verification must succeed against exactly
-    // those keys — and against nothing else.
-    const trustAnchorJwks = createLocalJWKSet({ keys: [toPublicJwk(trustAnchorJwk)] });
-    const { payload } = await jwtVerify(entry.trust_mark, trustAnchorJwks, {
-      issuer: TRUST_ANCHOR_URL,
+    // The wallet resolves the issuer's keys from the Relying Party Entity Configuration
+    // it is already reading, so verification must succeed against exactly the federation
+    // JWKS published there — and against nothing else.
+    const federationJwks = createLocalJWKSet({ keys: [toPublicJwk(federationJwk)] });
+    const { payload } = await jwtVerify(entry.trust_mark, federationJwks, {
+      issuer: RP_BASE_URL,
       subject: RP_BASE_URL
     });
 
@@ -114,13 +112,11 @@ describe('GET /.well-known/openid-federation', () => {
   });
 
   it('signs the Trust Mark with an unpublished key under the invalid-trust-mark fault (WP_080)', async () => {
-    const trustAnchorJwk = generateJwk('trust-anchor-federation-key', 'sig');
-    const app = await buildApp({
+    const { app, federationJwk } = await buildApp({
       activeFault: {
         profile: { type: 'invalid-trust-mark' },
         scenarioId: 'WP_080'
-      } as unknown as ActiveRpFault,
-      trustAnchorFederationJwk: trustAnchorJwk
+      } as unknown as ActiveRpFault
     });
 
     const [entry] = await getTrustMarks(app);
@@ -128,12 +124,12 @@ describe('GET /.well-known/openid-federation', () => {
     // The fault must stay invisible in the claims and the header: only the signature
     // distinguishes it, which is what isolates WP_080 from WP_087.
     const claims = decodeJwt(entry.trust_mark);
-    expect(claims.iss).toBe(TRUST_ANCHOR_URL);
+    expect(claims.iss).toBe(RP_BASE_URL);
     expect(claims.sub).toBe(RP_BASE_URL);
-    expect(decodeProtectedHeader(entry.trust_mark).kid).toBe(trustAnchorJwk.kid);
+    expect(decodeProtectedHeader(entry.trust_mark).kid).toBe(federationJwk.kid);
 
-    const trustAnchorJwks = createLocalJWKSet({ keys: [toPublicJwk(trustAnchorJwk)] });
-    await expect(jwtVerify(entry.trust_mark, trustAnchorJwks)).rejects.toThrow();
+    const federationJwks = createLocalJWKSet({ keys: [toPublicJwk(federationJwk)] });
+    await expect(jwtVerify(entry.trust_mark, federationJwks)).rejects.toThrow();
 
     await app.close();
   });

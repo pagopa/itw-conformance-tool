@@ -33,13 +33,6 @@ export {
   type JwksLike,
   type SignedJwksValidationResult
 } from './services/federation.js';
-export {
-  createTrustMark,
-  loadTrustAnchorFederationJwk,
-  TRUST_ANCHOR_FEDERATION_KEY_FILE,
-  type CreateTrustMarkOptions,
-  type TrustAnchorFederationJwk
-} from './services/trust-mark.js';
 export { generateKeyPair } from './services/keys.js';
 export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
 export { validateCertificateMatchesJwk, validateJWKS, isValidJwk } from './services/validate.js';

@@ -17,8 +17,8 @@ const invalidTrustAnchorProfileSchema = z
 /**
  * WP_080: keeps the nominal Trust Mark type and claims but signs the Trust
  * Mark with an ephemeral key that is published nowhere in the federation, so
- * its signature cannot be verified against the federation JWKS of the Trust
- * Mark issuer it names — the Trust Anchor. Isolates Trust Mark validation from
+ * its signature cannot be verified against the Relying Party's federation
+ * JWKS. Isolates Trust Mark validation from
  * `missing-presentation-trust-mark` (WP_087), where the Trust Mark is absent
  * rather than unverifiable.
  */

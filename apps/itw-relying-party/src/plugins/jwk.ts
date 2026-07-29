@@ -1,10 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadTrustAnchorFederationJwk } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
 
-import type { TrustAnchorFederationJwk } from '@itw-conformance-tool/crypto';
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { FastifyPluginAsync } from 'fastify';
 
@@ -33,10 +31,6 @@ type JwksByUse = Record<JwkUse, JwkKeyPair> & {
 declare module 'fastify' {
   interface FastifyInstance {
     jwks: JwksByUse;
-    /** The Trust Anchor's federation private key, read from the shared `data_dir`.
-     * The Relying Party signs no federation artifact with it except the Trust Anchor-issued
-     * Trust Mark it embeds in its own Entity Configuration. */
-    trustAnchorFederationJwk: TrustAnchorFederationJwk;
   }
 }
 
@@ -104,13 +98,9 @@ const loadKeyPairs = async (dataDir: string): Promise<JwksByUse> => {
 const jwkPlugin: FastifyPluginAsync = async (app) => {
   const dataDir = app.config.DATA_DIR;
 
-  const [jwks, trustAnchorFederationJwk] = await Promise.all([
-    loadKeyPairs(dataDir),
-    loadTrustAnchorFederationJwk(dataDir)
-  ]);
+  const jwks = await loadKeyPairs(dataDir);
 
   app.decorate('jwks', jwks);
-  app.decorate('trustAnchorFederationJwk', trustAnchorFederationJwk);
 };
 
 export default fp(jwkPlugin, {

@@ -1,16 +1,11 @@
 import { type ECKey, type ECPrivateKey, type JwkPrivateKey, type JwkPublicKey } from './z-jwk.js';
 
-import type { TrustAnchorFederationJwk } from '@itw-conformance-tool/crypto';
 import type { SignCallback } from '@pagopa/io-wallet-oid-federation';
 import type { JsonWebKey } from 'node:crypto';
 
 export interface JwksRepository {
   readonly getEncrypt: () => JwkKeyPair<'EC'>;
   readonly getSign: () => JwkKeyPair<'EC'>;
-  /** Returns the Trust Anchor's federation private key. Trust Marks are issued by the
-   * Trust Anchor, so the issuer signs the Trust Mark embedded in its own Entity
-   * Configuration with this key rather than with `getSign()`. */
-  readonly getTrustAnchorFederation: () => TrustAnchorFederationJwk;
   /** Returns the persisted issuer certificate chain (leaf first, followed by
    * the issuing intermediate CA certificate) as PEM-encoded strings. The
    * leaf's public key always corresponds to the private key returned by

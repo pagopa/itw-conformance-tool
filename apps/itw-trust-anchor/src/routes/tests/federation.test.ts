@@ -58,11 +58,9 @@ describe('GET /.well-known/openid-federation', () => {
     const payload = decodeJwt(response.body);
     expect(payload.iss).toBe(TRUST_ANCHOR_BASE_URL);
     expect(payload.sub).toBe(TRUST_ANCHOR_BASE_URL);
-    // The Trust Anchor owns and issues both Trust Mark types, so it is the only
-    // legitimate issuer for each: leaf entity IDs must never appear here.
     expect(payload.trust_mark_issuers).toEqual({
-      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/issuance/credential_issuer`]: [TRUST_ANCHOR_BASE_URL],
-      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/presentation/relying_party`]: [TRUST_ANCHOR_BASE_URL]
+      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/issuance/credential_issuer`]: [ISSUER_ENTITY_ID],
+      [`${TRUST_ANCHOR_BASE_URL}/trust_marks/presentation/relying_party`]: [RP_ENTITY_ID]
     });
 
     await app.close();
