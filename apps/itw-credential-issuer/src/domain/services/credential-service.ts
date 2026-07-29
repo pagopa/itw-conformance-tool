@@ -13,6 +13,7 @@ import { createPidCredential } from '../credentials/pid.js';
 import { generateFakeUser } from '../faker.js';
 import { applyMdocSignatureFault } from '../faults/mdoc-signature-fault.js';
 import { createMdocCredential, getMdocCredentialDefinition } from '../mdoc/index.js';
+import { ACCESS_TOKEN_TTL_SECONDS } from '../models/token.js';
 import { type JwksRepository } from '../signer.js';
 import { JwkPublicKey } from '../z-jwk.js';
 import {
@@ -40,7 +41,7 @@ import type {
 import type { HttpMethod, IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 
 /** Retry interval (in seconds) advertised to wallets polling `/deferred`. */
-export const DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS = 5;
+export const DEFERRED_CREDENTIAL_RETRY_INTERVAL_SECONDS = ACCESS_TOKEN_TTL_SECONDS;
 
 export class CreateCredentialError extends Error {
   constructor(message: string) {

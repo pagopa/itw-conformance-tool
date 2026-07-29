@@ -62,12 +62,19 @@ import type {
   ScenarioOutcome,
   ScenarioRunner
 } from '../../index.js';
-import type { CallbackContext, DpopJwtHeader, DpopJwtPayload } from '@pagopa/io-wallet-oauth2';
+import type {
+  CallbackContext,
+  DpopJwtHeader,
+  DpopJwtPayload,
+  ItWalletClientAttestationPopJwtHeader,
+  ItWalletClientAttestationPopJwtPayload,
+  Jwk as OAuthJwk
+} from '@pagopa/io-wallet-oauth2';
 import type { CredentialRequestV1_3, ProofJwtHeaderV1_3, ProofJwtPayload } from '@pagopa/io-wallet-oid4vci';
 
-function toHeaders(value: unknown): Headers {
+function toHeaders(value: unknown, context = 'request evidence'): Headers {
   if (value === null || typeof value !== 'object') {
-    throw new Error('issuer.par.requested evidence is missing header data');
+    throw new Error(`${context} is missing header data`);
   }
 
   const entries = Object.entries(value as Record<string, unknown>).filter(
@@ -75,6 +82,15 @@ function toHeaders(value: unknown): Headers {
   );
 
   return new Headers(entries);
+}
+
+function diagnosticBodyRecord(event: ObservedEvent, context: string): Record<string, unknown> {
+  const body = event.diagnostic?.['body'];
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error(`${context} evidence is missing parsed body data`);
+  }
+
+  return body as Record<string, unknown>;
 }
 
 function requiredDiagnosticString(event: ObservedEvent, key: string): string {
@@ -136,6 +152,33 @@ function pemFromX5cCertificate(certificate: string): string {
   return ['-----BEGIN CERTIFICATE-----', ...lines, '-----END CERTIFICATE-----'].join('\n');
 }
 
+function requireWalletAttestationCnfJwk(
+  tokenRequest: ReturnType<typeof parseAccessTokenRequest>,
+  context: string
+): OAuthJwk {
+  const { payload } = decodeJwt({ jwt: tokenRequest.clientAttestation.walletAttestationJwt });
+  const cnfJwk = payload.cnf?.jwk;
+  if (!cnfJwk) {
+    throw new Error(`${context} Wallet Attestation payload is missing cnf.jwk`);
+  }
+
+  return cnfJwk;
+}
+
+function expectJwtIatFresh(iat: unknown, event: ObservedEvent, context: string): void {
+  expect(iat, `${context} should carry a numeric iat`).toBeTypeOf('number');
+  if (typeof iat !== 'number') {
+    throw new Error(`${context} iat is not numeric`);
+  }
+
+  const iatMs = iat * 1000;
+  const eventMs = new Date(event.timestamp).getTime();
+  expect(
+    Math.abs(eventMs - iatMs),
+    `${context} iat should be fresh relative to its observed event`
+  ).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+}
+
 /**
  * Minimal jose-based `verifyJwt` callback adapter, local to this test file, so
  * that WP_052c can exercise `verifyClientAttestationPopJwt`'s cryptographic
@@ -186,6 +229,18 @@ const WALLET_ATTESTATION_NON_USER_PAYLOAD_CLAIMS = new Set([
 // before spawning this Vitest process; see `apps/cli/src/commands/runTests.ts`.
 const SERVICE_CONTROL_ENDPOINT_ENV_VAR = 'ITWCT_SERVICE_CONTROL_ENDPOINT';
 
+interface TokenRequestArtifact {
+  event: ObservedEvent;
+  dpopHeader: DpopJwtHeader;
+  dpopPayload: DpopJwtPayload;
+  headers: Headers;
+  popHeader: ItWalletClientAttestationPopJwtHeader;
+  popPayload: ItWalletClientAttestationPopJwtPayload;
+  requestResult: ReturnType<typeof parseAccessTokenRequest>;
+  requestUrl: string;
+  walletAttestationCnfJwk: OAuthJwk;
+}
+
 describe('Test Cases for Issuance Phase', () => {
   let runner: ScenarioRunner;
   let db: DatabaseClient;
@@ -218,9 +273,9 @@ describe('Test Cases for Issuance Phase', () => {
   });
 
   afterAll(async () => {
-    await runner.close();
-    await issuerFaultController.close();
-    db.close();
+    await runner?.close();
+    await issuerFaultController?.close();
+    db?.close();
   });
 
   describe('Happy path', () => {
@@ -1988,6 +2043,11 @@ describe('Test Cases for Issuance Phase', () => {
     let credentialProofJwts: string[];
     let credentialProofHeaders: ProofJwtHeaderV1_3[];
     let credentialProofPayloads: ProofJwtPayload[];
+    let originalTokenArtifact: TokenRequestArtifact;
+    let refreshTokenArtifact: TokenRequestArtifact;
+    let deferredEvent: ObservedEvent;
+    let deferredCredentialRequestEvent: ObservedEvent;
+    let deferredCredentialIssuedEvent: ObservedEvent;
 
     beforeAll(async () => {
       const session = await runner.start(wpDeferredScenario.id);
@@ -2058,6 +2118,95 @@ describe('Test Cases for Issuance Phase', () => {
         }
         batchSize = publishedBatchSize;
 
+        const tokenEvents = events.filter((event) => event.name === 'issuer.token.requested');
+        if (tokenEvents.length !== 2) {
+          throw new Error(
+            `WP_Deferred must observe exactly two successful issuer.token.requested events: the authorization-code exchange and the refresh-token exchange. Found ${tokenEvents.length}.`
+          );
+        }
+
+        const tokenArtifacts = tokenEvents.map((event, index): TokenRequestArtifact => {
+          const context = `WP_Deferred Token Request ${index + 1}`;
+          const tokenEndpoint = requiredDiagnosticString(event, 'endpoint');
+          const requestUrl = `${config['credential-issuer'].url}${tokenEndpoint}`;
+          const headers = toHeaders(event.diagnostic?.['headers'], context);
+
+          let requestResult: ReturnType<typeof parseAccessTokenRequest>;
+          try {
+            requestResult = parseAccessTokenRequest({
+              accessTokenRequest: diagnosticBodyRecord(event, context),
+              request: {
+                headers,
+                method: 'POST' as HttpMethod,
+                url: requestUrl
+              }
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`${context} could not be parsed as an IT-Wallet v1.4 Token Request: ${message}`);
+          }
+
+          let dpopHeader: DpopJwtHeader;
+          let dpopPayload: DpopJwtPayload;
+          try {
+            ({ header: dpopHeader, payload: dpopPayload } = decodeJwt({
+              jwt: requestResult.dpop.jwt,
+              headerSchema: zDpopJwtHeader,
+              payloadSchema: zDpopJwtPayload
+            }));
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`${context} DPoP JWT could not be decoded: ${message}`);
+          }
+
+          let popHeader: ItWalletClientAttestationPopJwtHeader;
+          let popPayload: ItWalletClientAttestationPopJwtPayload;
+          try {
+            ({ header: popHeader, payload: popPayload } = decodeJwt({
+              jwt: requestResult.clientAttestation.clientAttestationPopJwt,
+              headerSchema: zItWalletClientAttestationPopJwtHeader,
+              payloadSchema: zItWalletClientAttestationPopJwtPayload
+            }));
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`${context} Wallet Attestation PoP JWT could not be decoded: ${message}`);
+          }
+
+          const walletAttestationCnfJwk = requireWalletAttestationCnfJwk(requestResult, context);
+
+          return {
+            dpopHeader,
+            dpopPayload,
+            event,
+            headers,
+            popHeader,
+            popPayload,
+            requestResult,
+            requestUrl,
+            walletAttestationCnfJwk
+          };
+        });
+
+        const foundOriginalTokenArtifact = tokenArtifacts.find(
+          (artifact) => artifact.requestResult.grant.grantType === 'authorization_code'
+        );
+        if (!foundOriginalTokenArtifact) {
+          throw new Error('WP_Deferred is missing the initial authorization_code Token Request evidence');
+        }
+        originalTokenArtifact = foundOriginalTokenArtifact;
+
+        const foundRefreshTokenArtifact = tokenArtifacts.find(
+          (artifact) => artifact.requestResult.grant.grantType === 'refresh_token'
+        );
+        if (!foundRefreshTokenArtifact) {
+          throw new Error('WP_Deferred is missing the refresh_token Token Request evidence');
+        }
+        refreshTokenArtifact = foundRefreshTokenArtifact;
+
+        if (originalTokenArtifact.event.monotonicMs >= refreshTokenArtifact.event.monotonicMs) {
+          throw new Error('WP_Deferred refresh_token Token Request must occur after the authorization_code exchange');
+        }
+
         const foundNonceEvent = events.find((event) => event.name === 'issuer.nonce.requested');
         if (!foundNonceEvent) {
           throw new Error('Missing issuer.nonce.requested evidence required to assert WP_058b requirements');
@@ -2119,6 +2268,28 @@ describe('Test Cases for Issuance Phase', () => {
         );
         credentialProofHeaders = proofArtifacts.map(({ header }) => header);
         credentialProofPayloads = proofArtifacts.map(({ payload }) => payload);
+
+        const foundDeferredEvent = events.find((event) => event.name === 'issuer.credential.deferred');
+        if (!foundDeferredEvent) {
+          throw new Error('Missing issuer.credential.deferred evidence required to assert WP_065-WP_068 requirements');
+        }
+        deferredEvent = foundDeferredEvent;
+
+        const foundDeferredCredentialRequestEvent = events.find(
+          (event) => event.name === 'issuer.deferred_credential.requested'
+        );
+        if (!foundDeferredCredentialRequestEvent) {
+          throw new Error('Missing issuer.deferred_credential.requested evidence required to assert WP_066a/WP_068');
+        }
+        deferredCredentialRequestEvent = foundDeferredCredentialRequestEvent;
+
+        const foundDeferredCredentialIssuedEvent = events.find(
+          (event) => event.name === 'issuer.deferred_credential.issued'
+        );
+        if (!foundDeferredCredentialIssuedEvent) {
+          throw new Error('Missing issuer.deferred_credential.issued evidence required to assert WP_066/WP_068');
+        }
+        deferredCredentialIssuedEvent = foundDeferredCredentialIssuedEvent;
       } finally {
         await session.stop();
       }
@@ -2318,6 +2489,7 @@ describe('Test Cases for Issuance Phase', () => {
         const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
         expect(Number.isInteger(intervalSeconds), 'interval must be an integer number of seconds').toBe(true);
         expect(intervalSeconds, 'interval must be positive').toBeGreaterThan(0);
+        expect(intervalSeconds, 'interval must match the two-minute Access Token lifetime for WP_068').toBe(120);
         expect(
           requiredDiagnosticString(deferredEvent, 'transactionIdSha256'),
           'Deferred response evidence must include a non-empty transaction_id hash'
@@ -2415,6 +2587,191 @@ describe('Test Cases for Issuance Phase', () => {
           transactionIdSha256,
           'Deferred response evidence must include a non-empty transaction_id hash'
         ).not.toHaveLength(0);
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_068: Wallet Instance requests a refreshed DPoP-bound Access Token with grant_type=refresh_token before retrieving deferred credentials.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(refreshTokenArtifact.event.diagnostic?.['endpoint'], 'Refresh Token Request should call /token').toBe(
+          '/token'
+        );
+
+        const contentType = refreshTokenArtifact.headers.get('content-type');
+        expect(contentType, 'Refresh Token Request should include a Content-Type header').not.toBeNull();
+        expect(contentType?.toLowerCase(), 'Refresh Token Request should use form-urlencoded content').toContain(
+          'application/x-www-form-urlencoded'
+        );
+
+        expect(refreshTokenArtifact.requestResult.grant.grantType, 'parsed refresh grant should be refresh_token').toBe(
+          'refresh_token'
+        );
+        if (refreshTokenArtifact.requestResult.grant.grantType !== 'refresh_token') {
+          throw new Error('Expected the second Token Request to use the refresh_token grant');
+        }
+        expect(
+          refreshTokenArtifact.requestResult.grant.refreshToken,
+          'Refresh Token Request should include a non-empty refresh_token value'
+        ).not.toHaveLength(0);
+        expect(refreshTokenArtifact.requestResult.accessTokenRequest.grant_type).toBe('refresh_token');
+
+        expect(refreshTokenArtifact.headers.get('DPoP'), 'Refresh Token Request should include DPoP').not.toBeNull();
+        expect(
+          refreshTokenArtifact.headers.get('OAuth-Client-Attestation'),
+          'Refresh Token Request should include OAuth-Client-Attestation'
+        ).not.toBeNull();
+        expect(
+          refreshTokenArtifact.headers.get('OAuth-Client-Attestation-PoP'),
+          'Refresh Token Request should include OAuth-Client-Attestation-PoP'
+        ).not.toBeNull();
+
+        expect(refreshTokenArtifact.dpopHeader.typ, 'Refresh DPoP JWT typ should be dpop+jwt').toBe('dpop+jwt');
+        expect(refreshTokenArtifact.dpopHeader.alg, 'Refresh DPoP JWT alg should not be none').not.toBe('none');
+        expect(
+          refreshTokenArtifact.dpopHeader.jwk,
+          'Refresh DPoP JWT header should include a public JWK'
+        ).toBeDefined();
+        expect(refreshTokenArtifact.dpopHeader.jwk.kty, 'Refresh DPoP JWK should not be symmetric').not.toBe('oct');
+        expect(
+          refreshTokenArtifact.dpopHeader.jwk.d,
+          'Refresh DPoP JWK should not expose private key material'
+        ).toBeUndefined();
+
+        const publicKey = await importJWK(
+          refreshTokenArtifact.dpopHeader.jwk as JWK,
+          refreshTokenArtifact.dpopHeader.alg
+        );
+        await expect(
+          jwtVerify(refreshTokenArtifact.requestResult.dpop.jwt, publicKey),
+          'Refresh DPoP proof signature should verify with the declared public JWK'
+        ).resolves.toBeDefined();
+
+        expect(refreshTokenArtifact.dpopPayload.htm, 'Refresh DPoP proof should be bound to POST').toBe('POST');
+        expect(refreshTokenArtifact.dpopPayload.htu, 'Refresh DPoP proof should target the Token Endpoint URL').toBe(
+          htuFromRequestUrl(refreshTokenArtifact.requestUrl)
+        );
+        expectJwtIatFresh(refreshTokenArtifact.dpopPayload.iat, refreshTokenArtifact.event, 'Refresh DPoP proof');
+        expect(
+          refreshTokenArtifact.dpopPayload.jti,
+          'Refresh DPoP proof should carry a non-empty jti'
+        ).not.toHaveLength(0);
+
+        expect(
+          refreshTokenArtifact.popHeader.typ,
+          'Refresh PoP JWT typ should identify OAuth client attestation PoP'
+        ).toBe('oauth-client-attestation-pop+jwt');
+        expect(refreshTokenArtifact.popHeader.alg, 'Refresh PoP JWT alg should be allowed by IT-Wallet').toBeOneOf([
+          ...IT_WALLET_CLIENT_ATTESTATION_POP_ALLOWED_ALG_VALUES
+        ]);
+        await expect(
+          verifyClientAttestationPopJwt({
+            authorizationServer: config['credential-issuer'].url,
+            callbacks: { verifyJwt: verifyJwtWithJwk },
+            clientAttestationPopJwt: refreshTokenArtifact.requestResult.clientAttestation.clientAttestationPopJwt,
+            clientAttestationPublicJwk: refreshTokenArtifact.walletAttestationCnfJwk
+          }),
+          'Refresh PoP JWT should verify against the refresh Wallet Attestation cnf.jwk'
+        ).resolves.toBeDefined();
+
+        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
+        expect(
+          initialCredentialResponse,
+          'The initial deferred semantic event must pair to an HTTP 202 response'
+        ).toBeDefined();
+        if (!initialCredentialResponse) {
+          throw new Error('Missing HTTP response evidence for the initial deferred response');
+        }
+
+        expect(initialCredentialResponse.http.statusCode).toBe(202);
+        expect(
+          refreshTokenArtifact.event.monotonicMs,
+          'Refresh Token Request should occur after the HTTP 202 deferred response'
+        ).toBeGreaterThan(initialCredentialResponse.monotonicMs);
+        expect(
+          refreshTokenArtifact.event.monotonicMs,
+          'Refresh Token Request should occur before the Deferred Credential Request'
+        ).toBeLessThan(deferredCredentialRequestEvent.monotonicMs);
+        expect(
+          refreshTokenArtifact.event.monotonicMs,
+          'Refresh Token Request should occur before deferred credentials are issued'
+        ).toBeLessThan(deferredCredentialIssuedEvent.monotonicMs);
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_068a: Wallet Instance creates fresh DPoP and Wallet Attestation PoP JWT instances for the Refresh Token Request.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        expect(
+          refreshTokenArtifact.requestResult.dpop.jwt,
+          'Refresh Token Request DPoP compact JWT should differ from the original Token Request DPoP JWT'
+        ).not.toBe(originalTokenArtifact.requestResult.dpop.jwt);
+        expect(
+          refreshTokenArtifact.dpopPayload.jti,
+          'Refresh Token Request DPoP jti should differ from the original Token Request DPoP jti'
+        ).not.toBe(originalTokenArtifact.dpopPayload.jti);
+        expectJwtIatFresh(originalTokenArtifact.dpopPayload.iat, originalTokenArtifact.event, 'Original DPoP proof');
+        expectJwtIatFresh(refreshTokenArtifact.dpopPayload.iat, refreshTokenArtifact.event, 'Refresh DPoP proof');
+
+        expect(
+          refreshTokenArtifact.requestResult.clientAttestation.clientAttestationPopJwt,
+          'Refresh Token Request Wallet Attestation PoP compact JWT should differ from the original Token Request PoP JWT'
+        ).not.toBe(originalTokenArtifact.requestResult.clientAttestation.clientAttestationPopJwt);
+        expect(
+          refreshTokenArtifact.popPayload.jti,
+          'Refresh Token Request PoP jti should differ from the original Token Request PoP jti'
+        ).not.toBe(originalTokenArtifact.popPayload.jti);
+        expectJwtIatFresh(originalTokenArtifact.popPayload.iat, originalTokenArtifact.event, 'Original PoP proof');
+        expectJwtIatFresh(refreshTokenArtifact.popPayload.iat, refreshTokenArtifact.event, 'Refresh PoP proof');
+      },
+      wpDeferredScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_068b: Wallet Instance reuses the original DPoP key and Wallet Attestation cnf.jwk for the Refresh Token Request.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const originalDpopThumbprint = await calculateJwkThumbprint(originalTokenArtifact.dpopHeader.jwk as JWK);
+        const refreshDpopThumbprint = await calculateJwkThumbprint(refreshTokenArtifact.dpopHeader.jwk as JWK);
+        expect(
+          refreshDpopThumbprint,
+          'Refresh Token Request DPoP JWK must match the original Token Request DPoP JWK'
+        ).toBe(originalDpopThumbprint);
+
+        const originalAttestationThumbprint = await calculateJwkThumbprint(
+          originalTokenArtifact.walletAttestationCnfJwk
+        );
+        const refreshAttestationThumbprint = await calculateJwkThumbprint(refreshTokenArtifact.walletAttestationCnfJwk);
+        expect(
+          refreshAttestationThumbprint,
+          'Refresh Token Request Wallet Attestation cnf.jwk must match the original Token Request Wallet Attestation cnf.jwk'
+        ).toBe(originalAttestationThumbprint);
+
+        await expect(
+          verifyClientAttestationPopJwt({
+            authorizationServer: config['credential-issuer'].url,
+            callbacks: { verifyJwt: verifyJwtWithJwk },
+            clientAttestationPopJwt: originalTokenArtifact.requestResult.clientAttestation.clientAttestationPopJwt,
+            clientAttestationPublicJwk: originalTokenArtifact.walletAttestationCnfJwk
+          }),
+          'Original Token Request PoP JWT should verify against the original Wallet Attestation cnf.jwk'
+        ).resolves.toBeDefined();
+
+        await expect(
+          verifyClientAttestationPopJwt({
+            authorizationServer: config['credential-issuer'].url,
+            callbacks: { verifyJwt: verifyJwtWithJwk },
+            clientAttestationPopJwt: refreshTokenArtifact.requestResult.clientAttestation.clientAttestationPopJwt,
+            clientAttestationPublicJwk: originalTokenArtifact.walletAttestationCnfJwk
+          }),
+          'Refresh Token Request PoP JWT should verify against the original Wallet Attestation cnf.jwk'
+        ).resolves.toBeDefined();
       },
       wpDeferredScenario.timeouts.vitestTestMs
     );
