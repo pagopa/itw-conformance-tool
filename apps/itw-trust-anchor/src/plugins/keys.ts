@@ -56,20 +56,22 @@ function isEcPrivateJwk(jwk: unknown): jwk is JwkKey {
 // (apps/itw-credential-issuer/src/plugins/issuer-runtime.ts) so the Trust Anchor
 // resolves the exact same key the issuer advertises in its own federation entity
 // configuration.
-function pickSigningKey(keys: JwkKey[]): JwkKey {
-  const preferred = keys.find(
+function pickSigningKey(keys: JwkKey[], index = 0): JwkKey {
+  const preferredKeys = keys.filter(
     (key) => isEcPrivateJwk(key) && key.use === 'sig' && (key.alg === undefined || key.alg.startsWith('ES'))
   );
+  const preferred = preferredKeys[index];
   if (preferred) {
     return preferred;
   }
 
-  const fallback = keys.find((key) => isEcPrivateJwk(key) && (key.alg === undefined || key.alg.startsWith('ES')));
+  const fallbackKeys = keys.filter((key) => isEcPrivateJwk(key) && (key.alg === undefined || key.alg.startsWith('ES')));
+  const fallback = fallbackKeys[index];
   if (fallback) {
     return fallback;
   }
 
-  throw new Error('Issuer JWKS does not contain an EC signing key compatible with ES algorithms');
+  throw new Error(`JWKS does not contain EC signing key #${index + 1} compatible with ES algorithms`);
 }
 
 function parseJwkFileContent(content: string): unknown {
@@ -128,11 +130,7 @@ async function loadFederationJwk(dataDir: string, relativeFile: string): Promise
  * The RP keeps this key in `rp/jwks.json`, alongside its authorization-request
  * signing and encryption keys.
  */
-async function loadFederationJwkFromJwks(
-  dataDir: string,
-  relativeFile: string,
-  federationKeyId?: string
-): Promise<JwkKey> {
+async function loadFederationJwkFromJwks(dataDir: string, relativeFile: string, signingKeyIndex = 0): Promise<JwkKey> {
   const jwksPath = resolve(dataDir, relativeFile);
   let content: string;
 
@@ -152,17 +150,7 @@ async function loadFederationJwkFromJwks(
       throw new Error('JWKS does not contain any keys');
     }
 
-    if (federationKeyId) {
-      const federationKey = parsedJwks.keys.find(
-        (key) => key.kid === federationKeyId && key.use === 'sig' && isEcPrivateJwk(key)
-      );
-      if (!federationKey) {
-        throw new Error(`JWKS does not contain the federation signing key ${federationKeyId}`);
-      }
-      return federationKey;
-    }
-
-    return pickSigningKey(parsedJwks.keys);
+    return pickSigningKey(parsedJwks.keys, signingKeyIndex);
   } catch (err) {
     throw new Error(
       `Invalid key format in ${relativeFile}: ${err instanceof Error ? err.message : String(err)}. ` +
@@ -179,8 +167,8 @@ export default fp(
       [
         loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
         loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
-        loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 'rp-federation-key'),
-        loadFederationJwkFromJwks(dataDir, join('wallet-provider', 'jwks.json'), 'wallet-provider-signing-key')
+        loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 1),
+        loadFederationJwkFromJwks(dataDir, join('wallet-provider', 'jwks.json'))
       ]
     );
 

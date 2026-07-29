@@ -3,7 +3,7 @@ import { SERVICE_PROTOCOL_VERSION } from './protocol.js';
 
 import type { IpcMessage, LocalServiceName } from './messages.js';
 import type { IssuerConfig } from './messages.js';
-import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
+import type { IssuerFaultProfile, TrustAnchorFaultProfile } from '@itw-conformance-tool/faults';
 
 export interface IssuerFaultActivationRequest {
   scenarioId: string;
@@ -24,6 +24,27 @@ export interface IssuerFaultActivationResult {
 export interface IssuerFaultHandlers {
   activate: (request: IssuerFaultActivationRequest) => Promise<IssuerFaultActivationResult>;
   deactivate: (request: IssuerFaultDeactivationRequest) => Promise<IssuerFaultActivationResult>;
+}
+
+export interface TrustAnchorFaultActivationRequest {
+  scenarioId: string;
+  specVersion: string;
+  profile: TrustAnchorFaultProfile;
+}
+
+export interface TrustAnchorFaultDeactivationRequest {
+  scenarioId: string;
+}
+
+export interface TrustAnchorFaultActivationResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+}
+
+export interface TrustAnchorFaultHandlers {
+  activate: (request: TrustAnchorFaultActivationRequest) => Promise<TrustAnchorFaultActivationResult>;
+  deactivate: (request: TrustAnchorFaultDeactivationRequest) => Promise<TrustAnchorFaultActivationResult>;
 }
 
 export interface IssuerConfigActivationRequest {
@@ -52,6 +73,7 @@ export interface ServiceIpcAdapterOptions {
   stop: () => Promise<void>;
   issuerConfig?: IssuerConfigHandlers;
   issuerFaults?: IssuerFaultHandlers;
+  trustAnchorFaults?: TrustAnchorFaultHandlers;
 }
 
 /**
@@ -204,6 +226,102 @@ export function attachServiceIpcAdapter(options: ServiceIpcAdapterOptions): void
             service: options.service,
             code: 'FAULT_DEACTIVATION_FAILED',
             message: 'Issuer fault deactivation failed'
+          })
+      );
+      return;
+    }
+
+    if (message.type === 'trust-anchor.fault.activate') {
+      if (!options.trustAnchorFaults) {
+        send({
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'service.error',
+          requestId: message.requestId,
+          service: options.service,
+          code: 'UNSUPPORTED_MESSAGE',
+          message: 'Trust Anchor fault controls are not configured'
+        });
+        return;
+      }
+
+      void options.trustAnchorFaults
+        .activate({ scenarioId: message.scenarioId, specVersion: message.specVersion, profile: message.profile })
+        .then(
+          (result) => {
+            if (!result.ok) {
+              send({
+                version: SERVICE_PROTOCOL_VERSION,
+                type: 'service.error',
+                requestId: message.requestId,
+                service: options.service,
+                code: result.code ?? 'FAULT_ACTIVATION_FAILED',
+                message: result.message ?? 'Trust Anchor fault activation failed'
+              });
+              return;
+            }
+
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'trust-anchor.fault.activated',
+              requestId: message.requestId,
+              scenarioId: message.scenarioId
+            });
+          },
+          () =>
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'service.error',
+              requestId: message.requestId,
+              service: options.service,
+              code: 'FAULT_ACTIVATION_FAILED',
+              message: 'Trust Anchor fault activation failed'
+            })
+        );
+      return;
+    }
+
+    if (message.type === 'trust-anchor.fault.deactivate') {
+      if (!options.trustAnchorFaults) {
+        send({
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'service.error',
+          requestId: message.requestId,
+          service: options.service,
+          code: 'UNSUPPORTED_MESSAGE',
+          message: 'Trust Anchor fault controls are not configured'
+        });
+        return;
+      }
+
+      void options.trustAnchorFaults.deactivate({ scenarioId: message.scenarioId }).then(
+        (result) => {
+          if (!result.ok) {
+            send({
+              version: SERVICE_PROTOCOL_VERSION,
+              type: 'service.error',
+              requestId: message.requestId,
+              service: options.service,
+              code: result.code ?? 'FAULT_DEACTIVATION_FAILED',
+              message: result.message ?? 'Trust Anchor fault deactivation failed'
+            });
+            return;
+          }
+
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'trust-anchor.fault.deactivated',
+            requestId: message.requestId,
+            scenarioId: message.scenarioId
+          });
+        },
+        () =>
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: 'service.error',
+            requestId: message.requestId,
+            service: options.service,
+            code: 'FAULT_DEACTIVATION_FAILED',
+            message: 'Trust Anchor fault deactivation failed'
           })
       );
       return;

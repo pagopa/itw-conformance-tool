@@ -9,7 +9,9 @@ import type {
   IssuerConfigActivationRequest,
   IssuerConfigDeactivationRequest,
   IssuerFaultActivationRequest,
-  IssuerFaultDeactivationRequest
+  IssuerFaultDeactivationRequest,
+  TrustAnchorFaultActivationRequest,
+  TrustAnchorFaultDeactivationRequest
 } from './service-adapter.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -27,6 +29,8 @@ export interface ServiceControlClient {
   deactivateIssuerConfig(request: IssuerConfigDeactivationRequest): Promise<void>;
   activateIssuerFault(request: IssuerFaultActivationRequest): Promise<void>;
   deactivateIssuerFault(request: IssuerFaultDeactivationRequest): Promise<void>;
+  activateTrustAnchorFault(request: TrustAnchorFaultActivationRequest): Promise<void>;
+  deactivateTrustAnchorFault(request: TrustAnchorFaultDeactivationRequest): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -47,7 +51,10 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
   const pending = new Map<string, PendingRequest>();
   let buffer = '';
 
-  const socket = net.createConnection(options.endpoint);
+  const endpointUrl = options.endpoint.startsWith('tcp://') ? new URL(options.endpoint) : undefined;
+  const socket = endpointUrl
+    ? net.createConnection({ host: endpointUrl.hostname, port: Number(endpointUrl.port) })
+    : net.createConnection(options.endpoint);
   socket.setEncoding('utf8');
 
   const connected = new Promise<void>((resolve, reject) => {
@@ -99,6 +106,8 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
     if (
       message.type === 'issuer.fault.activated' ||
       message.type === 'issuer.fault.deactivated' ||
+      message.type === 'trust-anchor.fault.activated' ||
+      message.type === 'trust-anchor.fault.deactivated' ||
       message.type === 'issuer.config.activated' ||
       message.type === 'issuer.config.deactivated'
     ) {
@@ -182,6 +191,34 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
         {
           version: SERVICE_PROTOCOL_VERSION,
           type: 'issuer.fault.deactivate',
+          requestId,
+          scenarioId: request.scenarioId
+        },
+        requestId
+      );
+    },
+
+    async activateTrustAnchorFault(request: TrustAnchorFaultActivationRequest): Promise<void> {
+      const requestId = randomUUID();
+      await send(
+        {
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'trust-anchor.fault.activate',
+          requestId,
+          scenarioId: request.scenarioId,
+          specVersion: request.specVersion,
+          profile: request.profile
+        },
+        requestId
+      );
+    },
+
+    async deactivateTrustAnchorFault(request: TrustAnchorFaultDeactivationRequest): Promise<void> {
+      const requestId = randomUUID();
+      await send(
+        {
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'trust-anchor.fault.deactivate',
           requestId,
           scenarioId: request.scenarioId
         },

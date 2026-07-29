@@ -13,8 +13,20 @@ declare module 'fastify' {
       DATA_DIR: string;
       TRUST_ANCHOR_URL: string;
       WALLET_NAME: string;
-      WALLET_PROVIDER_X509: string;
+      WALLET_PROVIDER_X509_CHAIN: [string, string];
     };
+  }
+}
+
+async function readWalletProviderCertificate(filePath: string): Promise<string> {
+  try {
+    return await readFile(filePath, 'utf8');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Wallet Provider cryptographic material is missing or unreadable at '${filePath}'. ` +
+        `Run itw-conformance-tool init --force to regenerate a coherent certificate chain. ${message}`
+    );
   }
 }
 
@@ -23,14 +35,20 @@ export default fp(
     const config = loadConfig();
     const walletProviderConfig = config['wallet-provider'];
     const dataDir = config.global.data_dir;
-    const certificatePem = await readFile(path.join(dataDir, 'wallet-provider', 'cert.pem'), 'utf8');
+    const certificatePem = await readWalletProviderCertificate(path.join(dataDir, 'wallet-provider', 'cert.pem'));
+    const intermediateCertificatePem = await readWalletProviderCertificate(
+      path.join(dataDir, 'wallet-provider', 'intermediate-cert.pem')
+    );
 
     app.decorate('config', {
       BASE_URL: walletProviderConfig.local_url,
       DATA_DIR: dataDir,
       TRUST_ANCHOR_URL: trimTrailingSlashes(config['trust-anchor'].url.trim()),
       WALLET_NAME: config.wallet.wallet_name,
-      WALLET_PROVIDER_X509: convertPemToBase64Der(certificatePem)
+      WALLET_PROVIDER_X509_CHAIN: [
+        convertPemToBase64Der(certificatePem),
+        convertPemToBase64Der(intermediateCertificatePem)
+      ]
     });
   },
   { name: 'config' }

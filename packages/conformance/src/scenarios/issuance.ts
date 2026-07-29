@@ -1,7 +1,9 @@
+import { wp017Scenario } from './factories/wp-017.js';
 import { wp046aScenario } from './factories/wp-046a.js';
 import { wp054Scenarios } from './factories/wp-054.js';
 import { wp054aInvalidStateScenario } from './factories/wp-054a.js';
 import { wp054bInvalidIssuerScenario } from './factories/wp-054b.js';
+import { wp057Scenario } from './factories/wp-057.js';
 import { wp059Scenario } from './factories/wp-059.js';
 import { wp060Scenarios } from './factories/wp-060.js';
 import { wp061Scenario } from './factories/wp-061.js';
@@ -22,7 +24,9 @@ import type { ProtocolObservedScenarioDefinition } from './definitions.js';
 
 export const issuanceScenarios: ProtocolObservedScenarioDefinition[] = [
   wpCiHappyScenario,
+  wp017Scenario,
   wp046aScenario,
+  wp057Scenario,
   wp059Scenario,
   ...wp060Scenarios,
   wp061Scenario,
