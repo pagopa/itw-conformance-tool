@@ -71,7 +71,6 @@ import {
 } from '../../utils/x509.js';
 
 import type {
-  HttpRequestReceivedEvent,
   HttpResponseSentEvent,
   ObservedEvent,
   ScenarioOutcome,
