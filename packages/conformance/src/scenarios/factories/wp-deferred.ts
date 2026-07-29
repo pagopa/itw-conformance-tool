@@ -9,7 +9,7 @@ export const wpDeferredScenario: ProtocolObservedScenarioDefinition = {
   services: ['credentialIssuer', 'federation'],
   stimulus: {
     type: 'credential-offer',
-    credentialConfigurationIds: ['dc_sd_jwt_EuropeanDisabilityCard', 'dc_sd_jwt_EuropeanDisabilityCard'],
+    credentialConfigurationIds: ['org.iso.18013.5.1.mDL'],
     delivery: ['deep-link', 'qr']
   },
   setup: {

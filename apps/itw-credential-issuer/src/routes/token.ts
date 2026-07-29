@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { Oauth2Error } from '@pagopa/io-wallet-oauth2';
 
@@ -9,6 +11,7 @@ import {
   TokenService,
   UnsupportedGrantTypeError
 } from '../domain/index.js';
+import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from '../domain/models/token.js';
 import {
   makeJwksRepository,
   makeOauthCallbacks,
@@ -42,19 +45,49 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
                 .map(([key, value]) => [key, String(value)] as [string, string])
             ).toString();
       const { baseURL, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
+      const form = new URLSearchParams(bodyString);
+      const grantType = form.get('grant_type') ?? undefined;
+      const presentedRefreshToken = form.get('refresh_token') ?? undefined;
+      const scenarioCorrelationId = request.conformance?.correlation?.correlationId ?? null;
+      const dpopHeaderPresent = request.headers.dpop !== undefined;
+
+      const emitTokenFailure = async (input: { error: string; statusCode: number }): Promise<void> => {
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.token.failed',
+            correlationId: scenarioCorrelationId,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/token',
+              grantType,
+              error: input.error,
+              statusCode: input.statusCode,
+              dpopHeaderPresent,
+              requestId: request.id,
+              scenarioCorrelationId
+            }
+          })
+        );
+      };
 
       try {
         const service = new TokenService(
           makeTokenParRepository(app),
           makeJwksRepository(app),
-          makeRefreshTokenRepository(app)
+          makeRefreshTokenRepository(app),
+          {
+            accessTokenTtlSeconds: app.issuerRuntimeConfigStore.resolveAccessTokenTtlSeconds(ACCESS_TOKEN_TTL_SECONDS),
+            refreshTokenTtlSeconds:
+              app.issuerRuntimeConfigStore.resolveRefreshTokenTtlSeconds(REFRESH_TOKEN_TTL_SECONDS)
+          }
         );
         const tokenRequestHeaders = new Headers(
           Object.entries(request.headers)
             .filter(([, value]) => typeof value === 'string' || Array.isArray(value))
             .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : value] as [string, string])
         );
-        const { issuerState, response } = await service.createAccessToken({
+        const { issuedAccessToken, issuedRefreshToken, issuerState, response } = await service.createAccessToken({
           baseURL,
           callbacks: {
             generateRandom: oauthCallbacks.generateRandom,
@@ -79,8 +112,17 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
             requestId: request.id,
             diagnostic: {
               endpoint: '/token',
+              accessTokenExp: issuedAccessToken.exp,
+              accessTokenExpiresIn: issuedAccessToken.expiresIn,
+              accessTokenSha256: issuedAccessToken.sha256,
               body: request.body,
-              headers: Object.fromEntries(tokenRequestHeaders.entries())
+              grantType,
+              headers: Object.fromEntries(tokenRequestHeaders.entries()),
+              method: request.method,
+              presentedRefreshTokenSha256: presentedRefreshToken ? sha256Base64Url(presentedRefreshToken) : undefined,
+              refreshTokenExp: issuedRefreshToken?.exp,
+              refreshTokenSha256: issuedRefreshToken?.sha256,
+              tokenType: typeof response.token_type === 'string' ? response.token_type : undefined
             }
           })
         );
@@ -91,28 +133,34 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
           .send(response);
       } catch (error) {
         if (error instanceof CreateAccessTokenError) {
+          await emitTokenFailure({ error: 'invalid_request', statusCode: 400 });
           return withNoCache(reply).code(400).send({ error: 'invalid_request', error_description: error.message });
         }
 
         if (error instanceof InvalidGrantError) {
+          await emitTokenFailure({ error: 'invalid_grant', statusCode: 400 });
           return withNoCache(reply).code(400).send({ error: 'invalid_grant', error_description: error.message });
         }
 
         if (error instanceof UnsupportedGrantTypeError) {
+          await emitTokenFailure({ error: 'unsupported_grant_type', statusCode: 400 });
           return withNoCache(reply)
             .code(400)
             .send({ error: 'unsupported_grant_type', error_description: error.message });
         }
 
         if (error instanceof InvalidDpopProofError) {
+          await emitTokenFailure({ error: 'invalid_dpop_proof', statusCode: 400 });
           return withNoCache(reply).code(400).send({ error: 'invalid_dpop_proof', error_description: error.message });
         }
 
         if (error instanceof InvalidClientError) {
+          await emitTokenFailure({ error: 'invalid_client', statusCode: 401 });
           return withNoCache(reply).code(401).send({ error: 'invalid_client', error_description: error.message });
         }
 
         if (error instanceof Oauth2Error) {
+          await emitTokenFailure({ error: 'invalid_request', statusCode: 400 });
           return withNoCache(reply).code(400).send({
             error: 'invalid_request',
             error_description: error.message
@@ -127,3 +175,7 @@ const tokenRoute: FastifyPluginAsync = async (app) => {
 };
 
 export default tokenRoute;
+
+function sha256Base64Url(value: string): string {
+  return createHash('sha256').update(value, 'ascii').digest('base64url');
+}

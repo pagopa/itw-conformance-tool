@@ -15,6 +15,13 @@ export interface DeactivateIssuerFaultRequest {
 
 export interface IssuerRuntimeConfig {
   batchIssuanceByDeferred: boolean;
+  accessTokenTtlSeconds?: number;
+  refreshTokenTtlSeconds?: number;
+  statusList?: {
+    bits: 4;
+    ttlSeconds?: number;
+    values: number[];
+  };
 }
 
 export interface ActivateIssuerConfigRequest {

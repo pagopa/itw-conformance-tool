@@ -10,6 +10,11 @@ import { wp061Scenario } from './factories/wp-061.js';
 import { wp062aScenario } from './factories/wp-062a.js';
 import { wp062bScenario } from './factories/wp-062b.js';
 import { wpCiHappyScenario } from './factories/wp-ci-happy.js';
+import {
+  wpCredentialReissuanceRefreshAccessTokenScenario,
+  wpCredentialReissuanceScenario,
+  wpCredentialReissuanceValidAccessTokenScenario
+} from './factories/wp-credential-reissuance.js';
 import { wpDeferredScenario } from './factories/wp-deferred.js';
 import { wpNotificationScenario } from './factories/wp-notification.js';
 import { wpUnsupportedCredentialOfferScenario } from './factories/wp-unsupported-credential-offer.js';
@@ -28,6 +33,9 @@ export const issuanceScenarios: ProtocolObservedScenarioDefinition[] = [
   wp062aScenario,
   wp062bScenario,
   wpNotificationScenario,
+  wpCredentialReissuanceScenario,
+  wpCredentialReissuanceRefreshAccessTokenScenario,
+  wpCredentialReissuanceValidAccessTokenScenario,
   wpDeferredScenario,
   wpUnsupportedCredentialOfferScenario,
   ...wp054Scenarios,

@@ -55,7 +55,7 @@ export interface DeferredCredentialEntry {
   /** JWK thumbprint (`cnf.jkt`) bound to the access token. */
   jwkThumbprint: string;
   /** Notification ID to return alongside the deferred credentials. */
-  notificationId: string;
+  notificationId?: string;
 }
 
 export interface IDeferredCredentialRepository {

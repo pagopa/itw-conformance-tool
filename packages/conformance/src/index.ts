@@ -64,6 +64,25 @@ export { issuanceScenarioRegistry, issuanceScenarios } from './scenarios/issuanc
 export { presentationScenarioRegistry, presentationScenarios } from './scenarios/presentation.js';
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
+export {
+  WP_CREDENTIAL_REISSUANCE_EXPIRED_TOKENS,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_STATUS_LIST_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_REFRESH_ACCESS_TOKEN,
+  WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_REFRESHED_REFRESH_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_STATUS_INDEX,
+  WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS,
+  WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN,
+  WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN_TTL_SECONDS,
+  wpCredentialReissuanceRefreshAccessTokenScenario,
+  wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig,
+  wpCredentialReissuanceScenario,
+  wpCredentialReissuanceUpdatedIssuerConfig,
+  wpCredentialReissuanceValidAccessTokenScenario,
+  wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig
+} from './scenarios/factories/wp-credential-reissuance.js';
 export { wp017Scenario } from './scenarios/factories/wp-017.js';
 export { wpWalletProviderHappyScenario } from './scenarios/factories/wp-wallet-provider-happy.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';

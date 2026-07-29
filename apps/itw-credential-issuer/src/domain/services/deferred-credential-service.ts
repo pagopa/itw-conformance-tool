@@ -113,7 +113,7 @@ export class DeferredCredentialService {
   async #buildImmediateResponse(
     config: IoWalletSdkConfig,
     credentials: string[],
-    notificationId: string
+    notificationId?: string
   ): Promise<CreateCredentialResponseResult> {
     const [firstCredential, ...restCredentials] = credentials;
     if (!firstCredential) {

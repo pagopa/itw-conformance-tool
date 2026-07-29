@@ -12,7 +12,17 @@ const requestIdSchema = z.string();
 
 const issuerConfigSchema = z
   .object({
-    batchIssuanceByDeferred: z.boolean()
+    batchIssuanceByDeferred: z.boolean(),
+    accessTokenTtlSeconds: z.number().int().positive().optional(),
+    refreshTokenTtlSeconds: z.number().int().positive().optional(),
+    statusList: z
+      .object({
+        bits: z.literal(4),
+        ttlSeconds: z.number().int().positive().optional(),
+        values: z.array(z.number().int().min(0).max(15)).nonempty()
+      })
+      .strict()
+      .optional()
   })
   .strict();
 

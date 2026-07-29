@@ -19,7 +19,7 @@ export const getCompanyBadgeDocument = (holderKeyId: string, fakeUser: FakeUser)
       [BADGE_NAMESPACE]: {
         benefits: ['canteen', 'mobile'],
         birth_date: new DateOnly(fakeUser.birthDate),
-        company: 'Fondazione Bruno Kessler',
+        company: 'Private Company S.p.A.',
         document_number: fakeUser.documentNumber,
         employee_code: '22343',
         expiry_date: new DateOnly(expiryDate),

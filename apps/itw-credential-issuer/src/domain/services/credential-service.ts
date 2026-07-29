@@ -361,12 +361,10 @@ export class CredentialService {
     const { config } = options;
 
     const transactionId = randomBytes(32).toString('hex');
-    const notificationId = randomBytes(32).toString('hex');
 
     await this.#deferredCredentialRepository.insert(transactionId, {
       credentials,
       jwkThumbprint,
-      notificationId,
       subject
     });
 
