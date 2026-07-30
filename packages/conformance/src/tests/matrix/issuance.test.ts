@@ -3193,12 +3193,8 @@ describe('Test Cases for Issuance Phase', () => {
           signal: session.abortSignal
         });
         const firstTokenEvent = nthEvent(session.events.all(), 'issuer.token.requested', 0);
-        const expiryBoundaryMs =
-          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS * 1000;
-        const remainingMs = expiryBoundaryMs + 1_000 - Date.now();
-        if (remainingMs > 0) {
-          await sleep(remainingMs, undefined, { signal: session.abortSignal });
-        }
+        const originalRefreshTokenExpMs = requiredDiagnosticNumber(firstTokenEvent, 'refreshTokenExp') * 1000;
+        await waitUntilMs(originalRefreshTokenExpMs + STATUS_LIST_CACHE_CLOCK_SKEW_MS, session.abortSignal);
 
         await issuerFaultController.activateIssuerConfig({
           scenarioId: session.correlationId,
@@ -3308,7 +3304,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(failedTokenEvent.diagnostic?.['statusCode'], 'Refresh failure must be HTTP 400').toBe(400);
 
         const refreshExpiryBoundaryMs =
-          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS * 1000;
+          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_EXPIRED_REFRESH_TOKEN_TTL_SECONDS * 1000;
         expect(
           Date.parse(failedTokenEvent.timestamp),
           'Refresh Token must be expired when the wallet presents it'
