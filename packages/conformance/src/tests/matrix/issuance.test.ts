@@ -34,6 +34,8 @@ import {
   createSqliteScenarioEventBridge,
   issuanceScenarioRegistry,
   wp017Scenario,
+  WP_050A_METADATA_POLICY_CREDENTIAL_CONFIGURATION_ID,
+  wp050aMetadataPolicyScenario,
   wp046aScenario,
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario,
@@ -45,8 +47,8 @@ import {
   wp062bScenario,
   wpNotificationScenario,
   wpDeferredScenario,
+  WP_CREDENTIAL_REISSUANCE_EXPIRED_REFRESH_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS,
-  WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_STATUS_INDEX,
   WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS,
@@ -1728,6 +1730,67 @@ describe('Test Cases for Issuance Phase', () => {
     }, 10_000);
   });
 
+  describe('WP_050a', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let credentialOfferUri: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wp050aMetadataPolicyScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+      } finally {
+        await session.stop();
+      }
+    }, wp050aMetadataPolicyScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_050a: Wallet Instance rejects a Credential Issuer not authorized to issue the requested Digital Credential by metadata policy.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        expect(offerPayload.credential_configuration_ids).toEqual([
+          WP_050A_METADATA_POLICY_CREDENTIAL_CONFIGURATION_ID
+        ]);
+
+        const entityConfigurationEvent = events.find((event) => event.name === 'issuer.entity_configuration.requested');
+        const trustAnchorFetchEvent = events.find((event) => event.name === 'federation.fetch.requested');
+
+        expect(
+          entityConfigurationEvent,
+          'Wallet must request the Credential Issuer Entity Configuration before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          trustAnchorFetchEvent,
+          'Wallet must fetch the Credential Issuer Subordinate Statement from the Trust Anchor before this scenario can pass'
+        ).toBeDefined();
+        if (!entityConfigurationEvent || !trustAnchorFetchEvent) {
+          throw new Error('Missing issuer.entity_configuration.requested or federation.fetch.requested evidence');
+        }
+
+        const fetchSub = trustAnchorFetchEvent.diagnostic?.['sub'];
+        expect(typeof fetchSub, 'Trust Anchor /fetch evidence should include the requested sub').toBe('string');
+        if (typeof fetchSub !== 'string') {
+          throw new Error('federation.fetch.requested evidence is missing the sub diagnostic');
+        }
+        expect(trimTrailingSlash(fetchSub), 'Trust Anchor /fetch sub should target the configured issuer').toBe(
+          trimTrailingSlash(config['credential-issuer'].url)
+        );
+
+        expect(
+          events.indexOf(trustAnchorFetchEvent),
+          'Trust Anchor fetch must occur after the issuer Entity Configuration request'
+        ).toBeGreaterThan(events.indexOf(entityConfigurationEvent));
+      },
+      wp050aMetadataPolicyScenario.timeouts.vitestTestMs
+    );
+  });
+
   // Unlike WP_046a's stateless Entity Configuration endpoint, /code/jwt
   // requires a live Authorization request_uri from a fresh PAR/authorize
   // round-trip, so it cannot be probed out-of-band with a plain HTTP request
@@ -3130,12 +3193,8 @@ describe('Test Cases for Issuance Phase', () => {
           signal: session.abortSignal
         });
         const firstTokenEvent = nthEvent(session.events.all(), 'issuer.token.requested', 0);
-        const expiryBoundaryMs =
-          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS * 1000;
-        const remainingMs = expiryBoundaryMs + 1_000 - Date.now();
-        if (remainingMs > 0) {
-          await sleep(remainingMs, undefined, { signal: session.abortSignal });
-        }
+        const originalRefreshTokenExpMs = requiredDiagnosticNumber(firstTokenEvent, 'refreshTokenExp') * 1000;
+        await waitUntilMs(originalRefreshTokenExpMs + STATUS_LIST_CACHE_CLOCK_SKEW_MS, session.abortSignal);
 
         await issuerFaultController.activateIssuerConfig({
           scenarioId: session.correlationId,
@@ -3245,7 +3304,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(failedTokenEvent.diagnostic?.['statusCode'], 'Refresh failure must be HTTP 400').toBe(400);
 
         const refreshExpiryBoundaryMs =
-          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS * 1000;
+          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_EXPIRED_REFRESH_TOKEN_TTL_SECONDS * 1000;
         expect(
           Date.parse(failedTokenEvent.timestamp),
           'Refresh Token must be expired when the wallet presents it'

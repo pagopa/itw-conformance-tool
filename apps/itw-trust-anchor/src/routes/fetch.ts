@@ -4,6 +4,7 @@ import { createSubordinate } from '../federation/statements.js';
 
 import type { SubordinateEntityKind } from '../federation/statements.js';
 import type { JwkKey } from '../plugins/keys.js';
+import type { MetadataPolicyOperator } from '@pagopa/io-wallet-oid-federation';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 
 interface FetchQuerystring {
@@ -31,10 +32,24 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
 
       let subjectKind: SubordinateEntityKind;
       let subjectPrivateJwk: JwkKey;
+      let metadataPolicy: Record<string, Record<string, MetadataPolicyOperator>> | undefined;
 
       if (sub === issuerEntityId) {
         subjectKind = 'issuer';
         subjectPrivateJwk = app.trustAnchorKeys.issuerFederationJwk;
+        metadataPolicy = {
+          openid_credential_issuer: {
+            credential_configurations_supported: {
+              subset_of: [
+                'dc_sd_jwt_EuropeanDisabilityCard',
+                'dc_sd_jwt_PersonIdentificationData',
+                'mso_mdoc_mDL',
+                'org.iso.18013.5.1.mDL'
+              ],
+              essential: true
+            }
+          }
+        };
       } else if (sub === rpEntityId) {
         subjectKind = 'rp';
         subjectPrivateJwk = app.trustAnchorKeys.rpFederationJwk;
@@ -51,7 +66,8 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           subjectEntityId: sub,
           subjectKind,
           subjectPrivateJwk,
-          trustAnchorBaseUrl: baseUrl
+          trustAnchorBaseUrl: baseUrl,
+          metadataPolicy
         });
 
         await app.conformanceEventSink?.emit(
