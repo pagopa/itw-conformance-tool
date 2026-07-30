@@ -886,7 +886,7 @@ describe('Test Cases for Presentation Phase', () => {
     }
 
     test(
-      '[WP_116]: Wallet Instance discovers an HTTPS erasure_endpoint from Relying Party metadata',
+      'WP_116: Wallet Instance discovers an HTTPS erasure_endpoint from Relying Party metadata',
       async () => {
         assertConformanceOutcome(run.outcome, { expected: 'PASS' });
 
@@ -900,7 +900,7 @@ describe('Test Cases for Presentation Phase', () => {
     );
 
     test(
-      '[WP_117]: Wallet Instance sends a valid GET Erasure Request to the attested endpoint',
+      'WP_117: Wallet Instance sends a valid GET Erasure Request to the attested endpoint',
       async () => {
         assertConformanceOutcome(run.outcome, { expected: 'PASS' });
 
