@@ -1,0 +1,1207 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RP App - IT Wallet</title>
+
+    <!-- Google Fonts - Titillium Web (IO App) + Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Design System -->
+    <link rel="stylesheet" href="styles/design-system.css" />
+    <link rel="stylesheet" href="styles/animations.css" />
+
+    <style>
+      /* ===== Layout Principale ===== */
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+      }
+
+      /* ===== Header/Hero Section ===== */
+      .app-header {
+        background: var(--gradient-hero);
+        padding: var(--space-12) var(--space-4);
+        text-align: center;
+        border-bottom: 1px solid var(--gray-200);
+      }
+
+      .header-content {
+        max-width: 800px;
+        margin: 0 auto;
+        animation: fadeInDown 0.6s ease-out;
+      }
+
+      .header-title {
+        font-size: var(--text-4xl);
+        font-weight: var(--font-bold);
+        color: var(--gray-900);
+        margin-bottom: var(--space-3);
+        line-height: var(--leading-tight);
+      }
+
+      .header-subtitle {
+        font-size: var(--text-lg);
+        color: var(--gray-600);
+        line-height: var(--leading-relaxed);
+        margin: 0;
+      }
+
+      @media (max-width: 640px) {
+        .header-title {
+          font-size: var(--text-2xl);
+        }
+        .header-subtitle {
+          font-size: var(--text-base);
+        }
+        .app-header {
+          padding: var(--space-8) var(--space-4);
+        }
+      }
+
+      /* ===== Main Container ===== */
+      .container {
+        flex: 1;
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--space-8) var(--space-4);
+      }
+
+      /* ===== Credential Cards Grid ===== */
+      .credential-selector-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+        margin-bottom: var(--space-8);
+      }
+
+      @media (min-width: 768px) {
+        .credential-selector-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (min-width: 1024px) {
+        .credential-selector-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      /* ===== Credential Card ===== */
+      .credential-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
+        transition: all var(--transition-base);
+        border: 2px solid transparent;
+        animation: fadeInUp 0.5s ease-out;
+      }
+
+      .credential-card:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-2px);
+      }
+
+      .credential-card.has-selection {
+        border-color: var(--primary-blue);
+      }
+
+      .card-header {
+        padding: var(--space-6);
+        background: var(--gradient-card);
+        border-bottom: 1px solid var(--gray-200);
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .credential-icon {
+        font-size: var(--text-3xl);
+        line-height: 1;
+      }
+
+      .card-header h3 {
+        font-size: var(--text-xl);
+        font-weight: var(--font-semibold);
+        margin: 0;
+        color: var(--gray-900);
+      }
+
+      .expand-icon {
+        margin-left: auto;
+        transition: transform var(--transition-base);
+        color: var(--gray-500);
+      }
+
+      .credential-card.expanded .expand-icon {
+        transform: rotate(180deg);
+      }
+
+      /* ===== Card Body ===== */
+      .card-body {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height var(--transition-slow) ease-out;
+      }
+
+      .credential-card.expanded .card-body {
+        max-height: 600px;
+      }
+
+      .claims-checklist {
+        padding: var(--space-4) var(--space-6);
+      }
+
+      /* ===== Claim Items ===== */
+      .claim-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--gray-100);
+        cursor: pointer;
+        transition: background-color var(--transition-fast);
+      }
+
+      .claim-item:last-child {
+        border-bottom: none;
+      }
+
+      .claim-item:hover {
+        background-color: var(--gray-50);
+        padding-left: var(--space-2);
+        padding-right: var(--space-2);
+        margin-left: calc(var(--space-2) * -1);
+        margin-right: calc(var(--space-2) * -1);
+        border-radius: var(--radius-md);
+      }
+
+      .claim-item input[type='checkbox'] {
+        flex-shrink: 0;
+      }
+
+      .claim-label {
+        flex: 1;
+        font-size: var(--text-base);
+        color: var(--gray-700);
+        font-weight: var(--font-medium);
+      }
+
+      .select-all-item {
+        background-color: var(--gray-50);
+        padding: var(--space-3);
+        margin: 0 0 var(--space-2);
+        border-radius: var(--radius-md);
+        border: none;
+      }
+
+      .select-all-item:hover {
+        padding: var(--space-3);
+        margin: 0 0 var(--space-2);
+      }
+
+      .select-all-item .claim-label {
+        font-weight: var(--font-semibold);
+        color: var(--primary-blue);
+      }
+
+      /* ===== QR Code Section ===== */
+      #qrSection {
+        display: none;
+        margin-top: var(--space-8);
+        animation: scaleIn 0.4s ease-out;
+      }
+
+      /* ===== Loader Section ===== */
+      #loaderSection {
+        display: none;
+        margin-top: var(--space-8);
+        animation: fadeIn 0.4s ease-out;
+      }
+
+      .loader-container {
+        max-width: 500px;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .loader-content {
+        background: white;
+        border-radius: var(--radius-2xl);
+        box-shadow: var(--shadow-xl);
+        padding: var(--space-12) var(--space-8);
+      }
+
+      .spinner-wrapper {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto var(--space-6);
+      }
+
+      .spinner {
+        width: 100%;
+        height: 100%;
+        animation: spin 2s linear infinite;
+      }
+
+      .spinner-track {
+        fill: none;
+        stroke: var(--gray-200);
+        stroke-width: 4;
+        cx: 25;
+        cy: 25;
+        r: 20;
+      }
+
+      .spinner-fill {
+        fill: none;
+        stroke: url(#spinner-gradient);
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-dasharray: 126;
+        stroke-dashoffset: 50;
+        cx: 25;
+        cy: 25;
+        r: 20;
+        animation: spinDash 1.5s ease-in-out infinite;
+      }
+
+      @keyframes spinDash {
+        0% {
+          stroke-dashoffset: 126;
+        }
+        50% {
+          stroke-dashoffset: 32;
+        }
+        100% {
+          stroke-dashoffset: 126;
+        }
+      }
+
+      .loader-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 50px;
+        height: 50px;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      .loader-title {
+        font-size: var(--text-2xl);
+        font-weight: var(--font-bold);
+        color: var(--gray-900);
+        margin-bottom: var(--space-2);
+      }
+
+      .loader-message {
+        font-size: var(--text-base);
+        color: var(--gray-600);
+        margin-bottom: var(--space-8);
+      }
+
+      .loader-steps {
+        display: flex;
+        justify-content: center;
+        gap: var(--space-4);
+        flex-wrap: wrap;
+      }
+
+      .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-2);
+        opacity: 0.4;
+        transition: opacity var(--transition-base);
+      }
+
+      .step.active {
+        opacity: 1;
+      }
+
+      .step-number {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-full);
+        background: var(--gray-200);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: var(--font-bold);
+        color: var(--gray-600);
+      }
+
+      .step.active .step-number {
+        background: var(--gradient-primary);
+        color: white;
+      }
+
+      .step-label {
+        font-size: var(--text-xs);
+        color: var(--gray-600);
+        text-align: center;
+      }
+
+      /* ===== Wallet Button Container ===== */
+      #walletButtonContainer {
+        display: none;
+        margin-top: var(--space-8);
+        text-align: center;
+        animation: fadeInUp 0.4s ease-out;
+      }
+
+      #walletButtonContainer button {
+        padding: var(--space-5) var(--space-8);
+        font-size: var(--text-lg);
+      }
+
+      /* ===== Flow Selection Section ===== */
+      .flow-selection {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+        margin-top: var(--space-8);
+      }
+
+      @media (min-width: 768px) {
+        .flow-selection {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .flow-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-md);
+        padding: var(--space-8);
+        text-align: center;
+        transition: all var(--transition-base);
+        border: 2px solid transparent;
+        animation: fadeInUp 0.6s ease-out;
+      }
+
+      .flow-card:nth-child(2) {
+        animation-delay: 0.1s;
+      }
+
+      .flow-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-xl);
+        border-color: var(--primary-blue);
+      }
+
+      .flow-icon-container {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto var(--space-4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--gradient-primary);
+        border-radius: var(--radius-full);
+        transition: transform var(--transition-base);
+      }
+
+      .flow-card:hover .flow-icon-container {
+        transform: scale(1.1);
+      }
+
+      .flow-icon {
+        width: 40px;
+        height: 40px;
+        color: white;
+      }
+
+      .flow-title {
+        font-size: var(--text-2xl);
+        font-weight: var(--font-bold);
+        margin-bottom: var(--space-2);
+        color: var(--gray-900);
+      }
+
+      .flow-description {
+        font-size: var(--text-base);
+        color: var(--gray-600);
+        margin-bottom: var(--space-4);
+        line-height: var(--leading-relaxed);
+      }
+
+      .flow-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 var(--space-6) 0;
+        text-align: left;
+      }
+
+      .flow-features li {
+        font-size: var(--text-sm);
+        color: var(--gray-700);
+        padding: var(--space-2) 0;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .flow-features li::before {
+        content: '✓';
+        color: var(--accent-teal);
+        font-weight: var(--font-bold);
+      }
+
+      .flow-button {
+        width: 100%;
+        padding: var(--space-4) var(--space-6);
+        font-size: var(--text-base);
+        font-weight: var(--font-semibold);
+      }
+    </style>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+      integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script>
+      let pollingInterval;
+
+      function generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+          const r = (Math.random() * 16) | 0,
+            v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      }
+
+      // Toggle credential card expansion
+      function toggleCard(headerElement) {
+        const card = headerElement.closest('.credential-card');
+        const wasExpanded = card.classList.contains('expanded');
+
+        // Optional: close other cards
+        // document.querySelectorAll('.credential-card.expanded').forEach(c => {
+        //   if (c !== card) c.classList.remove('expanded');
+        // });
+
+        card.classList.toggle('expanded');
+
+        // Accessibility: update aria-expanded
+        const isExpanded = card.classList.contains('expanded');
+        headerElement.setAttribute('aria-expanded', isExpanded);
+      }
+
+      // Toggle all checkboxes in a credential group
+      function toggleAll(event, parentId) {
+        event.stopPropagation();
+        const isChecked = event.target.checked;
+        const checkboxes = document.querySelectorAll(`.option[data-parent="${parentId}"]`);
+
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = isChecked;
+        });
+
+        updateButtonState();
+        updateCardSelection();
+      }
+
+      function isUriSchemeValid() {
+        const val = document.getElementById('walletAuthBaseUri').value.trim();
+        if (val === '') return true;
+        try {
+          new URL(val);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function updateUriError() {
+        const valid = isUriSchemeValid();
+        document.getElementById('walletAuthBaseUriError').style.display = valid ? 'none' : 'block';
+        return valid;
+      }
+
+      // Update button state based on selections
+      function updateButtonState() {
+        const selectedClaims = document.querySelectorAll('.option[data-parent]:checked');
+
+        let hasPIDOrMDL = false;
+        selectedClaims.forEach((input) => {
+          const parent = input.getAttribute('data-parent');
+          if (parent === 'PersonIdentificationData' || parent === 'MDL') {
+            hasPIDOrMDL = true;
+          }
+        });
+
+        const uriValid = isUriSchemeValid();
+        const enable = hasPIDOrMDL && uriValid;
+
+        document.getElementById('createSameDevice').disabled = !enable;
+        document.getElementById('createCrossDevice').disabled = !enable;
+
+        updateCardSelection();
+      }
+
+      // Update visual state of cards based on selections
+      function updateCardSelection() {
+        document.querySelectorAll('.credential-card').forEach((card) => {
+          const hasChecked = card.querySelector('.option:checked') !== null;
+          card.classList.toggle('has-selection', hasChecked);
+        });
+      }
+
+      // Copy URL to clipboard
+      function copyUrl() {
+        const urlText = document.getElementById('qrUrlText').textContent;
+        navigator.clipboard
+          .writeText(urlText)
+          .then(() => {
+            const button = document.querySelector('.copy-url-button');
+            const originalText = button.innerHTML;
+            button.innerHTML = `
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Copiato!
+        `;
+            button.style.background = 'var(--accent-teal)';
+            button.style.color = 'white';
+            button.style.borderColor = 'var(--accent-teal)';
+
+            setTimeout(() => {
+              button.innerHTML = originalText;
+              button.style.background = '';
+              button.style.color = '';
+              button.style.borderColor = '';
+            }, 2000);
+          })
+          .catch((err) => {
+            console.error('Failed to copy:', err);
+          });
+      }
+
+      async function handleRequest(flowType) {
+        const sameBtn = document.getElementById('createSameDevice');
+        const crossBtn = document.getElementById('createCrossDevice');
+        if (flowType === 'same-device') {
+          crossBtn.disabled = true;
+        } else {
+          sameBtn.disabled = true;
+        }
+
+        document.getElementById('qrSection').style.display = 'none';
+        document.getElementById('walletButtonContainer').style.display = 'none';
+
+        let selections = [];
+
+        const credentialDefinitions = {
+          PersonIdentificationData: {
+            format: 'dc+sd-jwt',
+            meta: { vct_values: ['urn:eudi:pid:it:1'] },
+            path: (claim) => [claim]
+          },
+          MDL: {
+            format: 'mso_mdoc',
+            meta: { doctype_value: 'org.iso.18013.5.1.mDL' },
+            path: (claim) => ['org.iso.18013.5.1', claim]
+          }
+        };
+
+        // Group selected claims by credential type.
+        Object.keys(credentialDefinitions).forEach((parentId) => {
+          const claims = [];
+          const checkboxes = document.querySelectorAll(`.option[data-parent="${parentId}"]:checked`);
+
+          checkboxes.forEach((input) => {
+            if (input.value) {
+              claims.push(input.value);
+            }
+          });
+
+          if (claims.length > 0) {
+            selections.push({
+              claims,
+              ...credentialDefinitions[parentId]
+            });
+          }
+        });
+
+        const credentials = selections.map(({ claims, format, meta, path }) => ({
+          id: generateUUID(),
+          format,
+          meta,
+          claims: claims.map((claim) => ({ path: path(claim) }))
+        }));
+
+        const walletAuthBaseUriInput = document.getElementById('walletAuthBaseUri').value.trim();
+
+        if (!updateUriError()) {
+          return;
+        }
+
+        const requestBody = {
+          dcqlQuery: { credentials },
+          flow_type: flowType
+        };
+        if (walletAuthBaseUriInput) {
+          requestBody.wallet_auth_base_uri = walletAuthBaseUriInput;
+        }
+
+        const state = await fetch('/create-authorization-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        })
+          .then((response) => response.json())
+          .then(({ url }) => {
+            if (typeof url !== 'string') throw new Error('');
+
+            if (flowType === 'cross-device') {
+              document.getElementById('qrcode').innerHTML = '';
+              new QRCode(document.getElementById('qrcode'), {
+                text: url,
+                width: 256,
+                height: 256,
+                correctLevel: QRCode.CorrectLevel.L,
+                version: 20
+              });
+
+              document.getElementById('qrUrlText').textContent = url;
+
+              document.getElementById('qrSection').style.display = 'block';
+
+              // Scroll to QR code section
+              setTimeout(() => {
+                document.getElementById('qrSection').scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'center'
+                });
+              }, 100);
+            }
+
+            if (flowType === 'same-device') {
+              const openWalletButton = document.getElementById('openWallet');
+              openWalletButton.onclick = () => window.open(url, '_blank');
+              document.getElementById('walletButtonContainer').style.display = 'block';
+
+              // Scroll to wallet button
+              setTimeout(() => {
+                document.getElementById('walletButtonContainer').scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'center'
+                });
+              }, 100);
+            }
+
+            return getStateFromAuthorizationUrl(url);
+          });
+
+        console.log(state);
+        startPolling(state);
+      }
+
+      function getStateFromAuthorizationUrl(url) {
+        const requestUri = new URL(url).searchParams.get('request_uri');
+        if (!requestUri) {
+          throw new Error('request_uri mancante');
+        }
+
+        const state = new URL(requestUri).pathname.split('/').pop();
+        if (!state) {
+          throw new Error('state mancante nel request_uri');
+        }
+
+        return state;
+      }
+
+      function startPolling(state) {
+        pollingInterval = setInterval(async () => {
+          try {
+            let response = await fetch(`/status/${state}`);
+            let data = await response.json();
+            if (data.redirect_uri) {
+              const [path, responseCode] = data.redirect_uri.split('?');
+              if (path && path !== 'undefined') {
+                clearInterval(pollingInterval);
+                if (Array.isArray(data.values)) {
+                  sessionStorage.setItem('values', JSON.stringify(data.values));
+                } else {
+                  sessionStorage.removeItem('values');
+                }
+                window.location.href = path;
+              } else {
+                if (responseCode.includes('checking')) {
+                  document.getElementById('qrSection').style.display = 'none';
+                  document.getElementById('loaderSection').style.display = 'block';
+
+                  // Scroll to loader section
+                  setTimeout(() => {
+                    document.getElementById('loaderSection').scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'center'
+                    });
+                  }, 100);
+                }
+              }
+            } else {
+              throw new Error();
+            }
+          } catch (error) {
+            console.error('Errore nel polling:', error);
+          }
+        }, 3000);
+      }
+
+      // Initialize on DOM ready
+      document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('loaderSection').style.display = 'none';
+
+        document.querySelectorAll('.card-header').forEach((header) => {
+          header.setAttribute('role', 'button');
+          header.setAttribute('aria-expanded', 'false');
+          header.setAttribute('tabindex', '0');
+          header.addEventListener('click', () => {
+            toggleCard(header);
+          });
+          header.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleCard(header);
+            }
+          });
+        });
+
+        document.querySelectorAll('.select-all-item input[type="checkbox"]').forEach((checkbox) => {
+          checkbox.addEventListener('change', (event) => {
+            toggleAll(event, checkbox.getAttribute('data-parent'));
+          });
+        });
+
+        document.querySelectorAll('.option[data-parent]').forEach((checkbox) => {
+          checkbox.addEventListener('change', () => {
+            updateButtonState();
+          });
+        });
+
+        const walletAuthBaseUri = document.getElementById('walletAuthBaseUri');
+        walletAuthBaseUri.addEventListener('focus', () => {
+          walletAuthBaseUri.style.borderColor = 'var(--primary-blue)';
+          walletAuthBaseUri.style.boxShadow = '0 0 0 3px var(--primary-light)';
+        });
+        walletAuthBaseUri.addEventListener('blur', () => {
+          walletAuthBaseUri.style.borderColor = 'var(--gray-300)';
+          walletAuthBaseUri.style.boxShadow = 'none';
+        });
+        walletAuthBaseUri.addEventListener('input', () => {
+          clearTimeout(uriDebounce);
+          uriDebounce = setTimeout(() => {
+            updateUriError();
+            updateButtonState();
+          }, 400);
+        });
+
+        document.getElementById('createCrossDevice').addEventListener('click', () => {
+          handleRequest('cross-device');
+        });
+        document.getElementById('createSameDevice').addEventListener('click', () => {
+          handleRequest('same-device');
+        });
+        document.querySelector('.copy-url-button').addEventListener('click', () => {
+          copyUrl();
+        });
+
+        let uriDebounce;
+      });
+    </script>
+  </head>
+
+  <body>
+    <!-- Header Section -->
+    <header class="app-header">
+      <div class="header-content">
+        <h1 class="header-title">Richiesta Credenziali IT Wallet</h1>
+        <p class="header-subtitle">Seleziona le credenziali da richiedere e scegli il metodo di autenticazione</p>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Credential Selector Grid -->
+      <div class="credential-selector-grid">
+        <!-- PID Card -->
+        <div class="credential-card" data-credential="pid">
+          <div class="card-header">
+            <span class="credential-icon">🆔</span>
+            <h3>Carta d'Identità (PID)</h3>
+            <span class="expand-icon">▼</span>
+          </div>
+          <div class="card-body">
+            <div class="claims-checklist">
+              <label class="claim-item select-all-item">
+                <input type="checkbox" data-parent="PersonIdentificationData" value="" />
+                <span class="claim-label">Seleziona tutto</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="given_name" />
+                <span class="claim-label">Nome (Given Name)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="family_name" />
+                <span class="claim-label">Cognome (Family Name)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="birthdate" />
+                <span class="claim-label">Data di nascita (birthdate)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="place_of_birth" />
+                <span class="claim-label">Luogo di nascita (place_of_birth)</span>
+              </label>
+              <label class="claim-item">
+                <input
+                  type="checkbox"
+                  class="option"
+                  data-parent="PersonIdentificationData"
+                  value="personal_administrative_number"
+                />
+                <span class="claim-label">Numero amministrativo personale</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="tax_id_code" />
+                <span class="claim-label">Codice fiscale (tax_id_code)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="PersonIdentificationData" value="nationalities" />
+                <span class="claim-label">Nazionalità (nationalities)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- MDL Card -->
+        <div class="credential-card" data-credential="mdl">
+          <div class="card-header">
+            <span class="credential-icon">🚗</span>
+            <h3>Patente di Guida (MDL)</h3>
+            <span class="expand-icon">▼</span>
+          </div>
+          <div class="card-body">
+            <div class="claims-checklist">
+              <label class="claim-item select-all-item">
+                <input type="checkbox" data-parent="MDL" value="" />
+                <span class="claim-label">Seleziona tutto</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="given_name" />
+                <span class="claim-label">Nome (Given Name)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="family_name" />
+                <span class="claim-label">Cognome (Family Name)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="birth_date" />
+                <span class="claim-label">Data di Nascita (Birth Date)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="birth_place" />
+                <span class="claim-label">Luogo di Nascita (Birth Place)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="portrait" />
+                <span class="claim-label">Foto (Portrait)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="issue_date" />
+                <span class="claim-label">Data di Rilascio (Issue Date)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="issuing_country" />
+                <span class="claim-label">Paese di rilascio (issuing_country)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="driving_privileges" />
+                <span class="claim-label">Categorie (Driving Privileges)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="expiry_date" />
+                <span class="claim-label">Data di Scadenza (Expiry Date)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="document_number" />
+                <span class="claim-label">Numero Documento (Document Number)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="issuing_authority" />
+                <span class="claim-label">Autorità di rilascio (issuing_authority)</span>
+              </label>
+              <label class="claim-item">
+                <input type="checkbox" class="option" data-parent="MDL" value="un_distinguishing_sign" />
+                <span class="claim-label">Segno Distintivo (UN Distinguishing Sign)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wallet Auth Base URI -->
+      <div
+        style="
+          max-width: 720px;
+          margin: var(--space-6) auto 0;
+          background: white;
+          border-radius: var(--radius-xl);
+          box-shadow: var(--shadow-md);
+          padding: var(--space-6) var(--space-8);
+        "
+      >
+        <label
+          for="walletAuthBaseUri"
+          style="
+            display: block;
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-4);
+          "
+        >
+          <svg
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            style="display: inline; vertical-align: middle"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+            ></path>
+          </svg>
+          Wallet Auth Base URL
+        </label>
+        <input
+          type="text"
+          id="walletAuthBaseUri"
+          placeholder="https://continua.io.pagopa.it/itw/auth"
+          style="
+            width: 100%;
+            padding: var(--space-3) var(--space-4);
+            font-size: var(--text-sm);
+            font-family: 'Courier New', Consolas, monospace;
+            color: var(--gray-800);
+            background: white;
+            border: 2px solid var(--gray-300);
+            border-radius: var(--radius-md);
+            box-sizing: border-box;
+            transition:
+              border-color var(--transition-fast),
+              box-shadow var(--transition-fast);
+          "
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <p
+          id="walletAuthBaseUriError"
+          style="
+            display: none;
+            margin: var(--space-2) 0 0;
+            font-size: var(--text-sm);
+            color: var(--accent-coral);
+            font-weight: var(--font-medium);
+          "
+        >
+          URL non valido
+        </p>
+        <p
+          style="
+            margin: var(--space-3) 0 0;
+            font-size: var(--text-sm);
+            color: var(--gray-600);
+            line-height: var(--leading-relaxed);
+          "
+        >
+          URL completo del wallet su cui costruire il deeplink (es. <code>https://continua.io.pagopa.it/itw/auth</code>,
+          <code>haip://authorize</code>, <code>eudi-openid4vp://authorize</code>). I parametri di query esistenti
+          verranno preservati. Lascia vuoto per usare il default del server.
+        </p>
+      </div>
+
+      <!-- Flow Selection Cards -->
+      <div class="flow-selection">
+        <div class="flow-card cross-device">
+          <div class="flow-icon-container">
+            <svg
+              class="flow-icon"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+              ></path>
+            </svg>
+          </div>
+          <h3 class="flow-title">Cross-Device</h3>
+          <p class="flow-description">Scansiona il QR code con il wallet su un altro dispositivo</p>
+          <button
+            class="flow-button primary"
+            id="createCrossDevice"
+            disabled
+            aria-label="Crea richiesta per autenticazione cross-device"
+            aria-describedby="crossDeviceDescription"
+          >
+            Genera QR Code
+          </button>
+          <span id="crossDeviceDescription" class="sr-only">
+            Genera un QR code da scansionare con il wallet su un altro dispositivo
+          </span>
+        </div>
+
+        <div class="flow-card same-device">
+          <div class="flow-icon-container">
+            <svg
+              class="flow-icon"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+              ></path>
+            </svg>
+          </div>
+          <h3 class="flow-title">Same-Device</h3>
+          <p class="flow-description">Apri il wallet installato su questo dispositivo</p>
+          <button
+            class="flow-button secondary"
+            id="createSameDevice"
+            disabled
+            aria-label="Crea richiesta per autenticazione same-device"
+            aria-describedby="sameDeviceDescription"
+          >
+            Apri Wallet
+          </button>
+          <span id="sameDeviceDescription" class="sr-only">
+            Apri il wallet installato su questo dispositivo per completare l'autenticazione
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code Section -->
+    <div id="qrSection" class="qr-display-container">
+      <div class="qr-card">
+        <div class="qr-header">
+          <h3>Scansiona con il tuo Wallet</h3>
+          <p class="qr-instructions">Apri l'app IO Wallet e utilizza la funzione "Inquadra QR Code"</p>
+        </div>
+        <div class="qr-code-wrapper">
+          <div id="qrcode" class="qr-code-display"></div>
+          <div class="qr-decorations">
+            <div class="corner-decoration top-left"></div>
+            <div class="corner-decoration top-right"></div>
+            <div class="corner-decoration bottom-left"></div>
+            <div class="corner-decoration bottom-right"></div>
+          </div>
+        </div>
+        <div class="qr-url-section">
+          <button class="copy-url-button button secondary" aria-label="Copia URL QR code">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              ></path>
+            </svg>
+            Copia URL
+          </button>
+          <details class="url-details">
+            <summary>Mostra URL completo</summary>
+            <code id="qrUrlText"></code>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loader Section -->
+    <div id="loaderSection" class="loader-container">
+      <div class="loader-content">
+        <div class="spinner-wrapper">
+          <svg class="spinner" viewBox="0 0 50 50">
+            <defs>
+              <linearGradient id="spinner-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color: #0066cc; stop-opacity: 1" />
+                <stop offset="100%" style="stop-color: #00c5b8; stop-opacity: 1" />
+              </linearGradient>
+            </defs>
+            <circle class="spinner-track"></circle>
+            <circle class="spinner-fill"></circle>
+          </svg>
+          <div class="loader-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--primary-blue)">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <h3 class="loader-title">Autenticazione in corso...</h3>
+        <p class="loader-message">Completa l'operazione sul tuo wallet</p>
+        <div class="loader-steps">
+          <div class="step active">
+            <span class="step-number">1</span>
+            <span class="step-label">Verifica identità</span>
+          </div>
+          <div class="step">
+            <span class="step-number">2</span>
+            <span class="step-label">Selezione credenziali</span>
+          </div>
+          <div class="step">
+            <span class="step-number">3</span>
+            <span class="step-label">Conferma</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wallet Button Container -->
+    <div id="walletButtonContainer">
+      <button class="button primary" id="openWallet" aria-label="Apri con il tuo wallet">Apri con il tuo wallet</button>
+    </div>
+    <div class="link-hint">
+      <p>
+        Oppure inserisci manualmente una richiesta tramite DCQL query
+        <a href="custom-request.html">cliccando qui</a>.
+      </p>
+    </div>
+  </body>
+</html>

@@ -1,5 +1,4 @@
-import { EdocProofInitError, EdocProofService } from '@itw-conformance-tool/issuer';
-
+import { EdocProofInitError, EdocProofService } from '../domain/index.js';
 import { makeEdocParRepository, makeJwksRepository } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -15,11 +14,9 @@ interface EdocProofInitHeaders {
 }
 
 const EdocInit: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route<{ Body: EdocProofInitBody; Headers: EdocProofInitHeaders }>({
     url: '/edoc-proof/init',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Edoc'],
       headers: {
@@ -43,12 +40,11 @@ const EdocInit: FastifyPluginAsync = async (app) => {
       const { mrtd_auth_session, mrtd_pop_jwt_nonce } = request.body;
       const clientAttestationJwt = request.headers['oauth-client-attestation'];
       const clientAttestationPopJwt = request.headers['oauth-client-attestation-pop'];
-      const baseURL = `${app.config.BASE_URL_SCHEME}://${app.config.HOST}:${app.config.PORT}`;
 
       try {
         const service = new EdocProofService(makeEdocParRepository(app), makeJwksRepository(app));
         const responseJwt = await service.processInit({
-          baseURL,
+          baseURL: app.config.BASE_URL,
           clientAttestationJwt,
           clientAttestationPopJwt,
           mrtdAuthSessionId: mrtd_auth_session,

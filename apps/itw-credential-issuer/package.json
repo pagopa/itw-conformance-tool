@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/main.js",
-  "imports": {
-    "#/*": "./dist/*"
-  },
   "scripts": {
     "clean": "rimraf dist out-tsc node_modules"
   },
@@ -16,15 +13,17 @@
     "@fastify/env": "catalog:fastify",
     "@fastify/formbody": "^8.0.2",
     "@fastify/helmet": "catalog:fastify",
-    "@fastify/rate-limit": "^10.3.0",
     "@fastify/sensible": "catalog:fastify",
     "@fastify/swagger": "catalog:fastify",
     "@fastify/swagger-ui": "catalog:fastify",
+    "@itw-conformance-tool/config": "workspace:",
     "@itw-conformance-tool/conformance": "workspace:*",
     "@itw-conformance-tool/crypto": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
-    "@itw-conformance-tool/issuer": "workspace:*",
+    "@itw-conformance-tool/faults": "workspace:*",
     "@itw-conformance-tool/logger": "workspace:",
+    "@itw-conformance-tool/ipc": "workspace:*",
+    "@itw-conformance-tool/utils": "workspace:*",
     "@noble/curves": "^1.9.2",
     "@owf/mdoc": "^0.6.0",
     "@pagopa/io-wallet-oauth2": "catalog:pagopa",
@@ -43,7 +42,12 @@
     "dcql": "^1.0.0",
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
-    "jose": "5.2.4",
+    "jose": "catalog:",
+    "qrcode": "^1.5.4",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "esbuild": "^0.28.1"
   }
 }

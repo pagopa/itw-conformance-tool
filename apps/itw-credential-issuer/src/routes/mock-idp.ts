@@ -9,12 +9,9 @@ const mockIdpAuthorizeRoute: FastifyPluginAsync = async (app) => {
     return;
   }
 
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
-
   app.route({
     url: '/idp/authorize',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {

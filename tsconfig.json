@@ -13,6 +13,9 @@
       "path": "./apps/itw-relying-party"
     },
     {
+      "path": "./apps/itw-trust-anchor"
+    },
+    {
       "path": "./packages/logger"
     },
     {
@@ -22,16 +25,22 @@
       "path": "./packages/database"
     },
     {
-      "path": "./packages/issuer"
-    },
-    {
       "path": "./packages/conformance"
     },
     {
-      "path": "./packages/rp"
+      "path": "./packages/crypto"
     },
     {
-      "path": "./packages/crypto"
+      "path": "./packages/faults"
+    },
+    {
+      "path": "./packages/ipc"
+    },
+    {
+      "path": "./packages/utils"
+    },
+    {
+      "path": "./apps/itw-wallet-provider"
     }
   ]
 }

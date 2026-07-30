@@ -3,65 +3,46 @@
 Local CLI for the `itw-conformance-tool` monorepo. It supports the following workflows:
 
 - `init`, to generate the local configuration and key material
-- `start`, to launch the issuer and relying party services through Nx
-- `test`, to run conformance matrix specs (`WP_*`) through Vitest
+- `start`, to launch the trust anchor, issuer, and relying party services manually through Nx
+- `test <category>`, to run one conformance matrix category (`WP_*`) through Vitest with CLI-managed local services
 - `report:list`, to list all available conformance run reports
 - `report:create`, to generate an HTML or PDF report for a given run
 
 ## Installation (global binary)
 
-To make `itw-conformance-tool` and `itwct` available as global commands in the terminal:
+To make `itwct` available as a global command in the terminal:
 
 ```sh
 # From the project root
 pnpm i
 pnpm nx build itw-conformance-cli   # compiles the CLI and generates dist/main.js
-cd apps/cli
-pnpm link --global                  # registers the bin entries in the global PATH
+pnpm add --global ./apps/cli        # registers `itwct` in the global PATH
 ```
 
 To uninstall:
 
 ```sh
-pnpm unlink --global itw-conformance-cli
+pnpm remove --global itw-conformance-cli
 ```
 
 ## Entry Points
 
-You can run the CLI either through the exported binary (after `pnpm link --global`) or through the root workspace scripts without installing globally.
+After linking the package globally, use the exported binary:
 
-Direct CLI usage:
-
-- `itw-conformance-tool init`
-- `itw-conformance-tool start`
-- `itw-conformance-tool test`
-- `itw-conformance-tool report:list`
-- `itw-conformance-tool report:create <uuid> [format]`
 - `itwct init`
 - `itwct start`
-- `itwct test`
+- `itwct test <category>`
 - `itwct report:list`
 - `itwct report:create <uuid> [format]`
 
-From the workspace root through Nx-backed scripts:
+The root workspace provides these shortcuts:
 
-- `pnpm itw-conformance-tool --args="init"`
-- `pnpm itw-conformance-tool --args="init --force"`
-- `pnpm itw-conformance-tool --args="start --all"`
-- `pnpm itw-conformance-tool --args="start --issuer"`
-- `pnpm itw-conformance-tool --args="start --rp"`
-- `pnpm itw-conformance-tool --args="test"`
-- `pnpm itw-conformance-tool --args="report:list"`
-- `pnpm itw-conformance-tool --args="report:create <uuid>"`
-- `pnpm itw-conformance-tool --args="report:create <uuid> pdf"`
-
-Root shortcuts:
-
-- `pnpm itw-conformance-tool:init`
-- `pnpm itw-conformance-tool:start`
-- `pnpm itw-conformance-tool:start:issuer`
-- `pnpm itw-conformance-tool:start:rp`
-- `pnpm itw-conformance-tool:test` (legacy shortcut)
+- `pnpm run init`
+- `pnpm start`
+- `pnpm test:issuance`
+- `pnpm test:presentation`
+- `pnpm test:wallet-instance`
+- `pnpm test:wallet-provider`
 
 ## Supported Commands
 
@@ -75,18 +56,15 @@ Root shortcuts:
 
 ## Supported Options
 
-- `-c, --config <path>`: path to the configuration file. Supported by `start`, `test`, `report:list`, and `report:create`
-- `--all`: start both services. This is the default for `start`
+- `--all`: start the trust anchor, issuer, and relying party services. This is the default for `start`
 - `--issuer`: start only the issuer service
 - `--rp`: start only the relying party service
+- `--trust-anchor`: start only the trust anchor service
 - `-f, --force`: overwrite generated files during `init`
 - `-h, --help`: print the CLI help
 - `-v, --version`: print the CLI version
 
-The parser also supports inline config assignment:
-
-- `--config=/absolute/path/config.ini`
-- `-c=./config.ini`
+All commands use the workspace-root `config.ini`. Its path cannot be overridden.
 
 ## Current Behavior
 
@@ -96,35 +74,44 @@ The parser also supports inline config assignment:
 
 When executed, it:
 
-- determines the target config file path
+- creates or reads the workspace-root `config.ini`
 - creates the data directory
-- creates the `issuer` and `rp` subdirectories
-- generates issuer signing keys
-- generates relying party authentication keys
-- generates the IACA certificate and private key
-- generates a self-signed TLS certificate and private key **only if `https = true`** in the config
+- creates the `issuer`, `rp`, `wallet-provider`, and `trust-anchor` subdirectories
+- generates issuer signing keys and an issuer intermediate CA signing key
+- generates the trust-anchor federation key and self-signed federation certificate
+- generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
+- generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
+- generates the wallet provider intermediate CA certificate, chained to the trust-anchor federation certificate
+- generates the wallet provider leaf certificate (`cert.pem`), chained to the wallet provider intermediate CA certificate and bound to the Wallet Instance Attestation ES256 signing key in `jwks.json`
+- generates relying party authentication keys and a self-signed certificate
+- generates wallet provider runtime and intermediate signing keys
 - creates or overwrites the config file when needed
 
 Generated structure:
 
-- `<data_dir>/issuer/signing-keys.jwks.json`
-- `<data_dir>/issuer/iaca-cert.pem`
-- `<data_dir>/issuer/iaca-key.pem`
+- `<data_dir>/issuer/jwks.json` — issuer signing keys (ES256 for signing, ECDH-ES for encryption); the ES256 private key is the sole key used to produce issuer signatures
+- `<data_dir>/issuer/jwks-intermediate.json` — issuer intermediate CA signing key, used only to sign `intermediate-cert.pem`
+- `<data_dir>/issuer/intermediate-cert.pem` — issuer intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
+- `<data_dir>/issuer/cert.pem` — issuer leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
 - `<data_dir>/rp/auth-request-key.jwk.json`
 - `<data_dir>/rp/auth-response-key.jwk.json`
 - `<data_dir>/rp/federation-key.jwk.json`
-- `<data_dir>/rp/x5c-cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/rp/cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/wallet-provider/jwks.json` — wallet provider signing key used for Wallet Instance Attestations
+- `<data_dir>/wallet-provider/jwks-intermediate.json` — wallet provider intermediate CA signing key, used only to sign `cert.pem`
+- `<data_dir>/wallet-provider/intermediate-cert.pem` — wallet provider intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
+- `<data_dir>/wallet-provider/cert.pem` — wallet provider leaf certificate; its public key corresponds to the Wallet Instance Attestation ES256 signing key in `jwks.json`
+- `<data_dir>/trust-anchor/federation-key.jwk.json`
+- `<data_dir>/trust-anchor/federation-cert.pem` — self-signed X.509 certificate generated from the federation key
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
-
-The Trust Anchor URL (`trust_anchor_url` / `ITW_CT_RP_TRUST_ANCHOR_URL`) must be set before starting the RP service.
 
 Default locations:
 
 - config file: `<project-root>/config.ini`
 - data directory: `<project-root>/.itw-conformance-tool`
 
-If a config file already exists and `--force` is not used, `init` reuses the configured `global.data_dir` and does not overwrite existing generated files unless required.
+If a config file already exists and `--force` is not used, `init` reuses the configured `global.data_dir` and does not overwrite existing generated files unless required. Missing or rotated dependencies are propagated through issuer and wallet-provider certificate chains: rotating the Trust Anchor key regenerates intermediate and leaf certificates, rotating an intermediate key regenerates its intermediate and leaf certificates, and rotating a runtime signing key regenerates the corresponding leaf certificate.
 
 Wallet URL behavior during `init`:
 
@@ -137,9 +124,10 @@ Wallet URL behavior during `init`:
 
 Service selection:
 
-- default or `--all`: `nx run-many -t serve -p itw-credential-issuer,itw-relying-party`
+- default or `--all`: starts `itw-trust-anchor`, `itw-credential-issuer`, and `itw-relying-party` (each spawned individually via `nx run <project>:serve`)
 - `--issuer`: `nx run itw-credential-issuer:serve`
 - `--rp`: `nx run itw-relying-party:serve`
+- `--trust-anchor`: `nx run itw-trust-anchor:serve`
 
 Before launching Nx, the CLI checks that the required files exist in the resolved data directory. If any required file is missing, the CLI throws and exits before starting the services.
 
@@ -148,31 +136,65 @@ If the field is missing, empty, or invalid, startup fails before launching Nx.
 
 When `https = true` in the `[global]` config section, the CLI additionally verifies that `<data_dir>/tls-cert.pem` and `<data_dir>/tls-key.pem` exist. If either is missing, startup fails with an explicit error message.
 
+#### Credential Offer QR code
+
+When `credential-issuer.credential_identifiers` is set in `config.ini`, starting the issuer additionally:
+
+- builds an OpenID4VCI Credential Offer URI referencing those credential configuration IDs
+- serves it at `GET /credential-offer` on the issuer, as an HTML page with a scannable QR code and a "Copy URI" button
+
+The issuer does not open this static page automatically when it starts. In `itwct test issuance`, the conformance runner opens `GET /credential-offer?credential_offer_uri=...` for each scenario that uses a Credential Offer stimulus, so the browser page contains that scenario's current `issuer_state` and any scenario-specific offer mutation.
+
+`credential-issuer.credential_identifiers` must be comma-separated, non-empty, without duplicates, and each ID must match a key of the issuer's `credential_configurations_supported` metadata — otherwise startup fails with an explicit error. If it is not set, startup behaves as before and no static QR page is available.
+
+Example (`config.ini`):
+
+```ini
+[credential-issuer]
+credential_identifiers = dc_sd_jwt_PersonIdentificationData,mso_mdoc_PersonIdentificationData
+```
+
+#### Trusted Wallet Provider issuers
+
+The issuer verifies credential request proof key attestations for IT-Wallet specification versions that use them.
+Configure the accepted Wallet Provider issuer Entity IDs with `credential-issuer.trusted_wallet_provider_issuers`:
+
+```ini
+[credential-issuer]
+trusted_wallet_provider_issuers = https://wallet-provider.example,https://wallet-provider.wct.example:3002
+```
+
+The value is a comma-separated allowlist. Each entry must be an absolute HTTPS URL, the list must contain at least
+one entry, and duplicate entries fail startup. Whitespace around entries is ignored.
+
+The Credential Issuer passes this list to the proof verification SDK, which compares the key-attestation `iss` claim
+with exact string matching. Paths, trailing slashes, and explicit ports are significant. Replace the defaults with the
+Wallet Provider issuer identifiers trusted by your environment, then restart the issuer for changes to take effect.
+
 ### `report:list`
 
 `report:list` prints a formatted table of all conformance sessions stored in the configured data directory, sorted by start date (most recent first).
 
 Columns printed: `RUN ID`, `STARTED AT`, `CLOSED AT`, `STATUS`, `CHECKS`.
 
-Optional flag:
-
-- `-c, --config <path>`: load configuration from the given file to resolve the data directory
-
 Example:
 
 ```sh
 itwct report:list
-itwct report:list --config ./ci/config.ini
 ```
 
 ### `test`
 
-`test` launches Vitest on the conformance test matrix profile.
+`test <category>` launches Vitest on one conformance test matrix category. A category is required: `issuance`, `presentation`, `wallet-instance`, or `wallet-provider`.
+
+The CLI is the lifecycle supervisor in test mode: it directly forks the already compiled service entrypoints (not `nx serve`), waits for their IPC `service.ready` messages, passes their actual endpoints to Vitest, and always requests graceful shutdown afterwards. The selected local stack is minimal: issuance starts Trust Anchor + Issuer, presentation starts Trust Anchor + RP, wallet-instance starts Trust Anchor + Wallet Provider, and wallet-provider starts Trust Anchor + Wallet Provider. On test failure, timeout, SIGINT, SIGTERM, or child crash the CLI cleans up children, escalating from IPC shutdown to termination if necessary. Do not start these services manually for `itwct test`.
+
+`start` remains the manual-development mode and retains its Nx-based behaviour. Its services are not owned by a later `test` command.
 
 The command:
 
-- spawns a child process running `pnpm vitest run --config vitest.conformance-test.config.mts`
-- exports `ITW_CT_DATA_DIR` and related runtime variables to the test process
+- validates exactly one category and spawns a child process running `pnpm vitest run --config vitest.conformance-test.config.mts <selected-matrix-file>`
+- reads runtime configuration from `config.ini`
 - stores conformance sessions in `<data_dir>/itw.db`, so they can later be listed by `report:list` and rendered by `report:create`
 
 `test` requires `global.wallet_provider_backend_url` in config, with the same validation rules used by `start`.
@@ -180,9 +202,7 @@ The command:
 Examples:
 
 ```sh
-itwct test
-itwct test --config ./ci/config.ini
-pnpm itw-conformance-tool --args="test"
+itwct test presentation
 ```
 
 ### `report:create`
@@ -198,26 +218,16 @@ itwct report:create <uuid> [format]
 
 The report is saved as `conformance-report-<uuid>.<format>` in the **current working directory**.
 
-Optional flag:
-
-- `-c, --config <path>`: load configuration from the given file to resolve the data directory
-
 Examples:
 
 ```sh
 itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c
 itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c pdf
-itwct report:create 24f860b1-a98b-406b-b6d9-893c3aa12f4c html --config ./ci/config.ini
 ```
 
-## Configuration Resolution
+## Configuration Location
 
-The CLI resolves configuration in this order:
-
-1. If `--config` is provided and the file exists, it loads that file.
-2. If `--config` is provided but the file does not exist, it falls back to the default runtime configuration.
-3. If `--config` is not provided, it looks for `<project-root>/config.ini`.
-4. If no config file exists, it falls back to built-in defaults.
+The CLI always reads and `init` always creates `<workspace-root>/config.ini`. The file path is not configurable.
 
 ## HTTPS Configuration
 
@@ -235,28 +245,25 @@ When `https = true`, `itw-conformance-tool init` generates a self-signed certifi
 
 > The self-signed certificate is intended for local development and conformance testing only. Do not use it in production.
 
+## Deferred Batch Credential Issuance
+
+By default, batch (multi-proof) credential requests are issued immediately, just like single-proof requests. Deferred issuance can be enabled by setting `batch_issuance_by_deferred = true` in the `[credential-issuer]` section of `config.ini`:
+
+```ini
+[credential-issuer]
+batch_issuance_by_deferred = true
+```
+
+When `batch_issuance_by_deferred = true`, only requests carrying **multiple proofs** are affected: the Credential Endpoint responds with `202 Accepted` and a `transaction_id`/`interval` (or `lead_time`) instead of the issued credentials. Clients must then poll the Deferred Endpoint (`POST /deferred`) with that `transaction_id` to retrieve the credentials once ready.
+
+Single-proof requests are always issued immediately, regardless of this flag.
+
 ## Path Resolution
 
-This CLI treats `~` as the project root, not as the operating system home directory.
+The default `data_dir` is `./.itw-conformance-tool`, which resolves to a `.itw-conformance-tool` folder in the current working directory. Relative paths are resolved from the current working directory, while `~` and `~/…` resolve to the operating system home directory.
 
-Examples, assuming the workspace root is `/workspace/itw-conformance-tool`:
+Examples, assuming the current working directory is `/workspace/itw-conformance-tool`:
 
-- `~/.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
-- `~/custom-config.ini` resolves to `/workspace/itw-conformance-tool/custom-config.ini`
-
-Quoted paths are also supported for config arguments.
-
-## Passing Arguments Through the Root Script
-
-The root `pnpm itw-conformance-tool` script delegates to the Nx `run` target for the CLI project. To pass runtime CLI arguments, use the `--args="..."` form.
-
-Examples:
-
-- `pnpm itw-conformance-tool --args="init"`
-- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --all"`
-- `pnpm itw-conformance-tool --args="start --config ./ci/config.ini --issuer"`
-- `pnpm itw-conformance-tool --args="test --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool --args="report:list --config ./ci/config.ini"`
-- `pnpm itw-conformance-tool --args="report:create <uuid> html --config ./ci/config.ini"`
-
-This format is required because Nx forwards the CLI payload through its own `--args` option.
+- `./.itw-conformance-tool` resolves to `/workspace/itw-conformance-tool/.itw-conformance-tool`
+- `./data` resolves to `/workspace/itw-conformance-tool/data`
+- `~/.itw-conformance-tool` resolves to your home directory

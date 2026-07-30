@@ -1,0 +1,22 @@
+{
+  "name": "@itw-conformance-tool/ipc",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rimraf dist out-tsc"
+  },
+  "dependencies": {
+    "@itw-conformance-tool/faults": "workspace:*",
+    "zod": "catalog:"
+  }
+}

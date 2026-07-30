@@ -4,11 +4,7 @@
     "outDir": "dist",
     "types": ["node"],
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
-    "paths": {
-      "#/*": ["./src/*"],
-      "@itw-conformance-tool/conformance": ["../../packages/conformance/dist/index.d.ts"]
-    }
+    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
   "exclude": [
@@ -27,6 +23,24 @@
     "src/**/*.spec.jsx"
   ],
   "references": [
+    {
+      "path": "../itw-wallet-provider/tsconfig.app.json"
+    },
+    {
+      "path": "../itw-trust-anchor/tsconfig.app.json"
+    },
+    {
+      "path": "../itw-relying-party/tsconfig.app.json"
+    },
+    {
+      "path": "../itw-credential-issuer/tsconfig.app.json"
+    },
+    {
+      "path": "../../packages/utils/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/ipc/tsconfig.lib.json"
+    },
     {
       "path": "../../packages/logger/tsconfig.lib.json"
     },

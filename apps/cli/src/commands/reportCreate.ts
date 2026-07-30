@@ -1,56 +1,71 @@
 import { writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import path from 'node:path';
 
-import type { EmitLog } from '../types/types.js';
-import type { ReportFormat } from '@itw-conformance-tool/conformance';
+import { loadConfig } from '@itw-conformance-tool/config';
+import {
+  getLatestSessionId,
+  getSession,
+  renderHtml,
+  renderPdf,
+  type ReportView
+} from '@itw-conformance-tool/conformance';
+import { DatabaseClient } from '@itw-conformance-tool/database';
+import { logger } from '@itw-conformance-tool/logger';
 
-/** Generates a conformance report file for the given run ID.
- *
- * Saves the report as `conformance-report-<runId>.<format>` in the current
- * working directory. Throws if the session is not found, and lets the caller
- * decide the process exit code.
- *
- * @param runId - The UUID of the conformance session to report on.
- * @param format - Output format: 'html' or 'pdf'.
- * @param dataDir - Absolute path to the data directory containing the
- * SQLite database.
- * @returns void.
- */
-export async function reportCreate(
-  runId: string,
-  format: ReportFormat,
-  dataDir: string,
-  emitter: EmitLog
-): Promise<void> {
-  const dbPath = join(dataDir, 'itw.db');
-  const db = new DatabaseSync(dbPath, { open: true });
+type ReportFormat = 'html' | 'pdf';
+
+export async function reportCreate(runReference: string, format: string, view = 'both'): Promise<void> {
+  assertReportFormat(format);
+  assertReportView(view);
+
+  const config = loadConfig();
+  const db = new DatabaseClient(config.global.data_dir);
 
   try {
-    const { SqliteConformanceSessionRepository, buildJsonReporterFromSession, generateRenderedReport } =
-      await import('@itw-conformance-tool/conformance');
+    const resolvedRunId = runReference === 'latest' ? getLatestSessionId(db) : runReference;
 
-    const repository = new SqliteConformanceSessionRepository(db);
-    const session = await repository.get(runId);
+    if (!resolvedRunId) {
+      logger.error('No conformance runs found.');
+      process.exitCode = 1;
+      return;
+    }
 
+    const session = getSession(db, resolvedRunId);
     if (!session) {
-      throw new Error(`Conformance run '${runId}' not found in the database.`);
+      logger.error(`Conformance run not found: ${runReference}`);
+      process.exitCode = 1;
+      return;
     }
 
-    const jsonReporter = buildJsonReporterFromSession(session);
-    const rendered = await generateRenderedReport(format, jsonReporter, { generatedAt: new Date() });
+    const html = renderHtml(session, config, view);
+    const outputPath = path.resolve(process.cwd(), `conformance-report-${resolvedRunId}.${format}`);
 
-    const fileName = `conformance-report-${runId}.${rendered.extension}`;
-    const outputPath = resolve(process.cwd(), fileName);
-
-    if (rendered.content instanceof Uint8Array) {
-      writeFileSync(outputPath, rendered.content);
-    } else {
-      writeFileSync(outputPath, rendered.content, 'utf-8');
+    if (format === 'html') {
+      writeFileSync(outputPath, html, 'utf8');
+      logger.info(outputPath);
+      return;
     }
 
-    emitter(`Report saved at: ${outputPath}\n`, 'info');
+    const pdf = await renderPdf(html);
+    writeFileSync(outputPath, pdf);
+    logger.info(outputPath);
   } finally {
     db.close();
   }
+}
+
+function assertReportFormat(format: string): asserts format is ReportFormat {
+  if (format === 'html' || format === 'pdf') {
+    return;
+  }
+
+  throw new Error(`Invalid report format: ${format}. Expected one of: html, pdf.`);
+}
+
+function assertReportView(view: string): asserts view is ReportView {
+  if (view === 'both' || view === 'executive' || view === 'technical') {
+    return;
+  }
+
+  throw new Error(`Invalid report view: ${view}. Expected one of: both, executive, technical.`);
 }

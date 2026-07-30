@@ -1,15 +1,25 @@
-import { CodeJwtService, InvalidRequestUriError } from '@itw-conformance-tool/issuer';
+import { createHash } from 'node:crypto';
 
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
+import { CodeJwtService, InvalidRequestUriError, formatSpecVersionHeader } from '../domain/index.js';
 import { makeCodeJwtParRepository, makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
+type AuthorizationResponseFaultProfile =
+  | { readonly type: 'authorization-response-missing-claim'; readonly claim: 'code' | 'iss' | 'state' }
+  | { readonly type: 'authorization-response-invalid-state' }
+  | { readonly type: 'authorization-response-invalid-issuer' };
+
+function sha256HashArtifact(value: string): string {
+  return `sha256:${createHash('sha256').update(value, 'utf8').digest('base64url')}`;
+}
+
 const codeJwtRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 30, timeWindow: '1 minute' });
   app.route({
     url: '/code/jwt',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {
@@ -22,7 +32,15 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
     },
     handler: async (request, reply) => {
       const requestUri = (request.query as { request_uri: string }).request_uri;
-      const { baseURL } = makeOauthCallbacks(app, request);
+      const { baseURL, sdkConfig } = makeOauthCallbacks(app, request);
+      const activeFault = app.issuerFaultStore.getActive();
+      const authorizationResponseFault = [
+        'authorization-response-missing-claim',
+        'authorization-response-invalid-state',
+        'authorization-response-invalid-issuer'
+      ].includes(activeFault?.profile.type ?? '')
+        ? (activeFault?.profile as AuthorizationResponseFaultProfile)
+        : undefined;
 
       try {
         const service = new CodeJwtService({
@@ -31,7 +49,44 @@ const codeJwtRoute: FastifyPluginAsync = async (app) => {
           parRepository: makeCodeJwtParRepository(app)
         });
 
-        const result = await service.createAuthorizationCodeJwt(requestUri);
+        const mutation =
+          authorizationResponseFault?.type === 'authorization-response-missing-claim'
+            ? { type: 'omit-claim' as const, claim: authorizationResponseFault.claim }
+            : authorizationResponseFault?.type === 'authorization-response-invalid-state'
+              ? { type: 'replace-state' as const }
+              : authorizationResponseFault?.type === 'authorization-response-invalid-issuer'
+                ? { type: 'replace-issuer' as const }
+                : undefined;
+
+        const result = await service.createAuthorizationCodeJwt(requestUri, mutation);
+
+        if (authorizationResponseFault && activeFault) {
+          // Emission failures must not be reported as a successfully applied
+          // fault: any error here surfaces through the outer catch below (as
+          // a 500), rather than emitting a false "applied" event.
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'issuer.fault.applied',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'credential-issuer',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/code/jwt',
+                faultProfileType: authorizationResponseFault.type,
+                ...(authorizationResponseFault.type === 'authorization-response-missing-claim'
+                  ? { omittedClaim: authorizationResponseFault.claim }
+                  : authorizationResponseFault.type === 'authorization-response-invalid-state'
+                    ? { mutatedClaim: 'state' }
+                    : { mutatedClaim: 'iss' }),
+                scenarioId: activeFault.scenarioId,
+                resolvedSpecVersion: formatSpecVersionHeader(sdkConfig.itWalletSpecsVersion),
+                artifactHash: sha256HashArtifact(result.jwt),
+                outcome: 'applied'
+              }
+            })
+          );
+        }
+
         return reply.code(200).header('Content-Type', 'text/html').send(result.formPost);
       } catch (error) {
         if (error instanceof InvalidRequestUriError) {

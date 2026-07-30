@@ -1,0 +1,12 @@
+import type { LocalServiceEndpoints, ProtocolObservedScenarioDefinition } from '../scenarios/definitions.js';
+import type { Disposable, ScenarioEventStore } from './event-store.js';
+
+export interface ScenarioEventBridgeContext {
+  correlationId: string;
+  definition: ProtocolObservedScenarioDefinition;
+  endpoints: LocalServiceEndpoints;
+  eventStore: ScenarioEventStore;
+  startedAt: string;
+}
+
+export type ScenarioEventBridgeFactory = (context: ScenarioEventBridgeContext) => Disposable | Promise<Disposable>;

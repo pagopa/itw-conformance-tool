@@ -12,12 +12,14 @@ export default defineConfig(() => ({
   },
   test: {
     name: '@itw-conformance-tool/conformance',
+    setupFiles: ['./vitest.setup.ts'],
     watch: false,
     globals: true,
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts', 'src/__tests__/**/*.ts'],
     exclude: ['src/tests/matrix/**', '**/node_modules/**', '**/.git/**'],
     reporters: ['default'],
+    passWithNoTests: true,
     // node:sqlite requires --experimental-sqlite on Node.js 22
     pool: 'forks',
     forks: {

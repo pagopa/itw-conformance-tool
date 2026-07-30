@@ -1,15 +1,14 @@
-import { AuthorizationRequestError, AuthorizationService } from '@itw-conformance-tool/issuer';
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 
+import { AuthorizationRequestError, AuthorizationService } from '../domain/index.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { FastifyPluginAsync } from 'fastify';
 
 const authorizeRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
   app.route({
     url: '/authorize',
     method: 'GET',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization'],
       querystring: {
@@ -35,8 +34,23 @@ const authorizeRoute: FastifyPluginAsync = async (app) => {
           },
           clientId: query.client_id,
           config: sdkConfig,
-          requestUri: query.request_uri
+          requestUri: query.request_uri,
+          trustAnchorEntityId: app.config.TRUST_ANCHOR_ENTITY_ID
         });
+
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.authorization.requested',
+            correlationId: request.conformance?.correlation?.correlationId ?? null,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/authorize',
+              clientId: query.client_id,
+              requestUri: query.request_uri
+            }
+          })
+        );
 
         if (result.kind === 'redirect') {
           return reply.code(302).header('Location', result.location).send();

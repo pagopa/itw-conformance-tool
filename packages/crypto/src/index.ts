@@ -4,7 +4,7 @@ export * from './types/types.js';
 // Services
 export { hashCallback, sha256 } from './services/hashing.js';
 export { generateRandomBytes } from './services/random.js';
-export { getIACAChain, getTlsCertAndKey, getX5cCert } from './services/certificates.js';
+export { getX5cCert } from './services/certificates.js';
 export {
   getCertificateData,
   getCertificateChainPublicKey,
@@ -35,4 +35,5 @@ export {
 } from './services/federation.js';
 export { generateKeyPair } from './services/keys.js';
 export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
-export { validateIACAKeyPair, validateJWKS, isValidJwk } from './services/validate.js';
+export { validateCertificateMatchesJwk, validateJWKS, isValidJwk } from './services/validate.js';
+export * from './services/tls.js';

@@ -1,44 +1,36 @@
-import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
-import { loadRpConfig } from '@itw-conformance-tool/rp';
+import { loadConfig } from '@itw-conformance-tool/config';
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
+
+import type { FastifyPluginAsync } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
     config: {
-      host: string;
-      port: number;
-      baseUrl: string;
-      entityId: string;
-      dataDir: string;
-      configFilePath: string;
-      trustAnchorUrl?: string;
-      x5cCertPath: string;
-      httpsEnabled: boolean;
-      tlsCertPath: string;
-      tlsKeyPath: string;
+      BASE_URL: string;
+      DATA_DIR: string;
+      IACA_X509: string;
+      TRUST_ANCHOR_URL: string;
     };
   }
 }
 
-export default fp(
-  async function configPlugin(app) {
-    const configFilePath = resolve(process.cwd(), process.env.ITW_CT_CONFIG_FILE ?? 'config.ini');
-    const { config } = loadRpConfig({ configFilePath });
+const configPlugin: FastifyPluginAsync = async (app) => {
+  const config = loadConfig();
+  const relyingPartyConfig = config['relying-party'];
 
-    app.decorate('config', {
-      host: config.host,
-      port: config.port,
-      baseUrl: config.baseUrl,
-      entityId: config.entityId,
-      trustAnchorUrl: config.trustAnchorUrl,
-      dataDir: config.dataDir,
-      configFilePath,
-      x5cCertPath: config.x5cCertPath,
-      httpsEnabled: config.httpsEnabled,
-      tlsCertPath: config.tlsCertPath,
-      tlsKeyPath: config.tlsKeyPath
-    });
-  },
-  { name: 'config' }
-);
+  const dataDir = config.global.data_dir;
+  const certificatePem = await readFile(path.join(dataDir, 'rp', 'cert.pem'), 'utf8');
+
+  app.decorate('config', {
+    BASE_URL: relyingPartyConfig.url,
+    DATA_DIR: dataDir,
+    IACA_X509: convertPemToBase64Der(certificatePem),
+    TRUST_ANCHOR_URL: relyingPartyConfig.trust_anchor_url
+  });
+};
+
+export default fp(configPlugin, { name: 'config' });

@@ -1,33 +1,26 @@
-import { PARService, PostPushedAuthorizationError } from '@itw-conformance-tool/issuer';
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
 
+import { PARService, PostPushedAuthorizationError } from '../domain/index.js';
 import { makeOauthCallbacks } from '../plugins/index.js';
 
 import type { HttpMethod } from '@pagopa/io-wallet-utils';
 import type { FastifyPluginAsync } from 'fastify';
 
 const parRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '15 minutes' });
-  app.route({
+  app.route<{ Body: Record<string, string> }>({
     url: '/as/par',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['Authorization']
     },
     handler: async (request, reply) => {
-      const bodyString =
-        typeof request.body === 'string'
-          ? request.body
-          : new URLSearchParams(
-              Object.entries((request.body ?? {}) as Record<string, string | number | boolean | null | undefined>)
-                .filter(([, value]) => value !== undefined && value !== null)
-                .map(([key, value]) => [key, String(value)] as [string, string])
-            ).toString();
+      const bodyString = new URLSearchParams(request.body).toString();
+
       const { baseURL, headers, jwksRepository, oauthCallbacks, sdkConfig } = makeOauthCallbacks(app, request);
 
       try {
         const service = new PARService(app.parRepository);
-        const requestUri = await service.parseAndStore({
+        const { issuerState, requestUri } = await service.parseAndStore({
           baseURL,
           callbacks: {
             fetch: oauthCallbacks.fetch,
@@ -43,6 +36,21 @@ const parRoute: FastifyPluginAsync = async (app) => {
             url: `${baseURL}${request.url}`
           }
         });
+
+        await app.conformanceEventSink?.emit(
+          createObservedEvent({
+            name: 'issuer.par.requested',
+            correlationId: issuerState ?? request.conformance?.correlation?.correlationId ?? null,
+            service: 'credential-issuer',
+            requestId: request.id,
+            diagnostic: {
+              endpoint: '/as/par',
+              body: request.body,
+              headers: Object.fromEntries(headers.entries()),
+              requestUri
+            }
+          })
+        );
 
         return reply.code(201).send({
           expires_in: 60,

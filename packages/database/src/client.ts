@@ -4,50 +4,95 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { DDL } from './schema.js';
 
-export type DatabaseClientOptions = {
-  /** Absolute path to the data directory. The database file will be created as `itw.db` inside it. */
-  dataDir: string;
-  /** Cleanup interval in milliseconds. Defaults to 60 000 (60 seconds). */
-  cleanupIntervalMs?: number;
-};
+type SqlValue = string | number | bigint | null | Uint8Array;
+type SqlParams = SqlValue[] | Record<string, SqlValue>;
+
+export interface DatabaseClientOptions {
+  readonly readOnly?: boolean;
+  readonly timeout?: number;
+  readonly readBigInts?: boolean;
+}
 
 export class DatabaseClient {
-  readonly db: DatabaseSync;
-  private cleanupTimer: NodeJS.Timeout | undefined;
-  private isOpen = true;
+  private readonly db: DatabaseSync;
 
-  constructor({ dataDir, cleanupIntervalMs = 60_000 }: DatabaseClientOptions) {
-    mkdirSync(dataDir, { recursive: true });
-    const dbPath = join(dataDir, 'itw.db');
-    this.db = new DatabaseSync(dbPath);
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(DDL);
-    this.startCleanup(cleanupIntervalMs);
+  constructor(path: string, options: DatabaseClientOptions = {}) {
+    this.db = new DatabaseSync(this.resolvePath(path), {
+      readOnly: options.readOnly ?? false,
+      timeout: options.timeout ?? 5_000,
+      readBigInts: options.readBigInts ?? false,
+      enableForeignKeyConstraints: true
+    });
+
+    this.exec('PRAGMA journal_mode = WAL');
+    this.exec('PRAGMA synchronous = NORMAL');
+    this.exec(DDL);
   }
 
-  /** Removes all expired rows from nonces and par_entries. */
-  purgeExpired(): void {
-    this.db.exec("DELETE FROM nonces WHERE expires_at < unixepoch('now') * 1000");
-    this.db.exec("DELETE FROM par_entries WHERE expires_at < unixepoch('now') * 1000");
-  }
-
-  async close(): Promise<void> {
-    if (!this.isOpen) return;
-    this.isOpen = false;
-    if (this.cleanupTimer !== undefined) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = undefined;
+  private resolvePath(path: string) {
+    if (path === ':memory:') {
+      return ':memory';
     }
-    this.db.close();
+
+    mkdirSync(path, { recursive: true });
+    return join(path, 'itw.db');
   }
 
-  private startCleanup(intervalMs: number): void {
-    this.cleanupTimer = setInterval(() => {
-      if (!this.isOpen) return;
-      this.purgeExpired();
-    }, intervalMs);
-    // Do not keep the process alive solely for cleanup
-    this.cleanupTimer.unref();
+  exec(sql: string): void {
+    this.db.exec(sql);
+  }
+
+  query<T = Record<string, unknown>>(sql: string, params: SqlParams = []): T[] {
+    const stmt = this.db.prepare(sql);
+
+    if (Array.isArray(params)) {
+      return stmt.all(...params) as T[];
+    }
+
+    return stmt.all(params) as T[];
+  }
+
+  get<T = Record<string, unknown>>(sql: string, params: SqlParams = []): T | undefined {
+    const stmt = this.db.prepare(sql);
+
+    const row = Array.isArray(params) ? stmt.get(...params) : stmt.get(params);
+
+    return row as T | undefined;
+  }
+
+  run(
+    sql: string,
+    params: SqlParams = []
+  ): {
+    changes: number | bigint;
+    lastInsertRowid: number | bigint;
+  } {
+    const stmt = this.db.prepare(sql);
+
+    const result = Array.isArray(params) ? stmt.run(...params) : stmt.run(params);
+
+    return {
+      changes: result.changes,
+      lastInsertRowid: result.lastInsertRowid
+    };
+  }
+
+  transaction<T>(callback: () => T): T {
+    this.exec('BEGIN');
+
+    try {
+      const result = callback();
+      this.exec('COMMIT');
+      return result;
+    } catch (error) {
+      this.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  close(): void {
+    if (this.db.isOpen) {
+      this.db.close();
+    }
   }
 }

@@ -43,11 +43,9 @@ interface EdocProofVerifyRequest {
 }
 
 const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
-  const rateLimit = app.rateLimit({ max: 100, timeWindow: '1 minute' });
   app.route({
     url: '/edoc-proof/verify',
     method: 'POST',
-    onRequest: [rateLimit],
     schema: {
       tags: ['EDoc Proof'],
       headers: {
@@ -113,8 +111,7 @@ const edocProofVerifyRoute: FastifyPluginAsync = async (app) => {
         }
 
         const walletJwk = (decodedAttestation.cnf as Record<string, unknown>)?.jwk as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
 
         if (!walletJwk) {
           return reply

@@ -1,47 +1,47 @@
-import { SqliteConformanceSessionRepository, startConformanceCleanupJob } from '@itw-conformance-tool/conformance';
+import { SqliteScenarioEventRepository } from '@itw-conformance-tool/conformance';
 import {
   DatabaseClient,
+  SqliteDeferredCredentialRepository,
   SqliteNonceRepository,
   SqlitePARRepository,
-  SqliteSessionRepository
+  SqliteRefreshTokenRepository
 } from '@itw-conformance-tool/database';
 import fp from 'fastify-plugin';
 
-import type { IConformanceSessionRepository } from '@itw-conformance-tool/conformance';
-import type { INonceRepository, IPARRepository, ISessionRepository } from '@itw-conformance-tool/database';
+import type {
+  IDeferredCredentialRepository,
+  INonceRepository,
+  IPARRepository,
+  IRefreshTokenRepository,
+  ISessionRepository
+} from '@itw-conformance-tool/database';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    conformanceSessionRepository: IConformanceSessionRepository;
     dbClient: DatabaseClient;
+    deferredCredentialRepository: IDeferredCredentialRepository;
     nonceRepository: INonceRepository;
     parRepository: IPARRepository;
+    refreshTokenRepository: IRefreshTokenRepository;
     sessionRepository: ISessionRepository;
   }
 }
 
 export default fp(
   async function dbPlugin(app) {
-    const dbClient = new DatabaseClient({
-      dataDir: app.config.DATA_DIR,
-      cleanupIntervalMs: app.config.DB_CLEANUP_INTERVAL_MS
-    });
+    const dbClient = new DatabaseClient(app.config.DATA_DIR);
 
-    const conformanceSessionRepository = new SqliteConformanceSessionRepository(dbClient.db);
-    const stopConformanceCleanup = startConformanceCleanupJob({
-      logger: app.log,
-      repository: conformanceSessionRepository
-    });
+    const scenarioEventRepository = new SqliteScenarioEventRepository(dbClient);
 
-    app.decorate('conformanceSessionRepository', conformanceSessionRepository);
+    app.decorate('conformanceEventSink', scenarioEventRepository);
     app.decorate('dbClient', dbClient);
-    app.decorate('nonceRepository', new SqliteNonceRepository(dbClient.db));
-    app.decorate('parRepository', new SqlitePARRepository(dbClient.db));
-    app.decorate('sessionRepository', new SqliteSessionRepository(dbClient.db));
+    app.decorate('nonceRepository', new SqliteNonceRepository(dbClient));
+    app.decorate('parRepository', new SqlitePARRepository(dbClient));
+    app.decorate('deferredCredentialRepository', new SqliteDeferredCredentialRepository(dbClient));
+    app.decorate('refreshTokenRepository', new SqliteRefreshTokenRepository(dbClient));
 
     app.addHook('onClose', async () => {
-      stopConformanceCleanup();
-      await dbClient.close();
+      dbClient.close();
     });
   },
   { name: 'db', dependencies: ['config'] }

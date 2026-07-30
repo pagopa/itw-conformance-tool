@@ -3,27 +3,29 @@ import path from 'node:path';
 import FastifyAutoLoad from '@fastify/autoload';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 
-import conformanceHooks from './hooks/conformance.js';
 import configPlugin from './plugins/config.js';
+import conformancePlugin from './plugins/conformance.js';
 import dbPlugin from './plugins/db.js';
 import corsPlugin, { autoConfig as corsConfig } from './plugins/external/cors.js';
 import formbodyPlugin from './plugins/external/formbody.js';
 import helmetPlugin, { autoConfig as helmetConfig } from './plugins/external/helmet.js';
-import rateLimitPlugin, { autoConfig as rateLimitConfig } from './plugins/external/rate-limit.js';
 import sensiblePlugin from './plugins/external/sensible.js';
 import swaggerPlugin from './plugins/external/swagger.js';
+import issuerFaultsPlugin from './plugins/issuer-faults.js';
+import issuerRuntimeConfigPlugin from './plugins/issuer-runtime-config.js';
 import keysPlugin from './plugins/keys.js';
 
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
   await app.register(dbPlugin);
   await app.register(keysPlugin);
-  await app.register(conformanceHooks);
+  await app.register(issuerFaultsPlugin);
+  await app.register(issuerRuntimeConfigPlugin);
+  await app.register(conformancePlugin);
 
   await app.register(corsPlugin, corsConfig);
   await app.register(helmetPlugin, helmetConfig);
   await app.register(formbodyPlugin);
-  await app.register(rateLimitPlugin, rateLimitConfig);
   await app.register(sensiblePlugin);
   await app.register(swaggerPlugin);
 

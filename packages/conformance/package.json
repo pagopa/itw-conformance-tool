@@ -18,15 +18,27 @@
     "clean": "rimraf dist out-tsc"
   },
   "dependencies": {
+    "@itw-conformance-tool/config": "workspace:*",
     "@itw-conformance-tool/database": "workspace:*",
+    "@itw-conformance-tool/faults": "workspace:*",
+    "@itw-conformance-tool/logger": "workspace:*",
+    "@itw-conformance-tool/utils": "workspace:*",
+    "@pagopa/io-wallet-oid-federation": "catalog:pagopa",
+    "chalk": "^5.6.2",
+    "fastify": "catalog:fastify",
+    "fastify-plugin": "catalog:fastify",
+    "jose": "catalog:",
+    "open": "^11.0.0",
     "puppeteer": "^24.0.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "vitest": "catalog:"
   },
   "devDependencies": {
-    "@itw-conformance-tool/crypto": "workspace:*",
-    "@types/node": "^22.19.9",
-    "jose": "5.2.4",
-    "vitest": "~4.1.0",
-    "zod": "^4.4.3"
+    "@pagopa/io-wallet-oauth2": "catalog:pagopa",
+    "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
+    "@pagopa/io-wallet-utils": "catalog:pagopa",
+    "@types/node": "catalog:node",
+    "@itw-conformance-tool/ipc": "workspace:*",
+    "vitest": "catalog:"
   }
 }

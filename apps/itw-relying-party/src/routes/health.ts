@@ -1,3 +1,7 @@
+import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
+
+import { getHealthCheckHandler, healthCheckResponseSchema } from '../handlers/health.js';
+
 import type { FastifyPluginAsync } from 'fastify';
 
 const healthRoute: FastifyPluginAsync = async (app) => {
@@ -5,11 +9,18 @@ const healthRoute: FastifyPluginAsync = async (app) => {
     url: '/health',
     method: 'GET',
     schema: {
-      tags: ['Health']
+      operationId: 'getHealthCheck',
+      summary: 'Check application liveness',
+      description: 'Returns a simple liveness payload for health probes.',
+      tags: ['Health'],
+      response: {
+        200: {
+          description: 'Service is alive.',
+          ...toFastifyJsonSchema(healthCheckResponseSchema)
+        }
+      }
     },
-    handler: async () => {
-      return { status: 'ok' };
-    }
+    handler: getHealthCheckHandler
   });
 };
 

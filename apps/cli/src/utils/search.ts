@@ -1,7 +1,10 @@
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import type { SearchParamResult } from '../types/types.js';
+type SearchParamResult = {
+  value: string;
+  remainingArgs: string[];
+};
 
 /** Utility function to find the root directory of the Nx workspace
  * by looking for the presence of 'nx.json'.
@@ -50,23 +53,23 @@ export function searchNx(rootPath: string): string {
 /** Utility function to create an array of file paths that need to be checked for existence,
  *
  * @param filePath - The base path for the files.
- * @param httpsEnabled - Whether HTTPS is enabled; when true, TLS cert/key paths are included.
  * @returns An array of file paths for the required keys and certificates.
  */
-export function filesToSearch(filePath: string, httpsEnabled = false): string[] {
+export function filesToSearch(filePath: string): string[] {
   const paths = [
-    join(filePath, 'issuer', 'signing-keys.jwks.json'),
-    join(filePath, 'issuer', 'iaca-cert.pem'),
-    join(filePath, 'issuer', 'iaca-key.pem'),
-    join(filePath, 'rp', 'auth-request-key.jwk.json'),
-    join(filePath, 'rp', 'auth-response-key.jwk.json'),
-    join(filePath, 'rp', 'federation-key.jwk.json'),
-    join(filePath, 'rp', 'x5c-cert.pem')
+    join(filePath, 'issuer', 'jwks.json'),
+    join(filePath, 'issuer', 'jwks-intermediate.json'),
+    join(filePath, 'issuer', 'intermediate-cert.pem'),
+    join(filePath, 'issuer', 'cert.pem'),
+    join(filePath, 'rp', 'jwks.json'),
+    join(filePath, 'rp', 'cert.pem'),
+    join(filePath, 'wallet-provider', 'jwks.json'),
+    join(filePath, 'wallet-provider', 'jwks-intermediate.json'),
+    join(filePath, 'wallet-provider', 'intermediate-cert.pem'),
+    join(filePath, 'wallet-provider', 'cert.pem'),
+    join(filePath, 'trust-anchor', 'federation-key.jwk.json'),
+    join(filePath, 'trust-anchor', 'federation-cert.pem')
   ];
-
-  if (httpsEnabled) {
-    paths.push(join(filePath, 'tls-cert.pem'), join(filePath, 'tls-key.pem'));
-  }
 
   return paths;
 }
