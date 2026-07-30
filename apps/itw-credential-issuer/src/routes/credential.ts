@@ -16,6 +16,7 @@ import {
   type DigitalCredentialTrustChainFaultProfile,
   type MdocSignatureFaultProfile
 } from '../domain/index.js';
+import { STATUS_LIST_TESTED_CREDENTIAL_INDEX, STATUS_LIST_URI } from '../domain/models/status-list.js';
 import { makeJwksRepository, makeOauthCallbacks } from '../plugins/index.js';
 
 import type { CredentialResponse } from '@pagopa/io-wallet-oid4vci';
@@ -313,6 +314,9 @@ const credentialRoute: FastifyPluginAsync = async (app) => {
                 statusCode,
                 contentType: 'application/json',
                 responseKind: 'immediate',
+                responseHash: sha256Base64Url(JSON.stringify(responseBody)),
+                statusListIndex: STATUS_LIST_TESTED_CREDENTIAL_INDEX,
+                statusListUri: STATUS_LIST_URI(baseURL),
                 credentialCount: countResponseCredentials(responseBody),
                 notificationIdSha256: notificationIdSha256FromResponse(responseBody)
               }

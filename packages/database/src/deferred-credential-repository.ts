@@ -65,7 +65,13 @@ export class SqliteDeferredCredentialRepository implements IDeferredCredentialRe
     this.db.run(
       `INSERT INTO deferred_credentials (id, subject, jwk_thumbprint, notification_id, credentials)
        VALUES (?, ?, ?, ?, ?)`,
-      [transactionId, record.subject, record.jwkThumbprint, record.notificationId, JSON.stringify(record.credentials)]
+      [
+        transactionId,
+        record.subject,
+        record.jwkThumbprint,
+        record.notificationId ?? '',
+        JSON.stringify(record.credentials)
+      ]
     );
   }
 }

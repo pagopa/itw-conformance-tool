@@ -6,6 +6,13 @@ import { STATUS_LIST_TTL_SECONDS } from '../models/status-list.js';
 import { STATUS_LIST_BITS, STATUS_LIST_DEFAULT, STATUS_LIST_URI, createStatusList } from '../utils/status-list.js';
 
 import type { JwksRepository } from '../signer.js';
+import type { BitsPerStatus } from '@sd-jwt/jwt-status-list';
+
+export interface StatusListSettings {
+  bits: BitsPerStatus;
+  ttlSeconds?: number;
+  values: number[];
+}
 
 export class StatusListService {
   private readonly jwksRepository: JwksRepository;
@@ -14,18 +21,22 @@ export class StatusListService {
     this.jwksRepository = jwksRepository;
   }
 
-  async getStatusListJwt(baseURL: string): Promise<string> {
-    const statusList = createStatusList(STATUS_LIST_DEFAULT, STATUS_LIST_BITS);
+  async getStatusListJwt(
+    baseURL: string,
+    settings: StatusListSettings = DEFAULT_STATUS_LIST_SETTINGS
+  ): Promise<string> {
+    const statusList = createStatusList(settings.values, settings.bits);
     const lst = statusList.compressStatusList();
+    const ttlSeconds = settings.ttlSeconds ?? STATUS_LIST_TTL_SECONDS;
 
     const now = Math.floor(Date.now() / 1000);
     const payload: JWTPayload = {
-      exp: now + STATUS_LIST_TTL_SECONDS,
+      exp: now + ttlSeconds,
       iat: now,
       iss: baseURL,
-      status_list: { bits: STATUS_LIST_BITS, lst },
+      status_list: { bits: settings.bits, lst },
       sub: STATUS_LIST_URI(baseURL),
-      ttl: STATUS_LIST_TTL_SECONDS
+      ttl: ttlSeconds
     };
 
     const { private: privateSig } = this.jwksRepository.getSign();
@@ -43,3 +54,8 @@ export class StatusListService {
       .sign(signingKey);
   }
 }
+
+export const DEFAULT_STATUS_LIST_SETTINGS = {
+  bits: STATUS_LIST_BITS,
+  values: STATUS_LIST_DEFAULT
+} satisfies StatusListSettings;

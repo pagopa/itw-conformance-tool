@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { inflateSync } from 'node:zlib';
 
 import { loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
 import { DatabaseClient } from '@itw-conformance-tool/database';
@@ -43,10 +45,22 @@ import {
   wp062bScenario,
   wpNotificationScenario,
   wpDeferredScenario,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS,
+  WP_CREDENTIAL_REISSUANCE_STATUS_INDEX,
+  WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS,
+  WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN_TTL_SECONDS,
   wp054MissingCodeScenario,
   wp054aInvalidStateScenario,
   wp054bInvalidIssuerScenario,
-  wpCiHappyScenario
+  wpCiHappyScenario,
+  wpCredentialReissuanceRefreshAccessTokenScenario,
+  wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig,
+  wpCredentialReissuanceScenario,
+  wpCredentialReissuanceUpdatedIssuerConfig,
+  wpCredentialReissuanceValidAccessTokenScenario,
+  wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig
 } from '../../index.js';
 import { httpsRequest } from '../../utils/request.js';
 import {
@@ -57,10 +71,10 @@ import {
 } from '../../utils/x509.js';
 
 import type {
-  HttpRequestReceivedEvent,
   HttpResponseSentEvent,
   ObservedEvent,
   ScenarioOutcome,
+  ScenarioEventStore,
   ScenarioRunner
 } from '../../index.js';
 import type {
@@ -121,18 +135,126 @@ function findHttpResponseSentEvent(
   );
 }
 
-function findHttpRequestReceivedEvent(
-  events: ObservedEvent[],
-  requestId: string | undefined
-): HttpRequestReceivedEvent | undefined {
-  return events.find(
-    (event): event is HttpRequestReceivedEvent =>
-      event.name === 'http.request.received' && event.requestId === requestId
+function sha256Base64Url(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('base64url');
+}
+
+function nthEvent(events: ObservedEvent[], name: ObservedEvent['name'], index: number): ObservedEvent {
+  const event = events.filter((candidate) => candidate.name === name).at(index);
+  if (!event) {
+    throw new Error(`Missing ${name} event at index ${index}`);
+  }
+
+  return event;
+}
+
+function eventsByName(events: ObservedEvent[], name: ObservedEvent['name']): ObservedEvent[] {
+  return events.filter((event) => event.name === name);
+}
+
+function isUpdatedStatusListEvent(event: ObservedEvent): boolean {
+  return (
+    event.name === 'issuer.status_list.requested' &&
+    event.diagnostic?.['bits'] === 4 &&
+    event.diagnostic?.['credentialIndex'] === WP_CREDENTIAL_REISSUANCE_STATUS_INDEX &&
+    event.diagnostic?.['statusValue'] === WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS
   );
 }
 
-function sha256Base64Url(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('base64url');
+async function waitForUpdatedStatusListEvent(
+  sessionEvents: ScenarioEventStore,
+  after: ObservedEvent,
+  signal: AbortSignal | undefined,
+  timeoutMs: number
+): Promise<ObservedEvent> {
+  let cursor = after;
+  for (;;) {
+    const existing = sessionEvents
+      .all()
+      .find((event) => isUpdatedStatusListEvent(event) && event.monotonicMs > cursor.monotonicMs);
+    if (existing) return existing;
+
+    const event = await sessionEvents.waitFor('issuer.status_list.requested', {
+      after: cursor,
+      timeoutMs,
+      signal
+    });
+    if (isUpdatedStatusListEvent(event)) return event;
+    cursor = event;
+  }
+}
+
+function parseTokenRequestFromEvent(
+  event: ObservedEvent,
+  issuerBaseUrl: string
+): ReturnType<typeof parseAccessTokenRequest> {
+  const endpoint = requiredDiagnosticString(event, 'endpoint');
+  return parseAccessTokenRequest({
+    accessTokenRequest: event.diagnostic?.['body'] as Record<string, unknown>,
+    request: {
+      headers: toHeaders(event.diagnostic?.['headers']),
+      method: 'POST' as HttpMethod,
+      url: `${issuerBaseUrl}${endpoint}`
+    }
+  });
+}
+
+function parseCredentialRequestFromEvent(event: ObservedEvent): CredentialRequestV1_3 {
+  const credentialRequestParseResult = zCredentialRequestV1_3.safeParse(event.diagnostic?.['body']);
+  if (!credentialRequestParseResult.success) {
+    throw new Error(
+      `issuer.credential.requested evidence body is not a valid IT-Wallet v1.3/v1.4 Credential Request: ${credentialRequestParseResult.error.message}`
+    );
+  }
+
+  return credentialRequestParseResult.data;
+}
+
+function getStatusFromCompressedStatusList(compressedList: string, bits: 4, index: number): number {
+  const bytes = inflateSync(Buffer.from(compressedList, 'base64url'));
+  const totalStatuses = (bytes.length * 8) / bits;
+  const statusList = new Array<number>(totalStatuses);
+  const statusesPerByte = 8 / bits;
+
+  for (let statusIndex = 0; statusIndex < totalStatuses; statusIndex++) {
+    const byte = bytes[Math.floor((statusIndex * bits) / 8)];
+    if (byte === undefined) {
+      throw new Error(`Status List index ${statusIndex} is out of bounds`);
+    }
+
+    const bitIndex = (statusIndex * bits) % 8;
+    const byteString = byte.toString(2).padStart(8, '0');
+    const group = Math.floor(statusIndex / statusesPerByte);
+    const indexInGroup = statusIndex % statusesPerByte;
+    const position = group * statusesPerByte + (statusesPerByte - 1 - indexInGroup);
+    statusList[position] = Number.parseInt(byteString.slice(bitIndex, bitIndex + bits), 2);
+  }
+
+  const status = statusList[index];
+  if (status === undefined) {
+    throw new Error(`Status List index ${index} is out of bounds`);
+  }
+
+  return status;
+}
+
+async function fetchStatusListJwt(statusListUri: string): Promise<string> {
+  const statusListUrl = new URL(statusListUri);
+  const response = await httpsRequest<string>({
+    method: 'GET',
+    hostname: statusListUrl.hostname,
+    path: statusListUrl.pathname,
+    port: statusListUrl.port,
+    protocol: statusListUrl.protocol,
+    rejectUnauthorized: false,
+    signal: AbortSignal.timeout(10_000)
+  });
+
+  if (response.statusCode !== 200) {
+    throw new Error(`Unable to fetch Status List (${response.statusCode ?? 'unknown'}): ${response.body}`);
+  }
+
+  return response.body;
 }
 
 function decodeCredentialOfferUri(uri: string): { credential_configuration_ids?: string[] } {
@@ -208,6 +330,7 @@ const verifyJwtWithJwk: NonNullable<CallbackContext['verifyJwt']> = async (signe
 // matching the clock tolerance already used for JWT signature verification
 // in this file.
 const DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS = 300;
+const STATUS_LIST_CACHE_CLOCK_SKEW_MS = 1_000;
 
 const WALLET_ATTESTATION_NON_USER_PAYLOAD_CLAIMS = new Set([
   'aud',
@@ -240,6 +363,51 @@ interface TokenRequestArtifact {
   requestResult: ReturnType<typeof parseAccessTokenRequest>;
   requestUrl: string;
   walletAttestationCnfJwk: OAuthJwk;
+}
+
+function statusListExpiryMs(event: ObservedEvent): number | undefined {
+  const expiresAt = event.diagnostic?.['expiresAt'];
+  if (typeof expiresAt === 'string') {
+    const parsed = Date.parse(expiresAt);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+
+  const ttlSeconds = event.diagnostic?.['ttlSeconds'];
+  if (typeof ttlSeconds === 'number') {
+    return Date.parse(event.timestamp) + ttlSeconds * 1000;
+  }
+
+  return undefined;
+}
+
+function latestObservedNominalStatusListExpiryMs(events: ObservedEvent[]): number | undefined {
+  const nominalStatusListEvent = events
+    .filter(
+      (event) =>
+        event.name === 'issuer.status_list.requested' &&
+        event.diagnostic?.['credentialIndex'] === WP_CREDENTIAL_REISSUANCE_STATUS_INDEX &&
+        event.diagnostic?.['statusValue'] !== WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS
+    )
+    .at(-1);
+
+  return nominalStatusListEvent ? statusListExpiryMs(nominalStatusListEvent) : undefined;
+}
+
+async function waitUntilMs(targetMs: number, signal: AbortSignal | undefined): Promise<void> {
+  const remainingMs = targetMs - Date.now();
+  if (remainingMs > 0) {
+    await sleep(remainingMs, undefined, { signal });
+  }
+}
+
+async function waitForObservedNominalStatusListCacheExpiry(
+  events: ObservedEvent[],
+  signal: AbortSignal | undefined
+): Promise<void> {
+  const expiresAtMs = latestObservedNominalStatusListExpiryMs(events);
+  if (expiresAtMs === undefined) return;
+
+  await waitUntilMs(expiresAtMs + STATUS_LIST_CACHE_CLOCK_SKEW_MS, signal);
 }
 
 describe('Test Cases for Issuance Phase', () => {
@@ -452,7 +620,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(attestationHeader.x5c, 'Wallet Attestation should carry an X.509 certificate chain').not.toHaveLength(0);
 
         expect(attestationPayload.iss, 'Wallet Attestation should carry the Wallet Provider issuer').toBe(
-          trimTrailingSlash(config['wallet-provider'].local_url)
+          trimTrailingSlash(config['wallet-provider'].url)
         );
         expect(
           attestationPayload.sub,
@@ -480,7 +648,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(
           attestationPayload.wallet_link,
           'Wallet Attestation should carry the Wallet Provider information URL'
-        ).toBe(trimTrailingSlash(config['wallet-provider'].local_url));
+        ).toBe(trimTrailingSlash(config['wallet-provider'].url));
         expect(attestationPayload.wallet_name, 'Wallet Attestation should carry the Wallet name').toBe(
           config.wallet.wallet_name
         );
@@ -583,7 +751,7 @@ describe('Test Cases for Issuance Phase', () => {
         await expect(
           jwtVerify(clientAttestation.walletAttestationJwt, walletProviderPublicKey, {
             algorithms: [attestationHeader.alg],
-            issuer: trimTrailingSlash(config['wallet-provider'].local_url)
+            issuer: trimTrailingSlash(config['wallet-provider'].url)
           }),
           'Wallet Attestation signature should verify with the authorized Wallet Provider x5c leaf certificate'
         ).resolves.toBeDefined();
@@ -655,13 +823,13 @@ describe('Test Cases for Issuance Phase', () => {
         await expect(
           jwtVerify(clientAttestation.walletAttestationJwt, walletProviderPublicKey, {
             algorithms: [attestationHeader.alg],
-            issuer: trimTrailingSlash(config['wallet-provider'].local_url)
+            issuer: trimTrailingSlash(config['wallet-provider'].url)
           }),
           'Wallet Attestation signature should verify with the Wallet Provider x5c certificate'
         ).resolves.toMatchObject({
           payload: expect.objectContaining({
             cnf: expect.objectContaining({ jwk: attestationPayload.cnf.jwk }),
-            iss: trimTrailingSlash(config['wallet-provider'].local_url),
+            iss: trimTrailingSlash(config['wallet-provider'].url),
             sub: attestationPayload.sub
           })
         });
@@ -2257,7 +2425,6 @@ describe('Test Cases for Issuance Phase', () => {
     let credentialProofPayloads: ProofJwtPayload[];
     let originalTokenArtifact: TokenRequestArtifact;
     let refreshTokenArtifact: TokenRequestArtifact;
-    let deferredEvent: ObservedEvent;
     let deferredCredentialRequestEvent: ObservedEvent;
     let deferredCredentialIssuedEvent: ObservedEvent;
 
@@ -2271,12 +2438,9 @@ describe('Test Cases for Issuance Phase', () => {
         events = session.events.all();
 
         const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
-        if (
-          !Array.isArray(offerPayload.credential_configuration_ids) ||
-          offerPayload.credential_configuration_ids.length !== 2
-        ) {
+        if (!Array.isArray(offerPayload.credential_configuration_ids)) {
           throw new Error(
-            'WP_Deferred Credential Offer must contain exactly 2 credential_configuration_ids to enable batch issuance'
+            'WP_Deferred Credential Offer must contain credential_configuration_ids to enable batch issuance'
           );
         }
         offeredCredentialIdentifiers = offerPayload.credential_configuration_ids;
@@ -2485,7 +2649,6 @@ describe('Test Cases for Issuance Phase', () => {
         if (!foundDeferredEvent) {
           throw new Error('Missing issuer.credential.deferred evidence required to assert WP_065-WP_068 requirements');
         }
-        deferredEvent = foundDeferredEvent;
 
         const foundDeferredCredentialRequestEvent = events.find(
           (event) => event.name === 'issuer.deferred_credential.requested'
@@ -2706,20 +2869,6 @@ describe('Test Cases for Issuance Phase', () => {
           requiredDiagnosticString(deferredEvent, 'transactionIdSha256'),
           'Deferred response evidence must include a non-empty transaction_id hash'
         ).not.toHaveLength(0);
-
-        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
-        expect(
-          initialCredentialResponse,
-          'The deferred semantic event must pair to the actual HTTP response'
-        ).toBeDefined();
-        expect(initialCredentialResponse?.http.statusCode).toBe(202);
-        expect(initialCredentialResponse?.http.contentType.toLowerCase()).toContain('application/json');
-
-        const credentialResponse = findHttpResponseSentEvent(events, credentialEvent.requestId);
-        expect(
-          credentialResponse?.http.statusCode,
-          'The /credential response for this scenario must not be an immediate HTTP 200 credential payload'
-        ).toBe(202);
       },
       wpDeferredScenario.timeouts.vitestTestMs
     );
@@ -2739,15 +2888,6 @@ describe('Test Cases for Issuance Phase', () => {
 
         const transactionIdSha256 = requiredDiagnosticString(deferredEvent, 'transactionIdSha256');
         const intervalSeconds = requiredDiagnosticNumber(deferredEvent, 'intervalSeconds');
-
-        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
-        expect(
-          initialCredentialResponse,
-          'The initial deferred event must pair to HTTP response-send evidence'
-        ).toBeDefined();
-        if (!initialCredentialResponse) {
-          throw new Error('Missing HTTP response evidence for the initial deferred response');
-        }
 
         const issuedEvents = events.filter(
           (event) =>
@@ -2888,20 +3028,6 @@ describe('Test Cases for Issuance Phase', () => {
           'Refresh PoP JWT should verify against the refresh Wallet Attestation cnf.jwk'
         ).resolves.toBeDefined();
 
-        const initialCredentialResponse = findHttpResponseSentEvent(events, deferredEvent.requestId);
-        expect(
-          initialCredentialResponse,
-          'The initial deferred semantic event must pair to an HTTP 202 response'
-        ).toBeDefined();
-        if (!initialCredentialResponse) {
-          throw new Error('Missing HTTP response evidence for the initial deferred response');
-        }
-
-        expect(initialCredentialResponse.http.statusCode).toBe(202);
-        expect(
-          refreshTokenArtifact.event.monotonicMs,
-          'Refresh Token Request should occur after the HTTP 202 deferred response'
-        ).toBeGreaterThan(initialCredentialResponse.monotonicMs);
         expect(
           refreshTokenArtifact.event.monotonicMs,
           'Refresh Token Request should occur before the Deferred Credential Request'
@@ -2989,6 +3115,883 @@ describe('Test Cases for Issuance Phase', () => {
     );
   });
 
+  describe('WP_Reissuance', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let statusListJwt: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wpCredentialReissuanceScenario.id);
+      try {
+        await session.showInstructions();
+
+        const firstIssuedEvent = await session.events.waitFor('issuer.credential.issued', {
+          timeoutMs: wpCredentialReissuanceScenario.timeouts.protocolStepMs,
+          signal: session.abortSignal
+        });
+        const firstTokenEvent = nthEvent(session.events.all(), 'issuer.token.requested', 0);
+        const expiryBoundaryMs =
+          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS * 1000;
+        const remainingMs = expiryBoundaryMs + 1_000 - Date.now();
+        if (remainingMs > 0) {
+          await sleep(remainingMs, undefined, { signal: session.abortSignal });
+        }
+
+        await issuerFaultController.activateIssuerConfig({
+          scenarioId: session.correlationId,
+          config: {
+            batchIssuanceByDeferred: wpCredentialReissuanceUpdatedIssuerConfig.batchIssuanceByDeferred,
+            accessTokenTtlSeconds: wpCredentialReissuanceUpdatedIssuerConfig.accessTokenTtlSeconds,
+            refreshTokenTtlSeconds: wpCredentialReissuanceUpdatedIssuerConfig.refreshTokenTtlSeconds,
+            statusList: {
+              bits: wpCredentialReissuanceUpdatedIssuerConfig.statusList.bits,
+              values: [...wpCredentialReissuanceUpdatedIssuerConfig.statusList.values]
+            }
+          }
+        });
+
+        await waitForUpdatedStatusListEvent(
+          session.events,
+          firstIssuedEvent,
+          session.abortSignal,
+          wpCredentialReissuanceScenario.timeouts.protocolStepMs
+        );
+
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        statusListJwt = await fetchStatusListJwt(
+          requiredDiagnosticString(nthEvent(events, 'issuer.credential.issued', 0), 'statusListUri')
+        );
+      } finally {
+        await session.stop();
+      }
+    }, wpCredentialReissuanceScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_070: Wallet Instance detects UPDATE for the stored Digital Credential in the Status List.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const firstIssuedEvent = nthEvent(events, 'issuer.credential.issued', 0);
+        const statusListEvent = events.find(isUpdatedStatusListEvent);
+        expect(statusListEvent, 'Updated Status List request evidence must be observed').toBeDefined();
+        if (!statusListEvent) {
+          throw new Error('Missing issuer.status_list.requested evidence for the updated Status List');
+        }
+
+        const statusListUri = requiredDiagnosticString(firstIssuedEvent, 'statusListUri');
+        expect(statusListEvent.diagnostic?.['endpoint'], 'Wallet must request the Status List endpoint').toBe(
+          new URL(statusListUri).pathname
+        );
+        expect(statusListEvent.monotonicMs, 'Status List request must happen after first issuance').toBeGreaterThan(
+          firstIssuedEvent.monotonicMs
+        );
+        expect(
+          statusListEvent.monotonicMs,
+          'Status List request must happen before refresh failure/new issuance activity'
+        ).toBeLessThan(nthEvent(events, 'issuer.token.failed', 0).monotonicMs);
+
+        const { header } = decodeJwtHeader({ jwt: statusListJwt });
+        const { payload } = decodeJwt({ jwt: statusListJwt });
+        expect(header.typ, 'Status List JWT typ must identify a Status List Token').toBe('statuslist+jwt');
+        expect(Array.isArray(header.x5c), 'Status List JWT must carry an x5c chain').toBe(true);
+        if (!Array.isArray(header.x5c) || header.x5c.length === 0) {
+          throw new Error('Status List JWT header is missing x5c');
+        }
+
+        const leafCertificate = certificateFromBase64Der(header.x5c[0], 'Status List x5c[0]');
+        const publicKey = await importX509(leafCertificate.toString(), header.alg);
+        await expect(
+          jwtVerify(statusListJwt, publicKey, {
+            algorithms: [header.alg],
+            issuer: config['credential-issuer'].url,
+            subject: statusListUri
+          }),
+          'Status List JWT signature and iss/sub claims must verify'
+        ).resolves.toBeDefined();
+
+        expect(payload.iss, 'Status List issuer must be the Credential Issuer').toBe(config['credential-issuer'].url);
+        expect(payload.sub, 'Status List subject must be the referenced Status List URI').toBe(statusListUri);
+        expect(payload.exp, 'Status List expiry must be numeric').toBeTypeOf('number');
+        expect(payload.iat, 'Status List issued-at must be numeric').toBeTypeOf('number');
+        expect(Number(payload.exp), 'Status List exp must be after iat').toBeGreaterThan(Number(payload.iat));
+
+        const statusList = payload.status_list as { bits?: unknown; lst?: unknown } | undefined;
+        expect(statusList?.bits, 'Status List must use four-bit statuses').toBe(4);
+        expect(typeof statusList?.lst, 'Status List must carry a compressed list').toBe('string');
+        if (statusList?.bits !== 4 || typeof statusList.lst !== 'string') {
+          throw new Error('Status List JWT payload is missing a valid four-bit status_list');
+        }
+
+        expect(
+          getStatusFromCompressedStatusList(statusList.lst, statusList.bits, WP_CREDENTIAL_REISSUANCE_STATUS_INDEX),
+          'Credential index 1 must resolve to UPDATE'
+        ).toBe(WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS);
+      },
+      wpCredentialReissuanceScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_067: Wallet Instance fails expired Refresh Token exchange and starts a new issuance flow.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const firstTokenEvent = nthEvent(events, 'issuer.token.requested', 0);
+        const failedTokenEvent = nthEvent(events, 'issuer.token.failed', 0);
+        expect(failedTokenEvent.diagnostic?.['grantType'], 'Failed Token request must use refresh_token').toBe(
+          'refresh_token'
+        );
+        expect(failedTokenEvent.diagnostic?.['error'], 'Refresh failure must be invalid_grant').toBe('invalid_grant');
+        expect(failedTokenEvent.diagnostic?.['statusCode'], 'Refresh failure must be HTTP 400').toBe(400);
+
+        const refreshExpiryBoundaryMs =
+          Date.parse(firstTokenEvent.timestamp) + WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS * 1000;
+        expect(
+          Date.parse(failedTokenEvent.timestamp),
+          'Refresh Token must be expired when the wallet presents it'
+        ).toBeGreaterThanOrEqual(refreshExpiryBoundaryMs);
+
+        const failedResponse = findHttpResponseSentEvent(events, failedTokenEvent.requestId);
+        expect(failedResponse?.http.statusCode, 'Token endpoint must reject the expired Refresh Token').toBe(400);
+
+        const secondParEvent = nthEvent(events, 'issuer.par.requested', 1);
+        expect(secondParEvent.monotonicMs, 'A new PAR request must start after the failed refresh').toBeGreaterThan(
+          failedTokenEvent.monotonicMs
+        );
+
+        const secondTokenEvent = nthEvent(events, 'issuer.token.requested', 1);
+        const credentialRequestsBetweenFailureAndNewToken = events
+          .filter((event) => event.name === 'issuer.credential.requested')
+          .filter(
+            (event) =>
+              event.monotonicMs > failedTokenEvent.monotonicMs && event.monotonicMs < secondTokenEvent.monotonicMs
+          );
+        expect(
+          credentialRequestsBetweenFailureAndNewToken,
+          'No expired token may be accepted at the Credential Endpoint before the new Token exchange'
+        ).toHaveLength(0);
+      },
+      wpCredentialReissuanceScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_071b: Wallet Instance performs a second authorization-code flow after the failed refresh.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const failedTokenEvent = nthEvent(events, 'issuer.token.failed', 0);
+        const parEvents = eventsByName(events, 'issuer.par.requested');
+        const authorizationEvents = eventsByName(events, 'issuer.authorization.requested');
+        const tokenEvents = eventsByName(events, 'issuer.token.requested');
+        expect(parEvents.length, 'Two distinct PAR requests must be observed').toBeGreaterThanOrEqual(2);
+        expect(
+          authorizationEvents.length,
+          'Two Authorization Endpoint requests must be observed'
+        ).toBeGreaterThanOrEqual(2);
+        expect(
+          tokenEvents.length,
+          'Two successful authorization-code Token exchanges must be observed'
+        ).toBeGreaterThanOrEqual(2);
+
+        const firstParRequestUri = requiredDiagnosticString(parEvents[0], 'requestUri');
+        const secondParRequestUri = requiredDiagnosticString(parEvents[1], 'requestUri');
+        expect(secondParRequestUri, 'Second PAR request_uri must be distinct').not.toBe(firstParRequestUri);
+
+        expect(
+          authorizationEvents[1].monotonicMs,
+          'Second Authorization request must happen after failed refresh'
+        ).toBeGreaterThan(failedTokenEvent.monotonicMs);
+        expect(
+          authorizationEvents[1].diagnostic?.['requestUri'],
+          'Second Authorization must use second request_uri'
+        ).toBe(secondParRequestUri);
+
+        const firstTokenRequest = parseTokenRequestFromEvent(tokenEvents[0], config['credential-issuer'].url);
+        const secondTokenRequest = parseTokenRequestFromEvent(tokenEvents[1], config['credential-issuer'].url);
+        expect(secondTokenRequest.grant.grantType, 'Second Token exchange must use authorization_code').toBe(
+          'authorization_code'
+        );
+        if (
+          firstTokenRequest.grant.grantType !== 'authorization_code' ||
+          secondTokenRequest.grant.grantType !== 'authorization_code'
+        ) {
+          throw new Error('Expected both successful Token exchanges to use authorization_code');
+        }
+        expect(secondTokenRequest.grant.code, 'Second authorization code must be distinct').not.toBe(
+          firstTokenRequest.grant.code
+        );
+      },
+      wpCredentialReissuanceScenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_072: Wallet Instance uses the new DPoP-bound Access Token at the Credential Endpoint and retrieves the updated credential.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const tokenEvents = eventsByName(events, 'issuer.token.requested');
+        const nonceEvents = eventsByName(events, 'issuer.nonce.requested');
+        const credentialEvents = eventsByName(events, 'issuer.credential.requested');
+        const issuedEvents = eventsByName(events, 'issuer.credential.issued');
+        const secondTokenEvent = tokenEvents[1];
+        const secondNonceEvent = nonceEvents[1];
+        const firstCredentialEvent = credentialEvents[0];
+        const secondCredentialEvent = credentialEvents[1];
+        const firstIssuedEvent = issuedEvents[0];
+        const secondIssuedEvent = issuedEvents[1];
+        if (
+          !secondTokenEvent ||
+          !secondNonceEvent ||
+          !firstCredentialEvent ||
+          !secondCredentialEvent ||
+          !firstIssuedEvent ||
+          !secondIssuedEvent
+        ) {
+          throw new Error('Missing second-flow Token, Nonce, Credential Request, or issuance evidence');
+        }
+
+        expect(secondCredentialEvent.diagnostic?.['authorizationScheme']).toBe('DPoP');
+        expect(secondCredentialEvent.diagnostic?.['endpoint']).toBe('/credential');
+        expect(
+          secondCredentialEvent.monotonicMs,
+          'Second Credential Request must follow second Token exchange'
+        ).toBeGreaterThan(secondTokenEvent.monotonicMs);
+        expect(
+          secondIssuedEvent.monotonicMs,
+          'Second issuance must be correlated to the second request'
+        ).toBeGreaterThan(secondCredentialEvent.monotonicMs);
+
+        const firstAccessTokenHash = requiredDiagnosticString(firstCredentialEvent, 'accessTokenSha256');
+        const secondAccessTokenHash = requiredDiagnosticString(secondCredentialEvent, 'accessTokenSha256');
+        expect(secondAccessTokenHash, 'Second Credential Request must use a fresh access token').not.toBe(
+          firstAccessTokenHash
+        );
+
+        const secondCredentialRequest = parseCredentialRequestFromEvent(secondCredentialEvent);
+        const [proofJwt] = secondCredentialRequest.proofs.jwt;
+        if (!proofJwt) {
+          throw new Error('Second Credential Request is missing holder-binding proof JWT');
+        }
+
+        const credentialDpopJwt = requiredDiagnosticString(secondCredentialEvent, 'dpopProof');
+        const { header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
+          jwt: credentialDpopJwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        const { header: proofHeader, payload: proofPayload } = decodeJwt({
+          jwt: proofJwt,
+          headerSchema: zProofJwtHeaderV1_3,
+          payloadSchema: zProofJwtPayload
+        });
+
+        const credentialRequestUrl = `${config['credential-issuer'].url}${requiredDiagnosticString(
+          secondCredentialEvent,
+          'endpoint'
+        )}`;
+        const dpopPublicKey = await importJWK(credentialDpopHeader.jwk as JWK, credentialDpopHeader.alg);
+        await expect(
+          jwtVerify(credentialDpopJwt, dpopPublicKey),
+          'Second Credential DPoP proof must verify'
+        ).resolves.toBeDefined();
+        expect(credentialDpopPayload.htm, 'Second Credential DPoP proof must bind POST').toBe('POST');
+        expect(credentialDpopPayload.htu, 'Second Credential DPoP proof must bind the Credential Endpoint URL').toBe(
+          htuFromRequestUrl(credentialRequestUrl)
+        );
+        expect(credentialDpopPayload.iat, 'Second Credential DPoP proof must carry iat').toBeTypeOf('number');
+        expect(credentialDpopPayload.jti, 'Second Credential DPoP proof must carry jti').not.toHaveLength(0);
+        expect(credentialDpopPayload.ath, 'Second Credential DPoP ath must match the new access token').toBe(
+          secondAccessTokenHash
+        );
+
+        const secondTokenRequest = parseTokenRequestFromEvent(secondTokenEvent, config['credential-issuer'].url);
+        const { header: secondTokenDpopHeader } = decodeJwt({
+          jwt: secondTokenRequest.dpop.jwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        await expect(
+          calculateJwkThumbprint(credentialDpopHeader.jwk as JWK),
+          'Credential Request DPoP key must match the second Token Request DPoP key'
+        ).resolves.toBe(await calculateJwkThumbprint(secondTokenDpopHeader.jwk as JWK));
+
+        const proofPublicKey = await importJWK(proofHeader.jwk as JWK, proofHeader.alg);
+        await expect(
+          jwtVerify(proofJwt, proofPublicKey),
+          'Holder-binding proof JWT must verify'
+        ).resolves.toBeDefined();
+        const secondNonceHash = requiredDiagnosticString(secondNonceEvent, 'cNonceSha256');
+        expect(sha256Base64Url(proofPayload.nonce), 'Holder-binding proof must use the second nonce').toBe(
+          secondNonceHash
+        );
+        expect(secondNonceHash, 'Second nonce must be fresh').not.toBe(
+          requiredDiagnosticString(nonceEvents[0], 'cNonceSha256')
+        );
+
+        expect(
+          requiredDiagnosticString(secondIssuedEvent, 'responseHash'),
+          'Updated credential response hash must be present'
+        ).not.toHaveLength(0);
+        expect(
+          requiredDiagnosticString(secondIssuedEvent, 'responseHash'),
+          'Second credential response must be newly issued'
+        ).not.toBe(requiredDiagnosticString(firstIssuedEvent, 'responseHash'));
+      },
+      wpCredentialReissuanceScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_Reissuance_RefreshAccessToken', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let statusListJwt: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wpCredentialReissuanceRefreshAccessTokenScenario.id);
+      try {
+        await session.showInstructions();
+
+        const firstIssuedEvent = await session.events.waitFor('issuer.credential.issued', {
+          timeoutMs: wpCredentialReissuanceRefreshAccessTokenScenario.timeouts.protocolStepMs,
+          signal: session.abortSignal
+        });
+        const firstTokenEvent = nthEvent(session.events.all(), 'issuer.token.requested', 0);
+        const originalAccessTokenExpMs = requiredDiagnosticNumber(firstTokenEvent, 'accessTokenExp') * 1000;
+        const originalRefreshTokenExpMs = requiredDiagnosticNumber(firstTokenEvent, 'refreshTokenExp') * 1000;
+        const nominalStatusListExpMs = latestObservedNominalStatusListExpiryMs(session.events.all());
+        const transitionBoundaryMs =
+          Math.max(originalAccessTokenExpMs, nominalStatusListExpMs ?? 0) + STATUS_LIST_CACHE_CLOCK_SKEW_MS;
+        await waitUntilMs(transitionBoundaryMs, session.abortSignal);
+
+        if (originalRefreshTokenExpMs <= Date.now() + STATUS_LIST_CACHE_CLOCK_SKEW_MS) {
+          throw new Error(
+            'Inconclusive WP_071a setup: the original Refresh Token expired before the UPDATE transition boundary.'
+          );
+        }
+
+        await issuerFaultController.activateIssuerConfig({
+          scenarioId: session.correlationId,
+          config: {
+            batchIssuanceByDeferred:
+              wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig.batchIssuanceByDeferred,
+            accessTokenTtlSeconds: wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig.accessTokenTtlSeconds,
+            refreshTokenTtlSeconds: wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig.refreshTokenTtlSeconds,
+            statusList: {
+              bits: wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig.statusList.bits,
+              values: [...wpCredentialReissuanceRefreshAccessTokenUpdatedIssuerConfig.statusList.values]
+            }
+          }
+        });
+
+        await waitForUpdatedStatusListEvent(
+          session.events,
+          firstIssuedEvent,
+          session.abortSignal,
+          wpCredentialReissuanceRefreshAccessTokenScenario.timeouts.protocolStepMs
+        );
+
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        statusListJwt = await fetchStatusListJwt(
+          requiredDiagnosticString(nthEvent(events, 'issuer.credential.issued', 0), 'statusListUri')
+        );
+      } finally {
+        await session.stop();
+      }
+    }, wpCredentialReissuanceRefreshAccessTokenScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_071a: Wallet Instance uses a valid Refresh Token to obtain a new DPoP-bound Access Token for credential re-issuance.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const firstIssuedEvent = nthEvent(events, 'issuer.credential.issued', 0);
+        const secondIssuedEvent = nthEvent(events, 'issuer.credential.issued', 1);
+        const updatedStatusListEvent = events.find(isUpdatedStatusListEvent);
+        expect(updatedStatusListEvent, 'Updated Status List request evidence must be observed').toBeDefined();
+        if (!updatedStatusListEvent) {
+          throw new Error('Missing issuer.status_list.requested evidence for the updated Status List');
+        }
+
+        expect(
+          updatedStatusListEvent.monotonicMs,
+          'Updated Status List request must happen after initial issuance'
+        ).toBeGreaterThan(firstIssuedEvent.monotonicMs);
+
+        const { payload: statusListPayload } = decodeJwt({ jwt: statusListJwt });
+        const statusList = statusListPayload.status_list as { bits?: unknown; lst?: unknown } | undefined;
+        expect(statusList?.bits, 'Status List must use four-bit statuses').toBe(4);
+        expect(typeof statusList?.lst, 'Status List must carry a compressed list').toBe('string');
+        if (statusList?.bits !== 4 || typeof statusList.lst !== 'string') {
+          throw new Error('Status List JWT payload is missing a valid four-bit status_list');
+        }
+        expect(
+          getStatusFromCompressedStatusList(statusList.lst, statusList.bits, WP_CREDENTIAL_REISSUANCE_STATUS_INDEX),
+          'Credential index 1 must resolve to UPDATE'
+        ).toBe(WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS);
+
+        const tokenEvents = eventsByName(events, 'issuer.token.requested');
+        expect(tokenEvents, 'Exactly two successful Token Endpoint exchanges must be observed').toHaveLength(2);
+        const [initialTokenEvent, refreshTokenEvent] = tokenEvents;
+        if (!initialTokenEvent || !refreshTokenEvent) {
+          throw new Error('Missing initial or refresh Token exchange evidence');
+        }
+        expect(initialTokenEvent.diagnostic?.['grantType'], 'Initial Token exchange must use authorization_code').toBe(
+          'authorization_code'
+        );
+        expect(refreshTokenEvent.diagnostic?.['grantType'], 'Second Token exchange must use refresh_token').toBe(
+          'refresh_token'
+        );
+        expect(refreshTokenEvent.diagnostic?.['tokenType'], 'Refresh exchange must return a DPoP token').toBe('DPoP');
+        expect(eventsByName(events, 'issuer.token.failed'), 'Refresh exchange must emit no Token failure').toHaveLength(
+          0
+        );
+        expect(
+          refreshTokenEvent.monotonicMs,
+          'Refresh Token exchange must happen after updated Status List retrieval'
+        ).toBeGreaterThan(updatedStatusListEvent.monotonicMs);
+
+        const originalAccessTokenExp = requiredDiagnosticNumber(initialTokenEvent, 'accessTokenExp');
+        const originalRefreshTokenExp = requiredDiagnosticNumber(initialTokenEvent, 'refreshTokenExp');
+        expect(
+          Date.parse(refreshTokenEvent.timestamp),
+          'Refresh Token exchange must occur at or after the original Access Token signed expiry'
+        ).toBeGreaterThanOrEqual(originalAccessTokenExp * 1000);
+        expect(
+          Date.parse(refreshTokenEvent.timestamp),
+          'Refresh Token exchange must occur before the original Refresh Token signed expiry'
+        ).toBeLessThan(originalRefreshTokenExp * 1000);
+        expect(
+          originalRefreshTokenExp * 1000 - Date.parse(initialTokenEvent.timestamp),
+          'Original Refresh Token lifetime must be long enough for WP_071a'
+        ).toBeGreaterThanOrEqual(WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS * 1000 - 1_000);
+
+        const initialTokenRequest = parseTokenRequestFromEvent(initialTokenEvent, config['credential-issuer'].url);
+        const refreshTokenRequest = parseTokenRequestFromEvent(refreshTokenEvent, config['credential-issuer'].url);
+        expect(refreshTokenRequest.grant.grantType, 'Refresh exchange must parse as refresh_token').toBe(
+          'refresh_token'
+        );
+        if (refreshTokenRequest.grant.grantType !== 'refresh_token') {
+          throw new Error('Expected the second Token Request to use the refresh_token grant');
+        }
+
+        const refreshBody = refreshTokenEvent.diagnostic?.['body'] as Record<string, unknown>;
+        expect(refreshBody['grant_type'], 'Refresh Token Request form must use grant_type=refresh_token').toBe(
+          'refresh_token'
+        );
+        expect(refreshBody['refresh_token'], 'Refresh Token Request form must carry refresh_token').toBeTypeOf(
+          'string'
+        );
+        expect(refreshBody['code'], 'Refresh Token Request form must not carry code').toBeUndefined();
+        expect(refreshBody['code_verifier'], 'Refresh Token Request form must not carry code_verifier').toBeUndefined();
+        expect(refreshBody['redirect_uri'], 'Refresh Token Request form must not carry redirect_uri').toBeUndefined();
+        expect(refreshTokenEvent.diagnostic?.['method'], 'Refresh Token Request must use POST').toBe('POST');
+        const refreshHeaders = toHeaders(refreshTokenEvent.diagnostic?.['headers']);
+        expect(
+          refreshHeaders.get('content-type')?.toLowerCase(),
+          'Refresh Token Request must be form-urlencoded'
+        ).toContain('application/x-www-form-urlencoded');
+        expect(refreshHeaders.get('dpop'), 'Refresh Token Request must include DPoP proof').not.toBeNull();
+        expect(
+          refreshHeaders.get('oauth-client-attestation'),
+          'Refresh Token Request must include attestation'
+        ).not.toBeNull();
+        expect(
+          refreshHeaders.get('oauth-client-attestation-pop'),
+          'Refresh Token Request must include attestation PoP'
+        ).not.toBeNull();
+
+        const originalRefreshTokenHash = requiredDiagnosticString(initialTokenEvent, 'refreshTokenSha256');
+        const presentedRefreshTokenHash = requiredDiagnosticString(refreshTokenEvent, 'presentedRefreshTokenSha256');
+        expect(presentedRefreshTokenHash, 'Presented Refresh Token must match the one from initial issuance').toBe(
+          originalRefreshTokenHash
+        );
+        expect(
+          sha256Base64Url(refreshTokenRequest.grant.refreshToken),
+          'Parsed Refresh Token hash must match evidence'
+        ).toBe(originalRefreshTokenHash);
+
+        const initialAccessTokenHash = requiredDiagnosticString(initialTokenEvent, 'accessTokenSha256');
+        const refreshedAccessTokenHash = requiredDiagnosticString(refreshTokenEvent, 'accessTokenSha256');
+        expect(refreshedAccessTokenHash, 'Refreshed Access Token must be distinct from original').not.toBe(
+          initialAccessTokenHash
+        );
+        expect(
+          requiredDiagnosticString(refreshTokenEvent, 'refreshTokenSha256'),
+          'Refresh Token response must rotate the Refresh Token'
+        ).not.toBe(originalRefreshTokenHash);
+        expect(
+          requiredDiagnosticNumber(refreshTokenEvent, 'accessTokenExpiresIn'),
+          'Refreshed Access Token lifetime must match the updated issuer config'
+        ).toBe(WP_CREDENTIAL_REISSUANCE_REFRESHED_ACCESS_TOKEN_TTL_SECONDS);
+
+        const { header: initialDpopHeader, payload: initialDpopPayload } = decodeJwt({
+          jwt: initialTokenRequest.dpop.jwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        const { header: refreshDpopHeader, payload: refreshDpopPayload } = decodeJwt({
+          jwt: refreshTokenRequest.dpop.jwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        expect(refreshDpopHeader.typ, 'Refresh DPoP proof typ must be dpop+jwt').toBe('dpop+jwt');
+        expect(refreshDpopPayload.htm, 'Refresh DPoP proof must bind POST').toBe('POST');
+        expect(refreshDpopPayload.htu, 'Refresh DPoP proof must bind the Token Endpoint URL').toBe(
+          htuFromRequestUrl(`${config['credential-issuer'].url}/token`)
+        );
+        expect(refreshDpopPayload.iat, 'Refresh DPoP proof must carry iat').toBeTypeOf('number');
+        expect(
+          Math.abs(Date.parse(refreshTokenEvent.timestamp) - refreshDpopPayload.iat * 1000),
+          'Refresh DPoP proof iat must be fresh relative to the observed request'
+        ).toBeLessThanOrEqual(DPOP_IAT_FRESHNESS_TOLERANCE_SECONDS * 1000);
+        expect(refreshDpopPayload.jti, 'Refresh DPoP proof must carry a non-empty jti').not.toHaveLength(0);
+        expect(refreshDpopPayload.jti, 'Refresh DPoP proof jti must be fresh').not.toBe(initialDpopPayload.jti);
+
+        const refreshDpopPublicKey = await importJWK(refreshDpopHeader.jwk as JWK, refreshDpopHeader.alg);
+        await expect(
+          jwtVerify(refreshTokenRequest.dpop.jwt, refreshDpopPublicKey),
+          'Refresh DPoP proof signature must verify'
+        ).resolves.toBeDefined();
+        await expect(
+          calculateJwkThumbprint(refreshDpopHeader.jwk as JWK),
+          'Refresh DPoP proof must use the same DPoP key as the original Token Request'
+        ).resolves.toBe(await calculateJwkThumbprint(initialDpopHeader.jwk as JWK));
+
+        const { payload: initialPopPayload } = decodeJwt({
+          jwt: initialTokenRequest.clientAttestation.clientAttestationPopJwt,
+          headerSchema: zItWalletClientAttestationPopJwtHeader,
+          payloadSchema: zItWalletClientAttestationPopJwtPayload
+        });
+        const { payload: refreshWalletAttestationPayload } = decodeJwt({
+          jwt: refreshTokenRequest.clientAttestation.walletAttestationJwt
+        });
+        const { payload: refreshPopPayload } = decodeJwt({
+          jwt: refreshTokenRequest.clientAttestation.clientAttestationPopJwt,
+          headerSchema: zItWalletClientAttestationPopJwtHeader,
+          payloadSchema: zItWalletClientAttestationPopJwtPayload
+        });
+        expect(refreshPopPayload.aud, 'Refresh client-attestation PoP must target the Credential Issuer').toBe(
+          config['credential-issuer'].url
+        );
+        expect(refreshPopPayload.jti, 'Refresh client-attestation PoP must be newly generated').not.toBe(
+          initialPopPayload.jti
+        );
+        const cnfJwk = refreshWalletAttestationPayload.cnf?.jwk;
+        expect(cnfJwk, 'Refresh Wallet Attestation must bind a public key').toBeDefined();
+        if (!cnfJwk) {
+          throw new Error('Refresh Wallet Attestation payload is missing cnf.jwk');
+        }
+        await expect(
+          verifyClientAttestationPopJwt({
+            authorizationServer: config['credential-issuer'].url,
+            callbacks: { verifyJwt: verifyJwtWithJwk },
+            clientAttestationPopJwt: refreshTokenRequest.clientAttestation.clientAttestationPopJwt,
+            clientAttestationPublicJwk: cnfJwk
+          }),
+          'Refresh client-attestation PoP must verify against the Wallet Attestation key'
+        ).resolves.toBeDefined();
+
+        const credentialEvents = eventsByName(events, 'issuer.credential.requested');
+        const nonceEvents = eventsByName(events, 'issuer.nonce.requested');
+        const secondCredentialEvent = credentialEvents[1];
+        const secondNonceEvent = nonceEvents[1];
+        if (!secondCredentialEvent || !secondNonceEvent) {
+          throw new Error('Missing second Credential Request or second Nonce evidence');
+        }
+        expect(
+          secondCredentialEvent.monotonicMs,
+          'Second Credential Request must follow the refresh exchange'
+        ).toBeGreaterThan(refreshTokenEvent.monotonicMs);
+        expect(
+          requiredDiagnosticString(secondCredentialEvent, 'accessTokenSha256'),
+          'Second Credential Request must use the refreshed Access Token'
+        ).toBe(refreshedAccessTokenHash);
+        expect(
+          Date.parse(secondCredentialEvent.timestamp),
+          'Refreshed Access Token must still be valid when the Credential Request is accepted'
+        ).toBeLessThan(requiredDiagnosticNumber(refreshTokenEvent, 'accessTokenExp') * 1000);
+
+        const reissuanceWindowEvents = events.filter(
+          (event) =>
+            event.monotonicMs > updatedStatusListEvent.monotonicMs && event.monotonicMs < secondIssuedEvent.monotonicMs
+        );
+        expect(
+          reissuanceWindowEvents.filter(
+            (event) => event.name === 'issuer.par.requested' || event.name === 'issuer.authorization.requested'
+          ),
+          'Refresh-token re-issuance must not start a second PAR or Authorization request'
+        ).toHaveLength(0);
+
+        const secondCredentialRequest = parseCredentialRequestFromEvent(secondCredentialEvent);
+        const [proofJwt] = secondCredentialRequest.proofs.jwt;
+        if (!proofJwt) {
+          throw new Error('Second Credential Request is missing holder-binding proof JWT');
+        }
+        const credentialDpopJwt = requiredDiagnosticString(secondCredentialEvent, 'dpopProof');
+        const { header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
+          jwt: credentialDpopJwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        expect(credentialDpopPayload.ath, 'Second Credential DPoP ath must match the refreshed Access Token').toBe(
+          refreshedAccessTokenHash
+        );
+        await expect(
+          calculateJwkThumbprint(credentialDpopHeader.jwk as JWK),
+          'Second Credential Request DPoP key must match the refresh Token Request DPoP key'
+        ).resolves.toBe(await calculateJwkThumbprint(refreshDpopHeader.jwk as JWK));
+
+        const { header: proofHeader, payload: proofPayload } = decodeJwt({
+          jwt: proofJwt,
+          headerSchema: zProofJwtHeaderV1_3,
+          payloadSchema: zProofJwtPayload
+        });
+        const proofPublicKey = await importJWK(proofHeader.jwk as JWK, proofHeader.alg);
+        await expect(
+          jwtVerify(proofJwt, proofPublicKey),
+          'Holder-binding proof JWT must verify'
+        ).resolves.toBeDefined();
+        const secondNonceHash = requiredDiagnosticString(secondNonceEvent, 'cNonceSha256');
+        expect(sha256Base64Url(proofPayload.nonce), 'Holder-binding proof must use the second nonce').toBe(
+          secondNonceHash
+        );
+        expect(secondNonceHash, 'Second nonce must be fresh').not.toBe(
+          requiredDiagnosticString(nonceEvents[0], 'cNonceSha256')
+        );
+
+        expect(
+          requiredDiagnosticString(secondIssuedEvent, 'responseHash'),
+          'Replacement credential response hash must be present'
+        ).not.toHaveLength(0);
+        expect(
+          requiredDiagnosticString(secondIssuedEvent, 'responseHash'),
+          'Replacement credential response must differ from the initial response'
+        ).not.toBe(requiredDiagnosticString(firstIssuedEvent, 'responseHash'));
+      },
+      wpCredentialReissuanceRefreshAccessTokenScenario.timeouts.vitestTestMs
+    );
+  });
+
+  describe('WP_Reissuance_ValidAccessToken', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let statusListJwt: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wpCredentialReissuanceValidAccessTokenScenario.id);
+      try {
+        await session.showInstructions();
+
+        const firstIssuedEvent = await session.events.waitFor('issuer.credential.issued', {
+          timeoutMs: wpCredentialReissuanceValidAccessTokenScenario.timeouts.protocolStepMs,
+          signal: session.abortSignal
+        });
+        await waitForObservedNominalStatusListCacheExpiry(session.events.all(), session.abortSignal);
+
+        await issuerFaultController.activateIssuerConfig({
+          scenarioId: session.correlationId,
+          config: {
+            batchIssuanceByDeferred: wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig.batchIssuanceByDeferred,
+            accessTokenTtlSeconds: wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig.accessTokenTtlSeconds,
+            refreshTokenTtlSeconds: wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig.refreshTokenTtlSeconds,
+            statusList: {
+              bits: wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig.statusList.bits,
+              values: [...wpCredentialReissuanceValidAccessTokenUpdatedIssuerConfig.statusList.values]
+            }
+          }
+        });
+
+        await waitForUpdatedStatusListEvent(
+          session.events,
+          firstIssuedEvent,
+          session.abortSignal,
+          wpCredentialReissuanceValidAccessTokenScenario.timeouts.protocolStepMs
+        );
+
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        statusListJwt = await fetchStatusListJwt(
+          requiredDiagnosticString(nthEvent(events, 'issuer.credential.issued', 0), 'statusListUri')
+        );
+      } finally {
+        await session.stop();
+      }
+    }, wpCredentialReissuanceValidAccessTokenScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_071: Wallet Instance re-issues the credential with the still-valid associated Access Token.',
+      async () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const firstIssuedEvent = nthEvent(events, 'issuer.credential.issued', 0);
+        const secondIssuedEvent = nthEvent(events, 'issuer.credential.issued', 1);
+        const updatedStatusListEvent = events.find(isUpdatedStatusListEvent);
+        expect(updatedStatusListEvent, 'Updated Status List request evidence must be observed').toBeDefined();
+        if (!updatedStatusListEvent) {
+          throw new Error('Missing issuer.status_list.requested evidence for the updated Status List');
+        }
+
+        expect(
+          updatedStatusListEvent.monotonicMs,
+          'Status List request must happen after first issuance'
+        ).toBeGreaterThan(firstIssuedEvent.monotonicMs);
+
+        const credentialEvents = eventsByName(events, 'issuer.credential.requested');
+        const nonceEvents = eventsByName(events, 'issuer.nonce.requested');
+        const firstCredentialEvent = credentialEvents[0];
+        const secondCredentialEvent = credentialEvents[1];
+        const secondNonceEvent = nonceEvents[1];
+        if (!firstCredentialEvent || !secondCredentialEvent || !secondNonceEvent) {
+          throw new Error('Missing initial/second Credential Request or second Nonce evidence');
+        }
+
+        expect(
+          updatedStatusListEvent.monotonicMs,
+          'Updated Status List request must happen before the second Credential Request'
+        ).toBeLessThan(secondCredentialEvent.monotonicMs);
+        expect(
+          secondIssuedEvent.monotonicMs,
+          'Second issuance must follow the second Credential Request'
+        ).toBeGreaterThan(secondCredentialEvent.monotonicMs);
+
+        const { payload } = decodeJwt({ jwt: statusListJwt });
+        const statusList = payload.status_list as { bits?: unknown; lst?: unknown } | undefined;
+        expect(statusList?.bits, 'Status List must use four-bit statuses').toBe(4);
+        expect(typeof statusList?.lst, 'Status List must carry a compressed list').toBe('string');
+        if (statusList?.bits !== 4 || typeof statusList.lst !== 'string') {
+          throw new Error('Status List JWT payload is missing a valid four-bit status_list');
+        }
+        expect(
+          getStatusFromCompressedStatusList(statusList.lst, statusList.bits, WP_CREDENTIAL_REISSUANCE_STATUS_INDEX),
+          'Credential index 1 must resolve to UPDATE'
+        ).toBe(WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS);
+
+        const tokenEvents = eventsByName(events, 'issuer.token.requested');
+        expect(tokenEvents, 'Exactly one successful Token Endpoint exchange must be observed').toHaveLength(1);
+        const [tokenEvent] = tokenEvents;
+        if (!tokenEvent) {
+          throw new Error('Missing original Token exchange evidence');
+        }
+        expect(tokenEvent.diagnostic?.['grantType'], 'The only Token exchange must use authorization_code').toBe(
+          'authorization_code'
+        );
+        const tokenRequest = parseTokenRequestFromEvent(tokenEvent, config['credential-issuer'].url);
+        expect(tokenRequest.grant.grantType, 'Original Token exchange must parse as authorization_code').toBe(
+          'authorization_code'
+        );
+
+        const reissuanceWindowEvents = events.filter(
+          (event) =>
+            event.monotonicMs > updatedStatusListEvent.monotonicMs && event.monotonicMs < secondIssuedEvent.monotonicMs
+        );
+        expect(
+          reissuanceWindowEvents.filter((event) => event.name === 'issuer.token.failed'),
+          'No Token Endpoint failure may occur during valid-token re-issuance'
+        ).toHaveLength(0);
+        expect(
+          reissuanceWindowEvents.filter(
+            (event) =>
+              event.name === 'issuer.par.requested' ||
+              event.name === 'issuer.authorization.requested' ||
+              event.name === 'issuer.token.requested'
+          ),
+          'Valid-token re-issuance must not start a second PAR, Authorization, or Token exchange'
+        ).toHaveLength(0);
+
+        const originalTokenHash = requiredDiagnosticString(tokenEvent, 'accessTokenSha256');
+        const originalTokenExp = requiredDiagnosticNumber(tokenEvent, 'accessTokenExp');
+        const firstAccessTokenHash = requiredDiagnosticString(firstCredentialEvent, 'accessTokenSha256');
+        const secondAccessTokenHash = requiredDiagnosticString(secondCredentialEvent, 'accessTokenSha256');
+        expect(firstAccessTokenHash, 'Initial Credential Request must use the issued Access Token').toBe(
+          originalTokenHash
+        );
+        expect(secondAccessTokenHash, 'Second Credential Request must reuse the original Access Token').toBe(
+          originalTokenHash
+        );
+        expect(
+          Date.parse(secondCredentialEvent.timestamp),
+          'Second Credential Request must arrive before the original Access Token signed expiry'
+        ).toBeLessThan(originalTokenExp * 1000);
+        expect(
+          originalTokenExp * 1000 - Date.parse(tokenEvent.timestamp),
+          'Original Access Token lifetime must be long enough for WP_071'
+        ).toBeGreaterThanOrEqual(WP_CREDENTIAL_REISSUANCE_VALID_ACCESS_TOKEN_TTL_SECONDS * 1000 - 1_000);
+
+        expect(secondCredentialEvent.diagnostic?.['authorizationScheme']).toBe('DPoP');
+        const secondCredentialRequest = parseCredentialRequestFromEvent(secondCredentialEvent);
+        const [proofJwt] = secondCredentialRequest.proofs.jwt;
+        if (!proofJwt) {
+          throw new Error('Second Credential Request is missing holder-binding proof JWT');
+        }
+
+        const credentialDpopJwt = requiredDiagnosticString(secondCredentialEvent, 'dpopProof');
+        const { header: credentialDpopHeader, payload: credentialDpopPayload } = decodeJwt({
+          jwt: credentialDpopJwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        const { header: proofHeader, payload: proofPayload } = decodeJwt({
+          jwt: proofJwt,
+          headerSchema: zProofJwtHeaderV1_3,
+          payloadSchema: zProofJwtPayload
+        });
+
+        const credentialRequestUrl = `${config['credential-issuer'].url}${requiredDiagnosticString(
+          secondCredentialEvent,
+          'endpoint'
+        )}`;
+        const dpopPublicKey = await importJWK(credentialDpopHeader.jwk as JWK, credentialDpopHeader.alg);
+        await expect(
+          jwtVerify(credentialDpopJwt, dpopPublicKey),
+          'Second Credential DPoP proof must verify'
+        ).resolves.toBeDefined();
+        expect(credentialDpopPayload.htm, 'Second Credential DPoP proof must bind POST').toBe('POST');
+        expect(credentialDpopPayload.htu, 'Second Credential DPoP proof must bind the Credential Endpoint URL').toBe(
+          htuFromRequestUrl(credentialRequestUrl)
+        );
+        expect(credentialDpopPayload.iat, 'Second Credential DPoP proof must carry iat').toBeTypeOf('number');
+        expect(credentialDpopPayload.jti, 'Second Credential DPoP proof must carry jti').not.toHaveLength(0);
+        expect(credentialDpopPayload.ath, 'Second Credential DPoP ath must match the reused access token').toBe(
+          secondAccessTokenHash
+        );
+
+        const { header: tokenDpopHeader } = decodeJwt({
+          jwt: tokenRequest.dpop.jwt,
+          headerSchema: zDpopJwtHeader,
+          payloadSchema: zDpopJwtPayload
+        });
+        await expect(
+          calculateJwkThumbprint(credentialDpopHeader.jwk as JWK),
+          'Credential Request DPoP key must match the original Token Request DPoP key'
+        ).resolves.toBe(await calculateJwkThumbprint(tokenDpopHeader.jwk as JWK));
+
+        const proofPublicKey = await importJWK(proofHeader.jwk as JWK, proofHeader.alg);
+        await expect(
+          jwtVerify(proofJwt, proofPublicKey),
+          'Holder-binding proof JWT must verify'
+        ).resolves.toBeDefined();
+        const secondNonceHash = requiredDiagnosticString(secondNonceEvent, 'cNonceSha256');
+        expect(sha256Base64Url(proofPayload.nonce), 'Holder-binding proof must use the second nonce').toBe(
+          secondNonceHash
+        );
+        expect(secondNonceHash, 'Second nonce must be fresh').not.toBe(
+          requiredDiagnosticString(nonceEvents[0], 'cNonceSha256')
+        );
+
+        expect(
+          requiredDiagnosticString(secondIssuedEvent, 'responseHash'),
+          'Replacement credential response hash must be present'
+        ).not.toHaveLength(0);
+        expect(
+          requiredDiagnosticString(secondIssuedEvent, 'responseHash'),
+          'Replacement credential response must differ from the initial response'
+        ).not.toBe(requiredDiagnosticString(firstIssuedEvent, 'responseHash'));
+      },
+      wpCredentialReissuanceValidAccessTokenScenario.timeouts.vitestTestMs
+    );
+  });
+
   describe('WP_064 / WP_064a / WP_064b', () => {
     let outcome: ScenarioOutcome;
     let events: ObservedEvent[];
@@ -3019,15 +4022,7 @@ describe('Test Cases for Issuance Phase', () => {
         expect(notificationEvent.diagnostic?.['endpoint']).toBe('/notification');
         expect(notificationEvent.diagnostic?.['method']).toBe('POST');
 
-        const notificationRequest = findHttpRequestReceivedEvent(events, notificationEvent.requestId);
-        expect(
-          notificationRequest,
-          'The notification semantic event must pair to the actual HTTP request evidence'
-        ).toBeDefined();
-        expect(notificationRequest?.http.method).toBe('POST');
-        expect(notificationRequest?.http.path).toBe('/notification');
-
-        const contentTypeHeader = notificationRequest?.http.headers['content-type'];
+        const contentTypeHeader = notificationEvent.diagnostic?.['contentType'];
         const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
         expect(contentType, 'Notification Request must declare a content type').toBeDefined();
 

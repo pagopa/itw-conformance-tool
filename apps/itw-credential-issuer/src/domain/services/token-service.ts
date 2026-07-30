@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   createAccessTokenResponse,
@@ -9,6 +9,8 @@ import {
   verifyTokenDPoP,
   Oauth2Error,
   PkceCodeChallengeMethod,
+  zAccessTokenProfileJwtHeader,
+  zAccessTokenProfileJwtPayload,
   zRefreshTokenProfileJwtHeader,
   zRefreshTokenProfileJwtPayload
 } from '@pagopa/io-wallet-oauth2';
@@ -100,25 +102,44 @@ export interface CreateAccessTokenResult {
    * `null` for the refresh_token grant, which has no associated PAR request.
    */
   readonly issuerState: string | null;
+  readonly issuedAccessToken: {
+    readonly exp: number;
+    readonly expiresIn?: number;
+    readonly sha256: string;
+  };
+  readonly issuedRefreshToken?: {
+    readonly exp: number;
+    readonly sha256: string;
+  };
   readonly response: Record<string, unknown>;
 }
 
 type FederationMetadata = ReturnType<typeof getEntityConfigurationClaimsMetadata>;
 type AuthorizationServerMetadata = NonNullable<NonNullable<FederationMetadata>['oauth_authorization_server']>;
 
+export interface TokenServiceOptions {
+  accessTokenTtlSeconds?: number;
+  refreshTokenTtlSeconds?: number;
+}
+
 export class TokenService {
   readonly #parLookup: ITokenParRepository;
   readonly #jwksRepository: JwksRepository;
   readonly #refreshTokenRepository: IRefreshTokenRepository;
+  readonly #accessTokenTtlSeconds: number;
+  readonly #refreshTokenTtlSeconds: number;
 
   constructor(
     parLookup: ITokenParRepository,
     jwksRepository: JwksRepository,
-    refreshTokenRepository: IRefreshTokenRepository
+    refreshTokenRepository: IRefreshTokenRepository,
+    options: TokenServiceOptions = {}
   ) {
     this.#parLookup = parLookup;
     this.#jwksRepository = jwksRepository;
     this.#refreshTokenRepository = refreshTokenRepository;
+    this.#accessTokenTtlSeconds = options.accessTokenTtlSeconds ?? ACCESS_TOKEN_TTL_SECONDS;
+    this.#refreshTokenTtlSeconds = options.refreshTokenTtlSeconds ?? REFRESH_TOKEN_TTL_SECONDS;
   }
 
   async createAccessToken(options: CreateAccessTokenOptions): Promise<CreateAccessTokenResult> {
@@ -278,8 +299,8 @@ export class TokenService {
       callbacks: options.callbacks,
       clientId: parRequest.client_id,
       dpop: verifyAccessToken.dpop,
-      expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
-      refreshTokenExpiresInSeconds: REFRESH_TOKEN_TTL_SECONDS,
+      expiresInSeconds: this.#accessTokenTtlSeconds,
+      refreshTokenExpiresInSeconds: this.#refreshTokenTtlSeconds,
       scope: parRequest.scope,
       signer,
       subject: parRequest.client_id,
@@ -298,7 +319,14 @@ export class TokenService {
       });
     }
 
-    return { issuerState: parRequest.issuer_state ?? null, response: accessTokenResponse };
+    return {
+      issuerState: parRequest.issuer_state ?? null,
+      issuedAccessToken: describeIssuedAccessToken(accessTokenResponse.access_token, accessTokenResponse.expires_in),
+      issuedRefreshToken: accessTokenResponse.refresh_token
+        ? describeIssuedRefreshToken(accessTokenResponse.refresh_token)
+        : undefined,
+      response: accessTokenResponse
+    };
   }
 
   async #exchangeRefreshToken(input: {
@@ -440,8 +468,8 @@ export class TokenService {
       callbacks: options.callbacks,
       clientId: payload.client_id,
       dpop: { jwk: dpopVerification.header.jwk },
-      expiresInSeconds: ACCESS_TOKEN_TTL_SECONDS,
-      refreshTokenExpiresInSeconds: REFRESH_TOKEN_TTL_SECONDS,
+      expiresInSeconds: this.#accessTokenTtlSeconds,
+      refreshTokenExpiresInSeconds: this.#refreshTokenTtlSeconds,
       scope,
       signer,
       subject: payload.sub,
@@ -452,7 +480,7 @@ export class TokenService {
       throw new CreateAccessTokenError('Refresh token issuance failed');
     }
 
-    const newRefreshToken = decodeIssuedRefreshToken(accessTokenResponse.refresh_token);
+    const newRefreshToken = describeIssuedRefreshToken(accessTokenResponse.refresh_token);
 
     // Finalize the rotation: swap the throwaway placeholder for the real new
     // entry now that its jti/expiry are known. This always succeeds because
@@ -469,7 +497,12 @@ export class TokenService {
       subject: payload.sub
     });
 
-    return { issuerState: null, response: accessTokenResponse };
+    return {
+      issuerState: null,
+      issuedAccessToken: describeIssuedAccessToken(accessTokenResponse.access_token, accessTokenResponse.expires_in),
+      issuedRefreshToken: describeIssuedRefreshToken(accessTokenResponse.refresh_token),
+      response: accessTokenResponse
+    };
   }
 
   async #persistIssuedRefreshToken(input: {
@@ -481,7 +514,7 @@ export class TokenService {
     scope?: string;
     subject: string;
   }): Promise<void> {
-    const { jti, exp } = decodeIssuedRefreshToken(input.refreshTokenJwt);
+    const { jti, exp } = describeIssuedRefreshToken(input.refreshTokenJwt);
 
     const entry: RefreshTokenEntry = {
       authFlow: input.authFlow,
@@ -513,19 +546,39 @@ function buildAdditionalPayload(authorizationDetails: unknown, authFlow?: string
   };
 }
 
+function sha256Base64Url(value: string): string {
+  return createHash('sha256').update(value, 'ascii').digest('base64url');
+}
+
+function describeIssuedAccessToken(
+  accessTokenJwt: string,
+  expiresIn: number | undefined
+): CreateAccessTokenResult['issuedAccessToken'] {
+  try {
+    const { payload } = decodeJwt({
+      headerSchema: zAccessTokenProfileJwtHeader,
+      jwt: accessTokenJwt,
+      payloadSchema: zAccessTokenProfileJwtPayload
+    });
+    return { exp: payload.exp, expiresIn, sha256: sha256Base64Url(accessTokenJwt) };
+  } catch {
+    throw new CreateAccessTokenError('Issued access token failed profile validation');
+  }
+}
+
 /**
  * Decodes and structurally validates a refresh token JWT that this issuer just
  * minted via `createAccessTokenResponse`. Failures here indicate a bug in the
  * SDK/issuer rather than an untrusted client input.
  */
-function decodeIssuedRefreshToken(refreshTokenJwt: string): { exp: number; jti: string } {
+function describeIssuedRefreshToken(refreshTokenJwt: string): { exp: number; jti: string; sha256: string } {
   try {
     const { payload } = decodeJwt({
       headerSchema: zRefreshTokenProfileJwtHeader,
       jwt: refreshTokenJwt,
       payloadSchema: zRefreshTokenProfileJwtPayload
     });
-    return { exp: payload.exp, jti: payload.jti };
+    return { exp: payload.exp, jti: payload.jti, sha256: sha256Base64Url(refreshTokenJwt) };
   } catch {
     throw new CreateAccessTokenError('Issued refresh token failed profile validation');
   }

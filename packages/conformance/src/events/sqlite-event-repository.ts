@@ -101,6 +101,7 @@ function matchValueMatches(
   expected: RequiredEventMatchValue,
   endpoints: LocalServiceEndpoints
 ): boolean {
+  if (typeof expected === 'number' || typeof expected === 'boolean') return actual === expected;
   if (typeof expected === 'string') return actual === expected;
   if (expected.match !== 'normalized-url') return false;
   if (typeof actual !== 'string') return false;
