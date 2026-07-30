@@ -8,7 +8,8 @@ import type { JwkKey } from '../plugins/keys.js';
 import type {
   ItWalletEntityConfigurationClaimsOptions,
   ItWalletMetadataV1_3,
-  JsonWebKey
+  JsonWebKey,
+  MetadataPolicyOperator
 } from '@pagopa/io-wallet-oid-federation';
 
 const ENTITY_STATEMENT_TTL_SECONDS = 3600;
@@ -143,8 +144,10 @@ export async function createSubordinate(options: {
   subjectKind: SubordinateEntityKind;
   subjectPrivateJwk: JwkKey;
   trustAnchorBaseUrl: string;
+  metadataPolicy?: Record<string, Record<string, MetadataPolicyOperator>> | undefined;
 }): Promise<string> {
-  const { federationPrivateJwk, subjectEntityId, subjectKind, subjectPrivateJwk, trustAnchorBaseUrl } = options;
+  const { federationPrivateJwk, subjectEntityId, subjectKind, subjectPrivateJwk, trustAnchorBaseUrl, metadataPolicy } =
+    options;
 
   const trustAnchorPublicJwk = stripPrivateParams(federationPrivateJwk);
   const subjectPublicJwk =
@@ -170,7 +173,8 @@ export async function createSubordinate(options: {
       iat: issuedAt,
       iss: trustAnchorBaseUrl,
       jwks: { keys },
-      sub: subjectEntityId
+      sub: subjectEntityId,
+      metadata_policy: metadataPolicy
     },
     header: {
       alg: ENTITY_STATEMENT_SIGNING_ALG,

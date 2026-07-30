@@ -34,6 +34,8 @@ import {
   createSqliteScenarioEventBridge,
   issuanceScenarioRegistry,
   wp017Scenario,
+  WP_050A_METADATA_POLICY_CREDENTIAL_CONFIGURATION_ID,
+  wp050aMetadataPolicyScenario,
   wp046aScenario,
   WP_UNSUPPORTED_CREDENTIAL_CONFIGURATION_ID,
   wpUnsupportedCredentialOfferScenario,
@@ -1726,6 +1728,67 @@ describe('Test Cases for Issuance Phase', () => {
         'The Credential Issuer must serve the configured Trust Anchor again once the fault is deactivated'
       ).toEqual([trimTrailingSlash(config['trust-anchor'].url)]);
     }, 10_000);
+  });
+
+  describe('WP_050a', () => {
+    let outcome: ScenarioOutcome;
+    let events: ObservedEvent[];
+    let credentialOfferUri: string;
+
+    beforeAll(async () => {
+      const session = await runner.start(wp050aMetadataPolicyScenario.id);
+
+      try {
+        await session.showInstructions();
+        outcome = await session.awaitVerdict();
+        events = session.events.all();
+        credentialOfferUri = session.stimulus.type === 'credential-offer' ? session.stimulus.uri : '';
+      } finally {
+        await session.stop();
+      }
+    }, wp050aMetadataPolicyScenario.timeouts.vitestTestMs);
+
+    test(
+      'WP_050a: Wallet Instance rejects a Credential Issuer not authorized to issue the requested Digital Credential by metadata policy.',
+      () => {
+        assertConformanceOutcome(outcome, { expected: 'PASS' });
+
+        const offerPayload = decodeCredentialOfferUri(credentialOfferUri);
+        expect(offerPayload.credential_configuration_ids).toEqual([
+          WP_050A_METADATA_POLICY_CREDENTIAL_CONFIGURATION_ID
+        ]);
+
+        const entityConfigurationEvent = events.find((event) => event.name === 'issuer.entity_configuration.requested');
+        const trustAnchorFetchEvent = events.find((event) => event.name === 'federation.fetch.requested');
+
+        expect(
+          entityConfigurationEvent,
+          'Wallet must request the Credential Issuer Entity Configuration before this scenario can pass'
+        ).toBeDefined();
+        expect(
+          trustAnchorFetchEvent,
+          'Wallet must fetch the Credential Issuer Subordinate Statement from the Trust Anchor before this scenario can pass'
+        ).toBeDefined();
+        if (!entityConfigurationEvent || !trustAnchorFetchEvent) {
+          throw new Error('Missing issuer.entity_configuration.requested or federation.fetch.requested evidence');
+        }
+
+        const fetchSub = trustAnchorFetchEvent.diagnostic?.['sub'];
+        expect(typeof fetchSub, 'Trust Anchor /fetch evidence should include the requested sub').toBe('string');
+        if (typeof fetchSub !== 'string') {
+          throw new Error('federation.fetch.requested evidence is missing the sub diagnostic');
+        }
+        expect(trimTrailingSlash(fetchSub), 'Trust Anchor /fetch sub should target the configured issuer').toBe(
+          trimTrailingSlash(config['credential-issuer'].url)
+        );
+
+        expect(
+          events.indexOf(trustAnchorFetchEvent),
+          'Trust Anchor fetch must occur after the issuer Entity Configuration request'
+        ).toBeGreaterThan(events.indexOf(entityConfigurationEvent));
+      },
+      wp050aMetadataPolicyScenario.timeouts.vitestTestMs
+    );
   });
 
   // Unlike WP_046a's stateless Entity Configuration endpoint, /code/jwt

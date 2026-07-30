@@ -13,6 +13,19 @@ const TRUST_ANCHOR_BASE_URL = 'https://ta.example.org';
 const ISSUER_ENTITY_ID = 'https://issuer.example.org';
 const RP_ENTITY_ID = 'https://rp.example.org';
 const WALLET_PROVIDER_ENTITY_ID = 'https://127.0.0.1:3003';
+const WP_050A_METADATA_POLICY_EXCLUDED_CREDENTIAL_CONFIGURATION_ID = 'mso_mdoc_PersonIdentificationData';
+const METADATA_POLICY_ALLOWED_CREDENTIAL_CONFIGURATION_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
+
+interface IssuerMetadataPolicyPayload {
+  metadata_policy?: {
+    openid_credential_issuer?: {
+      credential_configurations_supported?: {
+        essential?: unknown;
+        subset_of?: unknown;
+      };
+    };
+  };
+}
 
 function generateFederationJwk(kid: string): JwkKey {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -71,6 +84,31 @@ describe('GET /fetch', () => {
     await app.close();
   });
 
+  it('adds an issuer metadata policy that excludes the WP_050a credential configuration', async () => {
+    const app = await buildApp({
+      issuerFederationJwk: generateFederationJwk('issuer-signing-key'),
+      rpFederationJwk: generateFederationJwk('federation-key')
+    });
+
+    const response = await app.inject({ method: 'GET', url: `/fetch?sub=${encodeURIComponent(ISSUER_ENTITY_ID)}` });
+
+    expect(response.statusCode).toBe(200);
+    const payload = decodeJwt(response.body) as IssuerMetadataPolicyPayload;
+    const policy = payload.metadata_policy?.openid_credential_issuer?.credential_configurations_supported;
+    const subsetOf = policy?.subset_of;
+
+    expect(policy?.essential).toBe(true);
+    expect(Array.isArray(subsetOf), 'credential_configurations_supported policy must include subset_of').toBe(true);
+    if (!Array.isArray(subsetOf)) {
+      throw new Error('credential_configurations_supported policy subset_of is missing');
+    }
+
+    expect(subsetOf).toContain(METADATA_POLICY_ALLOWED_CREDENTIAL_CONFIGURATION_ID);
+    expect(subsetOf).not.toContain(WP_050A_METADATA_POLICY_EXCLUDED_CREDENTIAL_CONFIGURATION_ID);
+
+    await app.close();
+  });
+
   it('returns a subordinate statement for a known rp sub', async () => {
     const app = await buildApp({
       issuerFederationJwk: generateFederationJwk('issuer-signing-key'),
@@ -99,6 +137,26 @@ describe('GET /fetch', () => {
 
     expect(response.statusCode).toBe(200);
     expect(decodeJwt(response.body).sub).toBe(WALLET_PROVIDER_ENTITY_ID);
+
+    await app.close();
+  });
+
+  it('does not add the issuer metadata policy to rp or wallet provider subordinate statements', async () => {
+    const app = await buildApp({
+      issuerFederationJwk: generateFederationJwk('issuer-signing-key'),
+      rpFederationJwk: generateFederationJwk('federation-key')
+    });
+
+    const rpResponse = await app.inject({ method: 'GET', url: `/fetch?sub=${encodeURIComponent(RP_ENTITY_ID)}` });
+    const walletProviderResponse = await app.inject({
+      method: 'GET',
+      url: `/fetch?sub=${encodeURIComponent(WALLET_PROVIDER_ENTITY_ID)}`
+    });
+
+    expect(rpResponse.statusCode).toBe(200);
+    expect(walletProviderResponse.statusCode).toBe(200);
+    expect((decodeJwt(rpResponse.body) as IssuerMetadataPolicyPayload).metadata_policy).toBeUndefined();
+    expect((decodeJwt(walletProviderResponse.body) as IssuerMetadataPolicyPayload).metadata_policy).toBeUndefined();
 
     await app.close();
   });

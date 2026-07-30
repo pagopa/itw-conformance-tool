@@ -86,6 +86,10 @@ export {
 export { wp017Scenario } from './scenarios/factories/wp-017.js';
 export { wpWalletProviderHappyScenario } from './scenarios/factories/wp-wallet-provider-happy.js';
 export { wp046aScenario } from './scenarios/factories/wp-046a.js';
+export {
+  WP_050A_METADATA_POLICY_CREDENTIAL_CONFIGURATION_ID,
+  wp050aMetadataPolicyScenario
+} from './scenarios/factories/wp-050a.js';
 export { wp054MissingCodeScenario, wp054Scenarios, type Wp054MissingClaim } from './scenarios/factories/wp-054.js';
 export { wp054aInvalidStateScenario } from './scenarios/factories/wp-054a.js';
 export { wp054bInvalidIssuerScenario } from './scenarios/factories/wp-054b.js';
