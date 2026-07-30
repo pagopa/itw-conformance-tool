@@ -62,11 +62,18 @@ function rowToObservedEvent(row: EventRow): ObservedEvent {
 }
 
 /**
- * Lists the event names that are allowed to satisfy a scenario's declared entry
- * and required evidence.
+ * Lists the event names a scenario declares: its entry event, its required
+ * evidence, and the continuations it forbids. Forbidden names are included
+ * because a negative scenario's verdict depends on observing them — an event
+ * this bridge does not adopt never reaches the scenario's event store, so it
+ * could neither trip `expectNone` nor be reported by the verdict engine.
  */
 function scenarioDeclaredEventNames(definition: ProtocolObservedScenarioDefinition): ObservedEventName[] {
-  return [definition.entryEvent, ...(definition.requiredEvents ?? []).map(getRequiredEventName)];
+  return [
+    definition.entryEvent,
+    ...(definition.requiredEvents ?? []).map(getRequiredEventName),
+    ...(definition.forbiddenEvents ?? []).map(getRequiredEventName)
+  ];
 }
 
 /**
@@ -130,9 +137,14 @@ function canAdoptUncorrelatedPostStartEvent(
 
 /**
  * Allows a scenario to opt in to narrowly matched, post-start, uncorrelated
- * evidence from the same required events used for verdict/order checks.
+ * evidence from the same expectations used for verdict/order checks: its
+ * required events, and the continuations it forbids.
+ *
+ * A forbidden expectation declared as a bare event name carries no service or
+ * diagnostics to narrow by, so any post-start, uncorrelated occurrence of that
+ * name is adopted — the scenario asked for every occurrence to count.
  */
-function matchesRequiredEventEvidence(
+function matchesScenarioEventEvidence(
   event: ObservedEvent,
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
@@ -142,14 +154,17 @@ function matchesRequiredEventEvidence(
   if (!isPostStartEvent(event, startedAt)) return false;
   if (!scenarioDeclaredEventNames(definition).includes(event.name)) return false;
 
-  return (definition.requiredEvents ?? [])
-    .filter(canAdoptUncorrelatedPostStartEvent)
-    .some(
-      (expectation) =>
-        expectation.event === event.name &&
+  const matchesExpectation = (expectation: RequiredEventExpectation): boolean =>
+    canAdoptUncorrelatedPostStartEvent(expectation)
+      ? expectation.event === event.name &&
         expectation.service === event.service &&
         requiredEventMatch(event, expectation, endpoints)
-    );
+      : expectation === event.name;
+
+  return (
+    (definition.requiredEvents ?? []).filter(canAdoptUncorrelatedPostStartEvent).some(matchesExpectation) ||
+    (definition.forbiddenEvents ?? []).some(matchesExpectation)
+  );
 }
 
 export class SqliteScenarioEventRepository implements ScenarioEventSink {
@@ -225,7 +240,7 @@ export function createSqliteScenarioEventBridge(
     const seenEventIds = new Set(eventStore.all().map((event) => event.id));
 
     function belongsToScenario(event: ObservedEvent): boolean {
-      return matchesRequiredEventEvidence(event, definition, endpoints, startedAt);
+      return matchesScenarioEventEvidence(event, definition, endpoints, startedAt);
     }
 
     function poll(): void {

@@ -8,15 +8,67 @@ import {
   type SignCallback
 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
-import { importJWK, SignJWT, type JWK } from 'jose';
+import { generateKeyPair, importJWK, SignJWT, type JWK } from 'jose';
 import z from 'zod';
 
+import { emitRpFaultApplied } from '../faults/rp-fault-evidence.js';
+
+import type { ActiveRpFault } from '../faults/rp-fault-store.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const ENTITY_STATEMENT_TTL_SECONDS = 3600;
 const ENTITY_STATEMENT_SIGNING_ALG = 'ES256';
 const RELYING_PARTY_TRUST_MARK_PURPOSE = 'presentation';
 const RELYING_PARTY_TRUST_MARK_ENTITY_TYPE = 'relying_party';
+
+/**
+ * Relying Party fault profiles applied while building the Entity Configuration.
+ * The remaining profiles are applied further down the flow, when the Request
+ * Object is served, and must leave this handler's output nominal.
+ */
+const ENTITY_CONFIGURATION_FAULT_TYPES = [
+  'invalid-trust-anchor',
+  'invalid-trust-mark',
+  'missing-presentation-trust-mark',
+  'unattested-redirect-uri',
+  'unattested-request-uri',
+  'unattested-response-uri'
+] as const;
+
+type EntityConfigurationFaultType = (typeof ENTITY_CONFIGURATION_FAULT_TYPES)[number];
+
+function findEntityConfigurationFault(
+  fault: ActiveRpFault | undefined
+): { fault: ActiveRpFault; type: EntityConfigurationFaultType } | undefined {
+  if (!fault) return undefined;
+
+  const type = ENTITY_CONFIGURATION_FAULT_TYPES.find((candidate) => candidate === fault.profile.type);
+  return type ? { fault, type } : undefined;
+}
+
+/**
+ * A syntactically valid, deterministic Entity ID that is never a real
+ * federation participant: `.invalid` is reserved by RFC 2606 and guaranteed to
+ * never resolve, so it can never accidentally form part of the wallet's
+ * expected Trust Chain. Used only by the `invalid-trust-anchor` fault to
+ * replace `authority_hints`. Mirrors the Credential Issuer's WP_046a fault.
+ */
+const INVALID_TRUST_ANCHOR_ENTITY_ID = 'https://wp-079-invalid-trust-anchor.itw-conformance-tool.invalid';
+
+/**
+ * Endpoint paths the `unattested-request-uri` (WP_081),
+ * `unattested-response-uri` (WP_091a) and `unattested-redirect-uri` (WP_094a)
+ * faults publish instead of the live ones. They differ from the real endpoints
+ * by path, so neither exact nor prefix matching can accept the URI the wallet is
+ * actually handed, and no route serves them: nothing ever requests an attested
+ * URI, so these values only ever have to fail a comparison.
+ */
+const UNATTESTED_REQUEST_URI_PATH = '/auth/request-unattested';
+const UNATTESTED_RESPONSE_URI_PATH = '/auth/response-unattested';
+const UNATTESTED_REDIRECT_URI_PATH = '/callback-unattested';
+
+/** Private key produced by `generateKeyPair`, kept in memory and never exported. */
+type EphemeralSigningKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 
 function getTrustMarkType(entityId: string): string {
   return `${entityId}/trust_marks/${RELYING_PARTY_TRUST_MARK_PURPOSE}/${RELYING_PARTY_TRUST_MARK_ENTITY_TYPE}`;
@@ -26,11 +78,17 @@ async function createRelyingPartyTrustMark(options: {
   entityId: string;
   issuedAt: number;
   signingJwk: JWK;
+  /**
+   * Signs in place of `signingJwk`, whose `kid` and `alg` the Trust Mark still
+   * advertises. Used by the `invalid-trust-mark` fault (WP_080) to produce a
+   * Trust Mark no federation-published key can verify.
+   */
+  signingKeyOverride?: EphemeralSigningKey;
   trustMarkType: string;
 }): Promise<string> {
   const { entityId, issuedAt, signingJwk, trustMarkType } = options;
   const alg = signingJwk.alg ?? ENTITY_STATEMENT_SIGNING_ALG;
-  const key = await importJWK(signingJwk, alg);
+  const key = options.signingKeyOverride ?? (await importJWK(signingJwk, alg));
 
   return new SignJWT({
     ref: `${trustMarkType}/compliance`,
@@ -95,10 +153,21 @@ export const createEntityConfigurationHandler = async (
   const encryptionPublicKey = req.server.jwks.enc.public;
   const issuedAt = Math.floor(Date.now() / 1000);
 
+  const activeFault = findEntityConfigurationFault(req.server.rpFaultStore.getActive());
+
+  // WP_080: the Trust Mark keeps its nominal type, claims and `kid`, but is
+  // signed with an ephemeral key that is published nowhere in the federation,
+  // so a wallet that verifies Trust Marks cannot validate it.
+  const trustMarkSigningKeyOverride =
+    activeFault?.type === 'invalid-trust-mark'
+      ? (await generateKeyPair(ENTITY_STATEMENT_SIGNING_ALG)).privateKey
+      : undefined;
+
   const trustMark = await createRelyingPartyTrustMark({
     entityId: BASE_URL,
     issuedAt,
     signingJwk: federationPrivateJwk,
+    signingKeyOverride: trustMarkSigningKeyOverride,
     trustMarkType: getTrustMarkType(TRUST_ANCHOR_URL)
   });
 
@@ -119,8 +188,26 @@ export const createEntityConfigurationHandler = async (
         keys: [signingPublicKey, encryptionPublicKey]
       },
       logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
-      request_uris: [`${BASE_URL}/auth/request`],
-      response_uris: [`${BASE_URL}/auth/response`],
+      // The attested endpoint lists the wallet must check the engagement
+      // `request_uri`, the Request Object `response_uri` and the returned
+      // `redirect_uri` against (WP_081, WP_091a, WP_094a). Faults replace one
+      // list at a time with a different path, leaving the live endpoints
+      // reachable so a wallet that skips the check is observed doing so.
+      request_uris: [
+        activeFault?.type === 'unattested-request-uri'
+          ? `${BASE_URL}${UNATTESTED_REQUEST_URI_PATH}`
+          : `${BASE_URL}/auth/request`
+      ],
+      response_uris: [
+        activeFault?.type === 'unattested-response-uri'
+          ? `${BASE_URL}${UNATTESTED_RESPONSE_URI_PATH}`
+          : `${BASE_URL}/auth/response`
+      ],
+      redirect_uris: [
+        activeFault?.type === 'unattested-redirect-uri'
+          ? `${BASE_URL}${UNATTESTED_REDIRECT_URI_PATH}`
+          : `${BASE_URL}/callback`
+      ],
       vp_formats_supported: {
         'dc+sd-jwt': {
           'kb-jwt_alg_values': ['ES256'],
@@ -145,13 +232,22 @@ export const createEntityConfigurationHandler = async (
       },
       metadata,
       sub: BASE_URL,
-      trust_marks: [
-        {
-          trust_mark: trustMark,
-          trust_mark_type: getTrustMarkType(TRUST_ANCHOR_URL)
-        }
-      ],
-      authority_hints: [TRUST_ANCHOR_URL]
+      // WP_087: without a Trust Mark the federation does not attest that this
+      // Relying Party may request Digital Credential presentations at all.
+      trust_marks:
+        activeFault?.type === 'missing-presentation-trust-mark'
+          ? []
+          : [
+              {
+                trust_mark: trustMark,
+                trust_mark_type: getTrustMarkType(TRUST_ANCHOR_URL)
+              }
+            ],
+      // WP_079: an authority hint that can never resolve leaves the wallet
+      // unable to build a Trust Chain up to the configured Trust Anchor.
+      authority_hints: [
+        activeFault?.type === 'invalid-trust-anchor' ? INVALID_TRUST_ANCHOR_ENTITY_ID : TRUST_ANCHOR_URL
+      ]
     },
     header: {
       alg: ENTITY_STATEMENT_SIGNING_ALG,
@@ -160,6 +256,16 @@ export const createEntityConfigurationHandler = async (
     },
     signJwtCallback: async ({ toBeSigned }) => signJwtCallback({ jwk: federationPrivateJwk, toBeSigned })
   });
+
+  if (activeFault) {
+    // Emission failures must not be reported as a successfully applied fault:
+    // any error here propagates instead of emitting a false "applied" event.
+    await emitRpFaultApplied(req, {
+      artifact: jwt,
+      endpoint: '/.well-known/openid-federation',
+      fault: activeFault.fault
+    });
+  }
 
   return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(jwt);
 };

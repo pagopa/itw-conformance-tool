@@ -10,6 +10,8 @@ import type {
   IssuerConfigDeactivationRequest,
   IssuerFaultActivationRequest,
   IssuerFaultDeactivationRequest,
+  RpFaultActivationRequest,
+  RpFaultDeactivationRequest,
   TrustAnchorFaultActivationRequest,
   TrustAnchorFaultDeactivationRequest
 } from './service-adapter.js';
@@ -29,6 +31,8 @@ export interface ServiceControlClient {
   deactivateIssuerConfig(request: IssuerConfigDeactivationRequest): Promise<void>;
   activateIssuerFault(request: IssuerFaultActivationRequest): Promise<void>;
   deactivateIssuerFault(request: IssuerFaultDeactivationRequest): Promise<void>;
+  activateRpFault(request: RpFaultActivationRequest): Promise<void>;
+  deactivateRpFault(request: RpFaultDeactivationRequest): Promise<void>;
   activateTrustAnchorFault(request: TrustAnchorFaultActivationRequest): Promise<void>;
   deactivateTrustAnchorFault(request: TrustAnchorFaultDeactivationRequest): Promise<void>;
   close(): Promise<void>;
@@ -109,7 +113,9 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
       message.type === 'trust-anchor.fault.activated' ||
       message.type === 'trust-anchor.fault.deactivated' ||
       message.type === 'issuer.config.activated' ||
-      message.type === 'issuer.config.deactivated'
+      message.type === 'issuer.config.deactivated' ||
+      message.type === 'rp.fault.activated' ||
+      message.type === 'rp.fault.deactivated'
     ) {
       clearTimeout(request.timeout);
       pending.delete(message.requestId);
@@ -198,6 +204,21 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
       );
     },
 
+    async activateRpFault(request: RpFaultActivationRequest): Promise<void> {
+      const requestId = randomUUID();
+      await send(
+        {
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'rp.fault.activate',
+          requestId,
+          scenarioId: request.scenarioId,
+          specVersion: request.specVersion,
+          profile: request.profile
+        },
+        requestId
+      );
+    },
+
     async activateTrustAnchorFault(request: TrustAnchorFaultActivationRequest): Promise<void> {
       const requestId = randomUUID();
       await send(
@@ -208,6 +229,19 @@ export function createServiceControlClient(options: ServiceControlClientOptions)
           scenarioId: request.scenarioId,
           specVersion: request.specVersion,
           profile: request.profile
+        },
+        requestId
+      );
+    },
+
+    async deactivateRpFault(request: RpFaultDeactivationRequest): Promise<void> {
+      const requestId = randomUUID();
+      await send(
+        {
+          version: SERVICE_PROTOCOL_VERSION,
+          type: 'rp.fault.deactivate',
+          requestId,
+          scenarioId: request.scenarioId
         },
         requestId
       );

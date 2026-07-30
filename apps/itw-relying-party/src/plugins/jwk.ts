@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import fp from 'fastify-plugin';
-import { calculateJwkThumbprint, type JWK } from 'jose';
 
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { FastifyPluginAsync } from 'fastify';
@@ -62,8 +61,7 @@ const getKeyPair = async (jwk: Jwk | undefined, filePath: string, description: s
     throw new Error(`${filePath} must contain ${description}`);
   }
 
-  const kid = await calculateJwkThumbprint(jwk as JWK);
-  const privateJwk = { ...jwk, kid } as PrivateJwk;
+  const privateJwk = jwk as PrivateJwk;
   const { d, key_ops, ...publicKey } = privateJwk;
   void d;
   void key_ops;

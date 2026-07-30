@@ -66,10 +66,24 @@ interface PendingWaiter {
   cleanup(): void;
 }
 
-function isAfter(event: ObservedEvent, after: ObservedEvent | undefined): boolean {
-  if (!after) return true;
-  if (event.monotonicMs !== after.monotonicMs) return event.monotonicMs > after.monotonicMs;
-  return event.timestamp > after.timestamp;
+/**
+ * Whether `event` was observed after `reference`.
+ *
+ * The wall-clock timestamp is the primary key because it is the only ordering
+ * that is comparable across processes: `monotonicMs` is a per-process
+ * `performance.now()` reading for events emitted in this process, and a
+ * millisecond-truncated wall-clock reading for events replayed from SQLite (see
+ * `rowToObservedEvent`). Timestamps carry microsecond resolution and fixed
+ * width, so string comparison orders them; `monotonicMs` only breaks ties
+ * between events that share one.
+ */
+export function compareEventOrder(left: ObservedEvent, right: ObservedEvent): number {
+  if (left.timestamp !== right.timestamp) return left.timestamp < right.timestamp ? -1 : 1;
+  return left.monotonicMs - right.monotonicMs;
+}
+
+export function isEventAfter(event: ObservedEvent, reference: ObservedEvent | undefined): boolean {
+  return reference === undefined || compareEventOrder(event, reference) > 0;
 }
 
 function timeoutMessage(names: ObservedEventName[], options: WaitOptions): string {
@@ -87,7 +101,7 @@ export function createInMemoryScenarioEventStore(options: InMemoryScenarioEventS
   }
 
   function matchExisting(names: ObservedEventName[], options: WaitOptions): ObservedEvent | undefined {
-    return find((event) => names.includes(event.name) && isAfter(event, options.after));
+    return find((event) => names.includes(event.name) && isEventAfter(event, options.after));
   }
 
   function removeWaiter(waiter: PendingWaiter): void {
@@ -113,7 +127,7 @@ export function createInMemoryScenarioEventStore(options: InMemoryScenarioEventS
       };
 
       const waiter: PendingWaiter = {
-        predicate: (event) => names.includes(event.name) && isAfter(event, waitOptions.after),
+        predicate: (event) => names.includes(event.name) && isEventAfter(event, waitOptions.after),
         resolve,
         reject,
         cleanup: () => {
@@ -166,7 +180,7 @@ export function createInMemoryScenarioEventStore(options: InMemoryScenarioEventS
         };
 
         const waiter: PendingWaiter = {
-          predicate: (event) => names.includes(event.name) && isAfter(event, noEventOptions.after),
+          predicate: (event) => names.includes(event.name) && isEventAfter(event, noEventOptions.after),
           resolve: (event) => reject(new ForbiddenObservedEventError(event)),
           reject,
           cleanup: () => {

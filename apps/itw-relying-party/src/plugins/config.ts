@@ -21,6 +21,7 @@ declare module 'fastify' {
 const configPlugin: FastifyPluginAsync = async (app) => {
   const config = loadConfig();
   const relyingPartyConfig = config['relying-party'];
+  const trustAnchorConfig = config['trust-anchor'];
 
   const dataDir = config.global.data_dir;
   const certificatePem = await readFile(path.join(dataDir, 'rp', 'cert.pem'), 'utf8');
@@ -29,7 +30,7 @@ const configPlugin: FastifyPluginAsync = async (app) => {
     BASE_URL: relyingPartyConfig.url,
     DATA_DIR: dataDir,
     IACA_X509: convertPemToBase64Der(certificatePem),
-    TRUST_ANCHOR_URL: relyingPartyConfig.trust_anchor_url
+    TRUST_ANCHOR_URL: trustAnchorConfig.url
   });
 };
 

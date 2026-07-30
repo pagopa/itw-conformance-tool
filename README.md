@@ -205,6 +205,14 @@ pnpm nx run itw-conformance-cli:run --args="test wallet-provider"
 
 The test command owns its children: it starts the minimal service set, waits for service readiness, runs the selected sequential Vitest matrix, and stops services on success, failure, interruption, or timeout. Do **not** separately start the same local services for a CLI-managed test run.
 
+The presentation category runs one interactive flow per scenario: a happy path, a cross-device variant that retrieves the Request Object with a POST, and one negative flow per wallet-side validation (Trust Chain, Trust Marks, `request_uri`, Request Object signature and `client_id` consistency, malformed Request Object, `response_uri`, `redirect_uri`). To run a subset — for example a single scenario while iterating — set `ITWCT_PRESENTATION_SCENARIO_IDS` to a comma-separated list of scenario IDs:
+
+```sh
+ITWCT_PRESENTATION_SCENARIO_IDS=WP_RP_HAPPY,WP_085 pnpm test:presentation
+```
+
+Each negative flow serves one deliberately defective artifact from the local Relying Party and passes when the wallet stops instead of continuing; see [docs/rp-fault-profile-lifecycle.md](docs/rp-fault-profile-lifecycle.md).
+
 Test results are printed to the terminal and stored in `<data_dir>/itw.db`. A failed check is evidence for investigation, not a claim that a production implementation is certified or non-compliant in all circumstances; review the technical report and captured protocol evidence.
 
 ### 4. Inspect and export reports

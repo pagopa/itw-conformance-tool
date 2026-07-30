@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { parseIpcMessage, SERVICE_PROTOCOL_VERSION } from '@itw-conformance-tool/ipc';
 
-import type { ServiceSupervisor } from './supervisor.js';
+import type { ServiceSupervisor, SupervisedService } from './supervisor.js';
 import type { IpcMessage, LocalServiceName } from '@itw-conformance-tool/ipc';
 
 const FRAME_DELIMITER = '\n';
@@ -27,6 +27,41 @@ interface PendingChildResponse {
   expectedService: LocalServiceName;
   socket: net.Socket;
   timeout: NodeJS.Timeout;
+}
+
+/** Control requests the relay forwards, and the child that owns each of them. */
+const CONTROL_REQUEST_TARGETS = {
+  'issuer.config.activate': 'credential-issuer',
+  'issuer.config.deactivate': 'credential-issuer',
+  'issuer.fault.activate': 'credential-issuer',
+  'issuer.fault.deactivate': 'credential-issuer',
+  'rp.fault.activate': 'relying-party',
+  'rp.fault.deactivate': 'relying-party',
+  'trust-anchor.fault.activate': 'trust-anchor',
+  'trust-anchor.fault.deactivate': 'trust-anchor'
+} as const satisfies Partial<Record<IpcMessage['type'], SupervisedService>>;
+
+type ControlRequestType = keyof typeof CONTROL_REQUEST_TARGETS;
+
+/** Acknowledgements (plus errors) the relay correlates back to the caller. */
+const CONTROL_RESPONSE_TYPES = [
+  'issuer.config.activated',
+  'issuer.config.deactivated',
+  'issuer.fault.activated',
+  'issuer.fault.deactivated',
+  'rp.fault.activated',
+  'rp.fault.deactivated',
+  'trust-anchor.fault.activated',
+  'trust-anchor.fault.deactivated',
+  'service.error'
+] as const satisfies readonly IpcMessage['type'][];
+
+function isControlRequest(message: IpcMessage): message is IpcMessage & { type: ControlRequestType } {
+  return message.type in CONTROL_REQUEST_TARGETS;
+}
+
+function isControlResponse(message: IpcMessage): boolean {
+  return (CONTROL_RESPONSE_TYPES as readonly string[]).includes(message.type);
 }
 
 interface EndpointAllocation {
@@ -77,9 +112,9 @@ async function allocateEndpoint(): Promise<EndpointAllocation> {
 
 /**
  * Local-only control relay between the Vitest conformance runner process and
- * the CLI-owned service children. Only allow-listed local control messages
- * are relayed, and only to their owning managed child. This is
- * never exposed as an HTTP route, uses a
+ * the CLI-owned service children. Only fault/config control messages are
+ * relayed, and only to the managed child that owns each message type (see
+ * `CONTROL_REQUEST_TARGETS`). This is never exposed as an HTTP route, uses a
  * random endpoint in a private temporary directory, owner-only permissions
  * where supported, newline-delimited framing, bounded frame sizes, and
  * request-ID correlation.
@@ -88,55 +123,20 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
   const endpointAllocation = await allocateEndpoint();
   const pendingByRequestId = new Map<string, PendingChildResponse>();
 
-  const responseTypes = new Set<IpcMessage['type']>([
-    'issuer.fault.activated',
-    'issuer.fault.deactivated',
-    'issuer.config.activated',
-    'issuer.config.deactivated',
-    'trust-anchor.fault.activated',
-    'trust-anchor.fault.deactivated',
-    'service.error'
-  ]);
+  const relayedServices = [...new Set(Object.values(CONTROL_REQUEST_TARGETS))];
+  const unsubscribers = relayedServices.map((service) =>
+    options.supervisor.onChildMessage(service, (message) => {
+      if (!('requestId' in message) || !message.requestId) return;
+      if (!isControlResponse(message)) return;
 
-  const subscriptions: Array<() => void> = [];
+      const pending = pendingByRequestId.get(message.requestId);
+      if (!pending || pending.expectedService !== service) return;
 
-  function subscribeToChild(service: LocalServiceName): void {
-    subscriptions.push(
-      options.supervisor.onChildMessage(service, (message) => {
-        if (!('requestId' in message) || !message.requestId) return;
-        if (!responseTypes.has(message.type)) return;
-
-        const pending = pendingByRequestId.get(message.requestId);
-        if (!pending || pending.expectedService !== service) return;
-
-        clearTimeout(pending.timeout);
-        pendingByRequestId.delete(message.requestId);
-        writeFrame(pending.socket, message);
-      })
-    );
-  }
-
-  subscribeToChild('credential-issuer');
-  subscribeToChild('trust-anchor');
-
-  function routeServiceFor(message: IpcMessage): LocalServiceName | undefined {
-    if (!('requestId' in message) || !message.requestId) return;
-
-    if (
-      message.type === 'issuer.fault.activate' ||
-      message.type === 'issuer.fault.deactivate' ||
-      message.type === 'issuer.config.activate' ||
-      message.type === 'issuer.config.deactivate'
-    ) {
-      return 'credential-issuer';
-    }
-
-    if (message.type === 'trust-anchor.fault.activate' || message.type === 'trust-anchor.fault.deactivate') {
-      return 'trust-anchor';
-    }
-
-    return undefined;
-  }
+      clearTimeout(pending.timeout);
+      pendingByRequestId.delete(message.requestId);
+      writeFrame(pending.socket, message);
+    })
+  );
 
   function handleFrame(socket: net.Socket, frame: string): void {
     if (!frame) return;
@@ -165,31 +165,30 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
       return;
     }
 
-    const targetService = routeServiceFor(message);
-    if (!targetService) {
+    if (!isControlRequest(message)) {
       if ('requestId' in message) {
         writeFrame(socket, {
           version: SERVICE_PROTOCOL_VERSION,
           type: 'service.error',
           requestId: message.requestId,
           code: 'UNSUPPORTED_MESSAGE',
-          message: 'Only issuer, issuer config, and Trust Anchor fault controls are relayed'
+          message: 'Only issuer fault/config, relying party fault, and Trust Anchor fault controls are relayed'
         });
       }
       return;
     }
-    if (!('requestId' in message)) return;
-    const requestId = message.requestId;
-    if (typeof requestId !== 'string') return;
 
-    const forwarded = options.supervisor.sendToChild(targetService, message);
+    const requestId = message.requestId;
+    const target = CONTROL_REQUEST_TARGETS[message.type];
+    const forwarded = options.supervisor.sendToChild(target, message);
     if (!forwarded) {
       writeFrame(socket, {
         version: SERVICE_PROTOCOL_VERSION,
         type: 'service.error',
         requestId,
+        service: target,
         code: 'SERVICE_UNAVAILABLE',
-        message: `${targetService} is not managed by this supervisor`
+        message: `${target} is not managed by this supervisor`
       });
       return;
     }
@@ -200,12 +199,13 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
         version: SERVICE_PROTOCOL_VERSION,
         type: 'service.error',
         requestId,
+        service: target,
         code: 'FAULT_CONTROL_TIMEOUT',
-        message: `Timed out waiting for ${targetService} response`
+        message: `Timed out waiting for ${target} response`
       });
     }, CHILD_RESPONSE_TIMEOUT_MS);
 
-    pendingByRequestId.set(requestId, { expectedService: targetService, socket, timeout });
+    pendingByRequestId.set(requestId, { expectedService: target, socket, timeout });
   }
 
   const server = net.createServer((socket) => {
@@ -256,7 +256,7 @@ export async function startServiceControlServer(options: ServiceControlServerOpt
   return {
     endpoint,
     close: async () => {
-      for (const unsubscribe of subscriptions) unsubscribe();
+      for (const unsubscribe of unsubscribers) unsubscribe();
       for (const pending of pendingByRequestId.values()) clearTimeout(pending.timeout);
       pendingByRequestId.clear();
       await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -1,18 +1,15 @@
 import { issuerFaultProfileSchema, type IssuerFaultProfileType } from './issuer-fault-profile.js';
+import {
+  isSupportedItWalletSpecVersion,
+  supportedItWalletSpecVersions,
+  type SupportedItWalletSpecVersion
+} from './spec-versions.js';
 
-/**
- * IT Wallet specification versions this catalog can reason about. Kept as
- * plain string literals (matching the `X-Spec-Version` header values used
- * across the Credential Issuer, see `spec-version.ts`) instead of importing
- * `@pagopa/io-wallet-utils`, so this package stays dependency-light.
- */
-export const supportedItWalletSpecVersions = ['1.0', '1.3', '1.4'] as const;
-
-export type SupportedItWalletSpecVersion = (typeof supportedItWalletSpecVersions)[number];
-
-export function isSupportedItWalletSpecVersion(value: string): value is SupportedItWalletSpecVersion {
-  return (supportedItWalletSpecVersions as readonly string[]).includes(value);
-}
+export {
+  isSupportedItWalletSpecVersion,
+  supportedItWalletSpecVersions,
+  type SupportedItWalletSpecVersion
+} from './spec-versions.js';
 
 /** Where in the Credential Issuer response pipeline a fault profile mutates data. */
 export type IssuerFaultApplicationPoint =

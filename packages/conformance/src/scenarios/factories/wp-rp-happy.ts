@@ -1,15 +1,27 @@
+import {
+  attestedRedirectFollowed,
+  authorizationResponseReceived,
+  presentationTimeouts,
+  relyingPartySubordinateStatementRequested,
+  requestObjectRequested,
+  rpEntityConfigurationRequested,
+  trustAnchorEntityConfigurationRequested,
+  vpTokenValidationSucceeded
+} from './presentation-evidence.js';
+
 import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
 
 /**
- * Happy-path OpenID4VP remote presentation flow.
+ * Happy-path OpenID4VP remote presentation flow, same-device with a GET Request
+ * Object retrieval.
  *
  * A single interactive run exercises every RP/Trust-Anchor-observable endpoint
  * call of the remote flow, so one flow satisfies many Wallet Solution Test
  * Matrix cases at once (see the test suite that maps WP_076..WP_094 onto this
- * scenario). Only the happy-path, protocol-observable cases are covered here;
- * the negative cases (WP_081, WP_085, WP_086, WP_087, WP_090, WP_091a, WP_094a)
- * and the UI-only cases (WP_088, WP_089x) require dedicated unhappy-path
- * scenarios.
+ * scenario). The mutually exclusive variants are covered by
+ * `wpRpHappyPostScenario` (QR engagement, POST retrieval), and the negative
+ * cases by the dedicated unhappy-path scenarios; the UI-only cases (WP_088,
+ * WP_089x) remain out of scope for a protocol-observed tool.
  *
  * This is a same-device flow (deep-link engagement): the wallet redirects the
  * user-agent back to the RP at the end, which is what makes the WP_094 redirect
@@ -19,7 +31,7 @@ import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
  * The protocol correlationId mechanism is currently disabled, so every observed
  * event — the federation-discovery calls and the later RP-route calls alike — is
  * emitted uncorrelated and adopted as post-start evidence narrowed by its
- * diagnostics (`match`).
+ * diagnostics (`match`); see `presentation-evidence.ts`.
  */
 export const wpRpHappyScenario: ProtocolObservedScenarioDefinition = {
   id: 'WP_RP_HAPPY',
@@ -36,78 +48,19 @@ export const wpRpHappyScenario: ProtocolObservedScenarioDefinition = {
   },
   entryEvent: 'rp.metadata.requested',
   requiredEvents: [
-    // WP_078 / WP_084: the wallet fetches the Relying Party Entity Configuration
-    // (its OpenID Federation endpoint) to obtain metadata and verifier keys.
-    {
-      event: 'rp.metadata.requested',
-      service: 'relying-party',
-      correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/.well-known/openid-federation' }
-    },
-    // WP_079: Trust Chain resolution — the wallet fetches the Trust Anchor
-    // Entity Configuration.
-    {
-      event: 'federation.anchor.requested',
-      service: 'federation',
-      correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/.well-known/openid-federation' }
-    },
-    // WP_078 / WP_079 / WP_080: the wallet fetches the subordinate statement
-    // about the Relying Party from the Trust Anchor `/fetch` endpoint, which is
-    // also where the Trust Marks are anchored.
-    {
-      event: 'federation.fetch.requested',
-      service: 'federation',
-      correlation: 'allow-uncorrelated-post-start',
-      match: {
-        endpoint: '/fetch',
-        sub: { endpoint: 'relyingParty', match: 'normalized-url' }
-      }
-    },
-    // WP_076 / WP_082: the wallet retrieves the signed Request Object via HTTP
-    // GET on the request_uri endpoint (the RP advertises no request_uri_method,
-    // so GET is used; WP_082 is chosen over the mutually exclusive WP_083 POST).
-    // Adopted as uncorrelated post-start evidence narrowed by the GET method on
-    // the request_uri endpoint (WP_082 is chosen over the POST WP_083).
-    {
-      event: 'rp.request_object.requested',
-      service: 'relying-party',
-      correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/auth/request/:state', method: 'GET' }
-    },
-    // WP_091 / WP_092 / WP_093 (+ a/b/c): the wallet posts the encrypted
-    // Authorization Response with the vp_token to the response_uri.
-    {
-      event: 'rp.presentation_response.received',
-      service: 'relying-party',
-      correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/auth/response', method: 'POST' }
-    },
-    // Anchors the response content checks (WP_092, WP_093, WP_093a/b/c): the RP
-    // decrypts the response and validates the vp_token, its SD-JWT disclosures,
-    // and the Key Binding JWTs.
-    {
-      event: 'vp_token.validation.succeeded',
-      service: 'relying-party',
-      correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/auth/response' }
-    },
-    // WP_094: the wallet follows the RP-supplied redirect_uri, hitting the
-    // instrumented `/callback/:state` endpoint via HTTP GET.
-    {
-      event: 'rp.redirect.followed',
-      service: 'relying-party',
-      correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/callback/:state', method: 'GET' }
-    }
+    rpEntityConfigurationRequested,
+    trustAnchorEntityConfigurationRequested,
+    relyingPartySubordinateStatementRequested,
+    // WP_076 / WP_082: the engagement advertises no request_uri_method, so the
+    // wallet retrieves the Request Object over GET (WP_082 is chosen over the
+    // mutually exclusive WP_083 POST).
+    requestObjectRequested('GET'),
+    authorizationResponseReceived,
+    vpTokenValidationSucceeded,
+    attestedRedirectFollowed
   ],
-  forbiddenEvents: ['vp_token.validation.failed'],
-  timeouts: {
-    testerActionMs: 300_000,
-    protocolStepMs: 60_000,
-    forbiddenObservationMs: 5_000,
-    vitestTestMs: 330_000
-  },
+  forbiddenEvents: ['vp_token.validation.failed', 'rp.presentation_error.received'],
+  timeouts: { ...presentationTimeouts, forbiddenObservationMs: 5_000, vitestTestMs: 330_000 },
   verdictRules: [
     { type: 'entry-event-required' },
     { type: 'required-events-in-order' },

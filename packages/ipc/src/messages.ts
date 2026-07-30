@@ -1,4 +1,8 @@
-import { issuerFaultProfileSchema, trustAnchorFaultProfileSchema } from '@itw-conformance-tool/faults';
+import {
+  issuerFaultProfileSchema,
+  rpFaultProfileSchema,
+  trustAnchorFaultProfileSchema
+} from '@itw-conformance-tool/faults';
 import { z } from 'zod';
 
 import { localServiceNames, SERVICE_PROTOCOL_VERSION } from './protocol.js';
@@ -166,6 +170,40 @@ const issuerConfigDeactivatedMessageSchema = protocolHeaderSchema
   })
   .strict();
 
+const rpFaultActivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('rp.fault.activate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string(),
+    specVersion: z.string(),
+    profile: rpFaultProfileSchema
+  })
+  .strict();
+
+const rpFaultActivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('rp.fault.activated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const rpFaultDeactivateMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('rp.fault.deactivate'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
+const rpFaultDeactivatedMessageSchema = protocolHeaderSchema
+  .extend({
+    type: z.literal('rp.fault.deactivated'),
+    requestId: requestIdSchema,
+    scenarioId: z.string()
+  })
+  .strict();
+
 const serviceErrorMessageSchema = protocolHeaderSchema
   .extend({
     type: z.literal('service.error'),
@@ -194,6 +232,10 @@ const ipcMessageSchema = z.union([
   issuerConfigActivatedMessageSchema,
   issuerConfigDeactivateMessageSchema,
   issuerConfigDeactivatedMessageSchema,
+  rpFaultActivateMessageSchema,
+  rpFaultActivatedMessageSchema,
+  rpFaultDeactivateMessageSchema,
+  rpFaultDeactivatedMessageSchema,
   serviceErrorMessageSchema
 ]);
 
@@ -216,6 +258,10 @@ export type IssuerConfigActivateMessage = z.infer<typeof issuerConfigActivateMes
 export type IssuerConfigActivatedMessage = z.infer<typeof issuerConfigActivatedMessageSchema>;
 export type IssuerConfigDeactivateMessage = z.infer<typeof issuerConfigDeactivateMessageSchema>;
 export type IssuerConfigDeactivatedMessage = z.infer<typeof issuerConfigDeactivatedMessageSchema>;
+export type RpFaultActivateMessage = z.infer<typeof rpFaultActivateMessageSchema>;
+export type RpFaultActivatedMessage = z.infer<typeof rpFaultActivatedMessageSchema>;
+export type RpFaultDeactivateMessage = z.infer<typeof rpFaultDeactivateMessageSchema>;
+export type RpFaultDeactivatedMessage = z.infer<typeof rpFaultDeactivatedMessageSchema>;
 export type ServiceErrorMessage = z.infer<typeof serviceErrorMessageSchema>;
 export type IpcMessage = z.infer<typeof ipcMessageSchema>;
 

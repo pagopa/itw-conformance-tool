@@ -3,7 +3,7 @@ import { SERVICE_PROTOCOL_VERSION } from './protocol.js';
 
 import type { IpcMessage, LocalServiceName } from './messages.js';
 import type { IssuerConfig } from './messages.js';
-import type { IssuerFaultProfile, TrustAnchorFaultProfile } from '@itw-conformance-tool/faults';
+import type { IssuerFaultProfile, RpFaultProfile, TrustAnchorFaultProfile } from '@itw-conformance-tool/faults';
 
 export interface IssuerFaultActivationRequest {
   scenarioId: string;
@@ -67,12 +67,43 @@ export interface IssuerConfigHandlers {
   deactivate: (request: IssuerConfigDeactivationRequest) => Promise<IssuerConfigActivationResult>;
 }
 
+export interface RpFaultActivationRequest {
+  scenarioId: string;
+  specVersion: string;
+  profile: RpFaultProfile;
+}
+
+export interface RpFaultDeactivationRequest {
+  scenarioId: string;
+}
+
+export interface RpFaultActivationResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+}
+
+export interface RpFaultHandlers {
+  activate: (request: RpFaultActivationRequest) => Promise<RpFaultActivationResult>;
+  deactivate: (request: RpFaultDeactivationRequest) => Promise<RpFaultActivationResult>;
+}
+
+/** Acknowledgement sent back for a successfully handled control request. */
+type ControlAcknowledgementType =
+  | 'issuer.config.activated'
+  | 'issuer.config.deactivated'
+  | 'issuer.fault.activated'
+  | 'issuer.fault.deactivated'
+  | 'rp.fault.activated'
+  | 'rp.fault.deactivated';
+
 export interface ServiceIpcAdapterOptions {
   endpoint: string;
   service: LocalServiceName;
   stop: () => Promise<void>;
   issuerConfig?: IssuerConfigHandlers;
   issuerFaults?: IssuerFaultHandlers;
+  rpFaults?: RpFaultHandlers;
   trustAnchorFaults?: TrustAnchorFaultHandlers;
 }
 
@@ -135,99 +166,88 @@ export function attachServiceIpcAdapter(options: ServiceIpcAdapterOptions): void
       return;
     }
 
-    if (message.type === 'issuer.fault.activate') {
-      if (!options.issuerFaults) {
+    /**
+     * Runs one control request (fault/config, activate/deactivate) and answers
+     * with its acknowledgement message, or with `service.error` when the
+     * control surface is not configured, the handler rejects the request, or
+     * the handler itself throws.
+     */
+    const handleControlRequest = <TResult extends { ok: boolean; code?: string; message?: string }>(input: {
+      requestId: string;
+      scenarioId: string;
+      handler: (() => Promise<TResult>) | undefined;
+      acknowledgement: ControlAcknowledgementType;
+      unsupportedMessage: string;
+      failureCode: string;
+      failureMessage: string;
+    }): void => {
+      const fail = (code: string, failureMessage: string): void =>
         send({
           version: SERVICE_PROTOCOL_VERSION,
           type: 'service.error',
-          requestId: message.requestId,
+          requestId: input.requestId,
           service: options.service,
-          code: 'UNSUPPORTED_MESSAGE',
-          message: 'Issuer fault controls are not configured'
+          code,
+          message: failureMessage
         });
+
+      if (!input.handler) {
+        fail('UNSUPPORTED_MESSAGE', input.unsupportedMessage);
         return;
       }
 
-      void options.issuerFaults
-        .activate({ scenarioId: message.scenarioId, specVersion: message.specVersion, profile: message.profile })
-        .then(
-          (result) => {
-            if (!result.ok) {
-              send({
-                version: SERVICE_PROTOCOL_VERSION,
-                type: 'service.error',
-                requestId: message.requestId,
-                service: options.service,
-                code: result.code ?? 'FAULT_ACTIVATION_FAILED',
-                message: result.message ?? 'Issuer fault activation failed'
-              });
-              return;
-            }
+      void input.handler().then(
+        (result) => {
+          if (!result.ok) {
+            fail(result.code ?? input.failureCode, result.message ?? input.failureMessage);
+            return;
+          }
 
-            send({
-              version: SERVICE_PROTOCOL_VERSION,
-              type: 'issuer.fault.activated',
-              requestId: message.requestId,
-              scenarioId: message.scenarioId
-            });
-          },
-          () =>
-            send({
-              version: SERVICE_PROTOCOL_VERSION,
-              type: 'service.error',
-              requestId: message.requestId,
-              service: options.service,
-              code: 'FAULT_ACTIVATION_FAILED',
-              message: 'Issuer fault activation failed'
-            })
-        );
+          // Every acknowledgement variant carries exactly these members, but a
+          // union-typed discriminant is not narrowed back to one variant.
+          send({
+            version: SERVICE_PROTOCOL_VERSION,
+            type: input.acknowledgement,
+            requestId: input.requestId,
+            scenarioId: input.scenarioId
+          } as IpcMessage);
+        },
+        () => fail(input.failureCode, input.failureMessage)
+      );
+    };
+
+    if (message.type === 'issuer.fault.activate') {
+      const faults = options.issuerFaults;
+      handleControlRequest({
+        requestId: message.requestId,
+        scenarioId: message.scenarioId,
+        handler:
+          faults &&
+          (() =>
+            faults.activate({
+              scenarioId: message.scenarioId,
+              specVersion: message.specVersion,
+              profile: message.profile
+            })),
+        acknowledgement: 'issuer.fault.activated',
+        unsupportedMessage: 'Issuer fault controls are not configured',
+        failureCode: 'FAULT_ACTIVATION_FAILED',
+        failureMessage: 'Issuer fault activation failed'
+      });
       return;
     }
 
     if (message.type === 'issuer.fault.deactivate') {
-      if (!options.issuerFaults) {
-        send({
-          version: SERVICE_PROTOCOL_VERSION,
-          type: 'service.error',
-          requestId: message.requestId,
-          service: options.service,
-          code: 'UNSUPPORTED_MESSAGE',
-          message: 'Issuer fault controls are not configured'
-        });
-        return;
-      }
-
-      void options.issuerFaults.deactivate({ scenarioId: message.scenarioId }).then(
-        (result) => {
-          if (!result.ok) {
-            send({
-              version: SERVICE_PROTOCOL_VERSION,
-              type: 'service.error',
-              requestId: message.requestId,
-              service: options.service,
-              code: result.code ?? 'FAULT_DEACTIVATION_FAILED',
-              message: result.message ?? 'Issuer fault deactivation failed'
-            });
-            return;
-          }
-
-          send({
-            version: SERVICE_PROTOCOL_VERSION,
-            type: 'issuer.fault.deactivated',
-            requestId: message.requestId,
-            scenarioId: message.scenarioId
-          });
-        },
-        () =>
-          send({
-            version: SERVICE_PROTOCOL_VERSION,
-            type: 'service.error',
-            requestId: message.requestId,
-            service: options.service,
-            code: 'FAULT_DEACTIVATION_FAILED',
-            message: 'Issuer fault deactivation failed'
-          })
-      );
+      const faults = options.issuerFaults;
+      handleControlRequest({
+        requestId: message.requestId,
+        scenarioId: message.scenarioId,
+        handler: faults && (() => faults.deactivate({ scenarioId: message.scenarioId })),
+        acknowledgement: 'issuer.fault.deactivated',
+        unsupportedMessage: 'Issuer fault controls are not configured',
+        failureCode: 'FAULT_DEACTIVATION_FAILED',
+        failureMessage: 'Issuer fault deactivation failed'
+      });
       return;
     }
 
@@ -328,96 +348,65 @@ export function attachServiceIpcAdapter(options: ServiceIpcAdapterOptions): void
     }
 
     if (message.type === 'issuer.config.activate') {
-      if (!options.issuerConfig) {
-        send({
-          version: SERVICE_PROTOCOL_VERSION,
-          type: 'service.error',
-          requestId: message.requestId,
-          service: options.service,
-          code: 'UNSUPPORTED_MESSAGE',
-          message: 'Issuer config controls are not configured'
-        });
-        return;
-      }
-
-      void options.issuerConfig.activate({ scenarioId: message.scenarioId, config: message.config }).then(
-        (result) => {
-          if (!result.ok) {
-            send({
-              version: SERVICE_PROTOCOL_VERSION,
-              type: 'service.error',
-              requestId: message.requestId,
-              service: options.service,
-              code: result.code ?? 'CONFIG_ACTIVATION_FAILED',
-              message: result.message ?? 'Issuer config activation failed'
-            });
-            return;
-          }
-
-          send({
-            version: SERVICE_PROTOCOL_VERSION,
-            type: 'issuer.config.activated',
-            requestId: message.requestId,
-            scenarioId: message.scenarioId
-          });
-        },
-        () =>
-          send({
-            version: SERVICE_PROTOCOL_VERSION,
-            type: 'service.error',
-            requestId: message.requestId,
-            service: options.service,
-            code: 'CONFIG_ACTIVATION_FAILED',
-            message: 'Issuer config activation failed'
-          })
-      );
+      const config = options.issuerConfig;
+      handleControlRequest({
+        requestId: message.requestId,
+        scenarioId: message.scenarioId,
+        handler: config && (() => config.activate({ scenarioId: message.scenarioId, config: message.config })),
+        acknowledgement: 'issuer.config.activated',
+        unsupportedMessage: 'Issuer config controls are not configured',
+        failureCode: 'CONFIG_ACTIVATION_FAILED',
+        failureMessage: 'Issuer config activation failed'
+      });
       return;
     }
 
     if (message.type === 'issuer.config.deactivate') {
-      if (!options.issuerConfig) {
-        send({
-          version: SERVICE_PROTOCOL_VERSION,
-          type: 'service.error',
-          requestId: message.requestId,
-          service: options.service,
-          code: 'UNSUPPORTED_MESSAGE',
-          message: 'Issuer config controls are not configured'
-        });
-        return;
-      }
+      const config = options.issuerConfig;
+      handleControlRequest({
+        requestId: message.requestId,
+        scenarioId: message.scenarioId,
+        handler: config && (() => config.deactivate({ scenarioId: message.scenarioId })),
+        acknowledgement: 'issuer.config.deactivated',
+        unsupportedMessage: 'Issuer config controls are not configured',
+        failureCode: 'CONFIG_DEACTIVATION_FAILED',
+        failureMessage: 'Issuer config deactivation failed'
+      });
+      return;
+    }
 
-      void options.issuerConfig.deactivate({ scenarioId: message.scenarioId }).then(
-        (result) => {
-          if (!result.ok) {
-            send({
-              version: SERVICE_PROTOCOL_VERSION,
-              type: 'service.error',
-              requestId: message.requestId,
-              service: options.service,
-              code: result.code ?? 'CONFIG_DEACTIVATION_FAILED',
-              message: result.message ?? 'Issuer config deactivation failed'
-            });
-            return;
-          }
+    if (message.type === 'rp.fault.activate') {
+      const faults = options.rpFaults;
+      handleControlRequest({
+        requestId: message.requestId,
+        scenarioId: message.scenarioId,
+        handler:
+          faults &&
+          (() =>
+            faults.activate({
+              scenarioId: message.scenarioId,
+              specVersion: message.specVersion,
+              profile: message.profile
+            })),
+        acknowledgement: 'rp.fault.activated',
+        unsupportedMessage: 'Relying party fault controls are not configured',
+        failureCode: 'FAULT_ACTIVATION_FAILED',
+        failureMessage: 'Relying party fault activation failed'
+      });
+      return;
+    }
 
-          send({
-            version: SERVICE_PROTOCOL_VERSION,
-            type: 'issuer.config.deactivated',
-            requestId: message.requestId,
-            scenarioId: message.scenarioId
-          });
-        },
-        () =>
-          send({
-            version: SERVICE_PROTOCOL_VERSION,
-            type: 'service.error',
-            requestId: message.requestId,
-            service: options.service,
-            code: 'CONFIG_DEACTIVATION_FAILED',
-            message: 'Issuer config deactivation failed'
-          })
-      );
+    if (message.type === 'rp.fault.deactivate') {
+      const faults = options.rpFaults;
+      handleControlRequest({
+        requestId: message.requestId,
+        scenarioId: message.scenarioId,
+        handler: faults && (() => faults.deactivate({ scenarioId: message.scenarioId })),
+        acknowledgement: 'rp.fault.deactivated',
+        unsupportedMessage: 'Relying party fault controls are not configured',
+        failureCode: 'FAULT_DEACTIVATION_FAILED',
+        failureMessage: 'Relying party fault deactivation failed'
+      });
     }
   });
 

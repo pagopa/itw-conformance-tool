@@ -90,6 +90,7 @@ processo gestito proprietario del controllo:
 
 - `issuer.fault.*` e `issuer.config.*` verso `credential-issuer`;
 - `trust-anchor.fault.*` verso `trust-anchor`.
+- `rp.fault.*` al `relying-party` (vedi [`rp-fault-profile-lifecycle.md`](./rp-fault-profile-lifecycle.md)).
 
 ## 3. Il test crea il controller del runner
 
@@ -128,14 +129,16 @@ runner, viene richiesta una disattivazione best-effort prima di propagare l'erro
 
 ## 5. Il relay inoltra solo comandi ammessi
 
-Il `ServiceControlServer` riceve il frame dal runner, lo valida con `parseIpcMessage` e accetta solo:
+Il `ServiceControlServer` riceve il frame dal runner, lo valida con `parseIpcMessage` e accetta solo i
+tipi elencati in `CONTROL_REQUEST_TARGETS`, fra cui:
 
 - `issuer.fault.activate`;
 - `issuer.fault.deactivate`.
 
 Qualsiasi altro messaggio riceve `service.error` con `UNSUPPORTED_MESSAGE`.
 
-Per i comandi ammessi, il relay usa `ServiceSupervisor.sendToChild('credential-issuer', message)`.
+Per i comandi ammessi, il relay usa `ServiceSupervisor.sendToChild(<servizio proprietario>, message)`,
+che per i fault dell'issuer e `credential-issuer`.
 Se il processo `credential-issuer` non e gestito o non e piu disponibile, il relay risponde con
 `SERVICE_UNAVAILABLE`.
 

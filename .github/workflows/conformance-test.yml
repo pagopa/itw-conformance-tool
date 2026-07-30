@@ -185,6 +185,15 @@ jobs:
       - name: Run presentation conformance tests
         env:
           WCT_DIR: /tmp/wct
+          # The wallet hook launches wct with `--tests happy`, so it drives one
+          # nominal same-device presentation per engagement. Restrict the matrix
+          # to that scenario: every other presentation scenario needs a wallet
+          # that either retrieves the Request Object over POST or performs the
+          # wallet-side validation the negative scenario is about, and would
+          # otherwise only burn its tester timeout here. Run the rest
+          # interactively (`itwct test presentation` with no allow-list), or add
+          # their IDs once the driver covers them.
+          ITWCT_PRESENTATION_SCENARIO_IDS: WP_RP_HAPPY,WP_079,WP_085,WP_094a
         run: |
           set -euo pipefail
 

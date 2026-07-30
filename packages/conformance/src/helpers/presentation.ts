@@ -15,9 +15,18 @@ export function createDefaultPresentationDcqlQuery(): Record<string, unknown> {
 
 export type PresentationFlowType = 'cross-device' | 'same-device';
 
+/**
+ * Retrieval method the engagement advertises for the `request_uri`. Left
+ * undefined the parameter is omitted, so a wallet falls back to `get`
+ * (WP_082); `'post'` exercises the POST retrieval with `wallet_metadata` and
+ * `wallet_nonce` (WP_083).
+ */
+export type PresentationRequestUriMethod = 'get' | 'post';
+
 export async function createPresentationRequestUri(
   baseURL: string,
-  flowType: PresentationFlowType = 'cross-device'
+  flowType: PresentationFlowType = 'cross-device',
+  requestUriMethod?: PresentationRequestUriMethod
 ): Promise<string> {
   const endpoint = new URL('/create-authorization-request', baseURL);
 
@@ -30,7 +39,8 @@ export async function createPresentationRequestUri(
     headers: { 'content-type': 'application/json' },
     body: {
       dcqlQuery: createDefaultPresentationDcqlQuery(),
-      flow_type: flowType
+      flow_type: flowType,
+      ...(requestUriMethod ? { request_uri_method: requestUriMethod } : {})
     },
     rejectUnauthorized: false
   });
