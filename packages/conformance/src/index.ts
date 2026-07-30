@@ -65,6 +65,7 @@ export { presentationScenarioRegistry, presentationScenarios } from './scenarios
 export { walletInstanceScenarioRegistry, walletInstanceScenarios } from './scenarios/wallet-instance.js';
 export { wpCiHappyScenario } from './scenarios/factories/wp-ci-happy.js';
 export {
+  WP_CREDENTIAL_REISSUANCE_EXPIRED_REFRESH_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_EXPIRED_TOKENS,
   WP_CREDENTIAL_REISSUANCE_INITIAL_REFRESH_TOKEN_TTL_SECONDS,
   WP_CREDENTIAL_REISSUANCE_INITIAL_TOKEN_TTL_SECONDS,
