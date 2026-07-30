@@ -94,6 +94,14 @@ export const attestedRedirectFollowed: RequiredEventEvidenceExpectation = {
   match: { endpoint: '/callback', method: 'GET' }
 };
 
+/** WP_117: the wallet sent a valid Erasure Request to the attested Relying Party endpoint. */
+export const erasureRequestAccepted: RequiredEventEvidenceExpectation = {
+  event: 'rp.erasure.requested',
+  service: 'relying-party',
+  correlation: 'allow-uncorrelated-post-start',
+  match: { endpoint: '/erasure', method: 'GET', outcome: 'accepted' }
+};
+
 /** WP_090: the wallet reported a rejected Request Object to the `response_uri`. */
 export const authorizationErrorResponseReceived: RequiredEventEvidenceExpectation = {
   event: 'rp.presentation_error.received',
