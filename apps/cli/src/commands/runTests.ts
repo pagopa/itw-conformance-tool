@@ -8,6 +8,11 @@ import { ServiceSupervisor, type SupervisedService } from '../supervisor.js';
 import { findNxRoot } from '../utils/search.js';
 
 export const SERVICE_CONTROL_ENDPOINT_ENV_VAR = 'ITWCT_SERVICE_CONTROL_ENDPOINT';
+export const CONFORMANCE_VERBOSE_ENV_VAR = 'ITWCT_CONFORMANCE_VERBOSE';
+
+export interface RunConformanceTestsOptions {
+  verbose?: boolean;
+}
 
 /** Builds the Vitest arguments for one category, or all conformance matrix tests. */
 export function buildConformanceTestArgs(category: TestCategory | undefined, nxRootPath: string): string[] {
@@ -31,11 +36,13 @@ export function createConformanceTestEnvironment(
   category: TestCategory | undefined,
   environment: NodeJS.ProcessEnv = process.env,
   isInteractive = process.stdout.isTTY === true,
-  controlEndpoint?: string
+  controlEndpoint?: string,
+  options: RunConformanceTestsOptions = {}
 ): NodeJS.ProcessEnv {
   const testEnvironment = { ...environment };
   delete testEnvironment.ITWCT_CONFORMANCE_TEST_CATEGORY;
   delete testEnvironment[SERVICE_CONTROL_ENDPOINT_ENV_VAR];
+  delete testEnvironment[CONFORMANCE_VERBOSE_ENV_VAR];
 
   if (category) {
     testEnvironment.ITWCT_CONFORMANCE_TEST_CATEGORY = category;
@@ -43,6 +50,12 @@ export function createConformanceTestEnvironment(
 
   if (controlEndpoint) {
     testEnvironment[SERVICE_CONTROL_ENDPOINT_ENV_VAR] = controlEndpoint;
+  }
+
+  if (options.verbose) {
+    testEnvironment[CONFORMANCE_VERBOSE_ENV_VAR] = '1';
+  } else if (testEnvironment.NODE_OPTIONS?.match(/--(?:inspect|inspect-brk|debug)(?:=|\b)/)) {
+    delete testEnvironment.NODE_OPTIONS;
   }
 
   if (!isInteractive || testEnvironment.FORCE_COLOR !== undefined || testEnvironment.NO_COLOR !== undefined) {
@@ -61,11 +74,26 @@ function runVitest(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise
 }
 
 /** Runs one conformance category, or the complete matrix, with the CLI owning local services. */
-export async function runConformanceTests(category?: TestCategory): Promise<number> {
+export async function runConformanceTests(
+  category?: TestCategory,
+  options: RunConformanceTestsOptions = {}
+): Promise<number> {
   const nxRootPath = findNxRoot();
-  const supervisor = new ServiceSupervisor({ cwd: nxRootPath });
+  const serviceEnvironment = createConformanceTestEnvironment(
+    category,
+    process.env,
+    process.stdout.isTTY === true,
+    undefined,
+    options
+  );
+  const supervisor = new ServiceSupervisor({ cwd: nxRootPath, env: serviceEnvironment });
+  let cancellationRequested = false;
+  let stopPromise: Promise<void> | undefined;
   const stop = (): void => {
-    void supervisor.stopAll();
+    cancellationRequested = true;
+    // eslint-disable-next-line no-console
+    console.log('\nCancellation requested. Stopping local services...');
+    stopPromise ??= supervisor.stopAll();
   };
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
@@ -82,12 +110,22 @@ export async function runConformanceTests(category?: TestCategory): Promise<numb
     return await runVitest(
       buildConformanceTestArgs(category, nxRootPath),
       nxRootPath,
-      createConformanceTestEnvironment(category, process.env, process.stdout.isTTY === true, controlServer.endpoint)
+      createConformanceTestEnvironment(
+        category,
+        process.env,
+        process.stdout.isTTY === true,
+        controlServer.endpoint,
+        options
+      )
     );
   } finally {
     process.removeListener('SIGINT', stop);
     process.removeListener('SIGTERM', stop);
     await controlServer?.close();
-    await supervisor.stopAll();
+    await (stopPromise ?? supervisor.stopAll());
+    if (cancellationRequested) {
+      // eslint-disable-next-line no-console
+      console.log('Local services stopped.');
+    }
   }
 }

@@ -75,6 +75,7 @@ export interface ScenarioInstructions {
   expectedBehavior: string;
   goal: string;
   prerequisites?: string[];
+  summary?: string;
   steps?: string[];
 }
 
@@ -89,6 +90,8 @@ export type RequiredEventMatchValue =
 
 export interface RequiredEventEvidenceExpectation {
   event: ObservedEventName;
+  /** Human-readable progress label for this protocol step. */
+  label?: string;
   service: ObservedServiceName;
   correlation?: 'allow-uncorrelated-post-start';
   match?: Record<string, RequiredEventMatchValue>;

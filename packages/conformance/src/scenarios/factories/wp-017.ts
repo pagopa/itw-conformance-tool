@@ -23,6 +23,7 @@ export const wp017Scenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'trust_anchor.fault.applied',
+      label: 'Trust Anchor served the nonmatching signing key',
       service: 'federation',
       correlation: 'allow-uncorrelated-post-start',
       match: {
@@ -47,6 +48,7 @@ export const wp017Scenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance rejects a Trust Anchor Entity Configuration whose published key does not match the Trust Anchor key distributed out-of-band.',
     expectedBehavior:
       'After opening the credential offer, the wallet must resolve the Trust Anchor Entity Configuration, verify that its self-consistent signing key does not match the configured out-of-band Trust Anchor key, log the discrepancy according to its own policy without exposing cryptographic secrets, and terminate the issuance flow without continuing to the Credential Issuer PAR endpoint. The harness observes the network behavior and fault evidence; it does not automatically verify wallet-internal logging.',
+    summary: 'Verify rejection of a Trust Anchor key mismatch.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
@@ -54,11 +56,9 @@ export const wp017Scenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services, activates the nonmatching signing-key fault on the Trust Anchor, and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Keep the wallet and test process running while the wallet resolves the trust chain and inspects the Trust Anchor Entity Configuration.',
-      'Do not continue any consent or identity verification step: the expected outcome is that the wallet stops after rejecting the nonmatching Trust Anchor key.',
-      'The runner will continue automatically after the wallet requests the Trust Anchor Entity Configuration and the fault application is recorded, or once the negative-observation window elapses without the wallet continuing to PAR.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Keep the wallet and this command running while the wallet resolves the trust chain.',
+      'Stop at the wallet rejection screen; the expected outcome is rejection of the nonmatching Trust Anchor key.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'
