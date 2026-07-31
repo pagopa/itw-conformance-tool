@@ -81,7 +81,12 @@ describe('VpTokenVerifier — key binding audience', () => {
     const verifier = createVerifier(await createSdJwtPresentation({ audience: 'https://attacker.example.org' }));
 
     await expect(verifier.verifyCredentials()).rejects.toThrow(
-      new RegExp(`${RP_BASE_URL}.*${nominalClientId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
+      new RegExp(
+        `${RP_BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*${nominalClientId.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          '\\$&'
+        )}`
+      )
     );
   });
 
