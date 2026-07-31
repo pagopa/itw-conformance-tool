@@ -1,10 +1,10 @@
+import { createX509HashClientId } from '@pagopa/io-wallet-oid4vp';
 import Fastify from 'fastify';
 import { CompactEncrypt, importJWK, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 
 import authorizationResponseRoute from '../../routes/authorization-response.js';
 import { callbacks as partialCallbacks, getDecryptJweCallback } from '../../utils/crypto.js';
-import { toX509HashClientId } from '../../utils/request-object.js';
 import {
   createCertificateBase64Der,
   createSdJwtPresentation,
@@ -44,7 +44,10 @@ async function buildApp(flowType: FlowType) {
 
   const encryptionJwk = generateEcJwk({ alg: 'ECDH-ES', kid: 'rp-enc-key', use: 'enc' });
   const requestSigningJwk = generateEcJwk({ alg: 'ES256', kid: 'rp-signing-key', use: 'sig' });
-  const clientId = toX509HashClientId(await createCertificateBase64Der(requestSigningJwk));
+  const clientId = await createX509HashClientId({
+    certificateChain: [await createCertificateBase64Der(requestSigningJwk)],
+    hash: partialCallbacks.hash
+  });
 
   // The stored Request Object. The handler decodes it without verifying, but
   // the SDK reads `client_metadata.jwks` out of it to pick the decryption key.

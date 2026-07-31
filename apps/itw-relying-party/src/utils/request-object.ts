@@ -1,4 +1,4 @@
-import { sha256 } from '@itw-conformance-tool/crypto';
+import { ClientIdPrefix as Oid4vpClientIdPrefix } from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt, decodeProtectedHeader, generateKeyPair, importJWK, SignJWT } from 'jose';
 
 import type { ActiveRpFault } from '../faults/rp-fault-store.js';
@@ -14,14 +14,14 @@ const REQUEST_OBJECT_SIGNING_ALG = 'ES256';
  * federation Trust Chain, rather than from the `x5c` certificate chain the
  * `x509_hash` prefix points at.
  */
-const OPENID_FEDERATION_CLIENT_ID_PREFIX = 'openid_federation';
+const OPENID_FEDERATION_CLIENT_ID_PREFIX = Oid4vpClientIdPrefix.OPENID_FEDERATION;
 
 /**
  * The Client Identifier Prefix IT Wallet uses by default. It tells the wallet
  * to take the verification key from the `x5c` certificate chain in the Request
  * Object header, which IT Wallet 1.4 requires precisely for this prefix.
  */
-const X509_HASH_CLIENT_ID_PREFIX = 'x509_hash';
+const X509_HASH_CLIENT_ID_PREFIX = Oid4vpClientIdPrefix.X509_HASH;
 
 /**
  * Trust mechanism the engagement announces, and therefore the one the wallet is
@@ -37,28 +37,6 @@ export type ClientIdPrefix = 'openid_federation' | 'x509_hash';
 
 /** The prefix used when a scenario does not ask for one — the IT Wallet nominal path. */
 export const DEFAULT_CLIENT_ID_PREFIX: ClientIdPrefix = 'x509_hash';
-
-/**
- * Builds the `x509_hash` `client_id`: the base64url-encoded SHA-256 hash of the
- * Relying Party's DER-encoded leaf certificate.
- *
- * The identifier is a *hash*, not a URL. A wallet that resolves this prefix
- * hashes the leaf certificate it was handed in the Request Object header `x5c`
- * and requires the result to equal this value, so it is derived from the very
- * certificate that goes into `x5c` and matches it by construction.
- *
- * Nothing about the Relying Party's identity can be read out of it: the entity
- * identifier lives in `iss`, in the Entity Configuration `sub` and in
- * `client_metadata.client_id`, never behind this prefix.
- *
- * @param certificateBase64Der - The leaf certificate as base64-encoded DER, exactly as published in the Request Object header `x5c`.
- * @returns The prefixed client identifier.
- */
-export function toX509HashClientId(certificateBase64Der: string): string {
-  const thumbprint = Buffer.from(sha256(Buffer.from(certificateBase64Der, 'base64'))).toString('base64url');
-
-  return `${X509_HASH_CLIENT_ID_PREFIX}:${thumbprint}`;
-}
 
 /**
  * Builds a `client_id` behind the `openid_federation` prefix.

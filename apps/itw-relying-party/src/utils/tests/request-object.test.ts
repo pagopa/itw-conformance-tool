@@ -1,9 +1,11 @@
 import { generateKeyPairSync } from 'node:crypto';
 
+import { createX509HashClientId } from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt, decodeProtectedHeader, importJWK, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 
-import { describeRequestObjectKeyResolution, reissueRequestObjectJwt, toX509HashClientId } from '../request-object.js';
+import { callbacks } from '../crypto.js';
+import { describeRequestObjectKeyResolution, reissueRequestObjectJwt } from '../request-object.js';
 
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { JWK } from 'jose';
@@ -14,8 +16,9 @@ const SIGNING_KID = 'rp-signing-key';
 // through the header, never parse it.
 const CERTIFICATE = 'MIIBdummycertificate';
 // The x509_hash client_id is the hash of that certificate, so it carries no
-// entity identifier at all — unlike the openid_federation one below.
-const NOMINAL_CLIENT_ID = toX509HashClientId(CERTIFICATE);
+// entity identifier at all — unlike the openid_federation one below. Built by
+// the SDK, exactly as `create-authorization-request` builds the served one.
+const NOMINAL_CLIENT_ID = await createX509HashClientId({ certificateChain: [CERTIFICATE], hash: callbacks.hash });
 
 function generateSigningJwk(): JWK & { kid: string } {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });

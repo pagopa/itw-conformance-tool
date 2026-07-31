@@ -1,6 +1,7 @@
+import { createX509HashClientId } from '@pagopa/io-wallet-oid4vp';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { toX509HashClientId } from '../request-object.js';
+import { callbacks } from '../crypto.js';
 import { VpTokenVerifier } from '../vp-token.js';
 import {
   createCertificateBase64Der,
@@ -22,7 +23,7 @@ beforeAll(async () => {
   const rpCertificate = await createCertificateBase64Der(
     generateEcJwk({ alg: 'ES256', kid: 'rp-signing-key', use: 'sig' })
   );
-  nominalClientId = toX509HashClientId(rpCertificate);
+  nominalClientId = await createX509HashClientId({ certificateChain: [rpCertificate], hash: callbacks.hash });
 });
 
 function createVerifier(presentation: string): VpTokenVerifier {

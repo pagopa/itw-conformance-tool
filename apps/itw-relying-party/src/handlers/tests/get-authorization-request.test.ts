@@ -1,12 +1,13 @@
 import { generateKeyPairSync } from 'node:crypto';
 
+import { createX509HashClientId } from '@pagopa/io-wallet-oid4vp';
 import Fastify from 'fastify';
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 
 import { createRpFaultStore } from '../../faults/rp-fault-store.js';
 import getAuthorizationRequestRoute from '../../routes/get-authorization-request.js';
-import { toX509HashClientId } from '../../utils/request-object.js';
+import { callbacks } from '../../utils/crypto.js';
 
 import type { ObservedEvent } from '@itw-conformance-tool/conformance';
 import type { JWK } from 'jose';
@@ -16,7 +17,7 @@ const SIGNING_KID = 'rp-signing-key';
 const CERTIFICATE = 'MIIBdummycertificate';
 const STATE = '11111111-2222-4333-8444-555555555555';
 /** Hash of the certificate above — the nominal identifier carries no entity URL. */
-const NOMINAL_CLIENT_ID = toX509HashClientId(CERTIFICATE);
+const NOMINAL_CLIENT_ID = await createX509HashClientId({ certificateChain: [CERTIFICATE], hash: callbacks.hash });
 
 function generateSigningJwk(): JWK & { kid: string } {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
