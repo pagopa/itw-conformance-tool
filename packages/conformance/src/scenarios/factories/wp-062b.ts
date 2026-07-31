@@ -63,6 +63,7 @@ export const wp062bScenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'issuer.fault.applied',
+      label: 'Credential Issuer returned an mDL with an invalid MSO COSE signature',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: {
@@ -82,17 +83,16 @@ export const wp062bScenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance rejects an mDL mdoc-CBOR credential whose MSO COSE signature fails verification, instead of storing it.',
     expectedBehavior:
       'After opening the credential offer for org.iso.18013.5.1.mDL, the wallet must complete the Authorization Code Flow through PAR, Authorization, Token, and Nonce exactly as in the happy path, then send the mDL Credential Request. The Credential Issuer applies the mdl-invalid-signature fault and returns an HTTP 200 application/json immediate response that is otherwise valid and contains an mdoc-CBOR credential whose issuerAuth remains a well-formed COSE_Sign1 with preserved alg, kid/x5chain, MSO payload, namespaces, credential data, digest data, validity, and holder binding, but whose COSE signature bytes have been corrupted after serialization. A conformant Wallet Instance must resolve the issuer key from the preserved kid or x5chain, detect the failed MSO COSE signature verification, report an error to the user, and must not store the mDL. This scenario proves the controlled fault was delivered (protocol-observed evidence only); it cannot itself verify the wallet UI error or secure storage, which the operator must confirm separately.',
+    summary: 'Verify rejection of an mDL with an invalid MSO COSE signature.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services, activates the mdl-invalid-signature fault on the Credential Issuer, and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance; the offer requests the mDL credential configuration org.iso.18013.5.1.mDL.',
-      'Complete the identity verification / consent step in the (mock) Identity Provider so the wallet receives the authorization code, automatically exchanges it at the Token endpoint, obtains a fresh nonce, and sends the mDL Credential Request.',
-      'Observe the Wallet Instance: the expected outcome is that it reports an error caused by MSO COSE signature verification failure and does not add the mDL to secure storage. Record this observation yourself; the automated verdict below only proves the defective credential was delivered, not that the wallet rejected it.',
-      'The runner will continue automatically after the wallet requests the Credential endpoint and the fault application is recorded.'
+      'Open the Credential Offer in your Wallet Instance; it requests the mDL credential configuration.',
+      'Complete identity verification and consent so the wallet sends the mDL Credential Request.',
+      'Observe the wallet rejection caused by MSO COSE signature verification failure and keep this command running.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

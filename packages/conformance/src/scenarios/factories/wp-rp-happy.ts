@@ -70,6 +70,7 @@ export const wpRpHappyScenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance completes a full OpenID4VP remote presentation: it discovers and trusts the Relying Party through the federation, retrieves and validates the signed Request Object, and returns an encrypted Authorization Response containing the requested credential.',
     expectedBehavior:
       'After acquiring the presentation request, the wallet resolves the Relying Party Entity Configuration and Trust Chain from the Trust Anchor, retrieves the signed Request Object from the request_uri endpoint, posts an encrypted Authorization Response with a vp_token to the response_uri, and follows the returned redirect_uri.',
+    summary: 'Verify a complete credential presentation flow.',
     prerequisites: [
       'The wallet app under test is installed and holds a credential that satisfies the requested presentation (PID by default).',
       'The wallet can open presentation request deep links on the same device (same-device flow).',
@@ -77,11 +78,9 @@ export const wpRpHappyScenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Trust Anchor and Relying Party URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services and waits for their readiness.',
-      'Open the printed presentation request deep link with the Wallet Instance on the same device.',
+      'Open the presentation request with the Wallet Instance on the same device.',
       'Allow the wallet to resolve the Relying Party federation trust chain and retrieve the Request Object.',
-      'Approve the disclosure of the requested attributes in the wallet.',
-      'The runner passes once the Relying Party receives a valid Authorization Response and the wallet follows the redirect_uri back to the Relying Party.'
+      'Approve the requested disclosure and keep this command running until the redirect back to the Relying Party completes.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'
