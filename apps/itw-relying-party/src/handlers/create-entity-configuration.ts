@@ -195,6 +195,7 @@ export const createEntityConfigurationHandler = async (
   const metadata: ItWalletMetadataV1_4 = buildVerifierEntityConfigurationMetadata({
     baseUrl: BASE_URL,
     encryptionJwk: encryptionPublicKey,
+    erasure_endpoint: `${BASE_URL}/erasure`,
     redirectUris: [
       activeFault?.type === 'unattested-redirect-uri'
         ? `${BASE_URL}${UNATTESTED_REDIRECT_URI_PATH}`

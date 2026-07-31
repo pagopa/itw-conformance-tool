@@ -71,6 +71,7 @@ export interface BuildVerifierEntityConfigurationMetadataOptions {
   /** Relying Party entity identifier, which is also the Entity Configuration `sub`. */
   baseUrl: string;
   encryptionJwk: PublishedJwk;
+  erasure_endpoint: string | undefined;
   /** Attested `redirect_uris`; overridden by the `unattested-redirect-uri` fault. */
   redirectUris: string[];
   /** Attested `request_uris`; overridden by the `unattested-request-uri` fault. */
@@ -91,7 +92,7 @@ export interface BuildVerifierEntityConfigurationMetadataOptions {
 export function buildVerifierEntityConfigurationMetadata(
   options: BuildVerifierEntityConfigurationMetadataOptions
 ): ItWalletMetadataV1_4 {
-  const { baseUrl, encryptionJwk, redirectUris, requestUris, responseUris, signingJwk } = options;
+  const { baseUrl, encryptionJwk, erasure_endpoint, redirectUris, requestUris, responseUris, signingJwk } = options;
 
   return {
     federation_entity: {
@@ -111,6 +112,7 @@ export function buildVerifierEntityConfigurationMetadata(
         keys: [signingJwk, encryptionJwk]
       },
       logo_uri: LOGO_URI,
+      erasure_endpoint,
       redirect_uris: redirectUris,
       request_uris: requestUris,
       response_uris: responseUris,
