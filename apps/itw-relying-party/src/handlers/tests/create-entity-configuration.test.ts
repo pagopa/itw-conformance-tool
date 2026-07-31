@@ -64,12 +64,18 @@ async function buildApp(options: { activeFault?: ActiveRpFault } = {}) {
 type TrustMarkEntry = { trust_mark: string; trust_mark_type: string };
 
 async function getTrustMarks(app: Awaited<ReturnType<typeof buildApp>>['app']): Promise<TrustMarkEntry[]> {
+  const jwt = await getEntityConfigurationJwt(app);
+
+  return decodeJwt(jwt).trust_marks as TrustMarkEntry[];
+}
+
+async function getEntityConfigurationJwt(app: Awaited<ReturnType<typeof buildApp>>['app']): Promise<string> {
   const response = await app.inject({ method: 'GET', url: '/.well-known/openid-federation' });
 
   expect(response.statusCode).toBe(200);
   expect(response.headers['content-type']).toBe('application/entity-statement+jwt');
 
-  return decodeJwt(response.body).trust_marks as TrustMarkEntry[];
+  return response.body;
 }
 
 async function getVerifierMetadata(app: Awaited<ReturnType<typeof buildApp>>['app']): Promise<Record<string, unknown>> {
@@ -159,6 +165,28 @@ describe('GET /.well-known/openid-federation', () => {
     });
 
     expect(payload.trust_mark_type).toBe(TRUST_MARK_TYPE);
+
+    await app.close();
+  });
+
+  it('publishes an HTTPS erasure endpoint in the verifier metadata', async () => {
+    const { app, federationJwk } = await buildApp();
+
+    const jwt = await getEntityConfigurationJwt(app);
+    const federationJwks = createLocalJWKSet({ keys: [toPublicJwk(federationJwk)] });
+    const { payload, protectedHeader } = await jwtVerify(jwt, federationJwks, {
+      issuer: RP_BASE_URL,
+      subject: RP_BASE_URL
+    });
+
+    expect(protectedHeader.typ).toBe('entity-statement+jwt');
+    expect(protectedHeader.kid).toBe(federationJwk.kid);
+
+    const verifier = payload.metadata?.openid_credential_verifier as { erasure_endpoint?: unknown } | undefined;
+    expect(verifier?.erasure_endpoint).toBe(`${RP_BASE_URL}/erasure`);
+
+    const erasureEndpoint = new URL(String(verifier?.erasure_endpoint));
+    expect(erasureEndpoint.protocol).toBe('https:');
 
     await app.close();
   });

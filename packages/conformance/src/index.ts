@@ -121,6 +121,7 @@ export { wp087Scenario } from './scenarios/factories/wp-087.js';
 export { wp090Scenario } from './scenarios/factories/wp-090.js';
 export { wp091aScenario } from './scenarios/factories/wp-091a.js';
 export { wp094aScenario } from './scenarios/factories/wp-094a.js';
+export { wp116Scenario } from './scenarios/factories/wp-116.js';
 export type {
   ArtifactExpectation,
   AutomationMode,

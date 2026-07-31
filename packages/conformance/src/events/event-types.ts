@@ -29,6 +29,7 @@ export const observedEventNames = [
   'issuer.status_list.requested',
   'issuer.notification.received',
   'rp.metadata.requested',
+  'rp.erasure.requested',
   'rp.fault.applied',
   'rp.request_object.requested',
   'rp.presentation_response.received',

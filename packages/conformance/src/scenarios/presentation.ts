@@ -8,6 +8,7 @@ import { wp087Scenario } from './factories/wp-087.js';
 import { wp090Scenario } from './factories/wp-090.js';
 import { wp091aScenario } from './factories/wp-091a.js';
 import { wp094aScenario } from './factories/wp-094a.js';
+import { wp116Scenario } from './factories/wp-116.js';
 import { wpRpHappyPostScenario } from './factories/wp-rp-happy-post.js';
 import { wpRpHappyScenario } from './factories/wp-rp-happy.js';
 import { createScenarioRegistry } from './registry.js';
@@ -26,7 +27,8 @@ export const presentationScenarios: ProtocolObservedScenarioDefinition[] = [
   wp087Scenario,
   wp090Scenario,
   wp091aScenario,
-  wp094aScenario
+  wp094aScenario,
+  wp116Scenario
 ];
 
 export const presentationScenarioRegistry = createScenarioRegistry(presentationScenarios);

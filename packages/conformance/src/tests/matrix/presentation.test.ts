@@ -25,6 +25,7 @@ import {
   wp090Scenario,
   wp091aScenario,
   wp094aScenario,
+  wp116Scenario,
   wpRpHappyPostScenario,
   wpRpHappyScenario
 } from '../../index.js';
@@ -871,6 +872,98 @@ describe('Test Cases for Presentation Phase', () => {
       );
     }
   );
+
+  describe.skipIf(!isSelected(wp116Scenario))('Happy path — erasure endpoint discovery and request', () => {
+    let run: PresentationRun;
+    let erasureEndpoint: string | undefined;
+
+    beforeAll(async () => {
+      run = await runPresentationScenario(wp116Scenario);
+    }, wp116Scenario.timeouts.vitestTestMs);
+
+    function requireEvent(name: string): ObservedEvent {
+      const event = findEvent(run.events, name);
+      if (!event) {
+        throw new Error(`Missing ${name} evidence required for erasure analysis`);
+      }
+      return event;
+    }
+
+    function expectEventOrder(first: string, second: string): void {
+      const firstIndex = run.events.findIndex((event) => event.name === first);
+      const secondIndex = run.events.findIndex((event) => event.name === second);
+
+      expect(firstIndex, `${first} must be present`).toBeGreaterThanOrEqual(0);
+      expect(secondIndex, `${second} must be present`).toBeGreaterThanOrEqual(0);
+      expect(firstIndex, `${first} must be observed before ${second}`).toBeLessThan(secondIndex);
+    }
+
+    async function verifiedErasureEndpoint(): Promise<string> {
+      if (erasureEndpoint) return erasureEndpoint;
+
+      const entityConfiguration = await fetchRelyingPartyEntityConfiguration();
+      const verifier = entityConfiguration.metadata?.openid_credential_verifier as
+        { erasure_endpoint?: unknown } | undefined;
+      const endpoint = verifier?.erasure_endpoint;
+
+      expect(endpoint, 'metadata.openid_credential_verifier.erasure_endpoint must be present').toBeTypeOf('string');
+
+      const parsed = new URL(String(endpoint));
+      expect(parsed.protocol, 'erasure_endpoint must use HTTPS').toBe('https:');
+      expect(String(endpoint), 'erasure_endpoint must point at the Relying Party /erasure route').toBe(
+        `${trimTrailingSlash(config['relying-party'].url)}/erasure`
+      );
+
+      erasureEndpoint = String(endpoint);
+      return erasureEndpoint;
+    }
+
+    test(
+      'WP_116: Wallet Instance discovers an HTTPS erasure_endpoint from Relying Party metadata',
+      async () => {
+        assertConformanceOutcome(run.outcome, { expected: 'PASS' });
+
+        expectEventOrder('rp.metadata.requested', 'federation.anchor.requested');
+        expectEventOrder('federation.anchor.requested', 'federation.fetch.requested');
+        expectEventOrder('federation.fetch.requested', 'rp.erasure.requested');
+
+        await verifiedErasureEndpoint();
+      },
+      wp116Scenario.timeouts.vitestTestMs
+    );
+
+    test(
+      'WP_117: Wallet Instance sends a valid GET Erasure Request to the attested endpoint',
+      async () => {
+        assertConformanceOutcome(run.outcome, { expected: 'PASS' });
+
+        const endpoint = await verifiedErasureEndpoint();
+        const erasureEvent = requireEvent('rp.erasure.requested');
+        expect(erasureEvent.service, 'Erasure Request evidence must be emitted by the Relying Party').toBe(
+          'relying-party'
+        );
+        expect(erasureEvent.diagnostic?.['method'], 'Erasure Request must use HTTP GET').toBe('GET');
+        expect(erasureEvent.diagnostic?.['endpoint'], 'Erasure Request must target the erasure endpoint path').toBe(
+          new URL(endpoint).pathname
+        );
+        expect(erasureEvent.diagnostic?.['outcome'], 'Erasure Request must be accepted by the endpoint').toBe(
+          'accepted'
+        );
+
+        const callbackUrlPresent = erasureEvent.diagnostic?.['callbackUrlPresent'];
+        if (callbackUrlPresent !== undefined) {
+          expect(callbackUrlPresent, 'Only callback presence may be recorded').toBeTypeOf('boolean');
+        }
+        expect(erasureEvent.diagnostic, 'Callback URL values must not be exposed in evidence').not.toHaveProperty(
+          'callback_url'
+        );
+        expect(erasureEvent.diagnostic, 'Callback URL values must not be exposed in evidence').not.toHaveProperty(
+          'callbackUrl'
+        );
+      },
+      wp116Scenario.timeouts.vitestTestMs
+    );
+  });
 
   describe.skipIf(!isSelected(wp085Scenario))('Negative path — Request Object with an unverifiable signature', () => {
     let run: PresentationRun;
