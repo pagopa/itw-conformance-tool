@@ -36,12 +36,18 @@ catalogs:
     fastify-plugin: ^5.0.1
 
   pagopa:
-    '@pagopa/io-wallet-oauth2': 1.5.4-alpha-20260717125503
-    '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260717125503
-    '@pagopa/io-wallet-oid4vci': 1.5.4-alpha-20260717125503
-    '@pagopa/io-wallet-oid4vp': 1.5.4-alpha-20260717125503
-    '@pagopa/io-wallet-utils': 1.5.4-alpha-20260717125503
+    '@pagopa/io-wallet-oauth2': 1.5.4-alpha-20260731074954
+    '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260731074954
+    '@pagopa/io-wallet-oid4vci': 1.5.4-alpha-20260731074954
+    '@pagopa/io-wallet-oid4vp': 1.5.4-alpha-20260731074954
+    '@pagopa/io-wallet-utils': 1.5.4-alpha-20260731074954
 
 cleanupUnusedCatalogs: true
 linkWorkspacePackages: true
+minimumReleaseAgeExclude:
+  - '@pagopa/io-wallet-oauth2@1.5.4-alpha-20260731074954'
+  - '@pagopa/io-wallet-oid-federation@1.5.4-alpha-20260731074954'
+  - '@pagopa/io-wallet-oid4vci@1.5.4-alpha-20260731074954'
+  - '@pagopa/io-wallet-oid4vp@1.5.4-alpha-20260731074954'
+  - '@pagopa/io-wallet-utils@1.5.4-alpha-20260731074954'
 packageImportMethod: 'clone-or-copy'
