@@ -138,7 +138,7 @@ export const getAuthorizationResponseHandler = async (
 
   const verifier = new VpTokenVerifier({
     authResponse: authResponseResult.value,
-    iacaX509: req.server.config.IACA_X509,
+    iacaX509: req.server.config.RP_X509,
     requestObject: authorizationRequestPayload,
     verifierEncryptionPublicJwk: req.server.jwks.enc.public
   });

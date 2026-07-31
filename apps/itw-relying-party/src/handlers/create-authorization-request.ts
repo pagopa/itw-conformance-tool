@@ -92,7 +92,7 @@ export const createAuthorizationRequestHandler = async (
   req: FastifyRequest<{ Body: CreateAuthorizationRequestPayload }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { IACA_X509, BASE_URL } = req.server.config;
+  const { RP_X509, BASE_URL } = req.server.config;
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
@@ -123,7 +123,7 @@ export const createAuthorizationRequestHandler = async (
 
   const client_id = await createX509HashClientId({
     hash: req.server.callbacks.hash,
-    certificateChain: [IACA_X509]
+    certificateChain: [RP_X509]
   });
 
   const payload: Openid4vpAuthorizationRequestPayload = {
@@ -172,7 +172,7 @@ export const createAuthorizationRequestHandler = async (
         alg: 'ES256',
         kid: req.server.jwks.sig.public.kid,
         method: 'x5c',
-        x5c: [IACA_X509]
+        x5c: [RP_X509]
       }
     }
   });
