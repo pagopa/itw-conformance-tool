@@ -69,6 +69,7 @@ export const wp084Scenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance fetches the Relying Party public key from metadata.openid_credential_verifier.jwks in the Entity Configuration, using the kid in the Request Object header, and that it can complete a presentation when that is the only place the key is published.',
     expectedBehavior:
       'The wallet resolves the Relying Party Entity Configuration and Trust Chain from the Trust Anchor, retrieves a Request Object whose header carries no x5c certificate chain, looks the header kid up in metadata.openid_credential_verifier.jwks to verify the signature, and completes the flow with an encrypted Authorization Response. A wallet that can only verify a Request Object from an x5c header will stop here instead.',
+    summary: 'Verify presentation when the Relying Party key is available only from federation metadata.',
     prerequisites: [
       'The wallet app under test is installed and holds a credential that satisfies the requested presentation (PID by default).',
       'The wallet supports the openid_federation Client Identifier Prefix and resolves Relying Party keys through the federation Trust Chain; a wallet that requires an x5c certificate chain in the Request Object header cannot satisfy this scenario.',
@@ -77,11 +78,10 @@ export const wp084Scenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Trust Anchor and Relying Party URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services, activates the request-object-federation-key profile on the Relying Party, and waits for their readiness.',
-      'Open the printed presentation request deep link with the Wallet Instance on the same device.',
+      'Open the presentation request with the Wallet Instance on the same device.',
       'Allow the wallet to resolve the Relying Party federation trust chain and retrieve the Request Object.',
-      'Approve the disclosure of the requested attributes in the wallet.',
-      'The runner passes once the Relying Party receives a valid Authorization Response for a Request Object the wallet could only have verified with the federation-published key.'
+      'Approve the requested disclosure in the wallet.',
+      'Keep the wallet and this command running until the scenario completes.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

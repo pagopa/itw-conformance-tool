@@ -25,8 +25,9 @@ export const wp086Scenario = createNegativePresentationScenario({
     goal: 'Verify that the Wallet Instance confirms the Request Object iss claim equals both the engagement client_id and the sub of the Relying Party Entity Configuration.',
     expectedBehavior:
       'The wallet retrieves a validly signed Request Object whose iss claim differs from the client_id it received in the engagement and from the Relying Party Entity Configuration sub. It must not present any credential: no Authorization Response carrying a vp_token may reach the response_uri.',
+    summary: 'Verify rejection of a Request Object whose issuer does not match the client identifier.',
     observation: [
-      'Keep the wallet and the test process running while the wallet retrieves and validates the Request Object.',
+      'Let the wallet retrieve and validate the Request Object.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports an inconsistent presentation request and stops.'
     ]
   }

@@ -25,8 +25,9 @@ export const wp079Scenario = createNegativePresentationScenario({
     goal: 'Verify that the Wallet Instance validates the Relying Party OpenID Federation Trust Chain and stops when it cannot be built up to the configured Trust Anchor.',
     expectedBehavior:
       'The wallet requests the Relying Party Entity Configuration and finds authority_hints that do not include the configured Trust Anchor. It must terminate the presentation without resolving a subordinate statement for the Relying Party and without retrieving the Request Object. Successful conformance is rejection, not presentation.',
+    summary: 'Verify rejection of a Relying Party whose Trust Chain does not reach the Trust Anchor.',
     observation: [
-      'Keep the wallet and the test process running while the wallet requests and inspects the Relying Party Entity Configuration.',
+      'Let the wallet request and inspect the Relying Party Entity Configuration.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports a trust error and stops.'
     ]
   }

@@ -19,6 +19,7 @@ import type { RpFaultProfile } from '@itw-conformance-tool/faults';
 /** WP_078 / WP_084: the wallet fetches the Relying Party Entity Configuration. */
 export const rpEntityConfigurationRequested: RequiredEventEvidenceExpectation = {
   event: 'rp.metadata.requested',
+  label: 'Wallet contacted the Relying Party',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/.well-known/openid-federation' }
@@ -27,6 +28,7 @@ export const rpEntityConfigurationRequested: RequiredEventEvidenceExpectation = 
 /** WP_079: Trust Chain resolution — the wallet fetches the Trust Anchor Entity Configuration. */
 export const trustAnchorEntityConfigurationRequested: RequiredEventEvidenceExpectation = {
   event: 'federation.anchor.requested',
+  label: 'Wallet contacted the Trust Anchor',
   service: 'federation',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/.well-known/openid-federation' }
@@ -39,6 +41,7 @@ export const trustAnchorEntityConfigurationRequested: RequiredEventEvidenceExpec
  */
 export const relyingPartySubordinateStatementRequested: RequiredEventEvidenceExpectation = {
   event: 'federation.fetch.requested',
+  label: 'Wallet resolved the Relying Party trust statement',
   service: 'federation',
   correlation: 'allow-uncorrelated-post-start',
   match: {
@@ -55,6 +58,7 @@ export const relyingPartySubordinateStatementRequested: RequiredEventEvidenceExp
 export function requestObjectRequested(method: 'GET' | 'POST'): RequiredEventEvidenceExpectation {
   return {
     event: 'rp.request_object.requested',
+    label: `Wallet retrieved the presentation request object over ${method}`,
     service: 'relying-party',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/auth/request/:state', method }
@@ -69,6 +73,7 @@ export function requestObjectRequested(method: 'GET' | 'POST'): RequiredEventEvi
  */
 export const authorizationResponseReceived: RequiredEventEvidenceExpectation = {
   event: 'rp.presentation_response.received',
+  label: 'Wallet returned the presentation response',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/auth/response', method: 'POST', outcome: 'response' }
@@ -81,6 +86,7 @@ export const authorizationResponseReceived: RequiredEventEvidenceExpectation = {
  */
 export const vpTokenValidationSucceeded: RequiredEventEvidenceExpectation = {
   event: 'vp_token.validation.succeeded',
+  label: 'Relying Party validated the VP token',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/auth/response' }
@@ -89,6 +95,7 @@ export const vpTokenValidationSucceeded: RequiredEventEvidenceExpectation = {
 /** WP_094: the wallet followed the RP-supplied redirect_uri to the attested callback endpoint. */
 export const attestedRedirectFollowed: RequiredEventEvidenceExpectation = {
   event: 'rp.redirect.followed',
+  label: 'Wallet followed the Relying Party redirect',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/callback', method: 'GET' }
@@ -97,6 +104,7 @@ export const attestedRedirectFollowed: RequiredEventEvidenceExpectation = {
 /** WP_090: the wallet reported a rejected Request Object to the `response_uri`. */
 export const authorizationErrorResponseReceived: RequiredEventEvidenceExpectation = {
   event: 'rp.presentation_error.received',
+  label: 'Wallet reported the presentation request error',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/auth/response', method: 'POST' }
@@ -110,6 +118,7 @@ export function rpFaultApplied(
 ): RequiredEventEvidenceExpectation {
   return {
     event: 'rp.fault.applied',
+    label: `Relying Party served the ${faultProfileType} test artifact`,
     service: 'relying-party',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint, faultProfileType, ...match }
@@ -174,6 +183,8 @@ export const presentationTimeouts: TimeoutProfile = {
 export interface NegativePresentationInstructions {
   expectedBehavior: string;
   goal: string;
+  /** Short operator-facing purpose shown near the scenario title. */
+  summary?: string;
   /** Tester actions between acquiring the engagement and the verdict. */
   observation: string[];
 }
@@ -230,6 +241,7 @@ export function createNegativePresentationScenario(
     instructions: {
       goal: options.instructions.goal,
       expectedBehavior: options.instructions.expectedBehavior,
+      summary: options.instructions.summary,
       prerequisites: [
         'The wallet app under test is installed and holds a credential that satisfies the requested presentation (PID by default).',
         isSameDevice
@@ -239,12 +251,11 @@ export function createNegativePresentationScenario(
         'The device running the wallet can reach the local Trust Anchor and Relying Party URLs printed by this test.'
       ],
       steps: [
-        `Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services, activates the ${options.rpFault.type} fault on the Relying Party, and waits for their readiness.`,
         isSameDevice
-          ? 'Open the printed presentation request deep link with the Wallet Instance on the same device.'
-          : 'Scan the printed presentation request QR payload with the Wallet Instance.',
+          ? 'Open the presentation request with the Wallet Instance on the same device.'
+          : 'Scan the presentation request QR payload with the Wallet Instance.',
         ...options.instructions.observation,
-        'The runner concludes automatically once the required evidence is recorded and the negative-observation window elapses without the wallet performing the forbidden step.'
+        'Keep the wallet and this command running until the scenario completes.'
       ]
     },
     missingRequiredEventPolicy: options.missingRequiredEventPolicy ?? 'inconclusive'
