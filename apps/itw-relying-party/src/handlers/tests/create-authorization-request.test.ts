@@ -12,6 +12,7 @@ import authorizationRequestRoute from '../../routes/authorization-request.js';
 import { callbacks as partialCallbacks, getEncryptJweCallback, getSignJwtCallback } from '../../utils/crypto.js';
 
 import type { RpFaultProfile } from '@itw-conformance-tool/faults';
+import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { JWK } from 'jose';
 
 const RP_BASE_URL = 'https://rp.example.org';
@@ -73,9 +74,9 @@ async function buildApp(options: { fault?: RpFaultProfile } = {}) {
   });
   app.decorate('callbacks', {
     ...partialCallbacks,
-    encryptJwe: getEncryptJweCallback(toPublicJwk(encryptionJwk)),
+    encryptJwe: getEncryptJweCallback(toPublicJwk(encryptionJwk) as Jwk),
     fetch,
-    signJwt: getSignJwtCallback([signingJwk])
+    signJwt: getSignJwtCallback([signingJwk as Jwk])
   });
   app.decorate('sdkConfig', new IoWalletSdkConfig({ itWalletSpecsVersion: ItWalletSpecsVersion.V1_4 }));
   app.decorate('repository', {

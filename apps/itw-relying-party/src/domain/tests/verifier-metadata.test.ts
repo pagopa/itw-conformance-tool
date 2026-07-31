@@ -41,14 +41,14 @@ describe('verifier metadata', () => {
     // A wallet may read either artifact. Two disagreeing capability sets leave
     // it with no safe choice.
     expect(clientMetadata.encrypted_response_enc_values_supported).toEqual(
-      verifier.encrypted_response_enc_values_supported
+      verifier?.encrypted_response_enc_values_supported
     );
     expect(clientMetadata.encrypted_response_alg_values_supported).toEqual(
-      verifier.encrypted_response_alg_values_supported
+      verifier?.encrypted_response_alg_values_supported
     );
-    expect(clientMetadata.vp_formats_supported).toEqual(verifier.vp_formats_supported);
-    expect(clientMetadata.client_name).toBe(verifier.client_name);
-    expect(clientMetadata.logo_uri).toBe(verifier.logo_uri);
+    expect(clientMetadata.vp_formats_supported).toEqual(verifier?.vp_formats_supported);
+    expect(clientMetadata.client_name).toBe(verifier?.client_name);
+    expect(clientMetadata.logo_uri).toBe(verifier?.logo_uri);
   });
 
   it('offers AES-GCM response encryption only, preferring A256GCM', () => {
@@ -62,7 +62,7 @@ describe('verifier metadata', () => {
     // capability off the metadata rather than infer it from the JWK's own `alg`.
     expect(buildClientMetadata().encrypted_response_alg_values_supported).toEqual(['ECDH-ES']);
     expect(
-      buildEntityConfigurationMetadata().openid_credential_verifier.encrypted_response_alg_values_supported
+      buildEntityConfigurationMetadata().openid_credential_verifier?.encrypted_response_alg_values_supported
     ).toEqual(['ECDH-ES']);
   });
 
@@ -96,7 +96,7 @@ describe('verifier metadata', () => {
     // A wallet resolving through the Trust Chain needs the signing key to verify
     // a Request Object carrying no x5c (WP_084), and the encryption key for the
     // Authorization Response.
-    expect(buildEntityConfigurationMetadata().openid_credential_verifier.jwks.keys).toEqual([
+    expect(buildEntityConfigurationMetadata().openid_credential_verifier?.jwks.keys).toEqual([
       SIGNING_JWK,
       ENCRYPTION_JWK
     ]);
@@ -109,7 +109,7 @@ describe('verifier metadata', () => {
   it('identifies the Relying Party by entity identifier in both artifacts', () => {
     // The prefixed `client_id` is a certificate hash; this is where the entity
     // identifier is actually stated.
-    expect(buildEntityConfigurationMetadata().openid_credential_verifier.client_id).toBe(RP_BASE_URL);
+    expect(buildEntityConfigurationMetadata().openid_credential_verifier?.client_id).toBe(RP_BASE_URL);
     expect(buildClientMetadata().client_id).toBe(RP_BASE_URL);
   });
 });
