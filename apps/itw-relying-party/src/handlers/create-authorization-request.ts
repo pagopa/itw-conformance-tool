@@ -1,6 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
+import {
+  createAuthorizationRequest,
+  createX509HashClientId,
+  type Openid4vpAuthorizationRequestPayload
+} from '@pagopa/io-wallet-oid4vp';
 import { DcqlQuery, getDcqlErrorFromUnknown } from 'dcql';
 import z from 'zod';
 
@@ -117,8 +121,13 @@ export const createAuthorizationRequestHandler = async (
   const state = randomUUID();
   const sessionId = randomUUID();
 
+  const client_id = await createX509HashClientId({
+    hash: req.server.callbacks.hash,
+    certificateChain: [IACA_X509]
+  });
+
   const payload: Openid4vpAuthorizationRequestPayload = {
-    client_id: 'x509_hash:' + BASE_URL,
+    client_id,
     client_metadata: {
       application_type: 'web',
       client_id: BASE_URL,
@@ -180,7 +189,7 @@ export const createAuthorizationRequestHandler = async (
   // caller asked for a specific retrieval method, leaving the default (`get`,
   // WP_082) implicit as before.
   const presentationParams = new URLSearchParams({
-    client_id: BASE_URL,
+    client_id,
     request_uri: requestUri,
     ...(request_uri_method ? { request_uri_method } : {})
   });

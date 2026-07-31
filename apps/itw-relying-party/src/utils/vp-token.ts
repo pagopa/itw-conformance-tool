@@ -1,5 +1,4 @@
 import {
-  extractClientIdPrefix,
   type Openid4vpAuthorizationRequestPayload,
   type ParseAuthorizationResponseResult
 } from '@pagopa/io-wallet-oid4vp';
@@ -124,9 +123,10 @@ export class VpTokenVerifier {
       throw new Error("vp_token header is missing 'kid' (key identifier) or it is invalid");
     }
 
-    const { clientId } = extractClientIdPrefix(this.requestObject.client_id);
-    if (kbJwt?.payload.aud !== clientId) {
-      throw new Error("vp_token key binding 'aud' does not match the client_id in the request");
+    if (kbJwt?.payload.aud !== this.requestObject.client_id) {
+      throw new Error(
+        `vp_token key binding 'aud' (${kbJwt?.payload.aud}) does not match the client_id in the request (${this.requestObject.client_id})`
+      );
     }
 
     if (kbJwt.header.typ !== 'kb+jwt') {
