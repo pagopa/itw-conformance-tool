@@ -1,12 +1,16 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload } from '@pagopa/io-wallet-oid4vp';
+import {
+  createAuthorizationRequest,
+  createX509HashClientId,
+  type Openid4vpAuthorizationRequestPayload
+} from '@pagopa/io-wallet-oid4vp';
 import { DcqlQuery, getDcqlErrorFromUnknown } from 'dcql';
 import z from 'zod';
 
 import { USER_AGENT_SESSION_COOKIE, userAgentSessionCookieOptions } from '../domain/user-agent-session.js';
 import { buildRequestObjectClientMetadata, REQUEST_URI_PATH, RESPONSE_URI_PATH } from '../domain/verifier-metadata.js';
-import { resolveClientId, toFederationRequestObjectJwt, toX509HashClientId } from '../utils/request-object.js';
+import { resolveClientId, toFederationRequestObjectJwt } from '../utils/request-object.js';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -100,7 +104,7 @@ export const createAuthorizationRequestHandler = async (
   req: FastifyRequest<{ Body: CreateAuthorizationRequestPayload }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { IACA_X509, BASE_URL } = req.server.config;
+  const { RP_X509, BASE_URL } = req.server.config;
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
@@ -139,7 +143,10 @@ export const createAuthorizationRequestHandler = async (
   // reuses the same schema), so the Request Object is always built in that shape
   // and rewritten afterwards when the scenario asked for the federation one —
   // where 1.4 makes `x5c` optional.
-  const nominalClientId = toX509HashClientId(IACA_X509);
+  const nominalClientId = await createX509HashClientId({
+    hash: req.server.callbacks.hash,
+    certificateChain: [RP_X509]
+  });
 
   const payload: Openid4vpAuthorizationRequestPayload = {
     client_id: nominalClientId,
@@ -169,7 +176,7 @@ export const createAuthorizationRequestHandler = async (
         alg: 'ES256',
         kid: req.server.jwks.sig.public.kid,
         method: 'x5c',
-        x5c: [IACA_X509]
+        x5c: [RP_X509]
       }
     }
   });
