@@ -1,8 +1,6 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
-import { isSameUserSession, USER_AGENT_SESSION_COOKIE } from '../domain/user-agent-session.js';
-
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 /**
@@ -55,24 +53,6 @@ export const getCallbackHandler = async (
     return reply.redirect('/error.html');
   }
 
-  // IT Wallet 1.4 completes the transaction only when the Same Device redirect
-  // returns in the user-agent session that started the flow, and requires the
-  // presentation to be rejected otherwise.
-  //
-  // Deliberately kept out of `isValidFollow` above: that condition gates the
-  // `rp.redirect.followed` emission, which WP_094 requires as evidence and
-  // WP_094a requires as a forbidden continuation. Folding the session check into
-  // it would suppress the event and silently break both — and a wallet that
-  // opens the redirect in an in-app webview rather than the original browser
-  // carries no cookie, which is a fact about the wallet worth observing, not a
-  // reason to stop observing. So the follow is always recorded; only the
-  // Relying Party's own verdict below depends on the session matching.
-  const sameUserSession = isSameUserSession({
-    cookieSessionId: req.cookies[USER_AGENT_SESSION_COOKIE],
-    flowType: requestObject.flowType,
-    storedSessionId: requestObject.userAgentSessionId
-  });
-
   // WP_094: the wallet followed the RP-supplied redirect_uri, landing the
   // user-agent back on the Relying Party. Correlation is disabled, so the event
   // is emitted uncorrelated and adopted as post-start evidence narrowed by the
@@ -93,18 +73,10 @@ export const getCallbackHandler = async (
         endpoint: '/callback',
         method: req.method,
         redirectUri: requestObject?.redirectUri ?? null,
-        responseCode: response_code,
-        // Whether the redirect came back in the user-agent session that started
-        // the flow. Always `true` for Cross Device, which is not session-bound.
-        sameUserSession
+        responseCode: response_code
       }
     })
   );
-
-  if (!sameUserSession) {
-    requestObjectRepository.update(state, 'rejected');
-    return reply.redirect('/error.html');
-  }
 
   return reply.redirect('/success.html');
 };

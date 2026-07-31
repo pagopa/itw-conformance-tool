@@ -1,10 +1,8 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import FastifyCookie from '@fastify/cookie';
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import { USER_AGENT_SESSION_COOKIE } from '../../domain/user-agent-session.js';
 import callbackRoute from '../../routes/callback.js';
 
 import type { ObservedEvent } from '@itw-conformance-tool/conformance';
@@ -12,8 +10,6 @@ import type { ObservedEvent } from '@itw-conformance-tool/conformance';
 const RP_BASE_URL = 'https://rp.example.org';
 /** The `redirect_uris` entry the Entity Configuration attests. */
 const ATTESTED_REDIRECT_URI = `${RP_BASE_URL}/callback`;
-/** Identifier the browser that started the flow carries in its session cookie. */
-const USER_AGENT_SESSION_ID = 'user-agent-session-id';
 
 /**
  * Builds the redirect URI exactly as `get-authorization-response.ts` does, so
@@ -27,28 +23,15 @@ function buildRedirectUri(state: string, responseCode: string): URL {
   return redirectUri;
 }
 
-interface StoredRequestObject {
-  flowType?: 'cross-device' | 'same-device';
-  redirectUri?: string;
-  status: string;
-  userAgentSessionId?: string;
-}
-
-async function buildApp(stored: StoredRequestObject | undefined) {
+async function buildApp(stored: { redirectUri?: string; status: string } | undefined) {
   const app = Fastify();
   const events: ObservedEvent[] = [];
-  const updates: { requestObjectId: string; status: string }[] = [];
 
   app.decorate('repository', {
     requestObject: {
       get: () => {
         if (!stored) throw new Error('Request object not found');
-        // Same-device with a bound session unless a case says otherwise: that is
-        // what `create-authorization-request` now writes for every flow.
-        return { flowType: 'same-device', userAgentSessionId: USER_AGENT_SESSION_ID, ...stored };
-      },
-      update: (requestObjectId: string, status: string) => {
-        updates.push({ requestObjectId, status });
+        return stored;
       }
     }
   });
@@ -58,27 +41,10 @@ async function buildApp(stored: StoredRequestObject | undefined) {
     }
   });
 
-  await app.register(FastifyCookie);
   await app.register(callbackRoute);
   await app.ready();
 
-  return { app, events, updates };
-}
-
-/**
- * Follows a redirect the way the browser holding the session cookie would.
- * Pass `null` to follow it from a user-agent carrying no cookie at all.
- */
-function followRedirect(
-  app: Awaited<ReturnType<typeof buildApp>>['app'],
-  url: string,
-  userAgentSessionId: string | null = USER_AGENT_SESSION_ID
-) {
-  return app.inject({
-    method: 'GET',
-    url,
-    ...(userAgentSessionId ? { cookies: { [USER_AGENT_SESSION_COOKIE]: userAgentSessionId } } : {})
-  });
+  return { app, events };
 }
 
 describe('GET /callback', () => {
@@ -88,7 +54,7 @@ describe('GET /callback', () => {
     const redirectUri = buildRedirectUri(state, responseCode);
     const { app, events } = await buildApp({ redirectUri: redirectUri.toString(), status: 'verified' });
 
-    const response = await followRedirect(app, `${redirectUri.pathname}${redirectUri.search}`);
+    const response = await app.inject({ method: 'GET', url: `${redirectUri.pathname}${redirectUri.search}` });
 
     expect(response.statusCode).toBe(302);
     expect(response.headers['location']).toBe('/success.html');
@@ -98,8 +64,7 @@ describe('GET /callback', () => {
       endpoint: '/callback',
       method: 'GET',
       redirectUri: redirectUri.toString(),
-      responseCode,
-      sameUserSession: true
+      responseCode
     });
 
     await app.close();
@@ -121,10 +86,10 @@ describe('GET /callback', () => {
     const redirectUri = buildRedirectUri(state, randomBytes(32).toString('hex'));
     const { app, events } = await buildApp({ redirectUri: redirectUri.toString(), status: 'verified' });
 
-    const response = await followRedirect(
-      app,
-      `/callback?state=${state}&response_code=${randomBytes(32).toString('hex')}`
-    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/callback?state=${state}&response_code=${randomBytes(32).toString('hex')}`
+    });
 
     expect(response.headers['location']).toBe('/error.html');
     expect(
@@ -141,7 +106,7 @@ describe('GET /callback', () => {
     const redirectUri = buildRedirectUri(state, responseCode);
     const { app, events } = await buildApp({ redirectUri: redirectUri.toString(), status: 'checking' });
 
-    const response = await followRedirect(app, `/callback?state=${state}&response_code=${responseCode}`);
+    const response = await app.inject({ method: 'GET', url: `/callback?state=${state}&response_code=${responseCode}` });
 
     expect(response.headers['location']).toBe('/error.html');
     expect(events.find((event) => event.name === 'rp.redirect.followed')).toBeUndefined();
@@ -152,10 +117,10 @@ describe('GET /callback', () => {
   it('rejects an unknown session without failing the request', async () => {
     const { app, events } = await buildApp(undefined);
 
-    const response = await followRedirect(
-      app,
-      `/callback?state=${randomUUID()}&response_code=${randomBytes(32).toString('hex')}`
-    );
+    const response = await app.inject({
+      method: 'GET',
+      url: `/callback?state=${randomUUID()}&response_code=${randomBytes(32).toString('hex')}`
+    });
 
     expect(response.headers['location']).toBe('/error.html');
     expect(events.find((event) => event.name === 'rp.redirect.followed')).toBeUndefined();
@@ -176,83 +141,5 @@ describe('GET /callback', () => {
     expect(missingCode.statusCode).toBe(400);
 
     await app.close();
-  });
-
-  describe('user-agent session binding', () => {
-    it('rejects a same-device redirect that returns in a different user session', async () => {
-      const state = randomUUID();
-      const responseCode = randomBytes(32).toString('hex');
-      const redirectUri = buildRedirectUri(state, responseCode);
-      const { app, events, updates } = await buildApp({
-        flowType: 'same-device',
-        redirectUri: redirectUri.toString(),
-        status: 'verified'
-      });
-
-      const response = await followRedirect(
-        app,
-        `/callback?state=${state}&response_code=${responseCode}`,
-        'another-session'
-      );
-
-      expect(response.headers['location']).toBe('/error.html');
-      expect(updates, 'the presentation must be rejected, not left verified').toContainEqual({
-        requestObjectId: state,
-        status: 'rejected'
-      });
-
-      // The follow is still observed. WP_094 requires this event as evidence and
-      // WP_094a as a forbidden continuation, so suppressing it here would make a
-      // wallet that opens the redirect outside the original browser silently
-      // unobservable rather than merely session-mismatched.
-      const followed = events.find((event) => event.name === 'rp.redirect.followed');
-      expect(followed?.diagnostic).toMatchObject({ responseCode, sameUserSession: false });
-
-      await app.close();
-    });
-
-    it('rejects a same-device redirect that carries no session cookie at all', async () => {
-      const state = randomUUID();
-      const responseCode = randomBytes(32).toString('hex');
-      const redirectUri = buildRedirectUri(state, responseCode);
-      const { app, events } = await buildApp({
-        flowType: 'same-device',
-        redirectUri: redirectUri.toString(),
-        status: 'verified'
-      });
-
-      const response = await followRedirect(app, `/callback?state=${state}&response_code=${responseCode}`, null);
-
-      expect(response.headers['location']).toBe('/error.html');
-      expect(events.find((event) => event.name === 'rp.redirect.followed')?.diagnostic).toMatchObject({
-        sameUserSession: false
-      });
-
-      await app.close();
-    });
-
-    it('does not bind the cross-device flow to a user session', async () => {
-      const state = randomUUID();
-      const responseCode = randomBytes(32).toString('hex');
-      const redirectUri = buildRedirectUri(state, responseCode);
-      const { app, events, updates } = await buildApp({
-        flowType: 'cross-device',
-        redirectUri: redirectUri.toString(),
-        status: 'verified'
-      });
-
-      // The browser that started a cross-device presentation is on another
-      // device and never navigates here, so requiring its cookie would reject a
-      // nominal flow.
-      const response = await followRedirect(app, `/callback?state=${state}&response_code=${responseCode}`, null);
-
-      expect(response.headers['location']).toBe('/success.html');
-      expect(updates).toHaveLength(0);
-      expect(events.find((event) => event.name === 'rp.redirect.followed')?.diagnostic).toMatchObject({
-        sameUserSession: true
-      });
-
-      await app.close();
-    });
   });
 });

@@ -8,7 +8,6 @@ import {
 import { DcqlQuery, getDcqlErrorFromUnknown } from 'dcql';
 import z from 'zod';
 
-import { USER_AGENT_SESSION_COOKIE, userAgentSessionCookieOptions } from '../domain/user-agent-session.js';
 import { buildRequestObjectClientMetadata, REQUEST_URI_PATH, RESPONSE_URI_PATH } from '../domain/verifier-metadata.js';
 import { toFederationClientId } from '../utils/request-object.js';
 
@@ -133,10 +132,6 @@ export const createAuthorizationRequestHandler = async (
 
   const state = randomUUID();
   const sessionId = randomUUID();
-  // IT Wallet 1.4 binds `state` to the user-agent session that started the flow
-  // and accepts the Same Device redirect back only within it. The identifier is
-  // opaque and travels to the browser in a cookie; `/callback` compares the two.
-  const userAgentSessionId = randomUUID();
 
   const isFederationPrefix = client_id_prefix === 'openid_federation';
 
@@ -198,8 +193,7 @@ export const createAuthorizationRequestHandler = async (
     flowType: flow_type,
     id: state,
     jwt: jar.authorizationRequestJwt,
-    sessionId,
-    userAgentSessionId
+    sessionId
   });
 
   const requestUri = `${BASE_URL}${REQUEST_URI_PATH}/${state}`;
@@ -217,10 +211,7 @@ export const createAuthorizationRequestHandler = async (
     baseUrl.searchParams.set(key, value);
   }
 
-  return reply
-    .setCookie(USER_AGENT_SESSION_COOKIE, userAgentSessionId, userAgentSessionCookieOptions)
-    .status(200)
-    .send({
-      url: baseUrl.toString()
-    } satisfies CreateAuthorizationRequestResponse);
+  return reply.status(200).send({
+    url: baseUrl.toString()
+  } satisfies CreateAuthorizationRequestResponse);
 };

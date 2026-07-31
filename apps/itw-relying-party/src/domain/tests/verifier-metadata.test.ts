@@ -18,6 +18,7 @@ const ENCRYPTION_JWK = { alg: 'ECDH-ES', crv: 'P-256', kid: 'rp-enc-key', kty: '
 function buildEntityConfigurationMetadata() {
   return buildVerifierEntityConfigurationMetadata({
     baseUrl: RP_BASE_URL,
+    erasure_endpoint: `${RP_BASE_URL}/erasure`,
     encryptionJwk: ENCRYPTION_JWK as PublishedJwk,
     redirectUris: [`${RP_BASE_URL}${REDIRECT_URI_PATH}`],
     requestUris: [`${RP_BASE_URL}${REQUEST_URI_PATH}`],

@@ -1,6 +1,5 @@
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 
-import FastifyCookie from '@fastify/cookie';
 import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '@itw-conformance-tool/crypto';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import Fastify from 'fastify';
@@ -61,7 +60,7 @@ async function buildApp(options: { fault?: RpFaultProfile } = {}) {
 
   const signingJwk = generateJwk('sig');
   const encryptionJwk = generateJwk('enc');
-  const storedRequestObjects: { id: string; jwt: string; userAgentSessionId: string }[] = [];
+  const storedRequestObjects: { id: string; jwt: string }[] = [];
 
   // The SDK parses the `x5c` entry it is handed, so the certificate has to be a
   // real one for this key.
@@ -82,12 +81,11 @@ async function buildApp(options: { fault?: RpFaultProfile } = {}) {
   app.decorate('repository', {
     nonce: { insert: () => undefined },
     requestObject: {
-      insert: (entry: { id: string; jwt: string; userAgentSessionId: string }) => storedRequestObjects.push(entry)
+      insert: (entry: { id: string; jwt: string }) => storedRequestObjects.push(entry)
     }
   });
   app.decorate('rpFaultStore', rpFaultStore);
 
-  await app.register(FastifyCookie);
   await app.register(authorizationRequestRoute);
   await app.ready();
 
@@ -120,7 +118,6 @@ async function createEngagement(
     engagementClientId,
     header: decodeProtectedHeader(storedRequestObjects[0].jwt),
     requestObject,
-    setCookie: response.headers['set-cookie'],
     signingJwk,
     storedRequestObject: storedRequestObjects[0],
     storedClientId: requestObject.client_id
@@ -202,21 +199,5 @@ describe('POST /create-authorization-request', () => {
 
     expect(engagementClientId).toMatch(/^x509_hash:[A-Za-z0-9_-]+$/);
     expect(engagementClientId).toBe(storedClientId);
-  });
-
-  it('binds the request to the calling user-agent session', async () => {
-    const { setCookie, storedRequestObject } = await createEngagement();
-
-    // IT Wallet 1.4 binds `state` to the browser session that started the flow.
-    // The cookie is the browser's half of that binding; the row holds the other.
-    const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-
-    expect(cookie).toContain(`rp_session=${storedRequestObject.userAgentSessionId}`);
-    expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('Secure');
-    // Lax, not None: the wallet returns the user-agent by a top-level GET
-    // navigation, which Lax permits.
-    expect(cookie).toContain('SameSite=Lax');
-    expect(cookie).toContain('Max-Age=300');
   });
 });

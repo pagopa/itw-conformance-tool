@@ -1,5 +1,3 @@
-import { USER_AGENT_SESSION_TTL_SECONDS } from '../domain/user-agent-session.js';
-
 import type { DatabaseClient } from '@itw-conformance-tool/database';
 
 type FlowType = 'same-device' | 'cross-device';
@@ -13,8 +11,6 @@ export interface RequestObject {
   sessionId: string;
   redirectUri?: string;
   status: RequestObjectStatus;
-  /** Browser session that created the request; bound to the user-agent cookie. */
-  userAgentSessionId?: string;
   values?: Record<string, null | string>[];
 }
 
@@ -26,7 +22,6 @@ type RequestObjectRow = {
   redirect_uri: string | null;
   session_id: string;
   status: RequestObjectStatus;
-  user_agent_session_id: string | null;
   values_json: string | null;
 };
 
@@ -39,7 +34,6 @@ function toRequestObject(row: RequestObjectRow): RequestObject {
     sessionId: row.session_id,
     ...(row.redirect_uri ? { redirectUri: row.redirect_uri } : {}),
     status: row.status,
-    ...(row.user_agent_session_id ? { userAgentSessionId: row.user_agent_session_id } : {}),
     ...(row.values_json ? { values: JSON.parse(row.values_json) as Record<string, null | string>[] } : {})
   };
 }
@@ -89,19 +83,17 @@ export class RequestObjectRepository {
     flowType,
     sessionId,
     id,
-    jwt,
-    userAgentSessionId
+    jwt
   }: {
     flowType: FlowType;
     sessionId: string;
     id: string;
     jwt: string;
-    userAgentSessionId: string;
   }): void {
     this.db.run(
-      `INSERT INTO relying_party_request_objects (id, expires_at, flow_type, jwt, session_id, user_agent_session_id, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
-      [id, Date.now() + USER_AGENT_SESSION_TTL_SECONDS * 1000, flowType, jwt, sessionId, userAgentSessionId]
+      `INSERT INTO relying_party_request_objects (id, expires_at, flow_type, jwt, session_id, status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
+      [id, Date.now() + 5 * 60 * 1000, flowType, jwt, sessionId]
     );
   }
 
