@@ -24,6 +24,9 @@ import {
  */
 export const wp094aScenario = createNegativePresentationScenario({
   id: 'WP_094a',
+  // Only an openid_federation engagement makes a wallet read the Entity
+  // Configuration this scenario's fault mutates.
+  clientIdPrefix: 'openid_federation',
   title:
     'Negative Path: Wallet Instance does not follow a redirect_uri that the Relying Party metadata does not attest',
   rpFault: { type: 'unattested-redirect-uri' },

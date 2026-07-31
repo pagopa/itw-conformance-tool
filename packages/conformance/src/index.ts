@@ -54,6 +54,7 @@ export type {
   StartScenarioOptions
 } from './runner/scenario-runner.js';
 export { createProtocolObservedScenarioRunner } from './runner/scenario-runner.js';
+export { createPresentationRequestPageUrl, renderTerminalQrCode, targetsLoopbackHost } from './runner/engagement.js';
 export { createScenarioPromptModel, type ScenarioPromptModel } from './runner/prompts.js';
 export { resolveTimeoutProfile, type ResolvedTimeoutProfile } from './runner/timeout-profile.js';
 export {
@@ -136,6 +137,7 @@ export type {
   ScenarioSetup,
   ScenarioStimulus,
   StimulusDefinition,
+  StimulusDelivery,
   TimeoutProfile,
   VerdictRule
 } from './scenarios/definitions.js';

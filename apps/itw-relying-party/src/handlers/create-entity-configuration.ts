@@ -3,14 +3,20 @@ import { createPrivateKey, sign } from 'node:crypto';
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import {
   createItWalletEntityConfiguration,
-  itWalletMetadataV1_3,
-  type ItWalletMetadataV1_3,
+  itWalletMetadataV1_4,
+  type ItWalletMetadataV1_4,
   type SignCallback
 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
 import { generateKeyPair, importJWK, SignJWT, type JWK } from 'jose';
 import z from 'zod';
 
+import {
+  buildVerifierEntityConfigurationMetadata,
+  REDIRECT_URI_PATH,
+  REQUEST_URI_PATH,
+  RESPONSE_URI_PATH
+} from '../domain/verifier-metadata.js';
 import { emitRpFaultApplied } from '../faults/rp-fault-evidence.js';
 
 import type { ActiveRpFault } from '../faults/rp-fault-store.js';
@@ -58,10 +64,20 @@ const INVALID_TRUST_ANCHOR_ENTITY_ID = 'https://wp-079-invalid-trust-anchor.itw-
 /**
  * Endpoint paths the `unattested-request-uri` (WP_081),
  * `unattested-response-uri` (WP_091a) and `unattested-redirect-uri` (WP_094a)
- * faults publish instead of the live ones. They differ from the real endpoints
- * by path, so neither exact nor prefix matching can accept the URI the wallet is
- * actually handed, and no route serves them: nothing ever requests an attested
- * URI, so these values only ever have to fail a comparison.
+ * faults publish instead of the live ones.
+ *
+ * An attested entry is matched against a live URI as a *path prefix*: same
+ * origin, and a path that is either equal to the attested path or continues it
+ * at a segment boundary (see `isUriUnderAttestedPrefix` in
+ * `@itw-conformance-tool/utils`). That is what lets the attested
+ * `/auth/request` cover the live `/auth/request/<state>`.
+ *
+ * Each fault path therefore has to differ from the live one *before* any
+ * segment boundary — `-unattested` is appended inside the last segment rather
+ * than below it — so a wallet applying that rule cannot accept the URI it is
+ * actually handed. No route serves these paths either: nothing ever requests an
+ * attested URI, so these values only ever have to fail a comparison.
+ * `packages/utils/src/tests/url.test.ts` pins that they do.
  */
 const UNATTESTED_REQUEST_URI_PATH = '/auth/request-unattested';
 const UNATTESTED_RESPONSE_URI_PATH = '/auth/response-unattested';
@@ -171,53 +187,33 @@ export const createEntityConfigurationHandler = async (
     trustMarkType: getTrustMarkType(TRUST_ANCHOR_URL)
   });
 
-  const metadata = {
-    federation_entity: {
-      contacts: ['info@pagopa.it'],
-      homepage_uri: 'https://io.italia.it',
-      logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
-      organization_name: 'PagoPa S.p.A.',
-      policy_uri: 'https://io.italia.it/privacy-policy'
-    },
-    openid_credential_verifier: {
-      application_type: 'web',
-      client_id: BASE_URL,
-      client_name: 'PagoPa S.p.A.',
-      encrypted_response_enc_values_supported: ['A256GCM'],
-      jwks: {
-        keys: [signingPublicKey, encryptionPublicKey]
-      },
-      logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
-      // The attested endpoint lists the wallet must check the engagement
-      // `request_uri`, the Request Object `response_uri` and the returned
-      // `redirect_uri` against (WP_081, WP_091a, WP_094a). Faults replace one
-      // list at a time with a different path, leaving the live endpoints
-      // reachable so a wallet that skips the check is observed doing so.
-      request_uris: [
-        activeFault?.type === 'unattested-request-uri'
-          ? `${BASE_URL}${UNATTESTED_REQUEST_URI_PATH}`
-          : `${BASE_URL}/auth/request`
-      ],
-      response_uris: [
-        activeFault?.type === 'unattested-response-uri'
-          ? `${BASE_URL}${UNATTESTED_RESPONSE_URI_PATH}`
-          : `${BASE_URL}/auth/response`
-      ],
-      redirect_uris: [
-        activeFault?.type === 'unattested-redirect-uri'
-          ? `${BASE_URL}${UNATTESTED_REDIRECT_URI_PATH}`
-          : `${BASE_URL}/callback`
-      ],
-      vp_formats_supported: {
-        'dc+sd-jwt': {
-          'kb-jwt_alg_values': ['ES256'],
-          'sd-jwt_alg_values': ['ES256']
-        }
-      }
-    }
-  } satisfies ItWalletMetadataV1_3;
+  // The attested endpoint lists the wallet must check the engagement
+  // `request_uri`, the Request Object `response_uri` and the returned
+  // `redirect_uri` against (WP_081, WP_091a, WP_094a). Faults replace one list
+  // at a time with a different path, leaving the live endpoints reachable so a
+  // wallet that skips the check is observed doing so.
+  const metadata: ItWalletMetadataV1_4 = buildVerifierEntityConfigurationMetadata({
+    baseUrl: BASE_URL,
+    encryptionJwk: encryptionPublicKey,
+    redirectUris: [
+      activeFault?.type === 'unattested-redirect-uri'
+        ? `${BASE_URL}${UNATTESTED_REDIRECT_URI_PATH}`
+        : `${BASE_URL}${REDIRECT_URI_PATH}`
+    ],
+    requestUris: [
+      activeFault?.type === 'unattested-request-uri'
+        ? `${BASE_URL}${UNATTESTED_REQUEST_URI_PATH}`
+        : `${BASE_URL}${REQUEST_URI_PATH}`
+    ],
+    responseUris: [
+      activeFault?.type === 'unattested-response-uri'
+        ? `${BASE_URL}${UNATTESTED_RESPONSE_URI_PATH}`
+        : `${BASE_URL}${RESPONSE_URI_PATH}`
+    ],
+    signingJwk: signingPublicKey
+  });
 
-  const parsed = itWalletMetadataV1_3.safeParse(metadata);
+  const parsed = itWalletMetadataV1_4.safeParse(metadata);
   if (!parsed.success) {
     throw new ValidationError('Invalid relying party entity configuration metadata', parsed.error);
   }

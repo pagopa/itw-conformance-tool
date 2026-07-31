@@ -72,6 +72,58 @@ async function getTrustMarks(app: Awaited<ReturnType<typeof buildApp>>['app']): 
   return decodeJwt(response.body).trust_marks as TrustMarkEntry[];
 }
 
+async function getVerifierMetadata(app: Awaited<ReturnType<typeof buildApp>>['app']): Promise<Record<string, unknown>> {
+  const response = await app.inject({ method: 'GET', url: '/.well-known/openid-federation' });
+
+  expect(response.statusCode).toBe(200);
+  const metadata = decodeJwt(response.body).metadata as Record<string, Record<string, unknown>>;
+
+  return metadata.openid_credential_verifier;
+}
+
+describe('GET /.well-known/openid-federation — verifier metadata', () => {
+  it('advertises AES-GCM response encryption, preferring A256GCM', async () => {
+    const { app } = await buildApp();
+
+    // IT Wallet mandates ECDH-ES on P-256 with AES-GCM. This list must also
+    // match the one inlined in every Request Object's client_metadata, or a
+    // wallet reading one artifact and encrypting per the other has no valid
+    // choice; verifier-metadata.test.ts pins that they agree.
+    expect((await getVerifierMetadata(app)).encrypted_response_enc_values_supported).toEqual(['A256GCM', 'A128GCM']);
+
+    await app.close();
+  });
+
+  it('advertises only the credential format the Verifier can process', async () => {
+    const { app } = await buildApp();
+
+    expect((await getVerifierMetadata(app)).vp_formats_supported).toEqual({
+      'dc+sd-jwt': { 'kb-jwt_alg_values': ['ES256'], 'sd-jwt_alg_values': ['ES256'] }
+    });
+
+    await app.close();
+  });
+
+  it('attests the live endpoints when no fault is active', async () => {
+    const { app } = await buildApp();
+    const verifier = await getVerifierMetadata(app);
+
+    expect(verifier.request_uris).toEqual([`${RP_BASE_URL}/auth/request`]);
+    expect(verifier.response_uris).toEqual([`${RP_BASE_URL}/auth/response`]);
+    expect(verifier.redirect_uris).toEqual([`${RP_BASE_URL}/callback`]);
+
+    await app.close();
+  });
+
+  it('identifies the Relying Party by entity identifier, not by the prefixed client_id', async () => {
+    const { app } = await buildApp();
+
+    expect((await getVerifierMetadata(app)).client_id).toBe(RP_BASE_URL);
+
+    await app.close();
+  });
+});
+
 describe('GET /.well-known/openid-federation', () => {
   it('publishes a Trust Mark the Relying Party issues about itself', async () => {
     const { app, federationJwk } = await buildApp();

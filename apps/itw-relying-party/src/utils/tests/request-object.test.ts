@@ -4,16 +4,25 @@ import { extractClientIdPrefix } from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 
-import { describeFederationKeyRequestObject, reissueRequestObjectJwt } from '../request-object.js';
+import {
+  describeRequestObjectKeyResolution,
+  reissueRequestObjectJwt,
+  toFederationRequestObjectJwt,
+  toX509HashClientId
+} from '../request-object.js';
 
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { JWK } from 'jose';
 
 const RP_BASE_URL = 'https://rp.example.org';
 const SIGNING_KID = 'rp-signing-key';
-// Stands in for the RP's self-signed certificate: the `federation-key` mutation
-// only has to drop it, never parse it.
+// Stands in for the RP's self-signed certificate: the federation rewrite only
+// has to drop it, never parse it.
 const CERTIFICATE = 'MIIBdummycertificate';
+// The x509_hash client_id is the hash of that certificate, so it carries no
+// entity identifier at all — which is exactly why the federation rewrite has to
+// be told the entity id rather than recovering it from here.
+const NOMINAL_CLIENT_ID = toX509HashClientId(CERTIFICATE);
 
 function generateSigningJwk(): JWK & { kid: string } {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -21,14 +30,14 @@ function generateSigningJwk(): JWK & { kid: string } {
   return { ...jwk, alg: 'ES256', kid: SIGNING_KID, use: 'sig' };
 }
 
-/** Builds a nominal Request Object as the SDK produces it at IT Wallet 1.3:
+/** Builds a nominal Request Object as the SDK produces it at IT Wallet 1.4:
  * an `x5c` certificate chain in the header and the `x509_hash` Client Identifier
  * Prefix in the claims. */
 async function createNominalRequestObject(signingJwk: JWK): Promise<string> {
   const key = await importJWK(signingJwk, 'ES256');
 
   return new SignJWT({
-    client_id: `x509_hash:${RP_BASE_URL}`,
+    client_id: NOMINAL_CLIENT_ID,
     iss: RP_BASE_URL,
     nonce: 'a-nonce',
     response_mode: 'direct_post.jwt',
@@ -40,7 +49,7 @@ async function createNominalRequestObject(signingJwk: JWK): Promise<string> {
     .sign(key);
 }
 
-describe('reissueRequestObjectJwt — federation-key mutation (WP_084)', () => {
+describe('toFederationRequestObjectJwt (WP_084)', () => {
   it('removes every key source except the federation-published kid', async () => {
     const signingJwk = generateSigningJwk();
     const nominal = await createNominalRequestObject(signingJwk);
@@ -49,9 +58,9 @@ describe('reissueRequestObjectJwt — federation-key mutation (WP_084)', () => {
       CERTIFICATE
     ]);
 
-    const jwt = await reissueRequestObjectJwt({
+    const jwt = await toFederationRequestObjectJwt({
       jwt: nominal,
-      mutation: { type: 'federation-key' },
+      relyingPartyEntityId: RP_BASE_URL,
       signingPrivateJwk: signingJwk as Jwk
     });
 
@@ -66,20 +75,23 @@ describe('reissueRequestObjectJwt — federation-key mutation (WP_084)', () => {
     expect(header.typ).toBe('oauth-authz-req+jwt');
   });
 
-  it('switches the Client Identifier Prefix to openid_federation without changing the identifier', async () => {
+  it('switches the Client Identifier Prefix to openid_federation and names the entity', async () => {
     const signingJwk = generateSigningJwk();
-    const jwt = await reissueRequestObjectJwt({
+    const jwt = await toFederationRequestObjectJwt({
       jwt: await createNominalRequestObject(signingJwk),
-      mutation: { type: 'federation-key' },
+      relyingPartyEntityId: RP_BASE_URL,
       signingPrivateJwk: signingJwk as Jwk
     });
 
     const claims = decodeJwt(jwt);
     expect(claims.client_id).toBe(`openid_federation:${RP_BASE_URL}`);
+    expect(claims.client_id, 'the mutation must not carry over the nominal certificate hash').not.toBe(
+      NOMINAL_CLIENT_ID
+    );
 
-    // WP_086 stays satisfied: once the prefix is stripped, the client_id is
-    // still the same entity as the Request Object `iss` (and as the engagement
-    // client_id and the Entity Configuration `sub`, both of which are BASE_URL).
+    // Unlike x509_hash, this prefix carries the entity identifier itself — that
+    // is what points the wallet at the Trust Chain. Stripping it must yield the
+    // Request Object `iss`, which is also the Entity Configuration `sub`.
     const { clientId, prefix } = extractClientIdPrefix(claims.client_id as string);
     expect(prefix).toBe('openid_federation');
     expect(clientId).toBe(RP_BASE_URL);
@@ -88,9 +100,9 @@ describe('reissueRequestObjectJwt — federation-key mutation (WP_084)', () => {
 
   it('keeps the Request Object validly signed with the nominal key', async () => {
     const signingJwk = generateSigningJwk();
-    const jwt = await reissueRequestObjectJwt({
+    const jwt = await toFederationRequestObjectJwt({
       jwt: await createNominalRequestObject(signingJwk),
-      mutation: { type: 'federation-key' },
+      relyingPartyEntityId: RP_BASE_URL,
       signingPrivateJwk: signingJwk as Jwk
     });
 
@@ -106,35 +118,55 @@ describe('reissueRequestObjectJwt — federation-key mutation (WP_084)', () => {
     expect(payload.response_type).toBe('vp_token');
   });
 
-  it('echoes a wallet_nonce alongside the mutation on a POST retrieval', async () => {
+  it('survives a POST retrieval that echoes a wallet_nonce', async () => {
+    // The stored Request Object is already in its federation shape, so the
+    // retrieval-time rewrite must carry that header through untouched.
     const signingJwk = generateSigningJwk();
-    const jwt = await reissueRequestObjectJwt({
+    const federation = await toFederationRequestObjectJwt({
       jwt: await createNominalRequestObject(signingJwk),
-      mutation: { type: 'federation-key' },
+      relyingPartyEntityId: RP_BASE_URL,
+      signingPrivateJwk: signingJwk as Jwk
+    });
+
+    const jwt = await reissueRequestObjectJwt({
+      jwt: federation,
       signingPrivateJwk: signingJwk as Jwk,
       walletNonce: 'wallet-provided-nonce'
     });
 
     expect(decodeJwt(jwt).wallet_nonce).toBe('wallet-provided-nonce');
+    expect(decodeJwt(jwt).client_id).toBe(`openid_federation:${RP_BASE_URL}`);
     expect(decodeProtectedHeader(jwt).x5c).toBeUndefined();
   });
+});
 
-  it('reports what was actually served as fault evidence', async () => {
+describe('describeRequestObjectKeyResolution', () => {
+  it('reports the federation shape actually served', async () => {
     const signingJwk = generateSigningJwk();
-    const jwt = await reissueRequestObjectJwt({
+    const jwt = await toFederationRequestObjectJwt({
       jwt: await createNominalRequestObject(signingJwk),
-      mutation: { type: 'federation-key' },
+      relyingPartyEntityId: RP_BASE_URL,
       signingPrivateJwk: signingJwk as Jwk
     });
 
-    expect(describeFederationKeyRequestObject(jwt)).toEqual({
-      clientId: `openid_federation:${RP_BASE_URL}`,
+    expect(describeRequestObjectKeyResolution(jwt)).toEqual({
+      clientIdPrefix: 'openid_federation',
       hasX5c: false,
       signingKeyId: SIGNING_KID
     });
   });
 
-  it('leaves the nominal header untouched when no mutation is requested', async () => {
+  it('reports the x509_hash shape actually served', async () => {
+    expect(describeRequestObjectKeyResolution(await createNominalRequestObject(generateSigningJwk()))).toEqual({
+      clientIdPrefix: 'x509_hash',
+      hasX5c: true,
+      signingKeyId: SIGNING_KID
+    });
+  });
+});
+
+describe('reissueRequestObjectJwt', () => {
+  it('leaves the header and the client identifier untouched when no mutation is requested', async () => {
     const signingJwk = generateSigningJwk();
     const jwt = await reissueRequestObjectJwt({
       jwt: await createNominalRequestObject(signingJwk),
@@ -143,7 +175,7 @@ describe('reissueRequestObjectJwt — federation-key mutation (WP_084)', () => {
     });
 
     const header = decodeProtectedHeader(jwt);
-    expect(header.x5c, 'only the federation-key profile may drop the certificate chain').toEqual([CERTIFICATE]);
-    expect(decodeJwt(jwt).client_id).toBe(`x509_hash:${RP_BASE_URL}`);
+    expect(header.x5c, 'the retrieval-time rewrite may not change the key resolution path').toEqual([CERTIFICATE]);
+    expect(decodeJwt(jwt).client_id).toBe(NOMINAL_CLIENT_ID);
   });
 });

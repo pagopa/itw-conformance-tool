@@ -4,9 +4,19 @@ import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload }
 import { DcqlQuery, getDcqlErrorFromUnknown } from 'dcql';
 import z from 'zod';
 
+import { USER_AGENT_SESSION_COOKIE, userAgentSessionCookieOptions } from '../domain/user-agent-session.js';
+import { buildRequestObjectClientMetadata, REQUEST_URI_PATH, RESPONSE_URI_PATH } from '../domain/verifier-metadata.js';
+import { resolveClientId, toFederationRequestObjectJwt, toX509HashClientId } from '../utils/request-object.js';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createAuthorizationRequestPayloadSchema = z.object({
+  client_id_prefix: z
+    .enum(['openid_federation', 'x509_hash'])
+    .default('x509_hash')
+    .describe(
+      'Client Identifier Prefix the engagement and the Request Object carry. `x509_hash` (the default) makes the wallet verify the Request Object with the x5c certificate chain and read the Verifier metadata from client_metadata; `openid_federation` makes it resolve both through the federation Trust Chain.'
+    ),
   dcqlQuery: z
     .object({
       credential_sets: z
@@ -72,8 +82,10 @@ export const createAuthorizationRequestPayloadSchema = z.object({
     .url()
     .trim()
     .min(1)
-    .default('https://continua.io.pagopa.it/itw/auth')
-    .describe('Wallet authorization endpoint used to launch the presentation flow.')
+    .default('openid4vp://')
+    .describe(
+      'Wallet authorization endpoint used to launch the presentation flow. Defaults to the OpenID4VP custom scheme; pass a wallet-specific scheme or universal link to engage a particular Wallet Solution.'
+    )
 });
 
 export type CreateAuthorizationRequestPayload = z.infer<typeof createAuthorizationRequestPayloadSchema>;
@@ -92,7 +104,7 @@ export const createAuthorizationRequestHandler = async (
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
-  const { dcqlQuery, flow_type, request_uri_method, wallet_auth_base_uri } =
+  const { client_id_prefix, dcqlQuery, flow_type, request_uri_method, wallet_auth_base_uri } =
     createAuthorizationRequestPayloadSchema.parse(req.body);
 
   let parsedQuery: DcqlQuery.Output;
@@ -116,37 +128,31 @@ export const createAuthorizationRequestHandler = async (
 
   const state = randomUUID();
   const sessionId = randomUUID();
+  // IT Wallet 1.4 binds `state` to the user-agent session that started the flow
+  // and accepts the Same Device redirect back only within it. The identifier is
+  // opaque and travels to the browser in a cookie; `/callback` compares the two.
+  const userAgentSessionId = randomUUID();
+
+  // The `x509_hash` identifier hashes the very certificate published as `x5c`
+  // below, so a wallet resolving that prefix finds the two agree. The SDK's JAR
+  // header schema demands `x5c` at IT Wallet 1.4 just as it did at 1.3 (1.4
+  // reuses the same schema), so the Request Object is always built in that shape
+  // and rewritten afterwards when the scenario asked for the federation one —
+  // where 1.4 makes `x5c` optional.
+  const nominalClientId = toX509HashClientId(IACA_X509);
 
   const payload: Openid4vpAuthorizationRequestPayload = {
-    client_id: 'x509_hash:' + BASE_URL,
-    client_metadata: {
-      application_type: 'web',
-      client_id: BASE_URL,
-      client_name: 'IT Wallet Relying Party',
-      encrypted_response_enc_values_supported: ['A256CBC-HS512'],
-      jwks: {
-        keys: [req.server.jwks.enc.public]
-      },
-      logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
-      request_uris: [`${BASE_URL}/auth/request`],
-      response_uris: [`${BASE_URL}/auth/response`],
-      vp_formats_supported: {
-        'dc+sd-jwt': {
-          'kb-jwt_alg_values': ['ES256'],
-          'sd-jwt_alg_values': ['ES256', 'ES384']
-        },
-        mso_mdoc: {
-          deviceauth_alg_values: [-9, -50],
-          issuerauth_alg_values: [-9, -50]
-        }
-      }
-    },
+    client_id: nominalClientId,
+    client_metadata: buildRequestObjectClientMetadata({
+      baseUrl: BASE_URL,
+      encryptionJwk: req.server.jwks.enc.public
+    }),
     dcql_query: dcqlQuery,
     iss: BASE_URL,
     nonce,
     response_mode: 'direct_post.jwt',
     response_type: 'vp_token',
-    response_uri: `${BASE_URL}/auth/response?session_id=${sessionId}`,
+    response_uri: `${BASE_URL}${RESPONSE_URI_PATH}?session_id=${sessionId}`,
     state
   };
 
@@ -168,19 +174,35 @@ export const createAuthorizationRequestHandler = async (
     }
   });
 
+  // Stored in the shape the wallet will be served: the retrieval handler reuses
+  // this header verbatim, so the key resolution path the engagement announces is
+  // decided here, once, and cannot drift from the `client_id` below.
+  const requestObjectJwt =
+    client_id_prefix === 'openid_federation'
+      ? await toFederationRequestObjectJwt({
+          jwt: jar.authorizationRequestJwt,
+          relyingPartyEntityId: BASE_URL,
+          signingPrivateJwk: req.server.jwks.sig.private
+        })
+      : jar.authorizationRequestJwt;
+
   requestObjectRepository.insert({
     flowType: flow_type,
     id: state,
-    jwt: jar.authorizationRequestJwt,
-    sessionId
+    jwt: requestObjectJwt,
+    sessionId,
+    userAgentSessionId
   });
 
-  const requestUri = `${BASE_URL}/auth/request/${state}`;
+  const requestUri = `${BASE_URL}${REQUEST_URI_PATH}/${state}`;
+  // OpenID4VP requires the engagement `client_id` to be identical to the
+  // Request Object `client_id` claim, including the Client Identifier Prefix.
+  const engagementClientId = resolveClientId(nominalClientId, BASE_URL, client_id_prefix);
   // `request_uri_method` is only advertised when the
   // caller asked for a specific retrieval method, leaving the default (`get`,
   // WP_082) implicit as before.
   const presentationParams = new URLSearchParams({
-    client_id: BASE_URL,
+    client_id: engagementClientId,
     request_uri: requestUri,
     ...(request_uri_method ? { request_uri_method } : {})
   });
@@ -190,7 +212,10 @@ export const createAuthorizationRequestHandler = async (
     baseUrl.searchParams.set(key, value);
   }
 
-  return reply.status(200).send({
-    url: baseUrl.toString()
-  } satisfies CreateAuthorizationRequestResponse);
+  return reply
+    .setCookie(USER_AGENT_SESSION_COOKIE, userAgentSessionId, userAgentSessionCookieOptions)
+    .status(200)
+    .send({
+      url: baseUrl.toString()
+    } satisfies CreateAuthorizationRequestResponse);
 };

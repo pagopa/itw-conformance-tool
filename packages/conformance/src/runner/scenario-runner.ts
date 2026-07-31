@@ -19,13 +19,15 @@ import { getForbiddenEventNames, getRequiredEventName, hasVerdictRule } from '..
 import {
   type LocalServiceEndpoints,
   type ProtocolObservedScenarioDefinition,
-  type ScenarioStimulus
+  type ScenarioStimulus,
+  type StimulusDelivery
 } from '../scenarios/definitions.js';
 import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
 import { type RpFaultController } from '../services/rp-fault-controller.js';
 import { type TrustAnchorFaultController } from '../services/trust-anchor-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
+import { createPresentationRequestPageUrl, renderTerminalQrCode, targetsLoopbackHost } from './engagement.js';
 import { createScenarioPromptModel } from './prompts.js';
 
 import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
@@ -38,10 +40,10 @@ const DEFAULT_ISSUER_FAULT_SPEC_VERSION = '1.4';
 
 /**
  * Default IT Wallet specification version reported at Relying Party fault
- * activation when not overridden. The local Relying Party is pinned to `1.3`
+ * activation when not overridden. The local Relying Party is pinned to `1.4`
  * (see `apps/itw-relying-party/src/plugins/sdk.ts`).
  */
-const DEFAULT_RP_FAULT_SPEC_VERSION = '1.3';
+const DEFAULT_RP_FAULT_SPEC_VERSION = '1.4';
 
 export interface StartScenarioOptions {
   signal?: AbortSignal;
@@ -84,7 +86,7 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   issuerFaultSpecVersion?: string;
   /** Required to run any scenario that declares `setup.rpFault`. */
   rpFaultController?: RpFaultController;
-  /** IT Wallet specification version reported when activating a Relying Party fault. Defaults to '1.3'. */
+  /** IT Wallet specification version reported when activating a Relying Party fault. Defaults to '1.4'. */
   rpFaultSpecVersion?: string;
   /** Required to run any scenario that declares `setup.trustAnchorFault`. */
   trustAnchorFaultController?: TrustAnchorFaultController;
@@ -92,6 +94,12 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   trustAnchorFaultSpecVersion?: string;
   /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
   browserOpener?: BrowserOpener;
+  /**
+   * Base URI presentation engagements are built on: the Wallet Solution's
+   * custom scheme or claimed universal link. Omitted, the Relying Party keeps
+   * its own default.
+   */
+  walletAuthBaseUri?: string;
 }
 
 function defaultWrite(message: string): void {
@@ -129,7 +137,8 @@ async function createStimulus(
   definition: ProtocolObservedScenarioDefinition,
   endpoints: LocalServiceEndpoints,
   correlationId: string,
-  issuerFaultProfile: IssuerFaultProfile | undefined
+  issuerFaultProfile: IssuerFaultProfile | undefined,
+  walletAuthBaseUri: string | undefined
 ): Promise<CreatedStimulus> {
   if (definition.stimulus.type === 'credential-offer') {
     const credentialIssuer = endpoints.credentialIssuer;
@@ -170,7 +179,12 @@ async function createStimulus(
     // flow (the verifier polls status). This decides whether a redirect_uri
     // follow is expected.
     const flowType = definition.stimulus.delivery.includes('deep-link') ? 'same-device' : 'cross-device';
-    const uri = await createPresentationRequestUri(relyingParty, flowType, definition.stimulus.requestUriMethod);
+    const uri = await createPresentationRequestUri(relyingParty, {
+      clientIdPrefix: definition.stimulus.clientIdPrefix,
+      flowType,
+      requestUriMethod: definition.stimulus.requestUriMethod,
+      walletAuthBaseUri
+    });
     return {
       correlationId: extractPresentationCorrelationId(uri),
       stimulus: { type: 'presentation-request', uri, qrCode: uri }
@@ -218,7 +232,8 @@ function showPrompt(
   definition: ProtocolObservedScenarioDefinition,
   stimulus: ScenarioStimulus,
   endpoints: LocalServiceEndpoints,
-  write: (message: string) => void
+  write: (message: string) => void,
+  terminalQrCode?: string
 ): void {
   const prompt = createScenarioPromptModel(definition, stimulus);
   const testerActionTimeoutSeconds = Math.ceil(definition.timeouts.testerActionMs / 1000);
@@ -255,8 +270,13 @@ function showPrompt(
 
   if (prompt.stimulus.type === 'presentation-request') {
     write('');
-    write(chalk.bold.blue('Presentation request QR payload'));
+    write(chalk.bold.blue('Presentation engagement URI'));
+    write(chalk.cyan(prompt.stimulus.uri));
     write(chalk.dim(decodeURIComponent(prompt.stimulus.qrCode)));
+    if (terminalQrCode) {
+      write('');
+      write(terminalQrCode);
+    }
   }
 
   write('');
@@ -294,6 +314,46 @@ async function openCredentialOfferPage(
   }
 }
 
+/** Opens the Relying Party page that renders the engagement as a QR code, the
+ * cross-device counterpart of the Credential Offer page.
+ */
+async function openPresentationRequestPage(
+  stimulus: ScenarioStimulus,
+  endpoints: LocalServiceEndpoints,
+  browserOpener: BrowserOpener,
+  write: (message: string) => void
+): Promise<void> {
+  if (stimulus.type !== 'presentation-request') return;
+
+  const relyingParty = endpoints.relyingParty;
+  if (!relyingParty) return;
+
+  const pageUrl = createPresentationRequestPageUrl(relyingParty, stimulus.uri);
+
+  try {
+    await browserOpener(pageUrl);
+  } catch (error) {
+    write(chalk.yellow('Could not open the presentation request page in the default browser.'));
+    write(chalk.dim(`Open it manually if needed: ${pageUrl}`));
+    write(chalk.dim(error instanceof Error ? error.message : String(error)));
+    write('');
+  }
+}
+
+/** Warns when a cross-device QR engagement points at a loopback host, which the
+ * scanning device resolves to itself instead of to the local services.
+ */
+function warnAboutUnreachableEngagementHost(stimulus: ScenarioStimulus, write: (message: string) => void): void {
+  if (stimulus.type !== 'presentation-request') return;
+  if (!targetsLoopbackHost(stimulus.uri)) return;
+
+  write(
+    chalk.yellow(
+      'This engagement points at a loopback host, which a scanning device resolves to itself. For a cross-device flow, set the local service URLs in config.ini to this machine’s LAN address.'
+    )
+  );
+}
+
 export function createProtocolObservedScenarioRunner(
   options: CreateProtocolObservedScenarioRunnerOptions
 ): ScenarioRunner {
@@ -318,6 +378,7 @@ export function createProtocolObservedScenarioRunner(
       let stopped = false;
       let outcome: ScenarioOutcome | undefined;
       let credentialOfferPageOpened = false;
+      let presentationRequestPageOpened = false;
 
       const issuerFaultProfile = definition.setup?.issuerFault;
       const issuerConfig = definition.setup?.issuerConfig;
@@ -422,7 +483,8 @@ export function createProtocolObservedScenarioRunner(
           definition,
           endpoints,
           initialCorrelationId,
-          issuerFaultProfile
+          issuerFaultProfile,
+          options.walletAuthBaseUri
         );
         const eventBridge = await options.eventBridgeFactory?.({
           correlationId,
@@ -470,8 +532,27 @@ export function createProtocolObservedScenarioRunner(
           events: eventStore,
           abortSignal: abortController.signal,
           async showInstructions() {
-            showPrompt(definition, stimulus, endpoints, write);
+            // A scenario declaring a QR delivery gets the engagement rendered as
+            // a scannable code; a deep-link one is transferred to the wallet's
+            // device by the tester, from the clipboard.
+            const delivery: readonly StimulusDelivery[] =
+              definition.stimulus.type === 'presentation-request' ? definition.stimulus.delivery : [];
+            const showQrCode = delivery.includes('qr');
+
+            const terminalQrCode =
+              showQrCode && stimulus.type === 'presentation-request'
+                ? await renderTerminalQrCode(stimulus.uri)
+                : undefined;
+
+            showPrompt(definition, stimulus, endpoints, write, terminalQrCode);
             await copyQrPayloadToClipboard(stimulus, write);
+            if (showQrCode) {
+              warnAboutUnreachableEngagementHost(stimulus, write);
+              if (!presentationRequestPageOpened) {
+                presentationRequestPageOpened = true;
+                await openPresentationRequestPage(stimulus, endpoints, browserOpener, write);
+              }
+            }
             if (!credentialOfferPageOpened) {
               credentialOfferPageOpened = true;
               await openCredentialOfferPage(stimulus, endpoints, browserOpener, write);

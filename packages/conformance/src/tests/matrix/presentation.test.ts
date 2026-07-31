@@ -249,7 +249,8 @@ describe('Test Cases for Presentation Phase', () => {
       eventBridgeFactory: createSqliteScenarioEventBridge({ db }),
       registry: presentationScenarioRegistry,
       rpFaultController,
-      rpFaultSpecVersion: '1.3'
+      rpFaultSpecVersion: '1.4',
+      walletAuthBaseUri: config.wallet.auth_base_uri
     });
   });
 
@@ -299,10 +300,11 @@ describe('Test Cases for Presentation Phase', () => {
   /**
    * Fetches the Relying Party Entity Configuration the wallet resolves.
    *
-   * Local services use ephemeral, self-signed certificates (see
-   * @itw-conformance-tool/crypto's createHttpsOptions), so a plain global
-   * `fetch()` fails TLS verification. Use `httpsRequest` with
-   * `rejectUnauthorized: false`, matching the convention used for these hosts.
+   * Local services use certificates issued by the local root CA (see
+   * @itw-conformance-tool/crypto's createHttpsOptions), which the host does
+   * not trust, so a plain global `fetch()` fails TLS verification. Use
+   * `httpsRequest` with `rejectUnauthorized: false`, matching the convention
+   * used for these hosts.
    */
   async function fetchRelyingPartyEntityConfiguration(): Promise<ReturnType<typeof decodeEntityConfiguration>> {
     const discoveryUrl = new URL('/.well-known/openid-federation', config['relying-party'].url);
@@ -403,10 +405,14 @@ describe('Test Cases for Presentation Phase', () => {
     }
 
     // Cases whose expected effect is fully covered by the protocol verdict: the
-    // required event (federation/metadata fetch, redirect, etc.) was observed.
+    // required event (Request Object retrieval, redirect, etc.) was observed.
+    //
+    // WP_078 is not among them: this flow announces the `x509_hash` trust model,
+    // under which a wallet has no reason — and no identifier — to resolve the
+    // Relying Party through the federation. The federation discovery is covered
+    // by WP_084, whose engagement asks for the `openid_federation` prefix.
     const presenceOnlyCases: [id: string, description: string][] = [
-      ['WP_076', 'Wallet Instance obtains the Remote Presentation URL from a deep link'],
-      ['WP_078', 'Wallet Instance fetches the Relying Party OpenID Federation endpoint']
+      ['WP_076', 'Wallet Instance obtains the Remote Presentation URL from a deep link']
     ];
 
     test.each(presenceOnlyCases)('[%s]: %s', () => {
@@ -518,8 +524,14 @@ describe('Test Cases for Presentation Phase', () => {
       assertConformanceOutcome(outcome, { expected: 'PASS' });
 
       const succeeded = requireEvent('vp_token.validation.succeeded');
-      const expectedAud = succeeded.diagnostic?.['clientId'];
+      // IT Wallet requires the Relying Party entity identifier; OpenID4VP 1.0
+      // requires the full prefixed Client Identifier — which, under the
+      // `x509_hash` prefix, is a certificate hash and carries no identifier.
+      // Both are accepted, so the assertion is membership rather than equality.
+      const acceptedAud = succeeded.diagnostic?.['acceptedKeyBindingAudiences'];
       const expectedNonce = succeeded.diagnostic?.['nonce'];
+
+      expect(acceptedAud, 'the Relying Party should report the audiences it accepts').toBeInstanceOf(Array);
 
       for (const presentation of vpTokenPresentations()) {
         const { issuerJwt, disclosures, kbJwt } = splitSdJwtPresentation(presentation);
@@ -530,7 +542,10 @@ describe('Test Cases for Presentation Phase', () => {
         expect(SUPPORTED_KB_JWT_ALGS, 'KB-JWT alg should be a supported signature algorithm').toContain(header.alg);
 
         expect(payload.iat, 'KB-JWT should carry a numeric iat').toBeTypeOf('number');
-        expect(payload.aud, 'KB-JWT aud should match the client_id').toBe(expectedAud);
+        expect(
+          acceptedAud as unknown[],
+          'KB-JWT aud should be the Relying Party entity identifier or the full prefixed client_id'
+        ).toContain(payload.aud);
         expect(payload.nonce, 'KB-JWT nonce should match the Request Object nonce').toBe(expectedNonce);
 
         const sdHash = payload.sd_hash;
@@ -575,6 +590,12 @@ describe('Test Cases for Presentation Phase', () => {
   // request_uri_method=post, so the Request Object is retrieved with a POST
   // carrying wallet_metadata and wallet_nonce (WP_083 and its WP_083a/b/c
   // checks) instead of a GET (WP_082).
+  //
+  // WP_094 is deliberately absent here. A returned `redirect_uri` instructs the
+  // wallet to send its user-agent there, and in a cross-device flow the browser
+  // that started the flow is on another device — so the Relying Party withholds
+  // it and the browser reaches the same destination by polling /status. There is
+  // no redirect for the wallet to follow, and none is expected.
   describe.skipIf(!isSelected(wpRpHappyPostScenario))(
     'Happy path — Request Object retrieved with a POST (cross-device)',
     () => {
@@ -782,9 +803,13 @@ describe('Test Cases for Presentation Phase', () => {
   );
 
   // WP_084 is a happy path, not a negative one: the wallet is expected to
-  // complete the presentation. What makes the case conclusive is that the
-  // Relying Party removed every key source except the federation metadata, so a
-  // completed flow can only mean the wallet resolved the key from there.
+  // complete the presentation. What makes the case conclusive is the trust model
+  // its engagement announces — `openid_federation` leaves the federation
+  // metadata as the only place the signing key exists, so a completed flow can
+  // only mean the wallet resolved the key from there.
+  //
+  // It is therefore also the run that exercises the federation discovery, which
+  // an `x509_hash` engagement never triggers: WP_078 lives here.
   describe.skipIf(!isSelected(wp084Scenario))(
     'Happy path — Relying Party key published only in the federation metadata',
     () => {
@@ -794,6 +819,15 @@ describe('Test Cases for Presentation Phase', () => {
         run = await runPresentationScenario(wp084Scenario);
       }, wp084Scenario.timeouts.vitestTestMs);
 
+      test('[WP_078]: Wallet Instance fetches the Relying Party OpenID Federation endpoint', () => {
+        assertConformanceOutcome(run.outcome, { expected: 'PASS' });
+
+        expect(
+          findEvent(run.events, 'rp.metadata.requested'),
+          'Wallet must resolve the Relying Party Entity Configuration when the client_id names the entity'
+        ).toBeDefined();
+      });
+
       test(
         '[WP_084]: Wallet Instance resolves the Relying Party public key from metadata.openid_credential_verifier.jwks using the Request Object kid',
         async () => {
@@ -801,22 +835,21 @@ describe('Test Cases for Presentation Phase', () => {
 
           // The served Request Object really did carry no certificate chain,
           // and the kid the wallet had to resolve is recorded alongside it.
-          expectFaultApplied(run.events, 'request-object-federation-key', {
-            hasX5c: false,
-            keyResolution: 'federation'
-          });
+          const requestObjectEvent = findEvent(run.events, 'rp.request_object.requested');
+          expect(
+            requestObjectEvent?.diagnostic?.['clientIdPrefix'],
+            'The client_id must carry the openid_federation prefix so the wallet resolves the key through the Trust Chain'
+          ).toBe('openid_federation');
+          expect(
+            requestObjectEvent?.diagnostic?.['hasX5c'],
+            'The federation Request Object must carry no certificate chain: it is the alternative key source this case removes'
+          ).toBe(false);
 
-          const faultApplied = findEvent(run.events, 'rp.fault.applied');
-          const signingKeyId = faultApplied?.diagnostic?.['signingKeyId'];
+          const signingKeyId = requestObjectEvent?.diagnostic?.['signingKeyId'];
           expect(
             typeof signingKeyId === 'string' && signingKeyId.length > 0,
             'The Request Object must keep a kid: with no x5c it is the only handle on the signing key'
           ).toBe(true);
-
-          expect(
-            faultApplied?.diagnostic?.['clientId'],
-            'The client_id must carry the openid_federation prefix so the wallet resolves the key through the Trust Chain'
-          ).toMatch(/^openid_federation:/);
 
           // The kid must actually resolve in the Entity Configuration the wallet
           // fetched, otherwise the scenario would be unsatisfiable rather than
@@ -1020,7 +1053,7 @@ describe('Test Cases for Presentation Phase', () => {
 
       await rpFaultController.activateRpFault({
         scenarioId: probeScenarioId,
-        specVersion: '1.3',
+        specVersion: '1.4',
         profile: { type: 'invalid-trust-anchor' }
       });
 
