@@ -4,7 +4,7 @@ import FastifyCookie from '@fastify/cookie';
 import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '@itw-conformance-tool/crypto';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 import Fastify from 'fastify';
-import { decodeJwt, decodeProtectedHeader } from 'jose';
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from 'jose';
 import { describe, expect, it } from 'vitest';
 
 import { createRpFaultStore } from '../../faults/rp-fault-store.js';
@@ -67,7 +67,7 @@ async function buildApp(options: { fault?: RpFaultProfile } = {}) {
   // real one for this key.
   const certificate = convertPemToBase64Der(await createSelfSignedCertificateFromJwk(signingJwk));
 
-  app.decorate('config', { BASE_URL: RP_BASE_URL, IACA_X509: certificate });
+  app.decorate('config', { BASE_URL: RP_BASE_URL, RP_X509: certificate });
   app.decorate('jwks', {
     enc: { private: encryptionJwk, public: toPublicJwk(encryptionJwk) },
     sig: { private: signingJwk, public: toPublicJwk(signingJwk) }
@@ -91,13 +91,13 @@ async function buildApp(options: { fault?: RpFaultProfile } = {}) {
   await app.register(authorizationRequestRoute);
   await app.ready();
 
-  return { app, storedRequestObjects };
+  return { app, signingJwk, storedRequestObjects };
 }
 
 async function createEngagement(
   options: { clientIdPrefix?: 'openid_federation' | 'x509_hash'; fault?: RpFaultProfile } = {}
 ) {
-  const { app, storedRequestObjects } = await buildApp(options);
+  const { app, signingJwk, storedRequestObjects } = await buildApp(options);
 
   const response = await app.inject({
     method: 'POST',
@@ -121,6 +121,7 @@ async function createEngagement(
     header: decodeProtectedHeader(storedRequestObjects[0].jwt),
     requestObject,
     setCookie: response.headers['set-cookie'],
+    signingJwk,
     storedRequestObject: storedRequestObjects[0],
     storedClientId: requestObject.client_id
   };
@@ -161,9 +162,10 @@ describe('POST /create-authorization-request', () => {
   });
 
   it('serves the federation trust model when the caller asks for the openid_federation prefix', async () => {
-    const { engagementClientId, header, requestObject, storedClientId } = await createEngagement({
-      clientIdPrefix: 'openid_federation'
-    });
+    const { engagementClientId, header, requestObject, signingJwk, storedRequestObject, storedClientId } =
+      await createEngagement({
+        clientIdPrefix: 'openid_federation'
+      });
 
     // The prefix carries the entity identifier itself — that is what points the
     // wallet at the Trust Chain — and both copies must still agree.
@@ -178,6 +180,13 @@ describe('POST /create-authorization-request', () => {
       undefined
     );
     expect(header.kid).toBe(SIGNING_KID);
+
+    // Nothing is defective: the key a wallet resolves by that `kid` from
+    // metadata.openid_credential_verifier.jwks is the public half of the key
+    // that signed it. Only the key discovery path differs from the x509 flow.
+    await expect(
+      jwtVerify(storedRequestObject.jwt, await importJWK(toPublicJwk(signingJwk), 'ES256'))
+    ).resolves.toBeDefined();
   });
 
   it('keeps the x509_hash trust model intact when no prefix is asked for', async () => {

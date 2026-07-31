@@ -6,10 +6,9 @@ import { describe, expect, it } from 'vitest';
 
 import { createRpFaultStore } from '../../faults/rp-fault-store.js';
 import getAuthorizationRequestRoute from '../../routes/get-authorization-request.js';
-import { toFederationRequestObjectJwt, toX509HashClientId } from '../../utils/request-object.js';
+import { toX509HashClientId } from '../../utils/request-object.js';
 
 import type { ObservedEvent } from '@itw-conformance-tool/conformance';
-import type { Jwk } from '@pagopa/io-wallet-oauth2';
 import type { JWK } from 'jose';
 
 const RP_BASE_URL = 'https://rp.example.org';
@@ -109,11 +108,17 @@ describe('GET /auth/request/:state', () => {
     /** The stored artifact of an `openid_federation` engagement: no `x5c`, no
      * inlined Trust Chain, and an entity identifier behind the prefix. */
     async function createStoredFederationRequestObject(signingJwk: JWK): Promise<string> {
-      return toFederationRequestObjectJwt({
-        jwt: await createStoredRequestObject(signingJwk),
-        relyingPartyEntityId: RP_BASE_URL,
-        signingPrivateJwk: signingJwk as Jwk
-      });
+      return new SignJWT({
+        client_id: `openid_federation:${RP_BASE_URL}`,
+        iss: RP_BASE_URL,
+        nonce: 'a-nonce',
+        response_mode: 'direct_post.jwt',
+        response_type: 'vp_token',
+        response_uri: `${RP_BASE_URL}/auth/response`,
+        state: STATE
+      })
+        .setProtectedHeader({ alg: 'ES256', kid: SIGNING_KID, typ: 'oauth-authz-req+jwt' })
+        .sign(await importJWK(signingJwk, 'ES256'));
     }
 
     it('serves a Request Object whose only key handle is the federation-published kid', async () => {

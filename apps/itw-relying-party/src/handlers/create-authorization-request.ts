@@ -10,8 +10,9 @@ import z from 'zod';
 
 import { USER_AGENT_SESSION_COOKIE, userAgentSessionCookieOptions } from '../domain/user-agent-session.js';
 import { buildRequestObjectClientMetadata, REQUEST_URI_PATH, RESPONSE_URI_PATH } from '../domain/verifier-metadata.js';
-import { resolveClientId, toFederationRequestObjectJwt } from '../utils/request-object.js';
+import { toFederationClientId } from '../utils/request-object.js';
 
+import type { JwtSignerFederation, JwtSignerX5c } from '@pagopa/io-wallet-oauth2';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createAuthorizationRequestPayloadSchema = z.object({
@@ -137,19 +138,33 @@ export const createAuthorizationRequestHandler = async (
   // opaque and travels to the browser in a cookie; `/callback` compares the two.
   const userAgentSessionId = randomUUID();
 
-  // The `x509_hash` identifier hashes the very certificate published as `x5c`
-  // below, so a wallet resolving that prefix finds the two agree. The SDK's JAR
-  // header schema demands `x5c` at IT Wallet 1.4 just as it did at 1.3 (1.4
-  // reuses the same schema), so the Request Object is always built in that shape
-  // and rewritten afterwards when the scenario asked for the federation one —
-  // where 1.4 makes `x5c` optional.
-  const nominalClientId = await createX509HashClientId({
-    hash: req.server.callbacks.hash,
-    certificateChain: [RP_X509]
-  });
+  const isFederationPrefix = client_id_prefix === 'openid_federation';
+
+  // OpenID4VP requires the engagement `client_id` to be identical to the
+  // Request Object `client_id` claim, including the Client Identifier Prefix, so
+  // a single value serves both. The `x509_hash` identifier hashes the very
+  // certificate published as `x5c` below, so a wallet resolving that prefix
+  // finds the two agree; `openid_federation` carries the entity identifier
+  // instead, which is what points the wallet at the Trust Chain.
+  const clientId = isFederationPrefix
+    ? toFederationClientId(BASE_URL)
+    : await createX509HashClientId({
+        hash: req.server.callbacks.hash,
+        certificateChain: [RP_X509]
+      });
+
+  // The signer decides how a wallet resolves the key, so it is chosen with the
+  // prefix — the SDK rejects the two disagreeing. The federation signer offers
+  // no alternative key source: no `x5c`, and no inlined `trust_chain` that would
+  // already carry the Entity Configuration, leaving `kid` as the only handle on
+  // the signing key (WP_084). IT Wallet 1.4 makes `x5c` optional precisely so
+  // the JAR header can take that shape.
+  const jwtSigner: JwtSignerFederation | JwtSignerX5c = isFederationPrefix
+    ? { alg: 'ES256', kid: req.server.jwks.sig.public.kid, method: 'federation' }
+    : { alg: 'ES256', kid: req.server.jwks.sig.public.kid, method: 'x5c', x5c: [RP_X509] };
 
   const payload: Openid4vpAuthorizationRequestPayload = {
-    client_id: nominalClientId,
+    client_id: clientId,
     client_metadata: buildRequestObjectClientMetadata({
       baseUrl: BASE_URL,
       encryptionJwk: req.server.jwks.enc.public
@@ -172,44 +187,27 @@ export const createAuthorizationRequestHandler = async (
     config: req.server.sdkConfig,
     jar: {
       expiresInSeconds: 10000,
-      jwtSigner: {
-        alg: 'ES256',
-        kid: req.server.jwks.sig.public.kid,
-        method: 'x5c',
-        x5c: [RP_X509]
-      }
+      jwtSigner
     }
   });
 
   // Stored in the shape the wallet will be served: the retrieval handler reuses
   // this header verbatim, so the key resolution path the engagement announces is
-  // decided here, once, and cannot drift from the `client_id` below.
-  const requestObjectJwt =
-    client_id_prefix === 'openid_federation'
-      ? await toFederationRequestObjectJwt({
-          jwt: jar.authorizationRequestJwt,
-          relyingPartyEntityId: BASE_URL,
-          signingPrivateJwk: req.server.jwks.sig.private
-        })
-      : jar.authorizationRequestJwt;
-
+  // decided here, once, and cannot drift from the `client_id` it carries.
   requestObjectRepository.insert({
     flowType: flow_type,
     id: state,
-    jwt: requestObjectJwt,
+    jwt: jar.authorizationRequestJwt,
     sessionId,
     userAgentSessionId
   });
 
   const requestUri = `${BASE_URL}${REQUEST_URI_PATH}/${state}`;
-  // OpenID4VP requires the engagement `client_id` to be identical to the
-  // Request Object `client_id` claim, including the Client Identifier Prefix.
-  const engagementClientId = resolveClientId(nominalClientId, BASE_URL, client_id_prefix);
   // `request_uri_method` is only advertised when the
   // caller asked for a specific retrieval method, leaving the default (`get`,
   // WP_082) implicit as before.
   const presentationParams = new URLSearchParams({
-    client_id: engagementClientId,
+    client_id: clientId,
     request_uri: requestUri,
     ...(request_uri_method ? { request_uri_method } : {})
   });

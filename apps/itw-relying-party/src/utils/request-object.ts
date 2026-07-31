@@ -80,25 +80,6 @@ export function toFederationClientId(entityId: string): string {
 }
 
 /**
- * The `client_id` both the engagement and the Request Object must carry.
- *
- * OpenID4VP requires the two to be identical, *including* the Client Identifier
- * Prefix, so a single function answers for both.
- *
- * @param nominalClientId - The `x509_hash` client identifier built from the leaf certificate.
- * @param relyingPartyEntityId - The Relying Party base URL, used by the `openid_federation` prefix.
- * @param clientIdPrefix - The prefix the scenario asked for.
- * @returns The client identifier a wallet will find in both the engagement and the Request Object.
- */
-export function resolveClientId(
-  nominalClientId: string,
-  relyingPartyEntityId: string,
-  clientIdPrefix: ClientIdPrefix
-): string {
-  return clientIdPrefix === 'openid_federation' ? toFederationClientId(relyingPartyEntityId) : nominalClientId;
-}
-
-/**
  * A syntactically valid entity identifier that is not the `sub` of the Relying
  * Party Entity Configuration: `.invalid` is reserved by RFC 2606, so it can
  * never resolve to a real federation participant. Used only by the
@@ -162,42 +143,6 @@ function decomposeRequestObject(jwt: string): { header: Record<string, unknown>;
   void b64;
 
   return { header: header as Record<string, unknown>, payload: { ...decodeJwt(jwt) } };
-}
-
-export interface ToFederationRequestObjectOptions {
-  /** The Request Object as the SDK produced it: `x509_hash` `client_id`, `x5c` in the header. */
-  jwt: string;
-  /** The Relying Party entity identifier, which the `openid_federation` prefix carries. */
-  relyingPartyEntityId: string;
-  /** The Relying Party signing key, published in `metadata.openid_credential_verifier.jwks`. */
-  signingPrivateJwk: Jwk;
-}
-
-/**
- * Rewrites an `x509_hash` Request Object into its `openid_federation` form.
- *
- * Nothing about the Request Object becomes defective: it stays validly signed
- * with the same Relying Party key, and that key is published in
- * `metadata.openid_credential_verifier.jwks`. What changes is where a wallet can
- * find it. Both non-federation key sources are removed — the leaf certificate
- * chain, and an inlined `trust_chain` that would already carry the Entity
- * Configuration — leaving `kid` as the only handle on the signing key, so the
- * sole way to obtain it is to resolve the Relying Party through the Trust Chain.
- *
- * The Client Identifier Prefix has to change with it: `x509_hash` tells a wallet
- * to take the key from the header's `x5c`, which is exactly the path this
- * removes. The identifier behind the prefix is the entity identifier, so the
- * Request Object `iss` and the Entity Configuration `sub` stay consistent with
- * it (WP_086).
- */
-export async function toFederationRequestObjectJwt(options: ToFederationRequestObjectOptions): Promise<string> {
-  const { header, payload } = decomposeRequestObject(options.jwt);
-
-  delete header.x5c;
-  delete header.trust_chain;
-  payload.client_id = toFederationClientId(options.relyingPartyEntityId);
-
-  return signRequestObject({ header, payload, signingPrivateJwk: options.signingPrivateJwk });
 }
 
 export interface ReissueRequestObjectOptions {
