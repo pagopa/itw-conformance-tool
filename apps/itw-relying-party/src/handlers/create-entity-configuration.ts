@@ -188,6 +188,7 @@ export const createEntityConfigurationHandler = async (
         keys: [signingPublicKey, encryptionPublicKey]
       },
       logo_uri: 'https://io.italia.it/assets/img/io-it-logo-blue.svg',
+      erasure_endpoint: `${BASE_URL}/erasure`,
       // The attested endpoint lists the wallet must check the engagement
       // `request_uri`, the Request Object `response_uri` and the returned
       // `redirect_uri` against (WP_081, WP_091a, WP_094a). Faults replace one
