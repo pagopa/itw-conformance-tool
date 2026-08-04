@@ -23,6 +23,8 @@ const RP_BASE_URL = 'https://rp.example.org';
 const SESSION_ID = '11111111-2222-4333-8444-555555555555';
 const STATE = '99999999-8888-4777-8666-555555555555';
 
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 type FlowType = 'cross-device' | 'same-device';
 
 interface UpdateCall {
@@ -125,7 +127,9 @@ describe('POST /auth/response — successful presentation', () => {
 
     expect(response.statusCode, response.body).toBe(200);
     const body = response.json() as { redirect_uri?: string };
-    expect(body.redirect_uri).toMatch(new RegExp(`^${RP_BASE_URL}/callback\\?state=${STATE}&response_code=[a-f0-9]+$`));
+    expect(body.redirect_uri).toMatch(
+      new RegExp(`^${escapeRegex(RP_BASE_URL)}/callback\\?state=${STATE}&response_code=[a-f0-9]+$`)
+    );
 
     expect(updates).toEqual([
       { redirectUri: body.redirect_uri, state: STATE, status: 'verified', values: [DISCLOSED_CLAIMS] }
@@ -148,7 +152,9 @@ describe('POST /auth/response — successful presentation', () => {
     const { updates } = await postResponse('cross-device');
 
     expect(updates[0].status).toBe('verified');
-    expect(updates[0].redirectUri).toMatch(new RegExp(`^${RP_BASE_URL}/callback\\?state=${STATE}&response_code=`));
+    expect(updates[0].redirectUri).toMatch(
+      new RegExp(`^${escapeRegex(RP_BASE_URL)}/callback\\?state=${STATE}&response_code=`)
+    );
   });
 
   it('acknowledges with JSON and forbids caching', async () => {
