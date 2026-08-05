@@ -16,6 +16,11 @@ import {
  * `wp090Scenario`, which uses a validly signed but malformed Request Object so
  * that the error report itself can be demanded without conflating the two
  * checks.
+ *
+ * The signature check is trust-model agnostic, so the scenario runs on the
+ * nominal `x509_hash` engagement: the leaf certificate is right there in the
+ * header, and the signature still fails to verify against it. No federation call
+ * is expected, and the Request Object retrieval is the entry event.
  */
 export const wp085Scenario = createNegativePresentationScenario({
   id: 'WP_085',

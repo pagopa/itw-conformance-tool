@@ -18,6 +18,11 @@ const OMITTED_PARAMETER = 'nonce';
  * is the observable this scenario demands, so a wallet that stops silently is
  * reported as a failure rather than as inconclusive — unlike WP_085, whose
  * broken signature makes a silent abort a legitimate outcome.
+ *
+ * A missing REQUIRED parameter is detectable without any federation or
+ * cryptographic context, so the scenario runs on the nominal `x509_hash`
+ * engagement: no federation call is expected, and the Request Object retrieval
+ * is the entry event.
  */
 export const wp090Scenario = createNegativePresentationScenario({
   id: 'WP_090',
