@@ -112,7 +112,7 @@ export const createAuthorizationRequestHandler = async (
   req: FastifyRequest<{ Body: CreateAuthorizationRequestPayload }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { RP_X509, BASE_URL, TRUST_ANCHOR_URL } = req.server.config;
+  const { RP_X509, BASE_URL, TRUST_ANCHOR_TLS_CA, TRUST_ANCHOR_URL } = req.server.config;
   const requestObjectRepository = req.server.repository.requestObject;
   const nonceRepository = req.server.repository.nonce;
 
@@ -181,6 +181,7 @@ export const createAuthorizationRequestHandler = async (
           trustAnchorUrl: TRUST_ANCHOR_URL
         }),
         relyingPartyEntityId: BASE_URL,
+        trustAnchorTlsCa: TRUST_ANCHOR_TLS_CA,
         trustAnchorUrl: TRUST_ANCHOR_URL
       });
     } catch (error) {

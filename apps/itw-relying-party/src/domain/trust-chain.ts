@@ -1,4 +1,5 @@
 import { request } from 'node:https';
+import { rootCertificates } from 'node:tls';
 
 import { INTERNAL_SERVICE_REQUEST_HEADER } from '@itw-conformance-tool/utils';
 
@@ -33,11 +34,16 @@ const INTERNAL_REQUEST_PURPOSE = 'relying-party-trust-chain-assembly';
 /**
  * Fetches one entity statement from the Trust Anchor.
  *
- * TLS verification is deliberately off: every service in the tool runs on the
- * locally generated certificate authority, and this call never leaves the
- * tester's machine.
+ * TLS is verified. The local Trust Anchor answers on a certificate signed by
+ * the self-signed root CA `itwct init` generates, which no public trust store
+ * knows about, so that CA is *added to* the default roots rather than replacing
+ * them: a Trust Anchor configured at a public URL keeps being verified against
+ * the public authorities.
+ *
+ * @param trustAnchorTlsCa - PEM-encoded certificate authority to trust on top of
+ *   the public roots, or `undefined` to verify against the public roots alone.
  */
-async function fetchEntityStatement(url: URL): Promise<string> {
+async function fetchEntityStatement(url: URL, trustAnchorTlsCa?: string): Promise<string> {
   if (url.protocol !== 'https:') {
     throw new Error(`The Trust Anchor must be reachable over HTTPS to assemble a Trust Chain, got ${url.protocol}`);
   }
@@ -45,13 +51,14 @@ async function fetchEntityStatement(url: URL): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = request(
       {
+        ...(trustAnchorTlsCa === undefined ? {} : { ca: [...rootCertificates, trustAnchorTlsCa] }),
         headers: { [INTERNAL_SERVICE_REQUEST_HEADER]: INTERNAL_REQUEST_PURPOSE },
         hostname: url.hostname,
         method: 'GET',
         path: `${url.pathname}${url.search}`,
         port: url.port,
         protocol: url.protocol,
-        rejectUnauthorized: false,
+        rejectUnauthorized: true,
         timeout: TRUST_ANCHOR_FETCH_TIMEOUT_MS
       },
       (response) => {
@@ -89,6 +96,13 @@ export interface BuildRelyingPartyTrustChainOptions {
   entityConfigurationJwt: string;
   /** The Relying Party entity identifier, i.e. the `sub` the Trust Anchor attests. */
   relyingPartyEntityId: string;
+  /**
+   * PEM-encoded certificate authority that signed the Trust Anchor TLS
+   * certificate, for a Trust Anchor no public authority vouches for — locally,
+   * the self-signed root CA every service in the tool runs on. Omitted, the
+   * Trust Anchor is verified against the public roots alone.
+   */
+  trustAnchorTlsCa?: string;
   trustAnchorUrl: string;
 }
 
@@ -100,14 +114,14 @@ export interface BuildRelyingPartyTrustChainOptions {
  *   a Request Object is never signed over a Trust Chain that cannot be verified.
  */
 export async function buildRelyingPartyTrustChain(options: BuildRelyingPartyTrustChainOptions): Promise<TrustChain> {
-  const { entityConfigurationJwt, relyingPartyEntityId, trustAnchorUrl } = options;
+  const { entityConfigurationJwt, relyingPartyEntityId, trustAnchorTlsCa, trustAnchorUrl } = options;
 
   const subordinateStatementUrl = new URL(SUBORDINATE_STATEMENT_PATH, trustAnchorUrl);
   subordinateStatementUrl.searchParams.set('sub', relyingPartyEntityId);
 
   const [subordinateStatement, trustAnchorEntityConfiguration] = await Promise.all([
-    fetchEntityStatement(subordinateStatementUrl),
-    fetchEntityStatement(new URL(ENTITY_CONFIGURATION_PATH, trustAnchorUrl))
+    fetchEntityStatement(subordinateStatementUrl, trustAnchorTlsCa),
+    fetchEntityStatement(new URL(ENTITY_CONFIGURATION_PATH, trustAnchorUrl), trustAnchorTlsCa)
   ]);
 
   return [entityConfigurationJwt, subordinateStatement, trustAnchorEntityConfiguration];

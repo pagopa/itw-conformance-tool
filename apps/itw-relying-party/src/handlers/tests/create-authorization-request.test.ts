@@ -1,10 +1,14 @@
-import { createHash, createPrivateKey, generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:https';
 import { type AddressInfo } from 'node:net';
 
 import FastifySensible from '@fastify/sensible';
-import { convertPemToBase64Der, createSelfSignedCertificateFromJwk } from '@itw-conformance-tool/crypto';
+import {
+  convertPemToBase64Der,
+  createHttpsOptions,
+  createSelfSignedCertificateFromJwk
+} from '@itw-conformance-tool/crypto';
 import { INTERNAL_SERVICE_REQUEST_HEADER } from '@itw-conformance-tool/utils';
 import { validateTrustChain } from '@pagopa/io-wallet-oid-federation';
 import { IoWalletSdkConfig, ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
@@ -74,24 +78,32 @@ interface TrustAnchorStub {
   /** Headers of every request the Relying Party made, by path. */
   requests: { headers: Record<string, string | string[] | undefined>; url: string }[];
   federationJwk: JWK & { kid: string };
+  /** PEM-encoded root CA the TLS certificate chains to, which nothing else trusts. */
+  tlsCa: string;
   url: string;
 }
 
 /**
  * A stand-in Trust Anchor serving the two statements the Relying Party cannot
  * sign for itself: the Subordinate Statement about the Relying Party, and its
- * own Entity Configuration. It runs over TLS on a throwaway self-signed
- * certificate, exactly like the real one.
+ * own Entity Configuration. It runs over TLS on a certificate built exactly as
+ * every local service builds its own — a throwaway self-signed root CA, a leaf
+ * naming the loopback interface — because that is what the Relying Party has to
+ * cope with locally.
+ *
+ * The root CA is exposed: the fetch verifies TLS, and no public authority
+ * vouches for this certificate, so the Relying Party has to be told to trust it.
  */
 async function startTrustAnchorStub(relyingPartyFederationJwk: JWK & { kid: string }): Promise<TrustAnchorStub> {
   const federationJwk = generateFederationJwk(TRUST_ANCHOR_KID);
-  const tlsJwk = generateFederationJwk('tls');
   const requests: TrustAnchorStub['requests'] = [];
+
+  const { ca, cert, key } = await createHttpsOptions();
 
   const server = createServer(
     {
-      cert: await createSelfSignedCertificateFromJwk(tlsJwk),
-      key: createPrivateKey({ key: tlsJwk as JWK, format: 'jwk' }).export({ format: 'pem', type: 'pkcs8' })
+      cert,
+      key
     },
     (request, response) => {
       requests.push({ headers: request.headers, url: request.url ?? '' });
@@ -135,6 +147,7 @@ async function startTrustAnchorStub(relyingPartyFederationJwk: JWK & { kid: stri
     },
     requests,
     federationJwk,
+    tlsCa: ca,
     url: `https://127.0.0.1:${(server.address() as AddressInfo).port}`
   };
 }
@@ -142,7 +155,12 @@ async function startTrustAnchorStub(relyingPartyFederationJwk: JWK & { kid: stri
 /** Boots the real route with the real fault store, decorated with only what the
  * handler reads. Mirrors the sibling Request Object route tests. */
 async function buildApp(
-  options: { fault?: RpFaultProfile; federationJwk?: JWK & { kid: string }; trustAnchorUrl?: string } = {}
+  options: {
+    fault?: RpFaultProfile;
+    federationJwk?: JWK & { kid: string };
+    trustAnchorTlsCa?: string;
+    trustAnchorUrl?: string;
+  } = {}
 ) {
   const app = Fastify();
   const rpFaultStore = createRpFaultStore();
@@ -168,6 +186,7 @@ async function buildApp(
   app.decorate('config', {
     BASE_URL: RP_BASE_URL,
     RP_X509: certificate,
+    TRUST_ANCHOR_TLS_CA: options.trustAnchorTlsCa,
     TRUST_ANCHOR_URL: options.trustAnchorUrl ?? 'https://ta.example.org'
   });
   app.decorate('jwks', {
@@ -205,6 +224,7 @@ async function createEngagement(
     fault?: RpFaultProfile;
     federationJwk?: JWK & { kid: string };
     includeTrustChain?: boolean;
+    trustAnchorTlsCa?: string;
     trustAnchorUrl?: string;
   } = {}
 ) {
@@ -316,6 +336,7 @@ describe('POST /create-authorization-request', () => {
         clientIdPrefix: 'openid_federation',
         federationJwk: relyingPartyFederationJwk,
         includeTrustChain: true,
+        trustAnchorTlsCa: trustAnchor.tlsCa,
         trustAnchorUrl: trustAnchor.url
       });
 
@@ -360,6 +381,35 @@ describe('POST /create-authorization-request', () => {
       for (const { headers } of trustAnchor.requests) {
         expect(headers[INTERNAL_SERVICE_REQUEST_HEADER]).toBeDefined();
       }
+    } finally {
+      await trustAnchor.close();
+    }
+  });
+
+  it('verifies the Trust Anchor TLS certificate instead of accepting any', async () => {
+    const trustAnchor = await startTrustAnchorStub(generateFederationJwk(FEDERATION_KID));
+
+    try {
+      // Same Trust Anchor as above, only its certificate authority is withheld,
+      // so the statements are now served over a certificate nothing vouches for.
+      const { app } = await buildApp({ trustAnchorUrl: trustAnchor.url });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/create-authorization-request',
+        payload: {
+          client_id_prefix: 'openid_federation',
+          dcqlQuery: DCQL_QUERY,
+          flow_type: 'cross-device',
+          include_trust_chain: true,
+          wallet_auth_base_uri: 'openid4vp://'
+        }
+      });
+
+      expect(response.statusCode, response.body).toBe(502);
+      expect(response.body).toMatch(/certificate/i);
+
+      await app.close();
     } finally {
       await trustAnchor.close();
     }
