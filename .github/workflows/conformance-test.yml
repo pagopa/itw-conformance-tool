@@ -142,7 +142,7 @@ jobs:
           sudo sh -c 'echo "127.0.0.1  trust-anchor.wct.example.org relying-party.wct.example.org wallet-provider.wct.example.org credential-issuer.wct.example.org" >> /etc/hosts'
 
       - name: Clone wallet-conformance-test
-        run: git clone --depth --branch fix/add-auth-endpoint-wallet-metadata 1 https://github.com/pagopa/wallet-conformance-test.git /tmp/wct
+        run: git clone --depth 1 --branch fix/add-auth-endpoint-wallet-metadata https://github.com/pagopa/wallet-conformance-test.git /tmp/wct
 
       - name: Install wct dependencies
         working-directory: /tmp/wct
