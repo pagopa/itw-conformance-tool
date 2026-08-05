@@ -80,6 +80,12 @@ export type RequestObjectMutation =
 export interface RequestObjectKeyResolution {
   /** The prefix the `client_id` claim carries, or `null` when it carries none. */
   clientIdPrefix: ClientIdPrefix | null;
+  /**
+   * Whether the header inlines the federation Trust Chain, which carries the
+   * Relying Party Entity Configuration — and therefore the signing key and the
+   * `sub` — without the wallet having to resolve anything over the network.
+   */
+  hasTrustChain: boolean;
   /** Whether the header offers a certificate chain to verify with. */
   hasX5c: boolean;
   /** `kid` a wallet has to look up in `metadata.openid_credential_verifier.jwks` when there is no `x5c`. */
@@ -218,6 +224,7 @@ export function describeRequestObjectKeyResolution(jwt: string): RequestObjectKe
 
   return {
     clientIdPrefix: readClientIdPrefix(decodeJwt(jwt).client_id),
+    hasTrustChain: Array.isArray((header as { trust_chain?: unknown }).trust_chain),
     hasX5c: header.x5c !== undefined,
     signingKeyId: header.kid ?? null
   };

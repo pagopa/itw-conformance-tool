@@ -37,6 +37,17 @@ export type StimulusDefinition =
       clientIdPrefix?: 'openid_federation' | 'x509_hash';
       delivery: StimulusDelivery[];
       /**
+       * Whether the Request Object header inlines the federation Trust Chain.
+       *
+       * Only meaningful together with `openid_federation`. Set, the wallet is
+       * handed the Relying Party Entity Configuration, the Subordinate
+       * Statement about it and the Trust Anchor Entity Configuration, and is
+       * therefore entitled to validate the Request Object without fetching any
+       * of them — which is precisely why a scenario that requires the fetches
+       * as evidence must leave it unset.
+       */
+      inlineTrustChain?: boolean;
+      /**
        * Retrieval method advertised for the `request_uri` in the engagement.
        * Omitted leaves it unset, so a wallet defaults to `get` (WP_082);
        * `'post'` exercises the POST retrieval (WP_083).

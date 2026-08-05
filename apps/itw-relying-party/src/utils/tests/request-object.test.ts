@@ -46,9 +46,9 @@ async function createNominalRequestObject(signingJwk: JWK): Promise<string> {
 }
 
 /** The same Request Object as the RP stores it for an `openid_federation`
- * engagement: no `x5c`, no inlined Trust Chain, and the entity identifier behind
- * the prefix, so `kid` is the only handle a wallet has on the signing key. */
-async function createFederationRequestObject(signingJwk: JWK): Promise<string> {
+ * engagement: no `x5c`, and the entity identifier behind the prefix. Without a
+ * `trustChain`, `kid` is the only handle a wallet has on the signing key. */
+async function createFederationRequestObject(signingJwk: JWK, trustChain?: string[]): Promise<string> {
   return new SignJWT({
     client_id: `openid_federation:${RP_BASE_URL}`,
     iss: RP_BASE_URL,
@@ -58,7 +58,12 @@ async function createFederationRequestObject(signingJwk: JWK): Promise<string> {
     response_uri: `${RP_BASE_URL}/auth/response`,
     state: 'a-state'
   })
-    .setProtectedHeader({ alg: 'ES256', kid: SIGNING_KID, typ: 'oauth-authz-req+jwt' })
+    .setProtectedHeader({
+      alg: 'ES256',
+      kid: SIGNING_KID,
+      typ: 'oauth-authz-req+jwt',
+      ...(trustChain ? { trust_chain: trustChain } : {})
+    })
     .sign(await importJWK(signingJwk, 'ES256'));
 }
 
@@ -68,6 +73,7 @@ describe('describeRequestObjectKeyResolution', () => {
 
     expect(describeRequestObjectKeyResolution(jwt)).toEqual({
       clientIdPrefix: 'openid_federation',
+      hasTrustChain: false,
       hasX5c: false,
       signingKeyId: SIGNING_KID
     });
@@ -76,7 +82,25 @@ describe('describeRequestObjectKeyResolution', () => {
   it('reports the x509_hash shape actually served', async () => {
     expect(describeRequestObjectKeyResolution(await createNominalRequestObject(generateSigningJwk()))).toEqual({
       clientIdPrefix: 'x509_hash',
+      hasTrustChain: false,
       hasX5c: true,
+      signingKeyId: SIGNING_KID
+    });
+  });
+
+  // WP_086 relies on this: the verdict may only claim the wallet held the Entity
+  // Configuration by value if the artifact it was served actually carried it.
+  it('reports an inlined Trust Chain when the header carries one', async () => {
+    const jwt = await createFederationRequestObject(generateSigningJwk(), [
+      'rp.entity.configuration',
+      'ta.subordinate.statement',
+      'ta.entity.configuration'
+    ]);
+
+    expect(describeRequestObjectKeyResolution(jwt)).toEqual({
+      clientIdPrefix: 'openid_federation',
+      hasTrustChain: true,
+      hasX5c: false,
       signingKeyId: SIGNING_KID
     });
   });

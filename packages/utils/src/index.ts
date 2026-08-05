@@ -9,6 +9,7 @@ export {
   type TestCategory
 } from './test-categories.js';
 export { escapeHtml, toInlineScriptStringLiteral } from './html.js';
+export { INTERNAL_SERVICE_REQUEST_HEADER, isInternalServiceRequest } from './internal-request.js';
 export * from './json-schema.js';
 export * from './result.js';
 export * from './matchers.js';

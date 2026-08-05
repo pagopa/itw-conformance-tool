@@ -86,6 +86,10 @@ export const federationDiscoveryEvidence: RequiredEventEvidenceExpectation[] = [
  * the wallet's first act. An `x509_hash` engagement starts at the Request Object
  * retrieval: everything the wallet needs travels in the Request Object, so that
  * fetch is the first thing the Relying Party sees.
+ *
+ * An inlined Trust Chain does not move it: the engagement `client_id` names the
+ * entity, so the wallet resolves the Relying Party before it has any Request
+ * Object header to read.
  */
 export function presentationEntryEvent(clientIdPrefix: PresentationClientIdPrefix): ObservedEventName {
   return clientIdPrefix === 'openid_federation' ? 'rp.metadata.requested' : 'rp.request_object.requested';
@@ -99,10 +103,15 @@ export function presentationEntryEvent(clientIdPrefix: PresentationClientIdPrefi
  * `clientIdPrefix` narrows the evidence to a Request Object served for a given
  * trust model. WP_084 needs it: what proves the wallet resolved the key through
  * the federation is that the artifact it accepted carried no `x5c` at all.
+ *
+ * `inlineTrustChain` narrows it further, to a Request Object whose header
+ * carried the Trust Chain by value — the only way a verdict can claim the
+ * wallet had the Entity Configuration in hand without having fetched it.
  */
 export function requestObjectRequested(
   method: 'GET' | 'POST',
-  clientIdPrefix?: PresentationClientIdPrefix
+  clientIdPrefix?: PresentationClientIdPrefix,
+  options: { inlineTrustChain?: boolean } = {}
 ): RequiredEventEvidenceExpectation {
   return {
     event: 'rp.request_object.requested',
@@ -111,7 +120,8 @@ export function requestObjectRequested(
     match: {
       endpoint: '/auth/request/:state',
       method,
-      ...(clientIdPrefix ? { clientIdPrefix, hasX5c: clientIdPrefix === 'x509_hash' } : {})
+      ...(clientIdPrefix ? { clientIdPrefix, hasX5c: clientIdPrefix === 'x509_hash' } : {}),
+      ...(options.inlineTrustChain === undefined ? {} : { hasTrustChain: options.inlineTrustChain })
     }
   };
 }
@@ -251,6 +261,17 @@ export interface NegativePresentationScenarioOptions {
   delivery?: ('deep-link' | 'qr')[];
   forbiddenEvents: ForbiddenEventExpectation[];
   id: string;
+  /**
+   * Hands the wallet the Trust Chain inside the Request Object header instead of
+   * leaving it to resolve one for the signature check. Only an
+   * `openid_federation` engagement honours it.
+   *
+   * It does not relieve the wallet of federation discovery: the engagement
+   * `client_id` names the entity, so a wallet still resolves the Relying Party
+   * before it has a Request Object header to read. What it changes is what the
+   * header itself has to offer once retrieved.
+   */
+  inlineTrustChain?: boolean;
   instructions: NegativePresentationInstructions;
   missingRequiredEventPolicy?: 'fail' | 'inconclusive';
   /** Evidence expected after the entry event, in observation order. */
@@ -296,6 +317,7 @@ export function createNegativePresentationScenario(
       type: 'presentation-request',
       clientIdPrefix,
       delivery,
+      ...(options.inlineTrustChain ? { inlineTrustChain: true } : {}),
       ...(options.requestUriMethod ? { requestUriMethod: options.requestUriMethod } : {})
     },
     setup: { rpFault: options.rpFault },

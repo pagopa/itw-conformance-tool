@@ -182,6 +182,7 @@ async function createStimulus(
     const uri = await createPresentationRequestUri(relyingParty, {
       clientIdPrefix: definition.stimulus.clientIdPrefix,
       flowType,
+      inlineTrustChain: definition.stimulus.inlineTrustChain,
       requestUriMethod: definition.stimulus.requestUriMethod,
       walletAuthBaseUri
     });

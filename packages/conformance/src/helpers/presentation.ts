@@ -36,6 +36,11 @@ export interface CreatePresentationRequestUriOptions {
   clientIdPrefix?: PresentationClientIdPrefix;
   /** Whether the wallet redirects back (`same-device`) or the verifier polls (`cross-device`). */
   flowType?: PresentationFlowType;
+  /**
+   * Whether the Request Object header carries the federation Trust Chain by
+   * value. Only the `openid_federation` prefix honours it.
+   */
+  inlineTrustChain?: boolean;
   /** Retrieval method advertised for the `request_uri`. */
   requestUriMethod?: PresentationRequestUriMethod;
   /** Base URI the engagement is built on; omitted, the Relying Party applies its own default. */
@@ -52,7 +57,7 @@ export async function createPresentationRequestUri(
   baseURL: string,
   options: CreatePresentationRequestUriOptions = {}
 ): Promise<string> {
-  const { clientIdPrefix, flowType = 'cross-device', requestUriMethod, walletAuthBaseUri } = options;
+  const { clientIdPrefix, flowType = 'cross-device', inlineTrustChain, requestUriMethod, walletAuthBaseUri } = options;
   const endpoint = new URL('/create-authorization-request', baseURL);
 
   const response = await httpsRequest<{ url: string }>({
@@ -66,6 +71,7 @@ export async function createPresentationRequestUri(
       dcqlQuery: createDefaultPresentationDcqlQuery(),
       flow_type: flowType,
       ...(clientIdPrefix ? { client_id_prefix: clientIdPrefix } : {}),
+      ...(inlineTrustChain ? { include_trust_chain: true } : {}),
       ...(requestUriMethod ? { request_uri_method: requestUriMethod } : {}),
       ...(walletAuthBaseUri ? { wallet_auth_base_uri: walletAuthBaseUri } : {})
     },

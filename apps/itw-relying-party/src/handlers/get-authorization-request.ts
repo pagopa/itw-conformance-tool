@@ -83,8 +83,9 @@ export const getAuthorizationRequestHandler = async (
 
   // How the wallet can resolve the key that signed what it is being served,
   // read back from the artifact itself: the `x509_hash` engagement hands it a
-  // certificate chain, the `openid_federation` one leaves `kid` as the only
-  // handle and forces a federation metadata lookup (WP_084).
+  // certificate chain, the `openid_federation` one either inlines the Trust
+  // Chain or leaves `kid` as the only handle, forcing a federation metadata
+  // lookup (WP_084).
   const keyResolution = describeRequestObjectKeyResolution(jwt);
 
   // WP_082 / WP_083: the wallet retrieves the signed Request Object from the
@@ -103,6 +104,7 @@ export const getAuthorizationRequestHandler = async (
         endpoint: '/auth/request/:state',
         method: req.method,
         clientIdPrefix: keyResolution.clientIdPrefix,
+        hasTrustChain: keyResolution.hasTrustChain,
         hasX5c: keyResolution.hasX5c,
         signingKeyId: keyResolution.signingKeyId,
         contentType: isPostRetrieval ? (req.headers['content-type'] ?? null) : null,
