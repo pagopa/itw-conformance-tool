@@ -1,6 +1,8 @@
 import z from 'zod';
 
-import type { FastifyRequest } from 'fastify';
+import { isBoundToUserSession, USER_AGENT_SESSION_COOKIE } from '../utils/user-agent-session.js';
+
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 export const getStatusParamsSchema = z.object({
   state: z.uuid().describe('Authorization request state identifier.')
@@ -21,12 +23,45 @@ export const getStatusResponseSchema = z.object({
 export type GetStatusResponse = z.infer<typeof getStatusResponseSchema>;
 
 export const getStatusHandler = async (
-  req: FastifyRequest<{ Params: GetStatusParams }>
-): Promise<GetStatusResponse> => {
+  req: FastifyRequest<{ Params: GetStatusParams }>,
+  reply: FastifyReply
+): Promise<FastifyReply | GetStatusResponse> => {
   const { state } = req.params;
   const requestObjectRepository = req.server.repository.requestObject;
 
-  const { redirectUri, status, values } = requestObjectRepository.get(state);
+  const requestObject = (() => {
+    try {
+      return requestObjectRepository.get(state);
+    } catch {
+      return undefined;
+    }
+  })();
+
+  // `state` is public: it travels inside the `request_uri` the engagement URL
+  // carries, which is rendered into the QR code and shown on screen. This
+  // endpoint hands back the disclosed credential values and deletes the session
+  // row on the terminal branches below, so the poll is bound to the browser that
+  // created the request object, exactly as `/callback` is.
+  //
+  // Bound for both flow types, unlike `/callback`: whichever flow is running,
+  // the browser polling here is the one that called
+  // `POST /create-authorization-request` — in Cross Device it is the page
+  // displaying the QR code, not the device holding the wallet.
+  //
+  // A `state` that does not exist and one belonging to another browser are
+  // answered identically, so polling cannot be used to discover which states
+  // exist.
+  if (
+    !requestObject ||
+    !isBoundToUserSession({
+      cookieSessionId: req.cookies[USER_AGENT_SESSION_COOKIE],
+      storedSessionId: requestObject.userAgentSessionId
+    })
+  ) {
+    return reply.notFound();
+  }
+
+  const { redirectUri, status, values } = requestObject;
 
   switch (status) {
     case 'verified':
