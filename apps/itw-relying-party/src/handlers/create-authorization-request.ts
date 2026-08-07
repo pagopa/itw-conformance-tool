@@ -4,6 +4,8 @@ import { createAuthorizationRequest, type Openid4vpAuthorizationRequestPayload }
 import { DcqlQuery, getDcqlErrorFromUnknown } from 'dcql';
 import z from 'zod';
 
+import { USER_AGENT_SESSION_COOKIE, userAgentSessionCookieOptions } from '../utils/user-agent-session.js';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createAuthorizationRequestPayloadSchema = z.object({
@@ -116,6 +118,10 @@ export const createAuthorizationRequestHandler = async (
 
   const state = randomUUID();
   const sessionId = randomUUID();
+  // IT Wallet 1.4 binds `state` to the user-agent session that started the flow
+  // and accepts the Same Device redirect back only within it. The identifier is
+  // opaque and travels to the browser in a cookie; `/callback` compares the two.
+  const userAgentSessionId = randomUUID();
 
   const payload: Openid4vpAuthorizationRequestPayload = {
     client_id: 'x509_hash:' + BASE_URL,
@@ -172,7 +178,8 @@ export const createAuthorizationRequestHandler = async (
     flowType: flow_type,
     id: state,
     jwt: jar.authorizationRequestJwt,
-    sessionId
+    sessionId,
+    userAgentSessionId
   });
 
   const requestUri = `${BASE_URL}/auth/request/${state}`;
@@ -190,7 +197,10 @@ export const createAuthorizationRequestHandler = async (
     baseUrl.searchParams.set(key, value);
   }
 
-  return reply.status(200).send({
-    url: baseUrl.toString()
-  } satisfies CreateAuthorizationRequestResponse);
+  return reply
+    .setCookie(USER_AGENT_SESSION_COOKIE, userAgentSessionId, userAgentSessionCookieOptions)
+    .status(200)
+    .send({
+      url: baseUrl.toString()
+    } satisfies CreateAuthorizationRequestResponse);
 };
