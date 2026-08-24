@@ -22,7 +22,7 @@ export function requiredServicesForCategory(category: TestCategory): SupervisedS
   if (category === 'issuance') return ['trust-anchor', 'credential-issuer'];
   if (category === 'presentation') return ['trust-anchor', 'relying-party'];
   if (category === 'wallet-instance') return ['trust-anchor', 'wallet-provider'];
-  if (category === 'wallet-provider') return ['trust-anchor', 'wallet-provider'];
+  if (category === 'wallet-provider') return [];
   return [];
 }
 
