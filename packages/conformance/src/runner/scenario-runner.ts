@@ -439,6 +439,12 @@ function showPrompt(
     for (const prerequisite of prompt.prerequisites) write(`  ${chalk.gray('•')} ${prerequisite}`);
   }
 
+  if (prompt.stimulus.type === 'manual-instruction' && endpoints.walletProvider) {
+    write('');
+    write(chalk.bold.blue('Wallet Provider URL'));
+    write(chalk.cyan(endpoints.walletProvider));
+  }
+
   if (verbose) {
     write('');
     write(chalk.bold.blue('Diagnostics'));
