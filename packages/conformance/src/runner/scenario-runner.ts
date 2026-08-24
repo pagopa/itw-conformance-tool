@@ -27,6 +27,7 @@ import {
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
+import { matchesRequiredEventExpectation } from '../scenarios/expectation-matching.js';
 import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
 import { type RpFaultController } from '../services/rp-fault-controller.js';
 import { type TrustAnchorFaultController } from '../services/trust-anchor-fault-controller.js';
@@ -290,16 +291,24 @@ function shouldShowCredentialOfferUri(delivery: StimulusDeliveryResult): boolean
 
 interface ProtocolProgressStep {
   eventName: ObservedEventName;
+  expectation: RequiredEventExpectation;
   label: string;
 }
 
 function createProtocolProgressSteps(definition: ProtocolObservedScenarioDefinition): ProtocolProgressStep[] {
   if (!definition.requiredEvents || definition.requiredEvents.length === 0) {
-    return [{ eventName: definition.entryEvent, label: getProtocolEventLabel(definition.entryEvent) }];
+    return [
+      {
+        eventName: definition.entryEvent,
+        expectation: definition.entryEvent,
+        label: getProtocolEventLabel(definition.entryEvent)
+      }
+    ];
   }
 
   return definition.requiredEvents.map((event) => ({
     eventName: getRequiredEventName(event),
+    expectation: event,
     label: getRequiredEventLabel(event)
   }));
 }
@@ -365,6 +374,7 @@ function writeWaitFailure(
 
 function subscribeProtocolProgress(
   definition: ProtocolObservedScenarioDefinition,
+  endpoints: LocalServiceEndpoints,
   eventStore: ScenarioEventStore,
   verbose: boolean,
   write: (message: string) => void
@@ -377,8 +387,15 @@ function subscribeProtocolProgress(
       write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
     }
 
+    // Full expectation matching (name, service, and diagnostic `match`) keeps
+    // progress in sync with verdict evidence: a scenario with repeated event
+    // names but distinct `match` criteria - e.g. two `issuer.token.requested`
+    // expectations for an authorization-code and a refresh-token grant - only
+    // advances the step whose declared criteria the observed event satisfies,
+    // instead of consuming the first unclaimed step that merely shares a name.
     const observedStepIndex = progressSteps.findIndex(
-      (step, index) => step.eventName === event.name && !observedStepIndexes.has(index)
+      (step, index) =>
+        !observedStepIndexes.has(index) && matchesRequiredEventExpectation(event, step.expectation, endpoints)
     );
     if (observedStepIndex === -1) return;
 
@@ -685,7 +702,7 @@ export function createProtocolObservedScenarioRunner(
             }
             showPrompt(definition, stimulus, endpoints, { browser, clipboard }, verbose, write);
             eventSubscription?.dispose();
-            eventSubscription = subscribeProtocolProgress(definition, eventStore, verbose, write);
+            eventSubscription = subscribeProtocolProgress(definition, endpoints, eventStore, verbose, write);
           },
           async awaitVerdict(awaitOptions = {}) {
             const signal = awaitOptions.signal ?? abortController.signal;
