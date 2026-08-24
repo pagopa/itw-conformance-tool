@@ -31,7 +31,7 @@ export function createProgram(): Command {
       // CI) fail when the conformance verdict is not PASS. Setting exitCode
       // rather than calling process.exit lets service shutdown and report
       // writing finish draining first.
-      process.exitCode = await runConformanceTests(category, { verbose: options.verbose ?? false });
+      process.exitCode = await runConformanceTests(category, { verbose: options.verbose });
     });
 
   const report = program.command('report').description('Manage conformance test reports');

@@ -39,6 +39,12 @@ export function createConformanceTestEnvironment(
   controlEndpoint?: string,
   options: RunConformanceTestsOptions = {}
 ): NodeJS.ProcessEnv {
+  // Resolve the effective verbose setting before mutating the environment so
+  // an inherited ITWCT_CONFORMANCE_VERBOSE=1 is preserved unless the CLI
+  // --verbose flag was explicitly provided (true or false).
+  const inheritedVerbose = environment[CONFORMANCE_VERBOSE_ENV_VAR] === '1';
+  const effectiveVerbose = options.verbose ?? inheritedVerbose;
+
   const testEnvironment = { ...environment };
   delete testEnvironment.ITWCT_CONFORMANCE_TEST_CATEGORY;
   delete testEnvironment[SERVICE_CONTROL_ENDPOINT_ENV_VAR];
@@ -52,7 +58,7 @@ export function createConformanceTestEnvironment(
     testEnvironment[SERVICE_CONTROL_ENDPOINT_ENV_VAR] = controlEndpoint;
   }
 
-  if (options.verbose) {
+  if (effectiveVerbose) {
     testEnvironment[CONFORMANCE_VERBOSE_ENV_VAR] = '1';
   } else if (testEnvironment.NODE_OPTIONS?.match(/--(?:inspect|inspect-brk|debug)(?:=|\b)/)) {
     delete testEnvironment.NODE_OPTIONS;
