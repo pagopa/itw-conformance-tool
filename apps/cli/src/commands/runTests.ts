@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 
 import { testCategories, type TestCategory } from '@itw-conformance-tool/utils';
@@ -65,11 +65,60 @@ export function createConformanceTestEnvironment(
   return { ...testEnvironment, FORCE_COLOR: '1' };
 }
 
-function runVitest(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<number> {
+export const VITEST_SHUTDOWN_GRACE_MS = 5_000;
+
+/**
+ * Terminates the Vitest process tree. On POSIX platforms the child is
+ * spawned as the leader of its own process group (see `runVitest`), so
+ * signaling the negated pid reaches `pnpm`, `vitest`, and any descendants
+ * they spawned. Windows lacks an equivalent primitive here, matching the
+ * limitation already accepted in `ServiceSupervisor.kill`.
+ */
+function killVitestTree(child: ChildProcess, signal: NodeJS.Signals): void {
+  try {
+    if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch {
+    // The process may have already exited between the state check and kill.
+  }
+}
+
+export function runVitest(args: string[], cwd: string, env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<number> {
   return new Promise((resolve, reject) => {
-    const child = spawn('pnpm', args, { cwd, env, shell: process.platform === 'win32', stdio: 'inherit' });
-    child.once('error', reject);
-    child.once('exit', (code) => resolve(code ?? 1));
+    const child = spawn('pnpm', args, {
+      cwd,
+      env,
+      shell: process.platform === 'win32',
+      stdio: 'inherit',
+      detached: process.platform !== 'win32'
+    });
+
+    let escalationTimer: NodeJS.Timeout | undefined;
+
+    const onAbort = (): void => {
+      killVitestTree(child, 'SIGTERM');
+      escalationTimer = setTimeout(() => killVitestTree(child, 'SIGKILL'), VITEST_SHUTDOWN_GRACE_MS);
+      escalationTimer.unref();
+    };
+
+    const cleanup = (): void => {
+      clearTimeout(escalationTimer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    child.once('error', (error) => {
+      cleanup();
+      reject(error);
+    });
+    child.once('exit', (code) => {
+      cleanup();
+      resolve(code ?? 1);
+    });
   });
 }
 
@@ -87,12 +136,14 @@ export async function runConformanceTests(
     options
   );
   const supervisor = new ServiceSupervisor({ cwd: nxRootPath, env: serviceEnvironment });
+  const abortController = new AbortController();
   let cancellationRequested = false;
   let stopPromise: Promise<void> | undefined;
   const stop = (): void => {
     cancellationRequested = true;
     // eslint-disable-next-line no-console
     console.log('\nCancellation requested. Stopping local services...');
+    abortController.abort();
     stopPromise ??= supervisor.stopAll();
   };
   process.once('SIGINT', stop);
@@ -116,7 +167,8 @@ export async function runConformanceTests(
         process.stdout.isTTY === true,
         controlServer.endpoint,
         options
-      )
+      ),
+      abortController.signal
     );
   } finally {
     process.removeListener('SIGINT', stop);
