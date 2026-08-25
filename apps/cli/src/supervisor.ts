@@ -16,6 +16,7 @@ export type SupervisedEndpoints = Partial<Record<SupervisedService, string>>;
 
 export interface ServiceSupervisorOptions {
   cwd: string;
+  env?: NodeJS.ProcessEnv;
   readinessTimeoutMs?: number;
   shutdownTimeoutMs?: number;
 }
@@ -117,7 +118,7 @@ export class ServiceSupervisor {
     const child = fork(entrypoint, [], {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
-      env: process.env,
+      env: this.options.env ?? process.env,
       silent: false
     });
 

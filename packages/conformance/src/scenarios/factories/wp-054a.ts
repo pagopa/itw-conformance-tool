@@ -44,6 +44,7 @@ export const wp054aInvalidStateScenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'issuer.fault.applied',
+      label: 'Credential Issuer returned an Authorization Response with a mismatched state',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/code/jwt', faultProfileType: 'authorization-response-invalid-state', mutatedClaim: 'state' }
@@ -65,17 +66,16 @@ export const wp054aInvalidStateScenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance rejects a Credential Issuer Authorization Response whose state differs from the Request Object state.',
     expectedBehavior:
       'After opening the credential offer, the wallet must complete the identity/presentation interaction, request the Credential Issuer Authorization Endpoint, and receive an Authorization Response whose state is present but different from the Request Object state. The wallet must detect the mismatch and terminate the issuance flow without exchanging the authorization code at the Token Endpoint. Successful conformance is rejection/termination, not credential issuance or a specific UI message.',
+    summary: 'Verify rejection of an Authorization Response with mismatched state.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services, activates the authorization-response-invalid-state fault on the Credential Issuer, and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Complete the identity/presentation interaction needed to reach the Authorization Response, the same way as in the happy path scenario.',
-      'Do not continue any further step: the expected outcome is that the wallet stops after receiving the mismatched Authorization Response state.',
-      'The runner will continue automatically after the wallet requests the Authorization Endpoint and the fault application is recorded for /code/jwt, or once the negative-observation window elapses without the wallet requesting the Token Endpoint.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Complete identity verification and consent until the wallet receives the Authorization Response.',
+      'Stop at the wallet rejection screen; the expected outcome is rejection of the mismatched state.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

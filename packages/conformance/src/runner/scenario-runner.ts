@@ -15,20 +15,28 @@ import {
 } from '../events/event-store.js';
 import { NOMINAL_CREDENTIAL_CONFIGURATION_ID, createCredentialOfferUri } from '../helpers/issuance.js';
 import { createPresentationRequestUri, extractPresentationCorrelationId } from '../helpers/presentation.js';
-import { getForbiddenEventNames, getRequiredEventName, hasVerdictRule } from '../scenarios/definitions.js';
+import {
+  getForbiddenEventNames,
+  getRequiredEventName,
+  hasVerdictRule,
+  type RequiredEventExpectation
+} from '../scenarios/definitions.js';
 import {
   type LocalServiceEndpoints,
+  type LocalServiceName,
   type ProtocolObservedScenarioDefinition,
   type ScenarioStimulus
 } from '../scenarios/definitions.js';
+import { matchesRequiredEventExpectation } from '../scenarios/expectation-matching.js';
 import { type IssuerScenarioController } from '../services/issuer-fault-controller.js';
 import { type RpFaultController } from '../services/rp-fault-controller.js';
 import { type TrustAnchorFaultController } from '../services/trust-anchor-fault-controller.js';
 import { createProtocolObservedVerdictEngine, type VerdictEngine } from '../verdict/verdict-engine.js';
 import { copyTextToClipboard } from './clipboard.js';
-import { createScenarioPromptModel } from './prompts.js';
+import { createScenarioPromptModel, getProtocolEventLabel, getRequiredEventLabel } from './prompts.js';
 
 import type { ScenarioEventBridgeFactory } from '../events/event-bridge.js';
+import type { ObservedEventName, ObservedServiceName } from '../events/event-types.js';
 import type { ScenarioRegistry } from '../scenarios/registry.js';
 import type { ScenarioOutcome, ScenarioTimingSummary } from '../verdict/outcome.js';
 import type { IssuerFaultProfile } from '@itw-conformance-tool/faults';
@@ -92,6 +100,8 @@ export interface CreateProtocolObservedScenarioRunnerOptions {
   trustAnchorFaultSpecVersion?: string;
   /** Opens local browser pages for interactive scenario stimuli. Defaults to the system browser opener. */
   browserOpener?: BrowserOpener;
+  /** Prints protocol diagnostics such as full URIs, technical event names, and internal endpoints. */
+  verbose?: boolean;
 }
 
 function defaultWrite(message: string): void {
@@ -189,7 +199,7 @@ function createTimings(startedAt: string): ScenarioTimingSummary {
   };
 }
 
-function isControlledWaitError(error: unknown): boolean {
+function isControlledWaitError(error: unknown): error is EventStoreTimeoutError | EventStoreAbortedError {
   return error instanceof EventStoreTimeoutError || error instanceof EventStoreAbortedError;
 }
 
@@ -203,65 +213,277 @@ function writeOutcome(outcome: ScenarioOutcome, write: (message: string) => void
   }
 }
 
-async function copyQrPayloadToClipboard(stimulus: ScenarioStimulus, write: (message: string) => void): Promise<void> {
-  if (stimulus.type !== 'credential-offer' && stimulus.type !== 'presentation-request') return;
+const observedServiceEndpointMap: Partial<Record<ObservedServiceName, LocalServiceName>> = {
+  'credential-issuer': 'credentialIssuer',
+  federation: 'federation',
+  'relying-party': 'relyingParty',
+  'wallet-provider': 'walletProvider'
+};
+
+const phaseCommandHints: Record<ProtocolObservedScenarioDefinition['phase'], string> = {
+  ISSUANCE: 'itwct test issuance --verbose',
+  PRESENTATION: 'itwct test presentation --verbose',
+  WALLET_INSTANCE: 'itwct test wallet-provider --verbose'
+};
+
+interface BrowserDeliveryResult {
+  error?: string;
+  pageUrl?: string;
+  status: 'not-applicable' | 'opened' | 'unavailable';
+}
+
+interface ClipboardDeliveryResult {
+  status: 'copied' | 'not-applicable' | 'unavailable';
+}
+
+interface StimulusDeliveryResult {
+  browser: BrowserDeliveryResult;
+  clipboard: ClipboardDeliveryResult;
+}
+
+async function copyQrPayloadToClipboard(stimulus: ScenarioStimulus): Promise<ClipboardDeliveryResult> {
+  if (stimulus.type !== 'credential-offer' && stimulus.type !== 'presentation-request') {
+    return { status: 'not-applicable' };
+  }
 
   if (await copyTextToClipboard(stimulus.qrCode)) {
-    write(chalk.green('QR payload copied to your clipboard.'));
-    write('');
-  } else {
-    write(chalk.dim('Could not access the system clipboard; copy the QR payload shown above manually.'));
+    return { status: 'copied' };
   }
+
+  return { status: 'unavailable' };
+}
+
+function formatDuration(ms: number): string {
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60;
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  }
+
+  return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+}
+
+function statusSymbol(ok: boolean): string {
+  return ok ? chalk.green('✓') : chalk.yellow('!');
+}
+
+function writeCredentialOfferDeliveryStatus(delivery: StimulusDeliveryResult, write: (message: string) => void): void {
+  if (delivery.browser.status === 'opened') {
+    write(`    ${statusSymbol(true)} Offer page opened in your browser`);
+  } else if (delivery.browser.status === 'unavailable') {
+    write(`    ${statusSymbol(false)} Offer page could not be opened in your browser`);
+  }
+
+  if (delivery.clipboard.status === 'copied') {
+    write(`    ${statusSymbol(true)} Offer link copied to the clipboard`);
+  } else if (delivery.clipboard.status === 'unavailable') {
+    write(`    ${statusSymbol(false)} Offer link could not be copied to the clipboard`);
+  }
+
+  if (delivery.browser.status === 'opened') {
+    write(`    ${chalk.gray('•')} Or scan the QR code shown in the browser`);
+  }
+}
+
+function shouldShowCredentialOfferUri(delivery: StimulusDeliveryResult): boolean {
+  return delivery.browser.status === 'unavailable' || delivery.clipboard.status === 'unavailable';
+}
+
+interface ProtocolProgressStep {
+  eventName: ObservedEventName;
+  expectation: RequiredEventExpectation;
+  label: string;
+}
+
+function createProtocolProgressSteps(definition: ProtocolObservedScenarioDefinition): ProtocolProgressStep[] {
+  if (!definition.requiredEvents || definition.requiredEvents.length === 0) {
+    return [
+      {
+        eventName: definition.entryEvent,
+        expectation: definition.entryEvent,
+        label: getProtocolEventLabel(definition.entryEvent)
+      }
+    ];
+  }
+
+  return definition.requiredEvents.map((event) => ({
+    eventName: getRequiredEventName(event),
+    expectation: event,
+    label: getRequiredEventLabel(event)
+  }));
+}
+
+function formatProgress(observed: number, total: number): string {
+  return `Protocol progress: ${observed}/${total} ${total === 1 ? 'step' : 'steps'} observed`;
+}
+
+function findRequiredEvent(
+  definition: ProtocolObservedScenarioDefinition,
+  eventName: ObservedEventName
+): RequiredEventExpectation | undefined {
+  return definition.requiredEvents?.find((event) => getRequiredEventName(event) === eventName);
+}
+
+function technicalEndpointHint(
+  expected: RequiredEventExpectation | undefined,
+  endpoints: LocalServiceEndpoints
+): string | undefined {
+  if (!expected || typeof expected === 'string') return undefined;
+
+  const endpointKey = observedServiceEndpointMap[expected.service];
+  const baseEndpoint = endpointKey ? endpoints[endpointKey] : undefined;
+  const path = typeof expected.match?.endpoint === 'string' ? expected.match.endpoint : undefined;
+
+  if (baseEndpoint && path) return `${baseEndpoint}${path}`;
+  return baseEndpoint;
+}
+
+function writeWaitFailure(
+  definition: ProtocolObservedScenarioDefinition,
+  expectedEvent: ObservedEventName | RequiredEventExpectation,
+  endpoints: LocalServiceEndpoints,
+  timeoutMs: number,
+  error: EventStoreAbortedError | EventStoreTimeoutError,
+  verbose: boolean,
+  write: (message: string) => void
+): void {
+  const expectedEventName = typeof expectedEvent === 'string' ? expectedEvent : getRequiredEventName(expectedEvent);
+  const eventLabel =
+    typeof expectedEvent === 'string' ? getProtocolEventLabel(expectedEvent) : getRequiredEventLabel(expectedEvent);
+
+  write('');
+  if (error.name === 'EventStoreAbortedError') {
+    write(chalk.yellow(`Scenario cancelled while waiting for: ${eventLabel}.`));
+    return;
+  }
+
+  write(chalk.yellow(`Timed out after ${formatDuration(timeoutMs)} while waiting for: ${eventLabel}.`));
+
+  const expectedEventForHint =
+    typeof expectedEvent === 'string' ? findRequiredEvent(definition, expectedEventName) : expectedEvent;
+  const endpointHint = technicalEndpointHint(expectedEventForHint, endpoints);
+  if (endpointHint) {
+    write(`Check that the wallet can reach ${chalk.cyan(endpointHint)} from the device running the wallet.`);
+  } else {
+    write('Check wallet connectivity to the local services printed by this command.');
+  }
+
+  write(`For protocol diagnostics, re-run with ${chalk.cyan(phaseCommandHints[definition.phase])}.`);
+  if (verbose) write(chalk.gray(`Technical event: ${expectedEventName}`));
+}
+
+function subscribeProtocolProgress(
+  definition: ProtocolObservedScenarioDefinition,
+  endpoints: LocalServiceEndpoints,
+  eventStore: ScenarioEventStore,
+  verbose: boolean,
+  write: (message: string) => void
+): Disposable {
+  const progressSteps = createProtocolProgressSteps(definition);
+  const observedStepIndexes = new Set<number>();
+
+  return eventStore.subscribe((event) => {
+    if (verbose) {
+      write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
+    }
+
+    // Full expectation matching (name, service, and diagnostic `match`) keeps
+    // progress in sync with verdict evidence: a scenario with repeated event
+    // names but distinct `match` criteria - e.g. two `issuer.token.requested`
+    // expectations for an authorization-code and a refresh-token grant - only
+    // advances the step whose declared criteria the observed event satisfies,
+    // instead of consuming the first unclaimed step that merely shares a name.
+    const observedStepIndex = progressSteps.findIndex(
+      (step, index) =>
+        !observedStepIndexes.has(index) && matchesRequiredEventExpectation(event, step.expectation, endpoints)
+    );
+    if (observedStepIndex === -1) return;
+
+    observedStepIndexes.add(observedStepIndex);
+    const progress = formatProgress(observedStepIndexes.size, progressSteps.length);
+    write(`${progress} - ${progressSteps[observedStepIndex].label}`);
+  });
 }
 
 function showPrompt(
   definition: ProtocolObservedScenarioDefinition,
   stimulus: ScenarioStimulus,
   endpoints: LocalServiceEndpoints,
+  delivery: StimulusDeliveryResult,
+  verbose: boolean,
   write: (message: string) => void
 ): void {
   const prompt = createScenarioPromptModel(definition, stimulus);
-  const testerActionTimeoutSeconds = Math.ceil(definition.timeouts.testerActionMs / 1000);
+  const testerActionTimeout = formatDuration(definition.timeouts.testerActionMs);
+  const progressSteps = createProtocolProgressSteps(definition);
 
   write('');
   write(chalk.bold.cyan(`╭─ ${prompt.id} · ${prompt.title}`));
-  write(`${chalk.bold('Goal')}      ${prompt.goal}`);
-  write(`${chalk.bold('Expected')}  ${prompt.expectedBehavior}`);
+  write(prompt.summary);
   write(chalk.bold.cyan('╰────────────────────────────────────────────────────────────'));
-  write('');
-  write(chalk.bold.blue('Local endpoints'));
-  for (const [name, endpoint] of Object.entries(endpoints)) {
-    write(`  ${chalk.gray('•')} ${chalk.magenta(name)} ${chalk.gray('→')} ${chalk.cyan(endpoint)}`);
-  }
-  if (prompt.prerequisites.length > 0) {
-    write('');
-    write(chalk.bold.blue('Prerequisites'));
-    for (const prerequisite of prompt.prerequisites) write(`  ${chalk.gray('•')} ${prerequisite}`);
-  }
+
   if (prompt.steps.length > 0) {
     write('');
-    write(chalk.bold.blue('Tester actions'));
-    for (const [index, step] of prompt.steps.entries()) write(`  ${chalk.yellow(`${index + 1}.`)} ${step}`);
+    write(chalk.bold.blue('Action required'));
+    for (const [index, step] of prompt.steps.entries()) {
+      write(`  ${chalk.yellow(`${index + 1}.`)} ${step}`);
+      if (index === 0 && prompt.stimulus.type === 'credential-offer') {
+        writeCredentialOfferDeliveryStatus(delivery, write);
+      }
+    }
   }
 
-  if (prompt.stimulus.type === 'credential-offer') {
+  if (prompt.stimulus.type === 'credential-offer' && shouldShowCredentialOfferUri(delivery)) {
     write('');
-    write(chalk.bold.blue('Credential offer deep link'));
+    write(chalk.bold.blue('Fallback Credential Offer URI'));
     write(chalk.cyan(prompt.stimulus.uri));
-    write('');
-    write(chalk.bold.blue('QR payload'));
-    write(chalk.dim(prompt.stimulus.qrCode));
   }
 
   if (prompt.stimulus.type === 'presentation-request') {
     write('');
     write(chalk.bold.blue('Presentation request QR payload'));
     write(chalk.dim(decodeURIComponent(prompt.stimulus.qrCode)));
+    if (delivery.clipboard.status === 'copied') {
+      write(`  ${statusSymbol(true)} QR payload copied to the clipboard`);
+    } else if (delivery.clipboard.status === 'unavailable') {
+      write(`  ${statusSymbol(false)} QR payload could not be copied to the clipboard`);
+    }
+  }
+
+  if (prompt.prerequisites.length > 0 && verbose) {
+    write('');
+    write(chalk.bold.blue('Prerequisites'));
+    for (const prerequisite of prompt.prerequisites) write(`  ${chalk.gray('•')} ${prerequisite}`);
+  }
+
+  if (prompt.stimulus.type === 'manual-instruction' && endpoints.walletProvider) {
+    write('');
+    write(chalk.bold.blue('Wallet Provider URL'));
+    write(chalk.cyan(endpoints.walletProvider));
+  }
+
+  if (verbose) {
+    write('');
+    write(chalk.bold.blue('Diagnostics'));
+    for (const [name, endpoint] of Object.entries(endpoints)) {
+      const label = prompt.endpointLabels[name as keyof typeof prompt.endpointLabels] ?? name;
+      write(`  ${chalk.magenta(label)} ${chalk.gray(`(${name}) →`)} ${chalk.cyan(endpoint)}`);
+    }
+
+    if (prompt.stimulus.type === 'credential-offer') {
+      write(`  ${chalk.magenta('Credential Offer URI')} ${chalk.gray('→')} ${chalk.cyan(prompt.stimulus.uri)}`);
+    }
+
+    write(`  ${chalk.magenta('Entry event')} ${chalk.gray('→')} ${chalk.cyan(definition.entryEvent)}`);
+    for (const step of progressSteps) {
+      write(`  ${chalk.magenta('Protocol step')} ${chalk.gray('→')} ${step.label} (${step.eventName})`);
+    }
   }
 
   write('');
-  write(`${chalk.bold('Waiting for event')} ${chalk.green(definition.entryEvent)}`);
-  write(`${chalk.bold('Timeout')} ${chalk.yellow(`${testerActionTimeoutSeconds} seconds`)}`);
+  write('One wallet interaction; protocol checks continue automatically.');
+  write(`Waiting for ${chalk.green(prompt.waitingFor)} (up to ${chalk.yellow(testerActionTimeout)})...`);
+  write(formatProgress(0, progressSteps.length));
 }
 
 function createCredentialOfferPageUrl(credentialIssuer: string, credentialOfferUri: string): string {
@@ -274,23 +496,24 @@ function createCredentialOfferPageUrl(credentialIssuer: string, credentialOfferU
 async function openCredentialOfferPage(
   stimulus: ScenarioStimulus,
   endpoints: LocalServiceEndpoints,
-  browserOpener: BrowserOpener,
-  write: (message: string) => void
-): Promise<void> {
-  if (stimulus.type !== 'credential-offer') return;
+  browserOpener: BrowserOpener
+): Promise<BrowserDeliveryResult> {
+  if (stimulus.type !== 'credential-offer') return { status: 'not-applicable' };
 
   const credentialIssuer = endpoints.credentialIssuer;
-  if (!credentialIssuer) return;
+  if (!credentialIssuer) return { status: 'not-applicable' };
 
   const pageUrl = createCredentialOfferPageUrl(credentialIssuer, stimulus.uri);
 
   try {
     await browserOpener(pageUrl);
+    return { pageUrl, status: 'opened' };
   } catch (error) {
-    write(chalk.yellow('Could not open the credential offer page in the default browser.'));
-    write(chalk.dim(`Open it manually if needed: ${pageUrl}`));
-    write(chalk.dim(error instanceof Error ? error.message : String(error)));
-    write('');
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      pageUrl,
+      status: 'unavailable'
+    };
   }
 }
 
@@ -300,6 +523,7 @@ export function createProtocolObservedScenarioRunner(
   const write = options.write ?? defaultWrite;
   const browserOpener = options.browserOpener ?? defaultBrowserOpener;
   const verdictEngine = options.verdictEngine ?? createProtocolObservedVerdictEngine();
+  const verbose = options.verbose ?? process.env.ITWCT_CONFORMANCE_VERBOSE === '1';
   const activeSessions = new Set<InteractiveScenarioSession>();
 
   return {
@@ -470,16 +694,15 @@ export function createProtocolObservedScenarioRunner(
           events: eventStore,
           abortSignal: abortController.signal,
           async showInstructions() {
-            showPrompt(definition, stimulus, endpoints, write);
-            await copyQrPayloadToClipboard(stimulus, write);
+            const clipboard = await copyQrPayloadToClipboard(stimulus);
+            let browser: BrowserDeliveryResult = { status: 'not-applicable' };
             if (!credentialOfferPageOpened) {
               credentialOfferPageOpened = true;
-              await openCredentialOfferPage(stimulus, endpoints, browserOpener, write);
+              browser = await openCredentialOfferPage(stimulus, endpoints, browserOpener);
             }
+            showPrompt(definition, stimulus, endpoints, { browser, clipboard }, verbose, write);
             eventSubscription?.dispose();
-            eventSubscription = eventStore.subscribe((event) => {
-              write(`[event] ${event.name} service=${event.service} correlation=${event.correlationId ?? 'unmatched'}`);
-            });
+            eventSubscription = subscribeProtocolProgress(definition, endpoints, eventStore, verbose, write);
           },
           async awaitVerdict(awaitOptions = {}) {
             const signal = awaitOptions.signal ?? abortController.signal;
@@ -494,6 +717,15 @@ export function createProtocolObservedScenarioRunner(
                 });
               } catch (error) {
                 if (!isControlledWaitError(error)) throw error;
+                writeWaitFailure(
+                  definition,
+                  findRequiredEvent(definition, definition.entryEvent) ?? definition.entryEvent,
+                  endpoints,
+                  definition.timeouts.testerActionMs,
+                  error,
+                  verbose,
+                  write
+                );
               }
             }
 
@@ -514,6 +746,15 @@ export function createProtocolObservedScenarioRunner(
                   if (enforceOrder) previous = observed;
                 } catch (error) {
                   if (!isControlledWaitError(error)) throw error;
+                  writeWaitFailure(
+                    definition,
+                    requiredEvent,
+                    endpoints,
+                    definition.timeouts.protocolStepMs,
+                    error,
+                    verbose,
+                    write
+                  );
                   break;
                 }
               }
