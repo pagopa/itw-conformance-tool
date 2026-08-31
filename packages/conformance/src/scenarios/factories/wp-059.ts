@@ -62,6 +62,7 @@ export const wp059Scenario: ProtocolObservedScenarioDefinition = {
     },
     {
       event: 'issuer.fault.applied',
+      label: 'Credential Issuer returned a Credential Response without credentials',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: {
@@ -80,17 +81,16 @@ export const wp059Scenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance rejects an immediate Credential Response that omits the required credentials parameter, instead of proceeding to store a Digital Credential.',
     expectedBehavior:
       'After opening the credential offer, the wallet must complete the Authorization Code Flow through PAR, Authorization, Token, and Nonce exactly as in the happy path, then send the Credential Request. The Credential Issuer applies the edc-missing-required-claims fault and returns an HTTP 200 application/json immediate response that omits the top-level credentials parameter, leaving every other field unchanged. A conformant Wallet Instance must detect the missing required parameter, report an error to the user, and must not proceed to store any credential. This scenario proves the fault was delivered exactly as configured (protocol-observed evidence only); it cannot itself verify the wallet UI error or its secure storage, which the operator must confirm separately (see the steps below).',
+    summary: 'Verify rejection of a Credential Response missing credentials.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services, activates the edc-missing-required-claims fault (targeting the credentials parameter) on the Credential Issuer, and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Complete the identity verification / consent step in the (mock) Identity Provider so the wallet receives the authorization code, automatically exchanges it at the Token endpoint, obtains a fresh nonce, and sends the Credential Request.',
-      'Observe the Wallet Instance: the expected outcome is that it reports an error and does not add any credential to secure storage. Record this observation yourself; the automated verdict below only proves the malformed response was delivered, not that the wallet rejected it.',
-      'The runner will continue automatically after the wallet requests the Credential endpoint and the fault application is recorded.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Complete identity verification and consent so the wallet sends the Credential Request.',
+      'Observe the wallet rejection and keep this command running; the automated verdict checks that the malformed response was delivered.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

@@ -35,8 +35,9 @@ export const wp085Scenario = createNegativePresentationScenario({
     goal: 'Verify that the Wallet Instance cryptographically validates the Request Object signature and refuses to present any credential when that validation fails.',
     expectedBehavior:
       'The wallet retrieves the Request Object from the request_uri endpoint and finds a signature that does not verify against the Relying Party key. It must not present any credential: no Authorization Response carrying a vp_token may reach the response_uri. Reporting the failure to the response_uri as an Authorization Error Response is allowed, and is what WP_090 requires.',
+    summary: 'Verify rejection of a Request Object whose signature cannot be verified.',
     observation: [
-      'Keep the wallet and the test process running while the wallet retrieves and verifies the Request Object.',
+      'Let the wallet retrieve and verify the Request Object.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports an invalid presentation request and stops.'
     ]
   }

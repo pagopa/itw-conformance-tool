@@ -35,36 +35,42 @@ const initialIssuanceRequiredEvents: NonNullable<ProtocolObservedScenarioDefinit
   },
   {
     event: 'issuer.par.requested',
+    label: 'Wallet sent the initial pushed authorization request',
     service: 'credential-issuer',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/as/par' }
   },
   {
     event: 'issuer.authorization.requested',
+    label: 'Wallet opened the initial authorization step',
     service: 'credential-issuer',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/authorize' }
   },
   {
     event: 'issuer.token.requested',
+    label: 'Wallet exchanged the initial authorization code',
     service: 'credential-issuer',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/token', grantType: 'authorization_code' }
   },
   {
     event: 'issuer.nonce.requested',
+    label: 'Wallet requested the initial nonce',
     service: 'credential-issuer',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/nonce' }
   },
   {
     event: 'issuer.credential.requested',
+    label: 'Wallet requested the initial credential',
     service: 'credential-issuer',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/credential' }
   },
   {
     event: 'issuer.credential.issued',
+    label: 'Credential Issuer issued the initial credential',
     service: 'credential-issuer',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint: '/credential', responseKind: 'immediate' }
@@ -73,6 +79,7 @@ const initialIssuanceRequiredEvents: NonNullable<ProtocolObservedScenarioDefinit
 
 const updatedStatusListRequiredEvent = {
   event: 'issuer.status_list.requested',
+  label: 'Wallet requested the updated Status List',
   service: 'credential-issuer',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/statuslist/1', bits: 4, statusValue: WP_CREDENTIAL_REISSUANCE_UPDATED_STATUS }
@@ -106,42 +113,49 @@ export const wpCredentialReissuanceScenario: ProtocolObservedScenarioDefinition 
     updatedStatusListRequiredEvent,
     {
       event: 'issuer.token.failed',
+      label: 'Wallet attempted the expired Refresh Token and received invalid_grant',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/token', grantType: 'refresh_token', error: 'invalid_grant' }
     },
     {
       event: 'issuer.par.requested',
+      label: 'Wallet restarted issuance with a new pushed authorization request',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/as/par' }
     },
     {
       event: 'issuer.authorization.requested',
+      label: 'Wallet opened the second authorization step',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/authorize' }
     },
     {
       event: 'issuer.token.requested',
+      label: 'Wallet exchanged the second authorization code',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/token' }
     },
     {
       event: 'issuer.nonce.requested',
+      label: 'Wallet requested a nonce for the updated credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/nonce' }
     },
     {
       event: 'issuer.credential.requested',
+      label: 'Wallet requested the updated credential after re-authorization',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
     },
     {
       event: 'issuer.credential.issued',
+      label: 'Credential Issuer issued the updated credential after re-authorization',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential', responseKind: 'immediate' }
@@ -157,6 +171,7 @@ export const wpCredentialReissuanceScenario: ProtocolObservedScenarioDefinition 
     goal: 'Verify that a Wallet Instance detects a Status List UPDATE after the original token pair expires, fails refresh-token reuse, and completes a new authorization-code issuance flow for the updated credential.',
     expectedBehavior:
       'After the first credential is issued, keep the wallet and test runner active. The test waits until the original Access Token and Refresh Token have expired, switches the credential status index to UPDATE, and waits for the wallet to request the Status List. The wallet must then attempt the expired Refresh Token exchange, receive invalid_grant, start a new PAR and Authorization flow, complete User authorization/authentication again, exchange a new authorization code, obtain a fresh nonce, and retrieve a newly issued DPoP-bound Digital Credential.',
+    summary: 'Verify re-issuance after both original tokens expire.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'The wallet must check Status List Tokens and support restarting issuance after a full Access Token and Refresh Token expiry.',
@@ -165,11 +180,10 @@ export const wpCredentialReissuanceScenario: ProtocolObservedScenarioDefinition 
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services with short initial token lifetimes and nominal status index 1.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance and complete the first issuance.',
-      'Keep the wallet and test process active after the first credential. The test will wait for the original token pair to expire and then switch status index 1 to UPDATE.',
+      'Open the Credential Offer in your Wallet Instance and complete the first issuance.',
+      'Keep the wallet and this command running after the first credential; the test will expire the original token pair and switch status index 1 to UPDATE.',
       'When the tool announces the status transition, reopen or foreground the wallet so it checks the Status List and continues re-issuance.',
-      'Complete the second authorization/authentication interaction. The runner continues after observing the failed refresh, second PAR/Authorization/code Token exchange, second Nonce request, DPoP Credential Request, and updated credential issuance.'
+      'Complete the second authorization/authentication interaction if the wallet asks for it.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'
@@ -214,24 +228,28 @@ export const wpCredentialReissuanceRefreshAccessTokenScenario: ProtocolObservedS
     updatedStatusListRequiredEvent,
     {
       event: 'issuer.token.requested',
+      label: 'Wallet refreshed the access token',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/token', grantType: 'refresh_token' }
     },
     {
       event: 'issuer.nonce.requested',
+      label: 'Wallet requested a nonce for the refreshed-token credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/nonce' }
     },
     {
       event: 'issuer.credential.requested',
+      label: 'Wallet requested the updated credential with the refreshed token',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
     },
     {
       event: 'issuer.credential.issued',
+      label: 'Credential Issuer issued the updated credential with the refreshed token',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential', responseKind: 'immediate' }
@@ -247,6 +265,7 @@ export const wpCredentialReissuanceRefreshAccessTokenScenario: ProtocolObservedS
     goal: 'Verify that a Wallet Instance detects a Status List UPDATE after the original Access Token expires and uses the still-valid Refresh Token to obtain a new DPoP-bound Access Token.',
     expectedBehavior:
       'After the first credential is issued, keep the wallet and test runner active. The test waits until the original Access Token and any nominal Status List Token cache have expired, switches credential status index 1 to UPDATE, and asks you to reopen or foreground the wallet. The wallet must request the updated Status List, perform one successful refresh_token exchange with the originally issued Refresh Token, obtain a fresh nonce, and retrieve a newly issued DPoP-bound Digital Credential with the refreshed Access Token. It must not start a second PAR or Authorization flow during this re-issuance window.',
+    summary: 'Verify re-issuance with a still-valid Refresh Token.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'The wallet must check Status List Tokens and support automatic Refresh Token flow for credential re-issuance.',
@@ -254,11 +273,10 @@ export const wpCredentialReissuanceRefreshAccessTokenScenario: ProtocolObservedS
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services with a short-lived Access Token, a long-lived Refresh Token, and nominal status index 1.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance and complete the first issuance.',
-      'Keep the wallet and test process active after the first credential. The test waits until the original Access Token and any observed nominal Status List Token have expired, then switches status index 1 to UPDATE.',
+      'Open the Credential Offer in your Wallet Instance and complete the first issuance.',
+      'Keep the wallet and this command running after the first credential; the test will expire the Access Token and switch status index 1 to UPDATE.',
       'When the tool announces the status transition, reopen or foreground the wallet so it checks the Status List and continues automatic re-issuance.',
-      'Do not start a new issuance flow manually. The runner continues after observing the updated Status List, successful Refresh Token exchange, second Nonce request, second DPoP Credential Request, and updated credential issuance.'
+      'Do not start a new issuance flow manually; the wallet should refresh the token and retrieve the updated credential.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'
@@ -303,18 +321,21 @@ export const wpCredentialReissuanceValidAccessTokenScenario: ProtocolObservedSce
     updatedStatusListRequiredEvent,
     {
       event: 'issuer.nonce.requested',
+      label: 'Wallet requested a nonce for the still-valid-token credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/nonce' }
     },
     {
       event: 'issuer.credential.requested',
+      label: 'Wallet requested the updated credential with the original token',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
     },
     {
       event: 'issuer.credential.issued',
+      label: 'Credential Issuer issued the updated credential with the original token',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential', responseKind: 'immediate' }
@@ -330,6 +351,7 @@ export const wpCredentialReissuanceValidAccessTokenScenario: ProtocolObservedSce
     goal: 'Verify that a Wallet Instance detects a Status List UPDATE and re-issues the credential with the still-valid associated Access Token.',
     expectedBehavior:
       'After the first credential is issued, keep the wallet and test runner active. The test briefly waits for any nominal Status List Token cache to expire, switches credential status index 1 to UPDATE, and asks you to reopen or foreground the wallet. The wallet must request the updated Status List, obtain a fresh nonce, and retrieve a newly issued DPoP-bound Digital Credential with the original still-valid Access Token. It must not use a Refresh Token flow or start a new PAR/Authorization flow during re-issuance.',
+    summary: 'Verify re-issuance with the original Access Token still valid.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'The wallet must check Status List Tokens and support automatic re-issuance while the original Access Token remains valid.',
@@ -337,11 +359,10 @@ export const wpCredentialReissuanceValidAccessTokenScenario: ProtocolObservedSce
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services with a long-lived Access Token and a short nominal Status List lifetime.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance and complete the first issuance.',
-      'Keep the wallet and test process active after the first credential. The test will switch status index 1 to UPDATE while the original Access Token remains valid.',
+      'Open the Credential Offer in your Wallet Instance and complete the first issuance.',
+      'Keep the wallet and this command running after the first credential; the test will switch status index 1 to UPDATE while the original Access Token remains valid.',
       'When the tool announces the status transition, reopen or foreground the wallet so it checks the Status List and continues re-issuance.',
-      'Do not start a new issuance flow manually. The runner continues after observing the updated Status List, second Nonce request, second DPoP Credential Request, and updated credential issuance.'
+      'Do not refresh or start a new issuance flow manually; the wallet should retrieve the updated credential with the original token.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

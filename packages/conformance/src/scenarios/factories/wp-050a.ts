@@ -53,6 +53,7 @@ export const wp050aMetadataPolicyScenario: ProtocolObservedScenarioDefinition = 
     goal: 'Verify that the Wallet Instance applies the Trust Anchor metadata policy and rejects a Credential Issuer that is not authorized to issue the requested Digital Credential.',
     expectedBehavior:
       'After opening the credential offer, the wallet must request the Credential Issuer Entity Configuration, fetch the Credential Issuer Subordinate Statement from the Trust Anchor, apply the metadata policy, and terminate the issuance flow because the requested credential_configuration_id is not authorized by the resolved metadata. Successful conformance is termination after trust evaluation, not a specific wallet UI message.',
+    summary: 'Verify rejection of a credential type not authorized by Trust Anchor policy.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
@@ -60,11 +61,9 @@ export const wp050aMetadataPolicyScenario: ProtocolObservedScenarioDefinition = 
       'Use a fresh trust-evaluation run or clear the wallet federation cache if the wallet caches subordinate statements.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Keep the wallet and test process running while the wallet requests the Credential Issuer Entity Configuration and fetches the Credential Issuer Subordinate Statement from the Trust Anchor.',
-      'Do not continue any consent or identity verification step: the expected outcome is that the wallet stops after applying the metadata policy.',
-      'The runner will continue automatically after the Trust Anchor /fetch evidence is observed and the negative-observation window elapses without the wallet sending PAR or any later issuance request.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Keep the wallet and this command running while the wallet resolves the Credential Issuer through the Trust Anchor.',
+      'Stop at the wallet rejection screen; the expected outcome is rejection after metadata policy evaluation.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

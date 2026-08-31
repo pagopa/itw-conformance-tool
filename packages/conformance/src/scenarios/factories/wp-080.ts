@@ -26,8 +26,9 @@ export const wp080Scenario = createNegativePresentationScenario({
     goal: 'Verify that the Wallet Instance evaluates the Trust Marks in the Relying Party Entity Configuration and stops when one cannot be validated.',
     expectedBehavior:
       'The wallet requests the Relying Party Entity Configuration and finds a Trust Mark whose signature does not verify against any key the federation publishes for the Relying Party. It must terminate the presentation without retrieving the Request Object. Successful conformance is rejection, not presentation.',
+    summary: 'Verify rejection of a Relying Party with an unverifiable Trust Mark.',
     observation: [
-      'Keep the wallet and the test process running while the wallet resolves the Trust Anchor and evaluates the Relying Party Trust Mark.',
+      'Let the wallet resolve the Trust Anchor and evaluate the Relying Party Trust Mark.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports a trust error and stops.'
     ]
   }

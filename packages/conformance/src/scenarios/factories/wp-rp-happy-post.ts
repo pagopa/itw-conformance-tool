@@ -63,7 +63,8 @@ export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
   instructions: {
     goal: 'Verify that the Wallet Instance obtains the presentation request from a QR code, retrieves the signed Request Object with an HTTP POST carrying wallet_metadata and a fresh wallet_nonce, and completes the presentation with an encrypted Authorization Response.',
     expectedBehavior:
-      'After scanning the QR payload, the wallet sends an application/x-www-form-urlencoded HTTP POST with wallet_metadata and wallet_nonce to the request_uri endpoint, validates the returned Request Object (which echoes the wallet_nonce) against the x5c certificate chain, and posts an encrypted Authorization Response with a vp_token to the response_uri.',
+      'After scanning the QR payload, the wallet resolves the Relying Party Entity Configuration and Trust Chain from the Trust Anchor, sends an application/x-www-form-urlencoded HTTP POST with wallet_metadata and wallet_nonce to the request_uri endpoint, validates the returned Request Object (which echoes the wallet_nonce), and posts an encrypted Authorization Response with a vp_token to the response_uri.',
+    summary: 'Verify credential presentation with QR engagement and POST Request Object retrieval.',
     prerequisites: [
       'The wallet app under test is installed and holds a credential that satisfies the requested presentation (PID by default).',
       'The wallet supports request_uri_method=post; a wallet that always retrieves the Request Object over GET cannot satisfy this scenario.',
@@ -72,11 +73,10 @@ export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Trust Anchor and Relying Party URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services and waits for their readiness.',
-      'Scan the printed presentation request QR payload with the Wallet Instance.',
-      'Allow the wallet to retrieve the Request Object over POST and validate it.',
-      'Approve the disclosure of the requested attributes in the wallet.',
-      'The runner passes once the Relying Party receives a valid Authorization Response for the Request Object retrieved over POST.'
+      'Scan the presentation request QR payload with the Wallet Instance.',
+      'Allow the wallet to resolve the Relying Party federation trust chain and retrieve the Request Object over POST.',
+      'Approve the requested disclosure in the wallet.',
+      'Keep the wallet and this command running until the scenario completes.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'
