@@ -1,4 +1,10 @@
+import { createHash } from 'node:crypto';
+
+import { createObservedEvent } from '@itw-conformance-tool/conformance';
+
 import type { FastifyPluginAsync } from 'fastify';
+
+const sha256Base64Url = (value: string): string => createHash('sha256').update(value, 'utf8').digest('base64url');
 
 const nonceRoute: FastifyPluginAsync = async (app) => {
   app.route({
@@ -21,10 +27,24 @@ const nonceRoute: FastifyPluginAsync = async (app) => {
       }
     },
     handler: async (request, reply) => {
-      const nonce = await app.walletNonces.issue({
-        correlationId: request.conformance?.correlation?.correlationId ?? null,
-        requestId: request.id
-      });
+      const nonce = app.walletNonces.issue();
+
+      await app.conformanceEventSink?.emit(
+        createObservedEvent({
+          name: 'wallet_provider.nonce.requested',
+          correlationId: request.conformance?.correlation?.correlationId ?? null,
+          service: 'wallet-provider',
+          requestId: request.id,
+          diagnostic: {
+            endpoint: '/nonce',
+            method: 'GET',
+            outcome: 'success',
+            statusCode: 200,
+            nonceSha256: sha256Base64Url(nonce)
+          }
+        })
+      );
+
       return reply.code(200).header('cache-control', 'no-store').send({ nonce });
     }
   });

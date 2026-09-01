@@ -1,11 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 
-import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import fp from 'fastify-plugin';
 
 import type { FastifyPluginAsync } from 'fastify';
-
-const sha256Base64Url = (value: string): string => createHash('sha256').update(value, 'utf8').digest('base64url');
 
 const NONCE_TTL_MS = 300_000;
 
@@ -13,14 +10,9 @@ type WalletNonce = {
   expiresAt: number;
 };
 
-type IssueNonceContext = {
-  correlationId: string | null;
-  requestId: string;
-};
-
 export type WalletNonceRegistry = {
   consume(nonce: string): boolean;
-  issue(context: IssueNonceContext): Promise<string>;
+  issue(): string;
 };
 
 declare module 'fastify' {
@@ -38,26 +30,9 @@ const walletNoncePlugin: FastifyPluginAsync = async (app) => {
       nonces.delete(nonce);
       return storedNonce !== undefined && storedNonce.expiresAt > Date.now();
     },
-    async issue({ correlationId, requestId }) {
+    issue() {
       const nonce = randomBytes(32).toString('base64url');
       nonces.set(nonce, { expiresAt: Date.now() + NONCE_TTL_MS });
-
-      await app.conformanceEventSink?.emit(
-        createObservedEvent({
-          name: 'wallet_provider.nonce.requested',
-          correlationId,
-          service: 'wallet-provider',
-          requestId,
-          diagnostic: {
-            endpoint: '/nonce',
-            method: 'GET',
-            outcome: 'success',
-            statusCode: 200,
-            nonceSha256: sha256Base64Url(nonce)
-          }
-        })
-      );
-
       return nonce;
     }
   });
