@@ -71,7 +71,7 @@ function validateRegistrationSemantics(
     );
   }
 
-  if (INVALID_REQUEST_SENTINELS.has(body.nonce) || INVALID_REQUEST_SENTINELS.has(body.key_attestation)) {
+  if (INVALID_REQUEST_SENTINELS.has(body.key_attestation)) {
     return walletInstanceRegistrationError(
       403,
       'invalid_request',
