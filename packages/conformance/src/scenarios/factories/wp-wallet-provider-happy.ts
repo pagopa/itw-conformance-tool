@@ -53,7 +53,7 @@ export const wpWalletProviderHappyScenario: ProtocolObservedScenarioDefinition =
   },
   verdictRules: [{ type: 'entry-event-required' }, { type: 'required-events-in-order' }],
   instructions: {
-    goal: 'Verify that the Wallet Instance discovers the Wallet Provider, resolves its Trust Anchor subordinate statement, request a fresh nonce, registers, and obtains a Wallet Instance Attestation.',
+    goal: 'Verify that the Wallet Instance discovers the Wallet Provider, resolves its Trust Anchor subordinate statement, requests a fresh nonce, registers, and obtains a Wallet Instance Attestation.',
     expectedBehavior:
       'The wallet must request the Wallet Provider Entity Configuration, fetch the Wallet Provider subordinate statement from the Trust Anchor, successfully register through POST /wallet-instances, and then successfully request POST /wallet-instance-attestation.',
     summary: 'Verify Wallet Instance registration and attestation issuance.',
