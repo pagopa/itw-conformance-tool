@@ -28,6 +28,12 @@ export const wpWalletProviderHappyScenario: ProtocolObservedScenarioDefinition =
       }
     },
     {
+      event: 'wallet_provider.nonce.requested',
+      service: 'wallet-provider',
+      correlation: 'allow-uncorrelated-post-start',
+      match: { endpoint: '/nonce', method: 'GET', outcome: 'success' }
+    },
+    {
       event: 'wallet_instance.registration.requested',
       service: 'wallet-provider',
       correlation: 'allow-uncorrelated-post-start',

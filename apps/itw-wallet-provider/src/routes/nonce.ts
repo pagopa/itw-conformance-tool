@@ -20,8 +20,11 @@ const nonceRoute: FastifyPluginAsync = async (app) => {
         }
       }
     },
-    handler: async (_request, reply) => {
-      const nonce = app.walletNonces.issue();
+    handler: async (request, reply) => {
+      const nonce = await app.walletNonces.issue({
+        correlationId: request.conformance?.correlation?.correlationId ?? null,
+        requestId: request.id
+      });
       return reply.code(200).header('cache-control', 'no-store').send({ nonce });
     }
   });
