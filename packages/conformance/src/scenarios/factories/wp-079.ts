@@ -17,6 +17,9 @@ import {
  */
 export const wp079Scenario = createNegativePresentationScenario({
   id: 'WP_079',
+  // Only an openid_federation engagement makes a wallet read the Entity
+  // Configuration this scenario's fault mutates.
+  clientIdPrefix: 'openid_federation',
   title: 'Negative Path: Wallet Instance rejects a Relying Party whose Trust Chain does not reach the Trust Anchor',
   rpFault: { type: 'invalid-trust-anchor' },
   requiredEvents: [rpFaultApplied('/.well-known/openid-federation', 'invalid-trust-anchor')],

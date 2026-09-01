@@ -30,6 +30,7 @@
     "jose": "catalog:",
     "open": "^11.0.0",
     "puppeteer": "^24.0.0",
+    "qrcode": "catalog:",
     "tslib": "^2.3.0",
     "vitest": "catalog:"
   },
@@ -38,6 +39,7 @@
     "@pagopa/io-wallet-oid4vci": "catalog:pagopa",
     "@pagopa/io-wallet-utils": "catalog:pagopa",
     "@types/node": "catalog:node",
+    "@types/qrcode": "catalog:",
     "@itw-conformance-tool/ipc": "workspace:*",
     "vitest": "catalog:"
   }

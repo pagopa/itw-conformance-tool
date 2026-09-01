@@ -1,11 +1,9 @@
 import {
   authorizationResponseReceived,
+  federationDiscoveryEvidence,
+  presentationEntryEvent,
   presentationTimeouts,
-  relyingPartySubordinateStatementRequested,
   requestObjectRequested,
-  rpEntityConfigurationRequested,
-  rpFaultApplied,
-  trustAnchorEntityConfigurationRequested,
   vpTokenValidationSucceeded
 } from './presentation-evidence.js';
 
@@ -17,20 +15,21 @@ import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
  * through the Trust Chain, selecting it by the `kid` in the Request Object
  * header.
  *
- * Unlike the other Relying Party fault scenarios this is a **happy path**: the
- * Request Object is nominal and validly signed, and a conformant wallet is
- * expected to complete the presentation. The scenario's job is to remove every
- * key source other than the federation metadata, which is what the Test Matrix
- * requires to make the case conclusive — the key must exist nowhere else in the
- * test ecosystem, otherwise a wallet that never consults the federation would
- * pass anyway. The `request-object-federation-key` profile does exactly that: it
- * drops the `x5c` certificate chain (and any inlined `trust_chain`) from the
- * header and switches the `client_id` to the `openid_federation` prefix, leaving
- * `kid` as the only handle on the signing key.
+ * Unlike the negative Relying Party scenarios this is a **happy path**: nothing
+ * is defective, and a conformant wallet is expected to complete the
+ * presentation. What makes the case conclusive is the trust model the engagement
+ * announces. With the `openid_federation` Client Identifier Prefix the Relying
+ * Party serves a Request Object whose header carries only `alg`, `kid` and
+ * `typ` — no `x5c` certificate chain and no inlined `trust_chain` — so the
+ * signing key exists nowhere in the test ecosystem except the federation
+ * metadata, and a wallet that never fetches it cannot verify the Request Object
+ * at all.
  *
- * A wallet that skips the metadata fetch therefore cannot verify the Request
- * Object, and the flow stops before the Authorization Response — which is what
- * makes the successful completion here meaningful rather than incidental.
+ * This is therefore also the scenario that exercises the federation discovery
+ * itself (WP_078): the Relying Party Entity Configuration, the Trust Anchor
+ * Entity Configuration and the subordinate statement that binds the two. The
+ * `x509_hash` scenarios cannot cover it — their `client_id` is a certificate
+ * hash that names no entity, so there is nothing for a wallet to resolve.
  */
 export const wp084Scenario: ProtocolObservedScenarioDefinition = {
   id: 'WP_084',
@@ -40,18 +39,20 @@ export const wp084Scenario: ProtocolObservedScenarioDefinition = {
   services: ['relyingParty', 'federation'],
   stimulus: {
     type: 'presentation-request',
+    // The whole point of the case: it is the prefix the engagement announces,
+    // not a fault, that removes every key source except the federation metadata.
+    clientIdPrefix: 'openid_federation',
     delivery: ['deep-link']
   },
-  setup: { rpFault: { type: 'request-object-federation-key' } },
-  entryEvent: 'rp.metadata.requested',
+  entryEvent: presentationEntryEvent('openid_federation'),
   requiredEvents: [
     // The Entity Configuration fetch is the whole point of this case: it is the
-    // only place the verification key is published once `x5c` is gone.
-    rpEntityConfigurationRequested,
-    trustAnchorEntityConfigurationRequested,
-    relyingPartySubordinateStatementRequested,
-    requestObjectRequested('GET'),
-    rpFaultApplied('/auth/request/:state', 'request-object-federation-key'),
+    // only place the verification key is published.
+    ...federationDiscoveryEvidence,
+    // Matching on the trust model proves what the wallet was handed: a Request
+    // Object with no `x5c`, leaving the header `kid` as the only handle on the
+    // signing key.
+    requestObjectRequested('GET', 'openid_federation'),
     // Reaching a valid Authorization Response proves the wallet actually
     // resolved the key: with no `x5c` in the header there is no other way it
     // could have verified the Request Object it just accepted.

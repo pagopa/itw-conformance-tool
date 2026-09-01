@@ -6,9 +6,15 @@ settings:
 
 catalogs:
   default:
+    '@types/qrcode':
+      specifier: ^1.5.6
+      version: 1.5.6
     jose:
       specifier: ^6.2.3
       version: 6.2.4
+    qrcode:
+      specifier: ^1.5.4
+      version: 1.5.4
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
@@ -64,20 +70,20 @@ catalogs:
       version: 13.1.3
   pagopa:
     '@pagopa/io-wallet-oauth2':
-      specifier: 1.5.4-alpha-20260717125503
-      version: 1.5.4-alpha-20260717125503
+      specifier: 1.5.4
+      version: 1.5.4
     '@pagopa/io-wallet-oid-federation':
-      specifier: 1.5.4-alpha-20260717125503
-      version: 1.5.4-alpha-20260717125503
+      specifier: 1.5.4
+      version: 1.5.4
     '@pagopa/io-wallet-oid4vci':
-      specifier: 1.5.4-alpha-20260717125503
-      version: 1.5.4-alpha-20260717125503
+      specifier: 1.5.4
+      version: 1.5.4
     '@pagopa/io-wallet-oid4vp':
-      specifier: 1.5.4-alpha-20260717125503
-      version: 1.5.4-alpha-20260717125503
+      specifier: 1.5.4
+      version: 1.5.4
     '@pagopa/io-wallet-utils':
-      specifier: 1.5.4-alpha-20260717125503
-      version: 1.5.4-alpha-20260717125503
+      specifier: 1.5.4
+      version: 1.5.4
 
 importers:
 
@@ -265,19 +271,19 @@ importers:
         version: 0.6.0
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid4vci':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid4vp':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@panva/hkdf':
         specifier: ^1.2.1
         version: 1.2.1
@@ -315,14 +321,14 @@ importers:
         specifier: 'catalog:'
         version: 6.2.4
       qrcode:
-        specifier: ^1.5.4
+        specifier: 'catalog:'
         version: 1.5.4
       zod:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
       '@types/qrcode':
-        specifier: ^1.5.6
+        specifier: 'catalog:'
         version: 1.5.6
       esbuild:
         specifier: ^0.28.1
@@ -380,16 +386,16 @@ importers:
         version: link:../../packages/utils
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid4vp':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@peculiar/x509':
         specifier: ^1.12.4
         version: 1.14.3
@@ -420,9 +426,16 @@ importers:
       jose:
         specifier: 'catalog:'
         version: 6.2.4
+      qrcode:
+        specifier: 'catalog:'
+        version: 1.5.4
       zod:
         specifier: 'catalog:'
         version: 4.4.3
+    devDependencies:
+      '@types/qrcode':
+        specifier: 'catalog:'
+        version: 1.5.6
 
   apps/itw-trust-anchor:
     dependencies:
@@ -470,10 +483,10 @@ importers:
         version: link:../../packages/utils
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       close-with-grace:
         specifier: ^2.5.0
         version: 2.5.0
@@ -530,16 +543,16 @@ importers:
         version: link:../../packages/utils
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid4vci':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       close-with-grace:
         specifier: ^2.5.0
         version: 2.5.0
@@ -594,7 +607,7 @@ importers:
         version: link:../utils
       '@pagopa/io-wallet-oid-federation':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -613,6 +626,9 @@ importers:
       puppeteer:
         specifier: ^24.0.0
         version: 24.43.1(typescript@5.9.3)
+      qrcode:
+        specifier: 'catalog:'
+        version: 1.5.4
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -625,25 +641,28 @@ importers:
         version: link:../ipc
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-oid4vci':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@types/node':
         specifier: catalog:node
         version: 22.20.1
+      '@types/qrcode':
+        specifier: 'catalog:'
+        version: 1.5.6
 
   packages/crypto:
     dependencies:
       '@pagopa/io-wallet-oauth2':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@pagopa/io-wallet-utils':
         specifier: catalog:pagopa
-        version: 1.5.4-alpha-20260717125503
+        version: 1.5.4
       '@peculiar/x509':
         specifier: ^1.12.4
         version: 1.14.3
@@ -2061,20 +2080,20 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@pagopa/io-wallet-oauth2@1.5.4-alpha-20260717125503':
-    resolution: {integrity: sha512-9GeBrEtrscCfMzk7EFyBFRTvTN3O/wvKkyN8B49hmgs2001iy759Sl7AQOV+pgCyYV/l+jNxa/Ejc06998eSWA==}
+  '@pagopa/io-wallet-oauth2@1.5.4':
+    resolution: {integrity: sha512-LPNoZbrSc/Nj0ax5hAO6+r+lQnRPMDabmKPSFhS5bhc7685h5kW2KuC4QjS1Y6HyBvKgZeYohYW9BDcbbPfm1g==}
 
-  '@pagopa/io-wallet-oid-federation@1.5.4-alpha-20260717125503':
-    resolution: {integrity: sha512-uuhXlUodNSrKJC5FQlGjssDlVUDXVq7tfRfD5RAEZ5GOtGvpYPVN7/R5gSupTC+8oYW0Nr8t7KJHDHhSJx+tQg==}
+  '@pagopa/io-wallet-oid-federation@1.5.4':
+    resolution: {integrity: sha512-G3HWvDBl1favjWuFDg+OAcLu99NFuf9ZNCmONejbWOVXbzhvzTCl4k6qCEY3GtwMaMdVP11lUdkfYbNowOoWCg==}
 
-  '@pagopa/io-wallet-oid4vci@1.5.4-alpha-20260717125503':
-    resolution: {integrity: sha512-63D7cPWpHMtPIsyVbJxih2NIMhZCtUDkvbqhPb5MMQYdnPRLTNyOucCKWaa/qVdo0uaUccu2m9axNCIUe9VRmg==}
+  '@pagopa/io-wallet-oid4vci@1.5.4':
+    resolution: {integrity: sha512-dapcXkVpD0wqxHZwhQUrJtE1eST0fRTxAuqrHzgU5XQo4fiEPfpse39uPRu+rec7kKVZbx7gw0uhoqVFLgGdaw==}
 
-  '@pagopa/io-wallet-oid4vp@1.5.4-alpha-20260717125503':
-    resolution: {integrity: sha512-jcvqkf5e68WpPKNjC3ZV5AhJymq6VOwV0fMlwg5+/b5c6hgcgRUcIPXHvD7cYDMMbZOBJAtua1jYLxjxo2pMig==}
+  '@pagopa/io-wallet-oid4vp@1.5.4':
+    resolution: {integrity: sha512-QnVkEHVNUHMQnUTxAaAVHkK06PjPTsF9g1EUNOxr/KsATjYa5exN5dz31lNdl7DupIBX/ponBS7pRxDsTMdxpw==}
 
-  '@pagopa/io-wallet-utils@1.5.4-alpha-20260717125503':
-    resolution: {integrity: sha512-aY2X2WAI8KnB4OXAFflGAyoz1152X1etY32CcHtS9obUUMHKwjxQyEWx5kKgk3Ss9aYdFybQ6E7uSDuEvOyIQQ==}
+  '@pagopa/io-wallet-utils@1.5.4':
+    resolution: {integrity: sha512-wX1WGFQedLJutBGOcz7QdQqp7N710ii/MEITJypxfiaJQFsXTUZUsux4ZWH1FYPhZUC6WVBX+0s+APyRRsZCew==}
 
   '@panva/hkdf@1.2.1':
     resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
@@ -6746,43 +6765,43 @@ snapshots:
   '@oxc-resolver/binding-win32-x64-msvc@11.24.2':
     optional: true
 
-  '@pagopa/io-wallet-oauth2@1.5.4-alpha-20260717125503':
+  '@pagopa/io-wallet-oauth2@1.5.4':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260717125503
-      '@pagopa/io-wallet-utils': 1.5.4-alpha-20260717125503
+      '@pagopa/io-wallet-oid-federation': 1.5.4
+      '@pagopa/io-wallet-utils': 1.5.4
       js-base64: 3.9.2
       zod: 4.4.3
 
-  '@pagopa/io-wallet-oid-federation@1.5.4-alpha-20260717125503':
+  '@pagopa/io-wallet-oid-federation@1.5.4':
     dependencies:
-      '@pagopa/io-wallet-utils': 1.5.4-alpha-20260717125503
+      '@pagopa/io-wallet-utils': 1.5.4
       buffer: 6.0.3
       zod: 4.4.3
 
-  '@pagopa/io-wallet-oid4vci@1.5.4-alpha-20260717125503':
+  '@pagopa/io-wallet-oid4vci@1.5.4':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/openid4vci': 0.4.3
       '@openid4vc/utils': 0.4.3
-      '@pagopa/io-wallet-oauth2': 1.5.4-alpha-20260717125503
-      '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260717125503
-      '@pagopa/io-wallet-oid4vp': 1.5.4-alpha-20260717125503
-      '@pagopa/io-wallet-utils': 1.5.4-alpha-20260717125503
+      '@pagopa/io-wallet-oauth2': 1.5.4
+      '@pagopa/io-wallet-oid-federation': 1.5.4
+      '@pagopa/io-wallet-oid4vp': 1.5.4
+      '@pagopa/io-wallet-utils': 1.5.4
       zod: 4.4.3
 
-  '@pagopa/io-wallet-oid4vp@1.5.4-alpha-20260717125503':
+  '@pagopa/io-wallet-oid4vp@1.5.4':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/openid4vp': 0.4.3
       '@openid4vc/utils': 0.4.3
-      '@pagopa/io-wallet-oauth2': 1.5.4-alpha-20260717125503
-      '@pagopa/io-wallet-oid-federation': 1.5.4-alpha-20260717125503
-      '@pagopa/io-wallet-utils': 1.5.4-alpha-20260717125503
+      '@pagopa/io-wallet-oauth2': 1.5.4
+      '@pagopa/io-wallet-oid-federation': 1.5.4
+      '@pagopa/io-wallet-utils': 1.5.4
       zod: 4.4.3
 
-  '@pagopa/io-wallet-utils@1.5.4-alpha-20260717125503':
+  '@pagopa/io-wallet-utils@1.5.4':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3

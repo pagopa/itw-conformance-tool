@@ -12,7 +12,7 @@ export default fp(async function (fastify) {
       info: {
         title: 'IT Wallet Relying Party',
         description:
-          'OpenAPI documentation for the Relying Party demo service, aligned with version 1.3 of the IT Wallet specification.',
+          'OpenAPI documentation for the Relying Party demo service, aligned with version 1.4 of the IT Wallet specification.',
         version: '1.0.0'
       },
       tags: [

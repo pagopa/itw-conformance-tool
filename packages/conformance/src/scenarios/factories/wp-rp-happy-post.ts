@@ -1,10 +1,8 @@
 import {
   authorizationResponseReceived,
+  presentationEntryEvent,
   presentationTimeouts,
-  relyingPartySubordinateStatementRequested,
   requestObjectRequested,
-  rpEntityConfigurationRequested,
-  trustAnchorEntityConfigurationRequested,
   vpTokenValidationSucceeded
 } from './presentation-evidence.js';
 
@@ -25,6 +23,11 @@ import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
  * A cross-device flow ends at the Authorization Response: the verifier resumes
  * on the initiating device by polling its own session status, so no user-agent
  * redirect is expected here — WP_094 stays with the same-device flow.
+ *
+ * Like `wpRpHappyScenario`, the engagement uses the nominal `x509_hash` trust
+ * model, so no federation call is expected: everything the wallet needs to
+ * verify the Request Object and encrypt the response travels in the Request
+ * Object itself.
  */
 export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
   id: 'WP_RP_HAPPY_POST',
@@ -36,18 +39,17 @@ export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
     // WP_077 (QR / cross-device) is chosen over the mutually exclusive WP_076,
     // and `post` over the mutually exclusive WP_082 GET retrieval.
     type: 'presentation-request',
+    clientIdPrefix: 'x509_hash',
     delivery: ['qr'],
     requestUriMethod: 'post'
   },
-  entryEvent: 'rp.metadata.requested',
+  // The Request Object retrieval is the first call an `x509_hash` wallet makes.
+  entryEvent: presentationEntryEvent('x509_hash'),
   requiredEvents: [
-    rpEntityConfigurationRequested,
-    trustAnchorEntityConfigurationRequested,
-    relyingPartySubordinateStatementRequested,
     // WP_083 / WP_083a / WP_083b / WP_083c: the engagement advertises
     // request_uri_method=post, so the wallet must POST its metadata and a fresh
     // nonce to the request_uri endpoint.
-    requestObjectRequested('POST'),
+    requestObjectRequested('POST', 'x509_hash'),
     authorizationResponseReceived,
     vpTokenValidationSucceeded
   ],
