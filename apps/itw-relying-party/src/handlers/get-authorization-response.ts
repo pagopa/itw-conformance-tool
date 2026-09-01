@@ -3,13 +3,14 @@ import { randomBytes } from 'node:crypto';
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import { toResult } from '@itw-conformance-tool/utils';
 import {
-  extractClientIdPrefix,
+  JarmMode,
   parseAuthorizationResponse,
   type Openid4vpAuthorizationRequestPayload
 } from '@pagopa/io-wallet-oid4vp';
 import { decodeJwt } from 'jose';
 import z from 'zod';
 
+import { REDIRECT_URI_PATH } from '../domain/verifier-metadata.js';
 import { VpTokenVerifier } from '../utils/vp-token.js';
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -38,8 +39,21 @@ const errorResponseBodySchema = z.object({
 export const authorizationResponsePayloadSchema = z.union([responseBodySchema, errorResponseBodySchema]);
 type AuthorizationResponsePayload = z.infer<typeof authorizationResponsePayloadSchema>;
 
+/**
+ * Acknowledgement body. `redirect_uri` is present only for the Same Device
+ * flow; a Cross Device presentation and an Authorization Error Response are
+ * both acknowledged with an empty JSON object.
+ */
 export const authorizationResponseResultSchema = z.object({
-  redirect_uri: z.url().describe('Absolute browser redirect URI to continue the relying-party flow.')
+  redirect_uri: z
+    .url()
+    .optional()
+    .describe('Absolute browser redirect URI to continue the relying-party flow; same-device only.')
+});
+
+export const authorizationResponseErrorSchema = z.object({
+  error: z.string().describe('OpenID4VP error code.'),
+  error_description: z.string().optional().describe('Human-readable error details.')
 });
 
 export const sessionIdQuerystringSchema = z.object({
@@ -117,7 +131,11 @@ export const getAuthorizationResponseHandler = async (
     );
 
     requestObjectRepository.update(authorizationRequest.id, 'rejected');
-    return reply.status(200).send();
+    // A response endpoint that has successfully processed an Authorization
+    // Error Response must acknowledge it exactly as it would a successful one:
+    // 200 with a JSON object body. An empty body would leave a wallet unable to
+    // tell acknowledgement from a truncated response.
+    return reply.status(200).header('cache-control', 'no-store').send({});
   }
 
   const authorizationRequestPayload = decodeJwt<Openid4vpAuthorizationRequestPayload>(authorizationRequest.jwt);
@@ -136,9 +154,35 @@ export const getAuthorizationResponseHandler = async (
     return reply.status(400).send({ error: 'invalid_request', error_description: authResponseResult.error.message });
   }
 
+  // IT Wallet 1.4 raises the Authorization Response from SHOULD to MUST be
+  // encrypted: `direct_post.jwt` has to use ECDH-ES key agreement on P-256 with
+  // AES-GCM content encryption. The SDK does not enforce it — its JARM verifier
+  // rejects only a response that is neither signed nor encrypted, so a
+  // signed-only one would otherwise be accepted here — but it does report the
+  // mode it detected, which is what this checks.
+  const jarmMode = authResponseResult.value.jarm?.type;
+  if (jarmMode !== JarmMode.Encrypted && jarmMode !== JarmMode.SignedEncrypted) {
+    const reason = `Authorization Response must be encrypted, got ${jarmMode ?? 'an unencrypted response'}`;
+
+    await req.server.conformanceEventSink.emit(
+      createObservedEvent({
+        name: 'vp_token.validation.failed',
+        correlationId: null,
+        service: 'relying-party',
+        requestId: req.id,
+        validation: { reason }
+      })
+    );
+
+    requestObjectRepository.update(authorizationRequest.id, 'rejected');
+    req.log.error({ jarmMode }, 'Authorization response is not encrypted');
+    return reply.status(400).send({ error: 'invalid_request', error_description: reason });
+  }
+
   const verifier = new VpTokenVerifier({
     authResponse: authResponseResult.value,
-    iacaX509: req.server.config.IACA_X509,
+    iacaX509: req.server.config.RP_X509,
+    relyingPartyEntityId: req.server.config.BASE_URL,
     requestObject: authorizationRequestPayload,
     verifierEncryptionPublicJwk: req.server.jwks.enc.public
   });
@@ -171,17 +215,28 @@ export const getAuthorizationResponseHandler = async (
   // disclosures and KB-JWT format by decoding the tokens themselves.
   const authorizationResponsePayload = authResponseResult.value.authorizationResponsePayload;
   const vpToken = authorizationResponsePayload.vp_token;
-  const { clientId } = extractClientIdPrefix(authorizationRequestPayload.client_id);
+  // The Relying Party entity identifier. It can no longer be recovered from
+  // `client_id`, which under the `x509_hash` prefix is a certificate hash.
+  const clientId = req.server.config.BASE_URL;
 
   // The path is exactly the attested `redirect_uris` entry; the session is
   // identified by query parameters alone. OpenID4VP requires the returned
   // `redirect_uri` to carry the `response_code`, so a wallet has to compare the
   // base URI and ignore the query — putting the state in the path instead would
   // make a nominal redirect fail that comparison (WP_094 / WP_094a).
-  const redirectUri = new URL(`${req.server.config.BASE_URL}/callback`);
+  const redirectUri = new URL(`${req.server.config.BASE_URL}${REDIRECT_URI_PATH}`);
   const responseCode = randomBytes(32).toString('hex');
   redirectUri.searchParams.set('state', authorizationRequest.id);
   redirectUri.searchParams.set('response_code', responseCode);
+
+  // A returned `redirect_uri` is an instruction to send the user-agent there,
+  // and only the Same Device flow has a user-agent on the wallet's device to
+  // send. In Cross Device the browser that started the flow is elsewhere and
+  // reaches the same destination by polling /status, so handing the wallet a
+  // redirect it cannot meaningfully follow would be an invitation to misbehave.
+  // It is still generated and stored either way: /status and /callback both
+  // resolve the session through the response_code embedded here.
+  const isSameDeviceFlow = authorizationRequest.flowType === 'same-device';
 
   await req.server.conformanceEventSink.emit(
     createObservedEvent({
@@ -196,10 +251,22 @@ export const getAuthorizationResponseHandler = async (
         requestedCredentialIds: extractRequestedCredentialIds(authorizationRequestPayload.dcql_query),
         vpTokenCredentialIds: Object.keys(vpToken as Record<string, unknown>),
         nonce: authorizationRequestPayload.nonce ?? null,
+        // `clientId` is the Relying Party entity identifier — the value IT
+        // Wallet requires the key binding `aud` to carry. `clientIdPrefixed` is
+        // what the Request Object actually advertised, which OpenID4VP 1.0
+        // requires instead; both are accepted, and the form each presentation
+        // used is reported alongside (WP_093c).
         clientId,
+        clientIdPrefixed: authorizationRequestPayload.client_id,
+        acceptedKeyBindingAudiences: verifier.acceptedKeyBindingAudiences,
+        keyBindingAudiences: verifier.keyBindingAudiences,
         // WP_094 / WP_094a: the redirect_uri handed back to the wallet, so a test
         // can check it against the redirect_uris the Relying Party attested.
+        // `redirectUriReturned` records whether it was actually sent: only the
+        // Same Device flow receives one.
         redirectUri: redirectUri.toString(),
+        redirectUriReturned: isSameDeviceFlow,
+        flowType: authorizationRequest.flowType,
         vpToken
       }
     })
@@ -212,5 +279,8 @@ export const getAuthorizationResponseHandler = async (
     verificationResult.value.vpToken
   );
 
-  return reply.status(200).send({ redirect_uri: redirectUri.toString() });
+  return reply
+    .status(200)
+    .header('cache-control', 'no-store')
+    .send(isSameDeviceFlow ? { redirect_uri: redirectUri.toString() } : {});
 };

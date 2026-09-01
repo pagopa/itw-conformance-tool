@@ -23,11 +23,41 @@ export type PresentationFlowType = 'cross-device' | 'same-device';
  */
 export type PresentationRequestUriMethod = 'get' | 'post';
 
+/**
+ * Client Identifier Prefix the engagement announces, which decides how the
+ * wallet establishes trust in the Relying Party: through the `x5c` certificate
+ * chain and the inline `client_metadata` (`x509_hash`), or through the
+ * federation Trust Chain and the Entity Configuration (`openid_federation`).
+ */
+export type PresentationClientIdPrefix = 'openid_federation' | 'x509_hash';
+
+export interface CreatePresentationRequestUriOptions {
+  /** Omitted, the Relying Party applies its IT Wallet 1.3 default (`x509_hash`). */
+  clientIdPrefix?: PresentationClientIdPrefix;
+  /** Whether the wallet redirects back (`same-device`) or the verifier polls (`cross-device`). */
+  flowType?: PresentationFlowType;
+  /**
+   * Whether the Request Object header carries the federation Trust Chain by
+   * value. Only the `openid_federation` prefix honours it.
+   */
+  inlineTrustChain?: boolean;
+  /** Retrieval method advertised for the `request_uri`. */
+  requestUriMethod?: PresentationRequestUriMethod;
+  /** Base URI the engagement is built on; omitted, the Relying Party applies its own default. */
+  walletAuthBaseUri?: string;
+}
+
+/** Creates the engagement URI a wallet is given to start a presentation.
+ *
+ * @param baseURL - The local Relying Party base URL.
+ * @param options - What the engagement must advertise.
+ * @returns The engagement URI, carrying `client_id` and `request_uri`.
+ */
 export async function createPresentationRequestUri(
   baseURL: string,
-  flowType: PresentationFlowType = 'cross-device',
-  requestUriMethod?: PresentationRequestUriMethod
+  options: CreatePresentationRequestUriOptions = {}
 ): Promise<string> {
+  const { clientIdPrefix, flowType = 'cross-device', inlineTrustChain, requestUriMethod, walletAuthBaseUri } = options;
   const endpoint = new URL('/create-authorization-request', baseURL);
 
   const response = await httpsRequest<{ url: string }>({
@@ -40,7 +70,10 @@ export async function createPresentationRequestUri(
     body: {
       dcqlQuery: createDefaultPresentationDcqlQuery(),
       flow_type: flowType,
-      ...(requestUriMethod ? { request_uri_method: requestUriMethod } : {})
+      ...(clientIdPrefix ? { client_id_prefix: clientIdPrefix } : {}),
+      ...(inlineTrustChain ? { include_trust_chain: true } : {}),
+      ...(requestUriMethod ? { request_uri_method: requestUriMethod } : {}),
+      ...(walletAuthBaseUri ? { wallet_auth_base_uri: walletAuthBaseUri } : {})
     },
     rejectUnauthorized: false
   });

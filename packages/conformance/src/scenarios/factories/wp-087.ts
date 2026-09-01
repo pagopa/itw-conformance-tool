@@ -13,6 +13,9 @@ import {
  */
 export const wp087Scenario = createNegativePresentationScenario({
   id: 'WP_087',
+  // Only an openid_federation engagement makes a wallet read the Entity
+  // Configuration this scenario's fault mutates.
+  clientIdPrefix: 'openid_federation',
   title:
     'Negative Path: Wallet Instance rejects a Relying Party the federation does not authorize to request presentations',
   rpFault: { type: 'missing-presentation-trust-mark' },
