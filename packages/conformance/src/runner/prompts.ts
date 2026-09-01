@@ -70,6 +70,7 @@ const protocolEventLabels: Partial<Record<ObservedEventName, string>> = {
   'wallet_attestation.requested': 'Wallet Instance Attestation requested',
   'wallet_instance.status_retrieval.requested': 'Wallet Instance status requested',
   'wallet_instance.revocation.requested': 'Wallet Instance revocation requested',
+  'wallet_provider.nonce.requested': 'Wallet requested a fresh nonce',
   'jwt.validation.succeeded': 'JWT validation succeeded',
   'jwt.validation.failed': 'JWT validation failed',
   'vp_token.validation.succeeded': 'VP token validation succeeded',

@@ -5,7 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const BASE64URL_WITH_OPTIONAL_PADDING = /^[A-Za-z0-9_-]+={0,2}$/;
 const INTEGRITY_FAILURE_SENTINELS = new Set(['integrity_check_error', 'device_integrity_failed']);
-const INVALID_REQUEST_SENTINELS = new Set(['invalid_request', 'invalid_nonce', 'invalid_key_attestation']);
+const INVALID_REQUEST_SENTINELS = new Set(['invalid_request', 'invalid_key_attestation']);
 
 export const walletInstanceRegistrationRequestSchema = z.strictObject({
   nonce: z.string().min(1).describe('Nonce obtained from the Wallet Provider nonce endpoint.'),
@@ -71,7 +71,7 @@ function validateRegistrationSemantics(
     );
   }
 
-  if (INVALID_REQUEST_SENTINELS.has(body.nonce) || INVALID_REQUEST_SENTINELS.has(body.key_attestation)) {
+  if (INVALID_REQUEST_SENTINELS.has(body.key_attestation)) {
     return walletInstanceRegistrationError(
       403,
       'invalid_request',
@@ -104,6 +104,17 @@ export const registerWalletInstanceHandler = async (
 
   if (semanticError !== undefined) {
     return sendWalletInstanceRegistrationError(reply, semanticError);
+  }
+
+  if (!request.server.walletNonces.consume(body.nonce)) {
+    return sendWalletInstanceRegistrationError(
+      reply,
+      walletInstanceRegistrationError(
+        403,
+        'invalid_request',
+        'The provided nonce is invalid, expired, or already used.'
+      )
+    );
   }
 
   request.server.registeredWalletInstances.set(body.hardware_key_tag, {

@@ -10,6 +10,7 @@ export const observedEventNames = [
   'presentation_request.generated',
   'trust_anchor.entity_configuration.requested',
   'wallet_provider.entity_configuration.requested',
+  'wallet_provider.nonce.requested',
   'federation.anchor.requested',
   'federation.fetch.requested',
   'trust_anchor.fault.applied',
