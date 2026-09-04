@@ -18,7 +18,7 @@ export const DDL = `
     session_id   TEXT    NOT NULL UNIQUE,
     user_agent_session_id TEXT,
     redirect_uri TEXT,
-    status       TEXT    NOT NULL CHECK(status IN ('checking', 'denied', 'expired', 'pending', 'rejected', 'verified')),
+    status       TEXT    NOT NULL CHECK(status IN ('checking', 'completed', 'denied', 'expired', 'pending', 'rejected', 'verified')),
     values_json  TEXT CHECK(values_json IS NULL OR json_valid(values_json))
   );
 

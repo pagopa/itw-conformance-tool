@@ -36,13 +36,7 @@ export const getCallbackHandler = async (
   const { response_code, state } = req.query;
   const requestObjectRepository = req.server.repository.requestObject;
 
-  const requestObject = (() => {
-    try {
-      return requestObjectRepository.get(state);
-    } catch {
-      return undefined;
-    }
-  })();
+  const requestObject = requestObjectRepository.find(state);
 
   // Only a genuine follow of the RP-issued redirect_uri counts: the presentation
   // must be verified and the opaque response_code must match the one embedded in
@@ -102,6 +96,12 @@ export const getCallbackHandler = async (
     requestObjectRepository.update(state, 'rejected');
     return reply.redirect('/error.html');
   }
+
+  // The redirect came back in the session that started the flow, which is what
+  // IT Wallet 1.4 requires before a transaction counts as complete. Until this
+  // point the row is `verified` — the VP token checked out — and `/status`
+  // withholds the presented values from a Same Device poll on that alone.
+  requestObjectRepository.update(state, 'completed');
 
   return reply.redirect('/success.html');
 };

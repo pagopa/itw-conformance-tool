@@ -29,13 +29,7 @@ export const getStatusHandler = async (
   const { state } = req.params;
   const requestObjectRepository = req.server.repository.requestObject;
 
-  const requestObject = (() => {
-    try {
-      return requestObjectRepository.get(state);
-    } catch {
-      return undefined;
-    }
-  })();
+  const requestObject = requestObjectRepository.find(state);
 
   // `state` is public: it travels inside the `request_uri` the engagement URL
   // carries, which is rendered into the QR code and shown on screen. This
@@ -61,10 +55,28 @@ export const getStatusHandler = async (
     return reply.notFound();
   }
 
-  const { redirectUri, status, values } = requestObject;
+  const { flowType, redirectUri, status, values } = requestObject;
 
   switch (status) {
     case 'verified':
+      // A verified VP token is not yet a completed transaction in Same Device:
+      // IT Wallet 1.4 completes one only once the redirect returns in the
+      // session that started the flow, so the poll waits for `/callback` to move
+      // the row to `completed` and the presented values stay withheld until it
+      // does. Reporting success here would let a presentation the wallet never
+      // redirected back — or redirected back from an unbound webview, which
+      // `/callback` marks `rejected` — still show as a success.
+      //
+      // Cross Device has no such redirect to wait for: the wallet is handed no
+      // `redirect_uri` at all there and never navigates here, so a verified
+      // token completes the transaction and this endpoint is the only signal the
+      // polling page ever gets.
+      if (flowType === 'same-device') {
+        return {
+          redirect_uri: '?response_code=checking'
+        };
+      }
+
       if (!redirectUri) {
         requestObjectRepository.delete(state);
 
@@ -77,6 +89,15 @@ export const getStatusHandler = async (
       // success page. The instrumented redirect_uri (/callback) is followed only
       // by the wallet's user-agent in the same-device flow, where the full
       // response_code query is preserved.
+      return {
+        redirect_uri: 'success.html?response_code=success',
+        values
+      };
+
+    // Same Device only: `/callback` records the redirect back arriving in the
+    // bound session, which is the point the transaction is complete and the
+    // values may be disclosed to the browser that started it.
+    case 'completed':
       return {
         redirect_uri: 'success.html?response_code=success',
         values

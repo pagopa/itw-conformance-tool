@@ -12,7 +12,11 @@ import { buildRelyingPartyEntityConfiguration, findEntityConfigurationFault } fr
 import { buildRelyingPartyTrustChain } from '../domain/trust-chain.js';
 import { buildRequestObjectClientMetadata, REQUEST_URI_PATH, RESPONSE_URI_PATH } from '../domain/verifier-metadata.js';
 import { toFederationClientId } from '../utils/request-object.js';
-import { USER_AGENT_SESSION_COOKIE, userAgentSessionCookieOptions } from '../utils/user-agent-session.js';
+import {
+  resolveUserAgentSessionId,
+  USER_AGENT_SESSION_COOKIE,
+  userAgentSessionCookieOptions
+} from '../utils/user-agent-session.js';
 
 import type { JwtSignerFederation, JwtSignerX5c, TrustChain } from '@pagopa/io-wallet-oauth2';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -144,7 +148,9 @@ export const createAuthorizationRequestHandler = async (
   // IT Wallet 1.4 binds `state` to the user-agent session that started the flow
   // and accepts the Same Device redirect back only within it. The identifier is
   // opaque and travels to the browser in a cookie; `/callback` compares the two.
-  const userAgentSessionId = randomUUID();
+  // A browser that already holds one keeps it, so concurrent flows in different
+  // tabs stay bound instead of unbinding one another (see the helper).
+  const userAgentSessionId = resolveUserAgentSessionId(req.cookies[USER_AGENT_SESSION_COOKIE]);
 
   const isFederationPrefix = client_id_prefix === 'openid_federation';
 

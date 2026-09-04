@@ -34,15 +34,16 @@ interface StoredRequestObject {
   userAgentSessionId?: string;
 }
 
-async function buildApp(stored: StoredRequestObject | undefined) {
+async function buildApp(stored: StoredRequestObject | undefined, failure?: Error) {
   const app = Fastify();
   const events: ObservedEvent[] = [];
   const updates: { requestObjectId: string; status: string }[] = [];
 
   app.decorate('repository', {
     requestObject: {
-      get: () => {
-        if (!stored) throw new Error('Request object not found');
+      find: () => {
+        if (failure) throw failure;
+        if (!stored) return undefined;
         // Same-device with a bound session unless a case says otherwise: that is
         // what `create-authorization-request` now writes for every flow.
         return { flowType: 'same-device', userAgentSessionId: USER_AGENT_SESSION_ID, ...stored };
@@ -248,8 +249,40 @@ describe('GET /callback', () => {
       const response = await followRedirect(app, `/callback?state=${state}&response_code=${responseCode}`, null);
 
       expect(response.headers['location']).toBe('/success.html');
-      expect(updates).toHaveLength(0);
+      // Completed rather than rejected: the cookie is exempt in Cross Device, so
+      // arriving without one is a valid follow and completes the transaction.
+      expect(updates).toEqual([{ requestObjectId: state, status: 'completed' }]);
       expect(events.find((event) => event.name === 'rp.redirect.followed')).toBeDefined();
+
+      await app.close();
+    });
+
+    it('records the transaction as completed when the redirect returns in the session', async () => {
+      const state = randomUUID();
+      const responseCode = randomBytes(32).toString('hex');
+      const redirectUri = buildRedirectUri(state, responseCode);
+      const { app, updates } = await buildApp({ redirectUri: redirectUri.toString(), status: 'verified' });
+
+      const response = await followRedirect(app, `${redirectUri.pathname}${redirectUri.search}`);
+
+      expect(response.headers['location']).toBe('/success.html');
+      // Completion is what `/status` waits for before releasing the values to
+      // the Same Device browser that started the flow.
+      expect(updates).toEqual([{ requestObjectId: state, status: 'completed' }]);
+
+      await app.close();
+    });
+
+    it('lets a repository failure surface instead of redirecting to the error page', async () => {
+      const state = randomUUID();
+      const responseCode = randomBytes(32).toString('hex');
+      const { app } = await buildApp({ status: 'verified' }, new Error('database is unavailable'));
+
+      // The error page is the answer to a redirect that does not check out, not
+      // to an outage: swallowing one as the other hides it from the logs.
+      const response = await followRedirect(app, `/callback?state=${state}&response_code=${responseCode}`);
+
+      expect(response.statusCode).toBe(500);
 
       await app.close();
     });

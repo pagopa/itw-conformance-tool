@@ -19,7 +19,7 @@ interface StoredRequestObject {
   values?: Record<string, null | string>[];
 }
 
-async function buildApp(stored: StoredRequestObject | undefined) {
+async function buildApp(stored: StoredRequestObject | undefined, failure?: Error) {
   const app = Fastify();
   const deleted: string[] = [];
 
@@ -28,8 +28,9 @@ async function buildApp(stored: StoredRequestObject | undefined) {
       delete: (requestObjectId: string) => {
         deleted.push(requestObjectId);
       },
-      get: () => {
-        if (!stored) throw new Error('Request object not found');
+      find: () => {
+        if (failure) throw failure;
+        if (!stored) return undefined;
         // Bound to the polling browser unless a case says otherwise: that is what
         // `create-authorization-request` writes for every flow.
         return { flowType: 'cross-device', userAgentSessionId: USER_AGENT_SESSION_ID, ...stored };
@@ -156,6 +157,77 @@ describe('GET /status/:state', () => {
 
       expect((await poll(app, state)).statusCode).toBe(200);
       expect(deleted).toEqual([state]);
+
+      await app.close();
+    });
+
+    it('withholds a same-device success until the redirect returns in the session', async () => {
+      const state = randomUUID();
+      const values = [{ given_name: 'Mario' }];
+      const { app } = await buildApp({
+        flowType: 'same-device',
+        redirectUri: 'https://rp.example.org/callback',
+        status: 'verified',
+        values
+      });
+
+      // A verified VP token does not complete a Same Device transaction: the
+      // redirect back has to reach `/callback` in this session first, so the
+      // poll keeps waiting and the presented values stay withheld.
+      const response = await poll(app, state);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ redirect_uri: '?response_code=checking' });
+
+      await app.close();
+    });
+
+    it('reports the same-device success once the callback has recorded the redirect', async () => {
+      const state = randomUUID();
+      const values = [{ given_name: 'Mario' }];
+      const { app } = await buildApp({
+        flowType: 'same-device',
+        redirectUri: 'https://rp.example.org/callback',
+        status: 'completed',
+        values
+      });
+
+      const response = await poll(app, state);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ redirect_uri: 'success.html?response_code=success', values });
+
+      await app.close();
+    });
+
+    it('completes a cross-device flow on the verified token alone', async () => {
+      const state = randomUUID();
+      const values = [{ given_name: 'Mario' }];
+      const { app } = await buildApp({
+        flowType: 'cross-device',
+        redirectUri: 'https://rp.example.org/callback',
+        status: 'verified',
+        values
+      });
+
+      // The wallet is handed no redirect_uri in Cross Device and never navigates
+      // to `/callback`, so waiting for it would hang a nominal flow until the
+      // row expires. This endpoint is the only completion signal the page gets.
+      const response = await poll(app, state);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ redirect_uri: 'success.html?response_code=success', values });
+
+      await app.close();
+    });
+
+    it('lets a repository failure surface instead of reporting an unknown session', async () => {
+      const state = randomUUID();
+      const { app } = await buildApp({ status: 'pending' }, new Error('database is unavailable'));
+
+      // A 404 here would report an outage as a state that never existed, hiding
+      // it from the error handler and the logs.
+      expect((await poll(app, state)).statusCode).toBe(500);
 
       await app.close();
     });

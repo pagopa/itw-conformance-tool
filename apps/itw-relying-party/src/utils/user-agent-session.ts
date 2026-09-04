@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { CookieSerializeOptions } from '@fastify/cookie';
 
 /**
@@ -19,12 +21,25 @@ import type { CookieSerializeOptions } from '@fastify/cookie';
 /** Cookie carrying the opaque user-agent session identifier. */
 export const USER_AGENT_SESSION_COOKIE = 'rp_session';
 
-/**
- * Lifetime of a presentation session, shared by the request object row and the
- * cookie bound to it so the browser never holds an identifier that outlives the
- * server-side state it points at.
- */
+/** Lifetime of the server-side presentation state a request object row holds. */
 export const USER_AGENT_SESSION_TTL_SECONDS = 5 * 60;
+
+/**
+ * Grace the cookie keeps beyond the row it is bound to.
+ *
+ * The row is only moved to `expired` by a sweep that runs every 10 seconds, and
+ * `/status` answers that status with the timeout redirect. Expiring the cookie
+ * at the row's own TTL would make that branch unreachable: the browser drops the
+ * cookie at the very moment the row falls due, so the poll that should have been
+ * told the presentation timed out arrives unbound and is answered 404 instead.
+ * The grace outlives the sweep interval by a wide margin, so the browser is
+ * still bound when the row it started turns `expired`.
+ */
+export const USER_AGENT_SESSION_COOKIE_GRACE_SECONDS = 60;
+
+/** Lifetime of the cookie carrying the binding, row TTL plus the grace above. */
+export const USER_AGENT_SESSION_COOKIE_TTL_SECONDS =
+  USER_AGENT_SESSION_TTL_SECONDS + USER_AGENT_SESSION_COOKIE_GRACE_SECONDS;
 
 /**
  * Attributes for the session cookie.
@@ -36,11 +51,35 @@ export const USER_AGENT_SESSION_TTL_SECONDS = 5 * 60;
  */
 export const userAgentSessionCookieOptions: CookieSerializeOptions = {
   httpOnly: true,
-  maxAge: USER_AGENT_SESSION_TTL_SECONDS,
+  maxAge: USER_AGENT_SESSION_COOKIE_TTL_SECONDS,
   path: '/',
   sameSite: 'lax',
   secure: true
 };
+
+/** Shape of a minted identifier, used to reject a value the RP never issued. */
+const USER_AGENT_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The identifier a new request object binds to.
+ *
+ * A browser already carrying a live session keeps it, because the binding is to
+ * the user-agent session rather than to a single transaction. Minting a fresh
+ * value per engagement would overwrite the one cookie the browser holds, so
+ * starting a second flow in another tab would unbind every flow already running:
+ * their `/status` polls would begin answering 404, and a Same Device redirect
+ * belonging to one of them would be rejected against the newest value.
+ *
+ * Only a well-formed identifier is carried over. The cookie is `httpOnly` and
+ * host-only, so its value is one this Relying Party issued in all nominal cases;
+ * checking the shape anyway keeps a hand-crafted request from choosing what gets
+ * stored on the row.
+ */
+export function resolveUserAgentSessionId(cookieSessionId: string | undefined): string {
+  return cookieSessionId !== undefined && USER_AGENT_SESSION_ID_PATTERN.test(cookieSessionId)
+    ? cookieSessionId
+    : randomUUID();
+}
 
 /**
  * Whether a caller is the browser the request object was created for.
