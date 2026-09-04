@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { createServer, type Server } from 'node:https';
 import { type AddressInfo } from 'node:net';
 
+import FastifyCookie from '@fastify/cookie';
 import FastifySensible from '@fastify/sensible';
 import {
   convertPemToBase64Der,
@@ -212,6 +213,9 @@ async function buildApp(
   // The handler answers malformed queries and an unreachable Trust Anchor with
   // sensible's HTTP error helpers, exactly as the booted app does.
   await app.register(FastifySensible);
+  // The handler binds the engagement to the browser session by setting a
+  // cookie, so `reply.setCookie` has to be decorated here as it is in the app.
+  await app.register(FastifyCookie);
   await app.register(authorizationRequestRoute);
   await app.ready();
 
