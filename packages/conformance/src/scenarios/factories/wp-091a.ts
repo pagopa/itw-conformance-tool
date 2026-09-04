@@ -14,6 +14,9 @@ import { createNegativePresentationScenario, requestObjectRequested, rpFaultAppl
  */
 export const wp091aScenario = createNegativePresentationScenario({
   id: 'WP_091a',
+  // Only an openid_federation engagement makes a wallet read the Entity
+  // Configuration this scenario's fault mutates.
+  clientIdPrefix: 'openid_federation',
   title: 'Negative Path: Wallet Instance rejects a response_uri that the Relying Party metadata does not attest',
   rpFault: { type: 'unattested-response-uri' },
   requiredEvents: [
@@ -27,8 +30,9 @@ export const wp091aScenario = createNegativePresentationScenario({
     goal: 'Verify that the Wallet Instance confirms the Request Object response_uri is one of the response_uris attested in the Relying Party metadata before sending anything to it.',
     expectedBehavior:
       'The wallet resolves the Relying Party metadata and retrieves a nominal Request Object whose response_uri is absent from openid_credential_verifier.response_uris. It must terminate the presentation without posting to that response_uri at all — neither an Authorization Response nor an Authorization Error Response.',
+    summary: 'Verify rejection of a response_uri not attested by Relying Party metadata.',
     observation: [
-      'Keep the wallet and the test process running while the wallet resolves the metadata and retrieves the Request Object.',
+      'Let the wallet resolve the metadata and retrieve the Request Object.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports an error about the presentation request and stops.'
     ]
   }

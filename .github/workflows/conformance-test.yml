@@ -161,11 +161,18 @@ jobs:
           # Trust Anchor advertises that same value as its entity identifier
           # (itw-trust-anchor derives iss/sub from [trust-anchor] url), so that
           # exact URL must appear in wct's federation_trust_anchors set.
+          #
+          # [trust_anchor] verify defaults to false, which makes wct skip every
+          # test that needs Trust Anchor verification. Our Trust Anchor is
+          # reachable here — the runner starts it — and the presentation
+          # scenarios behind the openid_federation prefix are precisely about
+          # the wallet resolving a Trust Chain up to it, so turn it on.
           sed -i \
             -e 's/^port = 3001$/port = 3101/' \
             -e 's/^port = 3002$/port = 3102/' \
             -e 's/^port = 3003$/port = 3103/' \
             -e 's#^federation_trust_anchors\[\] = https://trust-anchor\.wct\.example\.org:3004$#&\nfederation_trust_anchors[] = https://127.0.0.1:3001#' \
+            -e '/^\[trust_anchor\]/,/^\[/ s/^verify = false$/verify = true/' \
             config.ini
           pnpm install
           pnpm build
@@ -193,7 +200,7 @@ jobs:
           # otherwise only burn its tester timeout here. Run the rest
           # interactively (`itwct test presentation` with no allow-list), or add
           # their IDs once the driver covers them.
-          ITWCT_PRESENTATION_SCENARIO_IDS: WP_RP_HAPPY,WP_079,WP_085,WP_094a
+          ITWCT_PRESENTATION_SCENARIO_IDS: WP_RP_HAPPY,WP_RP_HAPPY_POST,WP_079,WP_084,WP_085,WP_094a
         run: |
           set -euo pipefail
 

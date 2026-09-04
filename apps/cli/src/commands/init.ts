@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { join, resolve } from 'node:path';
 
 import { ConfigIniTemplate, loadConfig, type ConfigSchemaType } from '@itw-conformance-tool/config';
+import { createLocalRootCertificateAuthority, getLocalRootCaPaths } from '@itw-conformance-tool/crypto';
 
 import {
   createIntermediateCertificateFromJwk,
@@ -323,6 +324,32 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
   }
 }
 
+/** Creates the local TLS root CA used by every local service.
+ *
+ * The services sign their TLS certificate with this root CA at startup, so a
+ * client that trusts it reaches the local Trust Anchor, Credential Issuer,
+ * Relying Party, and Wallet Provider over HTTPS without an unsafe-TLS mode.
+ *
+ * @param configs - The parsed configuration object.
+ * @param flags - The command-line flags.
+ * @returns It writes the root CA certificate and private key.
+ */
+async function createTlsRootCa(configs: InitConfig, flags: InitFlags): Promise<void> {
+  const { certificatePath, directory, privateKeyPath } = getLocalRootCaPaths(configs.global.data_dir);
+
+  mkdirSync(directory, { recursive: true });
+
+  const rootCaGenerated = !existsFileSync(certificatePath) || !existsFileSync(privateKeyPath) || flags.force;
+  if (rootCaGenerated) {
+    const rootCa = await createLocalRootCertificateAuthority();
+    writeFileSync(privateKeyPath, rootCa.privateKeyPem, { encoding: 'utf8', flag: 'w', mode: 0o600 });
+    writeFileSync(certificatePath, rootCa.certificatePem, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated TLS root CA → ${certificatePath}\n`);
+  } else {
+    process.stdout.write(`⚠ TLS root CA already exists → skipped (use --force to regenerate)\n`);
+  }
+}
+
 /** Initializes the configuration file and necessary keys/certificates for the conformance tool.
  *
  * @param flags - The command-line flags.
@@ -331,4 +358,5 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
 export async function init(flags: InitFlags): Promise<void> {
   const configs = checkConfig(flags);
   await createFilesAndDirs(configs, flags);
+  await createTlsRootCa(configs, flags);
 }

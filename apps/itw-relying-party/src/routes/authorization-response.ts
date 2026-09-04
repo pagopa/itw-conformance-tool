@@ -1,6 +1,7 @@
 import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
 
 import {
+  authorizationResponseErrorSchema,
   authorizationResponsePayloadSchema,
   authorizationResponseResultSchema,
   getAuthorizationResponseHandler,
@@ -23,8 +24,17 @@ const authorizationResponseRoute: FastifyPluginAsync = async (app) => {
       querystring: toFastifyJsonSchema(sessionIdQuerystringSchema),
       response: {
         200: {
-          description: 'Absolute redirect URI used to continue the relying-party flow.',
+          description:
+            'Acknowledgement. Carries the redirect URI used to continue the relying-party flow in the same-device flow; an empty object for cross-device and for an authorization error response.',
           ...toFastifyJsonSchema(authorizationResponseResultSchema)
+        },
+        400: {
+          description: 'The authorization response could not be parsed or decrypted.',
+          ...toFastifyJsonSchema(authorizationResponseErrorSchema)
+        },
+        403: {
+          description: 'The vp_token was parsed but failed verification.',
+          ...toFastifyJsonSchema(authorizationResponseErrorSchema)
         }
       }
     },

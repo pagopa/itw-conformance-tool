@@ -18,6 +18,11 @@ const OMITTED_PARAMETER = 'nonce';
  * is the observable this scenario demands, so a wallet that stops silently is
  * reported as a failure rather than as inconclusive — unlike WP_085, whose
  * broken signature makes a silent abort a legitimate outcome.
+ *
+ * A missing REQUIRED parameter is detectable without any federation or
+ * cryptographic context, so the scenario runs on the nominal `x509_hash`
+ * engagement: no federation call is expected, and the Request Object retrieval
+ * is the entry event.
  */
 export const wp090Scenario = createNegativePresentationScenario({
   id: 'WP_090',
@@ -37,8 +42,9 @@ export const wp090Scenario = createNegativePresentationScenario({
   instructions: {
     goal: 'Verify that the Wallet Instance rejects a malformed Request Object and sends an Authorization Error Response to the Relying Party response_uri endpoint.',
     expectedBehavior: `The wallet retrieves a validly signed Request Object that omits the REQUIRED ${OMITTED_PARAMETER} parameter. It must reject the request and POST an Authorization Error Response — an error code, optionally with an error_description — to the response_uri, and it must not present any credential.`,
+    summary: 'Verify reporting of a malformed Request Object without presenting a credential.',
     observation: [
-      'Keep the wallet and the test process running while the wallet retrieves and validates the Request Object.',
+      'Let the wallet retrieve and validate the Request Object.',
       'Do not approve any disclosure: the expected outcome is that the wallet reports the invalid request to the Relying Party and stops.'
     ]
   }

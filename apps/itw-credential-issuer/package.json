@@ -43,11 +43,11 @@
     "fastify": "catalog:fastify",
     "fastify-plugin": "catalog:fastify",
     "jose": "catalog:",
-    "qrcode": "^1.5.4",
+    "qrcode": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/qrcode": "^1.5.6",
+    "@types/qrcode": "catalog:",
     "esbuild": "^0.28.1"
   }
 }
