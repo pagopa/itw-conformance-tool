@@ -24,5 +24,11 @@
     "itw-wallet-provider": "workspace:*",
     "@peculiar/x509": "^1.12.4",
     "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "fastify": "catalog:fastify",
+    "fastify-plugin": "catalog:fastify",
+    "jose": "catalog:",
+    "vitest": "catalog:"
   }
 }

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import { isValidJwk, validateJWKS } from '@itw-conformance-tool/crypto';
+import { convertPemToBase64Der, isValidJwk, validateJWKS } from '@itw-conformance-tool/crypto';
 import fp from 'fastify-plugin';
 
 export interface JwkKey {
@@ -17,6 +17,14 @@ export interface JwkKey {
 }
 
 export type TrustAnchorKeys = {
+  /**
+   * The Trust Anchor federation certificate, DER-encoded, as a single-element
+   * `x5c` chain. It is self-signed and is the root every other service's `x5c`
+   * chain terminates at, so publishing it in the Trust Anchor's own Entity
+   * Configuration is what lets a verifier obtain that root from the federation
+   * rather than having to be provisioned with it out of band.
+   */
+  federationCertificateChain: string[];
   federationPrivateJwk: JwkKey;
   issuerFederationJwk: JwkKey;
   rpFederationJwk: JwkKey;
@@ -56,22 +64,20 @@ function isEcPrivateJwk(jwk: unknown): jwk is JwkKey {
 // (apps/itw-credential-issuer/src/plugins/issuer-runtime.ts) so the Trust Anchor
 // resolves the exact same key the issuer advertises in its own federation entity
 // configuration.
-function pickSigningKey(keys: JwkKey[], index = 0): JwkKey {
-  const preferredKeys = keys.filter(
+function pickSigningKey(keys: JwkKey[]): JwkKey {
+  const preferred = keys.find(
     (key) => isEcPrivateJwk(key) && key.use === 'sig' && (key.alg === undefined || key.alg.startsWith('ES'))
   );
-  const preferred = preferredKeys[index];
   if (preferred) {
     return preferred;
   }
 
-  const fallbackKeys = keys.filter((key) => isEcPrivateJwk(key) && (key.alg === undefined || key.alg.startsWith('ES')));
-  const fallback = fallbackKeys[index];
+  const fallback = keys.find((key) => isEcPrivateJwk(key) && (key.alg === undefined || key.alg.startsWith('ES')));
   if (fallback) {
     return fallback;
   }
 
-  throw new Error(`JWKS does not contain EC signing key #${index + 1} compatible with ES algorithms`);
+  throw new Error('JWKS does not contain an EC signing key compatible with ES algorithms');
 }
 
 function parseJwkFileContent(content: string): unknown {
@@ -127,10 +133,13 @@ async function loadFederationJwk(dataDir: string, relativeFile: string): Promise
 }
 
 /** Reads a service JWKS file and selects the federation-capable signing key.
- * The RP keeps this key in `rp/jwks.json`, alongside its authorization-request
- * signing and encryption keys.
+ *
+ * Used for the issuer and the Wallet Provider, which sign their Entity
+ * Configuration with the same key their runtime signs everything else with. The
+ * Relying Party does not: its federation key is a distinct key in a file of its
+ * own, read through `loadFederationJwk`.
  */
-async function loadFederationJwkFromJwks(dataDir: string, relativeFile: string, signingKeyIndex = 0): Promise<JwkKey> {
+async function loadFederationJwkFromJwks(dataDir: string, relativeFile: string): Promise<JwkKey> {
   const jwksPath = resolve(dataDir, relativeFile);
   let content: string;
 
@@ -150,7 +159,7 @@ async function loadFederationJwkFromJwks(dataDir: string, relativeFile: string, 
       throw new Error('JWKS does not contain any keys');
     }
 
-    return pickSigningKey(parsedJwks.keys, signingKeyIndex);
+    return pickSigningKey(parsedJwks.keys);
   } catch (err) {
     throw new Error(
       `Invalid key format in ${relativeFile}: ${err instanceof Error ? err.message : String(err)}. ` +
@@ -159,20 +168,46 @@ async function loadFederationJwkFromJwks(dataDir: string, relativeFile: string, 
   }
 }
 
+/** Reads the Trust Anchor federation certificate, which certifies the key the
+ * Trust Anchor signs every federation statement with.
+ */
+async function loadFederationCertificate(dataDir: string): Promise<string> {
+  const certificatePath = resolve(dataDir, join('trust-anchor', 'federation-cert.pem'));
+
+  try {
+    return await readFile(certificatePath, 'utf8');
+  } catch {
+    throw new Error(
+      `Missing required key material: trust-anchor/federation-cert.pem not found in ${dataDir}. ` +
+        `Please ensure the certificate exists before starting the server (run the CLI's init command).`
+    );
+  }
+}
+
 export default fp(
   async function keysPlugin(app) {
     const { dataDir } = app.config;
 
-    const [federationPrivateJwk, issuerFederationJwk, rpFederationJwk, walletProviderFederationJwk] = await Promise.all(
-      [
-        loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
-        loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
-        loadFederationJwkFromJwks(dataDir, join('rp', 'jwks.json'), 1),
-        loadFederationJwkFromJwks(dataDir, join('wallet-provider', 'jwks.json'))
-      ]
-    );
+    const [
+      federationCertificatePem,
+      federationPrivateJwk,
+      issuerFederationJwk,
+      rpFederationJwk,
+      walletProviderFederationJwk
+    ] = await Promise.all([
+      loadFederationCertificate(dataDir),
+      loadFederationJwk(dataDir, join('trust-anchor', 'federation-key.jwk.json')),
+      loadFederationJwkFromJwks(dataDir, join('issuer', 'jwks.json')),
+      // The subordinate statement must carry the key the Relying Party
+      // actually signs its Entity Configuration with — its federation key,
+      // which lives in its own file rather than as the second `use=sig` entry
+      // of `rp/jwks.json`.
+      loadFederationJwk(dataDir, join('rp', 'federation-key.jwk.json')),
+      loadFederationJwkFromJwks(dataDir, join('wallet-provider', 'jwks.json'))
+    ]);
 
     app.decorate('trustAnchorKeys', {
+      federationCertificateChain: [convertPemToBase64Der(federationCertificatePem)],
       federationPrivateJwk,
       issuerFederationJwk,
       rpFederationJwk,

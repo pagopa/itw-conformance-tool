@@ -87,13 +87,27 @@ function toSigningJwk(privateJwk: JwkKey, publicJwk: JsonWebKey): JsonWebKey {
  * local trust chain.
  */
 export async function createTrustAnchorEntityConfiguration(options: {
+  /**
+   * The DER-encoded self-signed certificate for `federationPrivateJwk`,
+   * published as the key's `x5c`. Omitted when the key being published is not
+   * the one the certificate certifies — the
+   * `entity-configuration-nonmatching-signing-key` fault substitutes another —
+   * since a certificate that does not match the key it accompanies would be a
+   * second, unasked-for defect on top of the one the scenario is exercising.
+   */
+  federationCertificateChain?: string[];
   federationPrivateJwk: JwkKey;
   issuerEntityId: string;
   relyingPartyEntityId: string;
   trustAnchorBaseUrl: string;
 }): Promise<string> {
-  const { federationPrivateJwk, issuerEntityId, relyingPartyEntityId, trustAnchorBaseUrl } = options;
+  const { federationCertificateChain, federationPrivateJwk, issuerEntityId, relyingPartyEntityId, trustAnchorBaseUrl } =
+    options;
   const publicJwk = stripPrivateParams(federationPrivateJwk);
+  const publishedJwk =
+    federationCertificateChain && federationCertificateChain.length > 0
+      ? { ...publicJwk, x5c: federationCertificateChain }
+      : publicJwk;
   const issuedAt = Math.floor(Date.now() / 1000);
 
   const metadata: ItWalletMetadataV1_3 = {
@@ -117,7 +131,7 @@ export async function createTrustAnchorEntityConfiguration(options: {
       exp: issuedAt + ENTITY_STATEMENT_TTL_SECONDS,
       iat: issuedAt,
       iss: trustAnchorBaseUrl,
-      jwks: { keys: [publicJwk] },
+      jwks: { keys: [publishedJwk] },
       metadata: parsedMetadata.data as ItWalletEntityConfigurationClaimsOptions['metadata'],
       sub: trustAnchorBaseUrl,
       trust_mark_issuers: {

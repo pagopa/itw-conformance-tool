@@ -52,6 +52,9 @@ catalogs:
     '@fastify/swagger-ui':
       specifier: ^5.2.3
       version: 5.2.6
+    fastify:
+      specifier: ^5.8.5
+      version: 5.12.1
     fastify-plugin:
       specifier: ^5.0.1
       version: 5.1.0
@@ -206,6 +209,19 @@ importers:
       itw-wallet-provider:
         specifier: workspace:*
         version: link:../itw-wallet-provider
+    devDependencies:
+      fastify:
+        specifier: catalog:fastify
+        version: 5.12.1
+      fastify-plugin:
+        specifier: catalog:fastify
+        version: 5.1.0
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.4
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(yaml@2.9.0))
 
   apps/itw-credential-issuer:
     dependencies:

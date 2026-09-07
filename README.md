@@ -113,8 +113,13 @@ pnpm run init:force
 │   ├── intermediate-cert.pem      # issuer intermediate certificate
 │   └── cert.pem                   # issuer leaf certificate chain
 ├── rp/
-│   ├── jwks.json                  # relying-party keys
-│   └── cert.pem                   # relying-party certificate
+│   ├── jwks.json                  # relying-party application keys (Request Object signing + encryption)
+│   ├── cert.pem                   # relying-party signing certificate (self-signed)
+│   ├── enc-cert.pem               # relying-party encryption certificate (self-signed)
+│   ├── federation-key.jwk.json    # relying-party federation key (Entity Configuration)
+│   ├── jwks-intermediate.json     # relying-party intermediate-CA key
+│   ├── intermediate-cert.pem      # relying-party intermediate certificate
+│   └── federation-cert.pem        # relying-party federation leaf certificate
 ├── trust-anchor/
 │   ├── federation-key.jwk.json
 │   └── federation-cert.pem
@@ -128,9 +133,16 @@ pnpm run init:force
     └── ca-cert.pem                # TLS root CA certificate
 ```
 
-The Credential Issuer and Wallet Provider both use the local Trust Anchor as their root. For the Wallet Provider, `cert.pem` is the Wallet Instance Attestation leaf certificate, `intermediate-cert.pem` is signed by `trust-anchor/federation-cert.pem`, and the attestation JWT `x5c` header contains `[leaf, intermediate]` without duplicating the root Trust Anchor certificate.
+The Credential Issuer, Wallet Provider, and Relying Party all use the local Trust Anchor as their root. Each holds an intermediate CA whose certificate is signed by `trust-anchor/federation-cert.pem`, and each publishes an `x5c` of `[leaf, intermediate]` — the root is left out, since a verifier is expected to hold it already. For the Wallet Provider, `cert.pem` is the Wallet Instance Attestation leaf certificate and that same chain appears both in the attestation JWT `x5c` header and on the key its Entity Configuration publishes.
 
-Without `--force`, existing generated files are retained unless a dependent artifact is missing. Use `--force` only when rotating all local test material is intended; it rotates the Trust Anchor, issuer, and Wallet Provider chains and invalidates state that depends on the replaced keys.
+The Relying Party is the one service whose federation key is distinct from the keys it uses at runtime, so its two roles are certified separately:
+
+- **`federation-key.jwk.json`** signs the Entity Configuration and the Relying Party Trust Mark. It is certified by `federation-cert.pem` → `intermediate-cert.pem` → the Trust Anchor, and that chain is published as the `x5c` of the key in the Entity Configuration's top-level `jwks`.
+- **`jwks.json`** holds the application keys: the ES256 key that signs Request Objects and the ECDH-ES key that decrypts the Authorization Response. Both carry self-signed certificates (`cert.pem`, `enc-cert.pem`) and deliberately stay outside the federation chain — a wallet resolving the Relying Party through the `x509_hash` Client Identifier Prefix commits to `cert.pem` and is not being pointed at the Trust Anchor.
+
+Keeping the two in separate files is what makes the roles unambiguous: they were previously two `use=sig` entries in one JWKS told apart only by array position.
+
+Without `--force`, existing generated files are retained unless a dependent artifact is missing. Use `--force` only when rotating all local test material is intended; it rotates the Trust Anchor, issuer, Relying Party, and Wallet Provider chains and invalidates state that depends on the replaced keys.
 
 Each running service generates its TLS certificate in memory at startup and signs it with `tls/ca-cert.pem`, so trusting that single root CA is enough for every local service. The certificate covers `localhost`, `127.0.0.1`, `::1`, the Android emulator host alias `10.0.2.2`, and the host's own LAN addresses. If `tls/` is missing, a service falls back to a throwaway CA generated for that process, which nothing can trust.
 
