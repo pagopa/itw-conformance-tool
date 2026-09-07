@@ -120,9 +120,14 @@ export const getSignJwtCallback =
         kid: signer.kid
       } as Jwk;
     } else if (signer.method === 'federation') {
-      if (signer.trustChain && signer.trustChain.length > 0) {
-        jwk = trustChainToJwk(signer.trustChain, signer.kid);
-      }
+      // A federation signer names its key by `kid` alone: the public half lives
+      // in the federation metadata, which an inlined Trust Chain carries when
+      // there is one. Without it the `kid` is the whole handle — that is the
+      // point of the trust model — and it is all the lookup below needs.
+      jwk =
+        signer.trustChain && signer.trustChain.length > 0
+          ? trustChainToJwk(signer.trustChain, signer.kid)
+          : ({ kid: signer.kid } as Jwk);
     } else {
       throw new Error('Signer method not supported');
     }

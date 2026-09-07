@@ -36,4 +36,16 @@ export {
 export { generateKeyPair } from './services/keys.js';
 export { generateEcPrivateJwk, generateJWKS, generateSigningJwks, generateConfigurableJwks } from './services/jwk.js';
 export { validateCertificateMatchesJwk, validateJWKS, isValidJwk } from './services/validate.js';
-export * from './services/tls.js';
+export {
+  createHttpsOptions,
+  createLocalRootCertificateAuthority,
+  getLocalRootCaPaths,
+  readLocalRootCertificateAuthority,
+  LOCAL_ROOT_CA_SUBJECT,
+  ROOT_CA_CERTIFICATE_FILENAME,
+  ROOT_CA_PRIVATE_KEY_FILENAME,
+  TLS_DIRECTORY_NAME,
+  type CreateHttpsOptionsInput,
+  type LocalRootCertificateAuthority,
+  type RuntimeHttpsOptions
+} from './services/tls.js';

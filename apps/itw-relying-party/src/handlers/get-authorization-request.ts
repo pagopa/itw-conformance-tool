@@ -3,12 +3,11 @@ import z from 'zod';
 
 import { emitRpFaultApplied } from '../faults/rp-fault-evidence.js';
 import {
-  describeFederationKeyRequestObject,
+  describeRequestObjectKeyResolution,
   reissueRequestObjectJwt,
-  type RequestObjectMutation
+  resolveRequestObjectMutation
 } from '../utils/request-object.js';
 
-import type { ActiveRpFault } from '../faults/rp-fault-store.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 export const getAuthorizationRequestParamsSchema = z.object({
@@ -31,30 +30,6 @@ export const postAuthorizationRequestBodySchema = z.object({
 export type PostAuthorizationRequestBody = z.infer<typeof postAuthorizationRequestBodySchema>;
 
 export const getAuthorizationRequestResponseSchema = z.string().describe('Signed authorization request JWT.');
-
-/**
- * Maps an active Relying Party fault profile onto the mutation the served
- * Request Object must carry. Profiles applied elsewhere in the flow (Entity
- * Configuration, Authorization Response) leave the Request Object nominal.
- */
-function resolveRequestObjectMutation(
-  fault: ActiveRpFault | undefined
-): { fault: ActiveRpFault; mutation: RequestObjectMutation } | undefined {
-  if (!fault) return undefined;
-
-  switch (fault.profile.type) {
-    case 'request-object-invalid-signature':
-      return { fault, mutation: { type: 'invalid-signature' } };
-    case 'request-object-invalid-client-id':
-      return { fault, mutation: { type: 'mismatched-issuer' } };
-    case 'request-object-federation-key':
-      return { fault, mutation: { type: 'federation-key' } };
-    case 'request-object-missing-parameter':
-      return { fault, mutation: { type: 'omit-parameter', parameter: fault.profile.parameter } };
-    default:
-      return undefined;
-  }
-}
 
 /**
  * Parses the `wallet_metadata` form field, which travels as a JSON string
@@ -106,6 +81,13 @@ export const getAuthorizationRequestHandler = async (
         })
       : requestObject.jwt;
 
+  // How the wallet can resolve the key that signed what it is being served,
+  // read back from the artifact itself: the `x509_hash` engagement hands it a
+  // certificate chain, the `openid_federation` one either inlines the Trust
+  // Chain or leaves `kid` as the only handle, forcing a federation metadata
+  // lookup (WP_084).
+  const keyResolution = describeRequestObjectKeyResolution(jwt);
+
   // WP_082 / WP_083: the wallet retrieves the signed Request Object from the
   // request_uri endpoint. Correlation is disabled, so the event is emitted
   // uncorrelated and the scenario adopts it as post-start evidence narrowed by
@@ -121,6 +103,10 @@ export const getAuthorizationRequestHandler = async (
       diagnostic: {
         endpoint: '/auth/request/:state',
         method: req.method,
+        clientIdPrefix: keyResolution.clientIdPrefix,
+        hasTrustChain: keyResolution.hasTrustChain,
+        hasX5c: keyResolution.hasX5c,
+        signingKeyId: keyResolution.signingKeyId,
         contentType: isPostRetrieval ? (req.headers['content-type'] ?? null) : null,
         walletMetadata: walletMetadata?.parsed ?? null,
         walletMetadataWellFormed: walletMetadata?.wellFormed ?? null,
@@ -143,12 +129,7 @@ export const getAuthorizationRequestHandler = async (
           ? { omittedParameter: activeFault.mutation.parameter }
           : activeFault.mutation.type === 'mismatched-issuer'
             ? { mutatedClaim: 'iss' }
-            : activeFault.mutation.type === 'federation-key'
-              ? // WP_084: proves what the wallet was handed — no `x5c` to verify
-                // with, and the `kid` it must look up in
-                // `metadata.openid_credential_verifier.jwks`.
-                { keyResolution: 'federation', ...describeFederationKeyRequestObject(jwt) }
-              : { mutatedArtifactPart: 'signature' })
+            : { mutatedArtifactPart: 'signature' })
       }
     });
   }

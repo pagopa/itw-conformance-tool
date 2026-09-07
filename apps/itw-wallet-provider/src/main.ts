@@ -1,3 +1,4 @@
+import { loadConfig } from '@itw-conformance-tool/config';
 import { createHttpsOptions } from '@itw-conformance-tool/crypto';
 import { attachServiceIpcAdapter } from '@itw-conformance-tool/ipc';
 import { logger } from '@itw-conformance-tool/logger';
@@ -8,11 +9,16 @@ import fp from 'fastify-plugin';
 import bootstrap from './app.js';
 
 async function startServer() {
+  const config = loadConfig();
+
   const app = Fastify({
     connectionTimeout: 120_000,
     requestTimeout: 60_000,
     keepAliveTimeout: 10_000,
-    https: await createHttpsOptions(),
+    https: await createHttpsOptions({
+      dataDir: config.global.data_dir,
+      hostnames: [new URL(config['wallet-provider'].local_url).hostname]
+    }),
     loggerInstance: logger,
     ajv: {
       customOptions: {

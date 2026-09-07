@@ -8,17 +8,45 @@ export type AutomationMode = 'interactive-protocol-observed';
 export type LocalServiceName = 'credentialIssuer' | 'federation' | 'relyingParty' | 'walletProvider';
 export type LocalServiceEndpoints = Partial<Record<LocalServiceName, string>>;
 
+/** How a scenario hands its engagement to the wallet: a scannable QR code, a
+ * deep link opened on the wallet's device, or both. */
+export type StimulusDelivery = 'deep-link' | 'qr';
+
 export type StimulusDefinition =
   | {
       type: 'credential-offer';
       credentialConfigurationId?: string;
       credentialConfigurationIds?: string[];
-      delivery: ('deep-link' | 'qr')[];
+      delivery: StimulusDelivery[];
     }
   | { type: 'manual-instruction'; text: string }
   | {
       type: 'presentation-request';
-      delivery: ('deep-link' | 'qr')[];
+      /**
+       * Trust mechanism the engagement announces through its Client Identifier
+       * Prefix, and therefore the one the wallet is expected to use.
+       *
+       * Omitted, the Relying Party applies its IT Wallet 1.3 default,
+       * `x509_hash`: the wallet verifies the Request Object with the `x5c`
+       * certificate chain and reads the Verifier metadata from
+       * `client_metadata`, so it has no reason to touch the federation.
+       * `'openid_federation'` is what makes the Trust Chain, the Trust Marks
+       * and the attested endpoint lists observable, and it must be set by every
+       * scenario whose verdict depends on them.
+       */
+      clientIdPrefix?: 'openid_federation' | 'x509_hash';
+      delivery: StimulusDelivery[];
+      /**
+       * Whether the Request Object header inlines the federation Trust Chain.
+       *
+       * Only meaningful together with `openid_federation`. Set, the wallet is
+       * handed the Relying Party Entity Configuration, the Subordinate
+       * Statement about it and the Trust Anchor Entity Configuration, and is
+       * therefore entitled to validate the Request Object without fetching any
+       * of them — which is precisely why a scenario that requires the fetches
+       * as evidence must leave it unset.
+       */
+      inlineTrustChain?: boolean;
       /**
        * Retrieval method advertised for the `request_uri` in the engagement.
        * Omitted leaves it unset, so a wallet defaults to `get` (WP_082);
@@ -26,7 +54,7 @@ export type StimulusDefinition =
        */
       requestUriMethod?: 'get' | 'post';
     }
-  | { type: 'web-url'; delivery: ('deep-link' | 'qr')[] };
+  | { type: 'web-url'; delivery: StimulusDelivery[] };
 
 export type ScenarioStimulus =
   | { type: 'credential-offer'; uri: string; qrCode: string }
@@ -75,6 +103,7 @@ export interface ScenarioInstructions {
   expectedBehavior: string;
   goal: string;
   prerequisites?: string[];
+  summary?: string;
   steps?: string[];
 }
 
@@ -89,6 +118,8 @@ export type RequiredEventMatchValue =
 
 export interface RequiredEventEvidenceExpectation {
   event: ObservedEventName;
+  /** Human-readable progress label for this protocol step. */
+  label?: string;
   service: ObservedServiceName;
   correlation?: 'allow-uncorrelated-post-start';
   match?: Record<string, RequiredEventMatchValue>;

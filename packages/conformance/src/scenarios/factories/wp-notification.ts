@@ -83,6 +83,7 @@ export const wpNotificationScenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance sends a Notification Request to the Notification Endpoint after receiving a Credential Response containing notification_id.',
     expectedBehavior:
       'After opening the credential offer, the wallet must complete the Authorization Code Flow through PAR, Authorization, Token, and Nonce exactly as in the happy path, then send the Credential Request and receive an immediate HTTP 200 Credential Response that includes a notification_id. The wallet must keep running after storing (or rejecting) the credential and send an HTTP POST Notification Request to the Notification Endpoint with a JSON body containing the same notification_id and one of the three defined event values (credential_accepted, credential_deleted, credential_failure), optionally with an event_description. This scenario accepts any of the three event values: it does not require credential_accepted specifically, only that the Notification Request itself is well-formed and correlated to the Credential Response.',
+    summary: 'Verify the wallet sends a Notification Request after issuance.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'The wallet must support the IT-Wallet Notification Endpoint and send a Notification Request after completing (or failing) credential storage.',
@@ -90,11 +91,9 @@ export const wpNotificationScenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Complete the identity verification / consent step in the (mock) Identity Provider so the wallet receives the authorization code, automatically exchanges it at the Token endpoint, obtains a fresh nonce, and sends the Credential Request.',
-      'Keep the wallet and test process active after the Credential Response so the wallet can complete credential storage/consent handling and send the Notification Request to the Notification Endpoint.',
-      'The runner will continue automatically after the Credential Issuer observes a valid Notification Request.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Complete identity verification and consent so the credential flow finishes.',
+      'Keep the wallet and this command running after the Credential Response until the Notification Request is sent.'
     ]
   },
   // Unlike the happy-path scenario, a Wallet Instance that completes

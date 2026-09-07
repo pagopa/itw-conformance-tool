@@ -1,13 +1,11 @@
-import { normalizeUrl } from '@itw-conformance-tool/utils';
-
 import { getRequiredEventName } from '../scenarios/definitions.js';
+import { matchesRequiredEventExpectation } from '../scenarios/expectation-matching.js';
 
 import type {
   LocalServiceEndpoints,
   ProtocolObservedScenarioDefinition,
   RequiredEventEvidenceExpectation,
-  RequiredEventExpectation,
-  RequiredEventMatchValue
+  RequiredEventExpectation
 } from '../scenarios/definitions.js';
 import type { ScenarioEventBridgeFactory } from './event-bridge.js';
 import type { ScenarioEventSink } from './event-bus.js';
@@ -92,43 +90,6 @@ function isUncorrelatedEvent(event: ObservedEvent): boolean {
   return event.correlationId === null;
 }
 
-/**
- * Compares one diagnostic value against either an exact string expectation or a
- * normalized configured endpoint URL.
- */
-function matchValueMatches(
-  actual: unknown,
-  expected: RequiredEventMatchValue,
-  endpoints: LocalServiceEndpoints
-): boolean {
-  if (typeof expected === 'number' || typeof expected === 'boolean') return actual === expected;
-  if (typeof expected === 'string') return actual === expected;
-  if (expected.match !== 'normalized-url') return false;
-  if (typeof actual !== 'string') return false;
-
-  const endpoint = endpoints[expected.endpoint];
-  if (!endpoint) return false;
-
-  return normalizeUrl(actual) === normalizeUrl(endpoint);
-}
-
-/**
- * Verifies that every matcher configured for an expected required event matches
- * the observed event diagnostics.
- */
-function requiredEventMatch(
-  event: ObservedEvent,
-  expectation: RequiredEventEvidenceExpectation,
-  endpoints: LocalServiceEndpoints
-): boolean {
-  const match = expectation.match;
-  if (!match) return true;
-
-  return Object.entries(match).every(([key, expected]) =>
-    matchValueMatches(event.diagnostic?.[key], expected, endpoints)
-  );
-}
-
 function canAdoptUncorrelatedPostStartEvent(
   expectation: RequiredEventExpectation
 ): expectation is RequiredEventEvidenceExpectation {
@@ -156,9 +117,7 @@ function matchesScenarioEventEvidence(
 
   const matchesExpectation = (expectation: RequiredEventExpectation): boolean =>
     canAdoptUncorrelatedPostStartEvent(expectation)
-      ? expectation.event === event.name &&
-        expectation.service === event.service &&
-        requiredEventMatch(event, expectation, endpoints)
+      ? matchesRequiredEventExpectation(event, expectation, endpoints)
       : expectation === event.name;
 
   return (

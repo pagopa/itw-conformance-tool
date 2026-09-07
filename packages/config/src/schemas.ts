@@ -19,7 +19,8 @@ export const DEFAULT_CONFIG = {
   },
   wallet: {
     wallet_name: 'My Wallet Solution',
-    wallet_version: 'V1_4'
+    wallet_version: 'V1_4',
+    auth_base_uri: 'openid4vp://'
   },
   'wallet-provider': {
     url: 'https://wallet-provider-backend.example.com',
@@ -75,6 +76,13 @@ wallet_name = ${walletDefaults.wallet_name}
 ; Wallet version (used in conformance test reports)
 ; Default: ${walletDefaults.wallet_version}
 wallet_version = ${walletDefaults.wallet_version}
+; Base URI the presentation engagement is built on. The default is the OpenID4VP
+; custom scheme, which every conforming wallet registers; replace it with the
+; Wallet Solution's own scheme (e.g. mywallet://auth) or an https universal link it
+; claims. Presentation scenarios append client_id and request_uri to it, and
+; deep-link scenarios open it on the attached emulator or simulator.
+; Default: ${walletDefaults.auth_base_uri}
+auth_base_uri = ${walletDefaults.auth_base_uri}
 
 [wallet-provider]
 ; Remote Wallet Provider backend URL used by the user and wallet-provider conformance matrix.
@@ -222,7 +230,10 @@ const GlobalConfigSchema = z
 const WalletConfigSchema = z
   .object({
     wallet_name: nonEmptyString.default(walletDefaults.wallet_name),
-    wallet_version: nonEmptyString.default(walletDefaults.wallet_version)
+    wallet_version: nonEmptyString.default(walletDefaults.wallet_version),
+    // Any scheme is accepted: wallets are engaged either through a custom
+    // scheme (`mywallet://auth`) or through a claimed https universal link.
+    auth_base_uri: z.url().default(walletDefaults.auth_base_uri)
   })
   .default(walletDefaults);
 

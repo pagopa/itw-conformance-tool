@@ -60,24 +60,28 @@ export const wp057Scenario: ProtocolObservedScenarioDefinition = {
     // occurrence.
     {
       event: 'issuer.credential.requested',
+      label: 'Wallet requested the first offered credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
     },
     {
       event: 'issuer.credential.issued',
+      label: 'Credential Issuer issued the first offered credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
     },
     {
       event: 'issuer.credential.requested',
+      label: 'Wallet requested the second offered credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
     },
     {
       event: 'issuer.credential.issued',
+      label: 'Credential Issuer issued the second offered credential',
       service: 'credential-issuer',
       correlation: 'allow-uncorrelated-post-start',
       match: { endpoint: '/credential' }
@@ -93,6 +97,7 @@ export const wp057Scenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that, when offered multiple Digital Credentials in a single Credential Offer, the Wallet Instance sends a separate and correctly formatted Credential Request for each Digital Credential it intends to accept, rather than combining them into a single request.',
     expectedBehavior:
       'After opening the credential offer with two distinct credential_configuration_ids, the wallet must complete the normal issuance flow through Entity Configuration, Federation Fetch, PAR, Authorization, Token and Nonce, then accept both offered credentials by sending two separate DPoP-authenticated Credential Requests to the Credential endpoint, each carrying exactly one credential_identifier and exactly one holder-binding proof JWT. The Credential Issuer must independently validate and issue each request, resulting in two issuer.credential.issued responses that together cover both offered credential identifiers.',
+    summary: 'Verify separate Credential Requests for two offered credentials.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'The wallet must be able to accept both offered credential types from a single Credential Offer.',
@@ -100,11 +105,9 @@ export const wp057Scenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Complete the identity verification / consent step in the (mock) Identity Provider so the wallet receives the authorization code, exchanges it at the Token endpoint and obtains a fresh nonce.',
-      'Accept both offered credentials in the Wallet Instance and keep the wallet and test process running until it has sent a separate Credential Request for each one and received both credentials.',
-      'The runner will continue automatically after the wallet sends and receives a response for two separate Credential Requests, one for each offered credential.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Complete identity verification and consent so the wallet reaches credential selection.',
+      'Accept both offered credentials and keep the wallet and this command running until both are issued.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

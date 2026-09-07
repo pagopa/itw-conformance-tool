@@ -81,40 +81,19 @@ const requestObjectInvalidSignatureProfileSchema = z
   .strict();
 
 /**
- * WP_086: serves a validly signed Request Object whose `iss` claim is neither
- * the `client_id` used in the engagement nor the `sub` of the Relying Party
- * Entity Configuration, isolating the client identifier consistency check
- * from the signature check (`request-object-invalid-signature`).
+ * WP_086: serves a validly signed Request Object whose `iss` claim is not the
+ * `sub` of the Relying Party Entity Configuration, isolating the client
+ * identifier consistency check from the signature check
+ * (`request-object-invalid-signature`).
+ *
+ * The Entity Configuration `sub` is the only thing `iss` is checked against
+ * under the nominal `x509_hash` prefix: the engagement `client_id` is the
+ * base64url SHA-256 of the Relying Party leaf certificate and carries no entity
+ * identifier to compare with.
  */
 const requestObjectInvalidClientIdProfileSchema = z
   .object({
     type: z.literal('request-object-invalid-client-id')
-  })
-  .strict();
-
-/**
- * WP_084: serves a Request Object signed the OpenID Federation way instead of
- * the X.509 way. The JOSE header carries only `alg`, `kid` and `typ` — no `x5c`
- * certificate chain and no embedded `trust_chain` — and the `client_id` switches
- * from the `x509_hash` Client Identifier Prefix to `openid_federation`.
- *
- * Nothing about the Request Object is defective: it stays validly signed with
- * the same Relying Party key, and that key is published in
- * `metadata.openid_credential_verifier.jwks`. What changes is that the key is
- * published *only* there — with the certificate chain gone from the header, the
- * sole way to obtain it is to resolve the Relying Party Entity Configuration
- * through the Trust Chain and select the key by the header's `kid`. A wallet
- * that never fetches that metadata cannot verify the Request Object at all.
- *
- * The Client Identifier Prefix has to change with it: `x509_hash` tells a wallet
- * to take the key from the header's `x5c`, which is exactly the path this
- * profile removes. The prefixed and unprefixed identifiers still resolve to the
- * same entity, so the engagement `client_id`, the Request Object `iss` and the
- * Entity Configuration `sub` stay consistent (WP_086).
- */
-const requestObjectFederationKeyProfileSchema = z
-  .object({
-    type: z.literal('request-object-federation-key')
   })
   .strict();
 
@@ -165,7 +144,6 @@ export const rpFaultProfileSchema = z.discriminatedUnion('type', [
   missingPresentationTrustMarkProfileSchema,
   requestObjectInvalidSignatureProfileSchema,
   requestObjectInvalidClientIdProfileSchema,
-  requestObjectFederationKeyProfileSchema,
   requestObjectMissingParameterProfileSchema,
   unattestedRedirectUriProfileSchema
 ]);

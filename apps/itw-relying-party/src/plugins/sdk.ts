@@ -5,13 +5,13 @@ import type { FastifyPluginAsync } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    sdkConfig: IoWalletSdkConfig<ItWalletSpecsVersion.V1_3>;
+    sdkConfig: IoWalletSdkConfig<ItWalletSpecsVersion.V1_4>;
   }
 }
 
 const sdkConfigPlugin: FastifyPluginAsync = async (app) => {
   const sdkConfig = new IoWalletSdkConfig({
-    itWalletSpecsVersion: ItWalletSpecsVersion.V1_3
+    itWalletSpecsVersion: ItWalletSpecsVersion.V1_4
   });
 
   app.decorate('sdkConfig', sdkConfig);

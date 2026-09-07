@@ -1,3 +1,4 @@
+import { escapeHtml, toInlineScriptStringLiteral } from '@itw-conformance-tool/utils';
 import QRCode from 'qrcode';
 
 import { CREDENTIAL_OFFER_QUERY_PARAM, CREDENTIAL_OFFER_URI_SCHEME } from '../domain/credential-offer.js';
@@ -5,29 +6,6 @@ import { CREDENTIAL_OFFER_QUERY_PARAM, CREDENTIAL_OFFER_URI_SCHEME } from '../do
 import type { FastifyPluginAsync } from 'fastify';
 
 const SCENARIO_CREDENTIAL_OFFER_QUERY_PARAM = 'credential_offer_uri';
-
-const HTML_ESCAPE_MAP: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;'
-};
-
-/** Escapes text for safe interpolation into HTML element content/attributes. */
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] as string);
-}
-
-/**
- * Serializes a string as a JS string literal safe to inline in a `<script>`
- * element: escapes quotes/backslashes via `JSON.stringify` and additionally
- * neutralizes `<`, `>`, and `&` so the literal cannot prematurely close the
- * surrounding `<script>` tag or be misinterpreted as HTML.
- */
-function toInlineScriptStringLiteral(value: string): string {
-  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

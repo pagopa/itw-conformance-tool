@@ -1,10 +1,8 @@
 import {
   authorizationResponseReceived,
+  presentationEntryEvent,
   presentationTimeouts,
-  relyingPartySubordinateStatementRequested,
   requestObjectRequested,
-  rpEntityConfigurationRequested,
-  trustAnchorEntityConfigurationRequested,
   vpTokenValidationSucceeded
 } from './presentation-evidence.js';
 
@@ -25,6 +23,11 @@ import type { ProtocolObservedScenarioDefinition } from '../definitions.js';
  * A cross-device flow ends at the Authorization Response: the verifier resumes
  * on the initiating device by polling its own session status, so no user-agent
  * redirect is expected here — WP_094 stays with the same-device flow.
+ *
+ * Like `wpRpHappyScenario`, the engagement uses the nominal `x509_hash` trust
+ * model, so no federation call is expected: everything the wallet needs to
+ * verify the Request Object and encrypt the response travels in the Request
+ * Object itself.
  */
 export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
   id: 'WP_RP_HAPPY_POST',
@@ -36,18 +39,17 @@ export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
     // WP_077 (QR / cross-device) is chosen over the mutually exclusive WP_076,
     // and `post` over the mutually exclusive WP_082 GET retrieval.
     type: 'presentation-request',
+    clientIdPrefix: 'x509_hash',
     delivery: ['qr'],
     requestUriMethod: 'post'
   },
-  entryEvent: 'rp.metadata.requested',
+  // The Request Object retrieval is the first call an `x509_hash` wallet makes.
+  entryEvent: presentationEntryEvent('x509_hash'),
   requiredEvents: [
-    rpEntityConfigurationRequested,
-    trustAnchorEntityConfigurationRequested,
-    relyingPartySubordinateStatementRequested,
     // WP_083 / WP_083a / WP_083b / WP_083c: the engagement advertises
     // request_uri_method=post, so the wallet must POST its metadata and a fresh
     // nonce to the request_uri endpoint.
-    requestObjectRequested('POST'),
+    requestObjectRequested('POST', 'x509_hash'),
     authorizationResponseReceived,
     vpTokenValidationSucceeded
   ],
@@ -62,6 +64,7 @@ export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
     goal: 'Verify that the Wallet Instance obtains the presentation request from a QR code, retrieves the signed Request Object with an HTTP POST carrying wallet_metadata and a fresh wallet_nonce, and completes the presentation with an encrypted Authorization Response.',
     expectedBehavior:
       'After scanning the QR payload, the wallet resolves the Relying Party Entity Configuration and Trust Chain from the Trust Anchor, sends an application/x-www-form-urlencoded HTTP POST with wallet_metadata and wallet_nonce to the request_uri endpoint, validates the returned Request Object (which echoes the wallet_nonce), and posts an encrypted Authorization Response with a vp_token to the response_uri.',
+    summary: 'Verify credential presentation with QR engagement and POST Request Object retrieval.',
     prerequisites: [
       'The wallet app under test is installed and holds a credential that satisfies the requested presentation (PID by default).',
       'The wallet supports request_uri_method=post; a wallet that always retrieves the Request Object over GET cannot satisfy this scenario.',
@@ -70,11 +73,10 @@ export const wpRpHappyPostScenario: ProtocolObservedScenarioDefinition = {
       'The device running the wallet can reach the local Trust Anchor and Relying Party URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services and waits for their readiness.',
-      'Scan the printed presentation request QR payload with the Wallet Instance.',
+      'Scan the presentation request QR payload with the Wallet Instance.',
       'Allow the wallet to resolve the Relying Party federation trust chain and retrieve the Request Object over POST.',
-      'Approve the disclosure of the requested attributes in the wallet.',
-      'The runner passes once the Relying Party receives a valid Authorization Response for the Request Object retrieved over POST.'
+      'Approve the requested disclosure in the wallet.',
+      'Keep the wallet and this command running until the scenario completes.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

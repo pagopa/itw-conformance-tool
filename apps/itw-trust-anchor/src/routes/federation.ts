@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
+import { isInternalServiceRequest } from '@itw-conformance-tool/utils';
 
 import { createTrustAnchorEntityConfiguration } from '../federation/statements.js';
 
@@ -35,26 +36,35 @@ const federationRoute: FastifyPluginAsync = async (app) => {
         // Entity Configuration (WP_079). The request carries no scenario
         // correlation, so it is adopted as uncorrelated evidence narrowed by the
         // endpoint diagnostic.
-        await app.conformanceEventSink?.emit(
-          createObservedEvent({
-            name: 'trust_anchor.entity_configuration.requested',
-            correlationId: request.conformance?.correlation?.correlationId ?? null,
-            service: 'federation',
-            requestId: request.id,
-            diagnostic: { endpoint: '/.well-known/openid-federation' }
-          })
-        );
-        await app.conformanceEventSink?.emit(
-          createObservedEvent({
-            name: 'federation.anchor.requested',
-            correlationId: request.conformance?.correlation?.correlationId ?? null,
-            service: 'federation',
-            requestId: request.id,
-            diagnostic: { endpoint: '/.well-known/openid-federation' }
-          })
-        );
+        //
+        // A call from another conformance-tool service — the Relying Party
+        // assembling an inlined Trust Chain — is not the wallet resolving
+        // anything, so it produces no evidence, neither of the resolution step
+        // nor of the fault it was served.
+        const isWalletObservation = !isInternalServiceRequest(request.headers);
 
-        if (useFaultKey && activeFault) {
+        if (isWalletObservation) {
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'trust_anchor.entity_configuration.requested',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'federation',
+              requestId: request.id,
+              diagnostic: { endpoint: '/.well-known/openid-federation' }
+            })
+          );
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'federation.anchor.requested',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'federation',
+              requestId: request.id,
+              diagnostic: { endpoint: '/.well-known/openid-federation' }
+            })
+          );
+        }
+
+        if (isWalletObservation && useFaultKey && activeFault) {
           await app.conformanceEventSink?.emit(
             createObservedEvent({
               name: 'trust_anchor.fault.applied',

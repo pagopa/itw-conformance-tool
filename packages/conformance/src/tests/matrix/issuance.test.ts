@@ -1700,10 +1700,11 @@ describe('Test Cases for Issuance Phase', () => {
     );
 
     test('Cleanup: deactivating the invalid-trust-anchor fault restores the configured Trust Anchor for subsequent scenarios.', async () => {
-      // Local services (credential-issuer, trust-anchor, relying-party) use ephemeral,
-      // self-signed certificates (see @itw-conformance-tool/crypto's createHttpsOptions),
-      // so a plain global `fetch()` fails TLS verification. Use `httpsRequest` with
-      // `rejectUnauthorized: false`, matching the convention used elsewhere for these hosts.
+      // Local services (credential-issuer, trust-anchor, relying-party) use certificates
+      // issued by the local root CA (see @itw-conformance-tool/crypto's createHttpsOptions),
+      // which the host does not trust, so a plain global `fetch()` fails TLS verification.
+      // Use `httpsRequest` with `rejectUnauthorized: false`, matching the convention used
+      // elsewhere for these hosts.
       const discoveryUrl = new URL('/.well-known/openid-federation', config['credential-issuer'].url);
       const response = await httpsRequest({
         method: 'GET',

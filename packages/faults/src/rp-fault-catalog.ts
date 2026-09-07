@@ -20,13 +20,13 @@ export interface RpFaultCatalogEntry {
 }
 
 /**
- * The local Relying Party is pinned to IT Wallet `1.3` (see
+ * The local Relying Party is pinned to IT Wallet `1.4` (see
  * `apps/itw-relying-party/src/plugins/sdk.ts`), so every Relying Party fault is
  * verified against that version only. Widen a profile's list once the Relying
  * Party can serve another version and that version has its own verified test
  * coverage.
  */
-const RELYING_PARTY_TESTED_SPEC_VERSIONS = ['1.3'] as const satisfies readonly SupportedItWalletSpecVersion[];
+const RELYING_PARTY_TESTED_SPEC_VERSIONS = ['1.4'] as const satisfies readonly SupportedItWalletSpecVersion[];
 
 /**
  * Associates every catalogued Relying Party fault `type` with its application
@@ -84,15 +84,6 @@ export const rpFaultCatalog: Readonly<Record<RpFaultProfileType, RpFaultCatalogE
     type: 'request-object-invalid-client-id',
     applicationPoint: 'rp-request-object',
     supportedSpecVersions: RELYING_PARTY_TESTED_SPEC_VERSIONS,
-    mutationTiming: 'pre-signature',
-    implemented: true
-  },
-  'request-object-federation-key': {
-    type: 'request-object-federation-key',
-    applicationPoint: 'rp-request-object',
-    supportedSpecVersions: RELYING_PARTY_TESTED_SPEC_VERSIONS,
-    // The header and the `client_id` claim are rewritten before signing; the
-    // signature itself stays valid and is produced with the nominal key.
     mutationTiming: 'pre-signature',
     implemented: true
   },

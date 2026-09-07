@@ -62,17 +62,16 @@ export const wpUnsupportedCredentialOfferScenario: ProtocolObservedScenarioDefin
     goal: 'Verify that the Wallet Instance rejects a Credential Offer whose credential_configuration_ids entry is not published in the Credential Issuer metadata.',
     expectedBehavior:
       'After opening the credential offer, the wallet must request the Credential Issuer Entity Configuration (and resolve the trust chain if needed) to evaluate the offer, discover that the requested credential_configuration_id is absent from credential_configurations_supported, and terminate the issuance flow without sending a Pushed Authorization Request or any later request. Successful conformance is rejection/termination, not issuance.',
+    summary: 'Verify rejection of an unsupported credential offer.',
     prerequisites: [
       'The wallet app under test is installed and can open credential offer deep links or scan credential offer QR payloads.',
       'Run the test from the workspace root, where config.ini and the compiled local services are available.',
       'The device running the wallet can reach the local Credential Issuer and Trust Anchor URLs printed by this test.'
     ],
     steps: [
-      'Start this scenario with itwct test issuance. The CLI starts the required Trust Anchor and Credential Issuer services, activates the unsupported-credential-offer fault, and waits for their readiness.',
-      'Open the printed credential offer deep link or scan the QR payload with the Wallet Instance.',
-      'Keep the wallet and test process running while the wallet requests the Credential Issuer metadata needed to evaluate the offer.',
-      'Do not continue any consent or identity verification step: the expected outcome is that the wallet stops after determining the requested credential_configuration_id is not supported.',
-      'The runner will continue automatically after the wallet requests the Issuer Entity Configuration, or once the negative-observation window elapses without the wallet sending PAR or any later request.'
+      'Open the Credential Offer in your Wallet Instance.',
+      'Keep the wallet and this command running while the wallet evaluates the offered credential type.',
+      'Stop at the wallet rejection screen; the expected outcome is rejection before PAR or later issuance requests.'
     ]
   },
   missingRequiredEventPolicy: 'inconclusive'

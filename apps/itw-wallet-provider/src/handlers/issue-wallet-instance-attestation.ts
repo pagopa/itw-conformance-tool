@@ -278,6 +278,10 @@ export const issueWalletInstanceAttestationHandler = async (
     return sendError(reply, invalidRequest('The Wallet Instance proof of possession or nonce is invalid.'));
   }
 
+  if (!request.server.walletNonces.consume(payload.nonce)) {
+    return sendError(reply, invalidRequest('The provided nonce is invalid, expired, or already used.'));
+  }
+
   const walletInstanceAttestation = await issueWalletInstanceAttestation(request.server, payload);
 
   await request.server.conformanceEventSink?.emit(

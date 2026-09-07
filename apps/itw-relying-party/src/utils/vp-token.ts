@@ -1,5 +1,4 @@
 import {
-  extractClientIdPrefix,
   type Openid4vpAuthorizationRequestPayload,
   type ParseAuthorizationResponseResult
 } from '@pagopa/io-wallet-oid4vp';
@@ -46,17 +45,52 @@ export class LocalSDJwtVcInstance extends SDJwtVcInstance {
 interface VpTokenVerifierOptions {
   authResponse: ParseAuthorizationResponseResult;
   iacaX509: string;
+  /** Relying Party entity identifier, one of the two accepted key binding audiences. */
+  relyingPartyEntityId: string;
   requestObject: Openid4vpAuthorizationRequestPayload;
   verifierEncryptionPublicJwk?: Jwk;
 }
 
+/**
+ * Which of the two accepted forms a wallet used for the key binding `aud`.
+ * IT Wallet requires the Relying Party entity identifier; OpenID4VP 1.0
+ * requires the full Client Identifier including its prefix. Both are accepted,
+ * and which one arrived is recorded as evidence rather than being judged here.
+ */
+export type KeyBindingAudienceForm = 'entity-identifier' | 'prefixed-client-id';
+
+export interface KeyBindingAudienceRecord {
+  aud: string;
+  credentialId: string;
+  form: KeyBindingAudienceForm;
+}
+
 export class VpTokenVerifier {
+  /**
+   * The key binding audience observed on each verified presentation, in the
+   * order they were verified. Populated by `verifyCredentials`.
+   */
+  public readonly keyBindingAudiences: KeyBindingAudienceRecord[] = [];
+
   private authResponse: ParseAuthorizationResponseResult;
+  private relyingPartyEntityId: string;
   private requestObject: Openid4vpAuthorizationRequestPayload;
 
   constructor(options: VpTokenVerifierOptions) {
     this.authResponse = options.authResponse;
+    this.relyingPartyEntityId = options.relyingPartyEntityId;
     this.requestObject = options.requestObject;
+  }
+
+  /**
+   * The key binding `aud` values this Relying Party accepts, most authoritative
+   * first. IT Wallet mandates the entity identifier, so it leads; the full
+   * prefixed Client Identifier follows because OpenID4VP 1.0 mandates that
+   * instead, and failing an otherwise-correct wallet over which of the two
+   * specs it read would be a false negative.
+   */
+  public get acceptedKeyBindingAudiences(): string[] {
+    return [this.relyingPartyEntityId, this.requestObject.client_id];
   }
 
   private normalizeCredentialTokens(credentialId: string, token: unknown): string[] {
@@ -110,7 +144,7 @@ export class VpTokenVerifier {
    * 3. Extracts the issuer's public key from the header (trust_chain or x5c)
    * 4. Verifies both the issuer's signature and the key binding
    */
-  private async verifySdJwtToken(token: string): Promise<Record<string, unknown>> {
+  private async verifySdJwtToken(credentialId: string, token: string): Promise<Record<string, unknown>> {
     const { jwt, kbJwt } = await decodeSdJwt(token, digest);
     const payload = jwt.payload as JwtPayload;
     const header = jwt.header;
@@ -124,10 +158,23 @@ export class VpTokenVerifier {
       throw new Error("vp_token header is missing 'kid' (key identifier) or it is invalid");
     }
 
-    const { clientId } = extractClientIdPrefix(this.requestObject.client_id);
-    if (kbJwt?.payload.aud !== clientId) {
-      throw new Error("vp_token key binding 'aud' does not match the client_id in the request");
+    if (!kbJwt) {
+      throw new Error('vp_token is missing the key binding JWT');
     }
+
+    const accepted = this.acceptedKeyBindingAudiences;
+    const audience = kbJwt.payload.aud;
+    if (typeof audience !== 'string' || !accepted.includes(audience)) {
+      throw new Error(
+        `vp_token key binding 'aud' must be the Relying Party entity identifier or the full prefixed client_id (one of ${accepted.join(', ')}), got ${String(audience)}`
+      );
+    }
+
+    this.keyBindingAudiences.push({
+      aud: audience,
+      credentialId,
+      form: audience === this.relyingPartyEntityId ? 'entity-identifier' : 'prefixed-client-id'
+    });
 
     if (kbJwt.header.typ !== 'kb+jwt') {
       throw new Error("vp_token key binding JWT 'typ' header is not 'kb+jwt'");
@@ -215,7 +262,7 @@ export class VpTokenVerifier {
 
       for (const credentialToken of credentialTokens) {
         if (credentialQuery.format === 'dc+sd-jwt') {
-          const verification = this.verifySdJwtToken(credentialToken).then((payload) =>
+          const verification = this.verifySdJwtToken(credentialId, credentialToken).then((payload) =>
             this.getDisclosedClaims(credentialQuery.claims ?? [], payload)
           );
           verifications.push(verification);

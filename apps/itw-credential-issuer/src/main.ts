@@ -1,3 +1,4 @@
+import { loadConfig } from '@itw-conformance-tool/config';
 import { createHttpsOptions } from '@itw-conformance-tool/crypto';
 import { attachServiceIpcAdapter } from '@itw-conformance-tool/ipc';
 import { logger } from '@itw-conformance-tool/logger';
@@ -8,13 +9,18 @@ import fp from 'fastify-plugin';
 import bootstrap from './app.js';
 
 async function startServer() {
+  const config = loadConfig();
+
   const app = Fastify({
     connectionTimeout: 120_000,
     // 1 minute: suitable for most payloads, including moderate file uploads
     requestTimeout: 60_000,
     // 10 seconds: ensures efficient resource usage for idle connections
     keepAliveTimeout: 10_000,
-    https: await createHttpsOptions(),
+    https: await createHttpsOptions({
+      dataDir: config.global.data_dir,
+      hostnames: [new URL(config['credential-issuer'].url).hostname]
+    }),
     loggerInstance: logger,
     ajv: {
       customOptions: {

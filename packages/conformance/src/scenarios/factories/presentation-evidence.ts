@@ -1,3 +1,4 @@
+import type { ObservedEventName } from '../../events/event-types.js';
 import type {
   ForbiddenEventExpectation,
   ProtocolObservedScenarioDefinition,
@@ -14,11 +15,30 @@ import type { RpFaultProfile } from '@itw-conformance-tool/faults';
  * event is emitted uncorrelated and has to be adopted as post-start evidence
  * narrowed by its diagnostics (`match`). Declaring each step once here keeps the
  * happy path and the negative paths matching the very same evidence.
+ *
+ * Which evidence a scenario may expect at all depends on the Client Identifier
+ * Prefix its engagement announces (`stimulus.clientIdPrefix`). Under the IT
+ * Wallet 1.3 default, `x509_hash`, the wallet verifies the Request Object with
+ * the `x5c` certificate chain and reads the Verifier metadata from the inline
+ * `client_metadata`: it has no reason to fetch the Entity Configuration, the
+ * Trust Anchor or a subordinate statement, and it could not do so before
+ * retrieving the Request Object anyway — the `client_id` is a certificate hash,
+ * so the entity identifier only reaches the wallet in the `iss` claim. Only an
+ * `openid_federation` engagement makes the federation discovery observable,
+ * which is why `federationDiscoveryEvidence` and the Entity-Configuration faults
+ * belong exclusively to scenarios that ask for that prefix.
  */
 
-/** WP_078 / WP_084: the wallet fetches the Relying Party Entity Configuration. */
+/** Trust model an engagement can announce; the Relying Party defaults to `x509_hash`. */
+export type PresentationClientIdPrefix = 'openid_federation' | 'x509_hash';
+
+/**
+ * WP_078 / WP_084: the wallet fetches the Relying Party Entity Configuration.
+ * Only an `openid_federation` engagement points it there.
+ */
 export const rpEntityConfigurationRequested: RequiredEventEvidenceExpectation = {
   event: 'rp.metadata.requested',
+  label: 'Wallet contacted the Relying Party',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/.well-known/openid-federation' }
@@ -27,6 +47,7 @@ export const rpEntityConfigurationRequested: RequiredEventEvidenceExpectation = 
 /** WP_079: Trust Chain resolution — the wallet fetches the Trust Anchor Entity Configuration. */
 export const trustAnchorEntityConfigurationRequested: RequiredEventEvidenceExpectation = {
   event: 'federation.anchor.requested',
+  label: 'Wallet contacted the Trust Anchor',
   service: 'federation',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/.well-known/openid-federation' }
@@ -39,6 +60,7 @@ export const trustAnchorEntityConfigurationRequested: RequiredEventEvidenceExpec
  */
 export const relyingPartySubordinateStatementRequested: RequiredEventEvidenceExpectation = {
   event: 'federation.fetch.requested',
+  label: 'Wallet resolved the Relying Party trust statement',
   service: 'federation',
   correlation: 'allow-uncorrelated-post-start',
   match: {
@@ -48,16 +70,63 @@ export const relyingPartySubordinateStatementRequested: RequiredEventEvidenceExp
 };
 
 /**
+ * The federation discovery a wallet performs when — and only when — the
+ * engagement carries the `openid_federation` Client Identifier Prefix: the
+ * Relying Party Entity Configuration, the Trust Anchor Entity Configuration and
+ * the subordinate statement that binds the two.
+ */
+export const federationDiscoveryEvidence: RequiredEventEvidenceExpectation[] = [
+  rpEntityConfigurationRequested,
+  trustAnchorEntityConfigurationRequested,
+  relyingPartySubordinateStatementRequested
+];
+
+/**
+ * The first Relying Party call each trust model produces, and therefore the
+ * event that opens the observation window.
+ *
+ * A federation engagement starts at the Entity Configuration fetch, which is
+ * the wallet's first act. An `x509_hash` engagement starts at the Request Object
+ * retrieval: everything the wallet needs travels in the Request Object, so that
+ * fetch is the first thing the Relying Party sees.
+ *
+ * An inlined Trust Chain does not move it: the engagement `client_id` names the
+ * entity, so the wallet resolves the Relying Party before it has any Request
+ * Object header to read.
+ */
+export function presentationEntryEvent(clientIdPrefix: PresentationClientIdPrefix): ObservedEventName {
+  return clientIdPrefix === 'openid_federation' ? 'rp.metadata.requested' : 'rp.request_object.requested';
+}
+
+/**
  * WP_082 / WP_083: the wallet retrieves the signed Request Object from the
  * `request_uri` endpoint, over GET when the engagement advertises no
  * `request_uri_method` and over POST when it advertises `post`.
+ *
+ * `clientIdPrefix` narrows the evidence to a Request Object served for a given
+ * trust model. WP_084 needs it: what proves the wallet resolved the key through
+ * the federation is that the artifact it accepted carried no `x5c` at all.
+ *
+ * `inlineTrustChain` narrows it further, to a Request Object whose header
+ * carried the Trust Chain by value — the only way a verdict can claim the
+ * wallet had the Entity Configuration in hand without having fetched it.
  */
-export function requestObjectRequested(method: 'GET' | 'POST'): RequiredEventEvidenceExpectation {
+export function requestObjectRequested(
+  method: 'GET' | 'POST',
+  clientIdPrefix?: PresentationClientIdPrefix,
+  options: { inlineTrustChain?: boolean } = {}
+): RequiredEventEvidenceExpectation {
   return {
     event: 'rp.request_object.requested',
+    label: `Wallet retrieved the presentation request object over ${method}`,
     service: 'relying-party',
     correlation: 'allow-uncorrelated-post-start',
-    match: { endpoint: '/auth/request/:state', method }
+    match: {
+      endpoint: '/auth/request/:state',
+      method,
+      ...(clientIdPrefix ? { clientIdPrefix, hasX5c: clientIdPrefix === 'x509_hash' } : {}),
+      ...(options.inlineTrustChain === undefined ? {} : { hasTrustChain: options.inlineTrustChain })
+    }
   };
 }
 
@@ -69,6 +138,7 @@ export function requestObjectRequested(method: 'GET' | 'POST'): RequiredEventEvi
  */
 export const authorizationResponseReceived: RequiredEventEvidenceExpectation = {
   event: 'rp.presentation_response.received',
+  label: 'Wallet returned the presentation response',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/auth/response', method: 'POST', outcome: 'response' }
@@ -81,6 +151,7 @@ export const authorizationResponseReceived: RequiredEventEvidenceExpectation = {
  */
 export const vpTokenValidationSucceeded: RequiredEventEvidenceExpectation = {
   event: 'vp_token.validation.succeeded',
+  label: 'Relying Party validated the VP token',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/auth/response' }
@@ -89,6 +160,7 @@ export const vpTokenValidationSucceeded: RequiredEventEvidenceExpectation = {
 /** WP_094: the wallet followed the RP-supplied redirect_uri to the attested callback endpoint. */
 export const attestedRedirectFollowed: RequiredEventEvidenceExpectation = {
   event: 'rp.redirect.followed',
+  label: 'Wallet followed the Relying Party redirect',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/callback', method: 'GET' }
@@ -105,6 +177,7 @@ export const erasureRequestAccepted: RequiredEventEvidenceExpectation = {
 /** WP_090: the wallet reported a rejected Request Object to the `response_uri`. */
 export const authorizationErrorResponseReceived: RequiredEventEvidenceExpectation = {
   event: 'rp.presentation_error.received',
+  label: 'Wallet reported the presentation request error',
   service: 'relying-party',
   correlation: 'allow-uncorrelated-post-start',
   match: { endpoint: '/auth/response', method: 'POST' }
@@ -118,6 +191,7 @@ export function rpFaultApplied(
 ): RequiredEventEvidenceExpectation {
   return {
     event: 'rp.fault.applied',
+    label: `Relying Party served the ${faultProfileType} test artifact`,
     service: 'relying-party',
     correlation: 'allow-uncorrelated-post-start',
     match: { endpoint, faultProfileType, ...match }
@@ -182,14 +256,33 @@ export const presentationTimeouts: TimeoutProfile = {
 export interface NegativePresentationInstructions {
   expectedBehavior: string;
   goal: string;
+  /** Short operator-facing purpose shown near the scenario title. */
+  summary?: string;
   /** Tester actions between acquiring the engagement and the verdict. */
   observation: string[];
 }
 
 export interface NegativePresentationScenarioOptions {
+  /**
+   * Trust model the engagement announces. Defaults to the Relying Party's
+   * `x509_hash`; scenarios whose fault mutates the Entity Configuration must ask
+   * for `openid_federation`, since nothing else makes a wallet read it.
+   */
+  clientIdPrefix?: PresentationClientIdPrefix;
   delivery?: ('deep-link' | 'qr')[];
   forbiddenEvents: ForbiddenEventExpectation[];
   id: string;
+  /**
+   * Hands the wallet the Trust Chain inside the Request Object header instead of
+   * leaving it to resolve one for the signature check. Only an
+   * `openid_federation` engagement honours it.
+   *
+   * It does not relieve the wallet of federation discovery: the engagement
+   * `client_id` names the entity, so a wallet still resolves the Relying Party
+   * before it has a Request Object header to read. What it changes is what the
+   * header itself has to offer once retrieved.
+   */
+  inlineTrustChain?: boolean;
   instructions: NegativePresentationInstructions;
   missingRequiredEventPolicy?: 'fail' | 'inconclusive';
   /** Evidence expected after the entry event, in observation order. */
@@ -204,30 +297,43 @@ export interface NegativePresentationScenarioOptions {
  * Builds a negative remote-presentation scenario: the Relying Party serves one
  * defective artifact and the wallet is expected to stop instead of completing
  * the flow. Every such scenario shares the same shape — a Relying Party fault
- * activated before the engagement is shown, the Entity Configuration fetch as
- * the entry event, and a forbidden continuation observed for a bounded window —
- * so only the fault, the evidence and the tester-facing texts differ.
+ * activated before the engagement is shown, the first Relying Party call as the
+ * entry event, and a forbidden continuation observed for a bounded window — so
+ * only the trust model, the fault, the evidence and the tester-facing texts
+ * differ.
+ *
+ * The entry event follows the trust model, because forbidden events are only
+ * counted after it: a federation scenario opens at the Entity Configuration
+ * fetch it is about, while an `x509_hash` scenario opens at the Request Object
+ * retrieval, the first call such a wallet makes.
  */
 export function createNegativePresentationScenario(
   options: NegativePresentationScenarioOptions
 ): ProtocolObservedScenarioDefinition {
   const delivery = options.delivery ?? ['deep-link'];
   const isSameDevice = delivery.includes('deep-link');
+  const clientIdPrefix = options.clientIdPrefix ?? 'x509_hash';
+  const isFederation = clientIdPrefix === 'openid_federation';
 
   return {
     id: options.id,
     title: options.title,
     phase: 'PRESENTATION',
     automationMode: 'interactive-protocol-observed',
+    // The Trust Anchor is started for every presentation scenario: the Relying
+    // Party derives its own Entity Configuration and Trust Mark from it even
+    // when the trust model under test never makes a wallet read them.
     services: ['relyingParty', 'federation'],
     stimulus: {
       type: 'presentation-request',
+      clientIdPrefix,
       delivery,
+      ...(options.inlineTrustChain ? { inlineTrustChain: true } : {}),
       ...(options.requestUriMethod ? { requestUriMethod: options.requestUriMethod } : {})
     },
     setup: { rpFault: options.rpFault },
-    entryEvent: 'rp.metadata.requested',
-    requiredEvents: [rpEntityConfigurationRequested, ...options.requiredEvents],
+    entryEvent: presentationEntryEvent(clientIdPrefix),
+    requiredEvents: isFederation ? [rpEntityConfigurationRequested, ...options.requiredEvents] : options.requiredEvents,
     forbiddenEvents: options.forbiddenEvents,
     timeouts: { ...presentationTimeouts, ...options.timeouts },
     verdictRules: [
@@ -238,6 +344,7 @@ export function createNegativePresentationScenario(
     instructions: {
       goal: options.instructions.goal,
       expectedBehavior: options.instructions.expectedBehavior,
+      summary: options.instructions.summary,
       prerequisites: [
         'The wallet app under test is installed and holds a credential that satisfies the requested presentation (PID by default).',
         isSameDevice
@@ -247,12 +354,11 @@ export function createNegativePresentationScenario(
         'The device running the wallet can reach the local Trust Anchor and Relying Party URLs printed by this test.'
       ],
       steps: [
-        `Start this scenario with itwct test presentation. The CLI starts the required Trust Anchor and Relying Party services, activates the ${options.rpFault.type} fault on the Relying Party, and waits for their readiness.`,
         isSameDevice
-          ? 'Open the printed presentation request deep link with the Wallet Instance on the same device.'
-          : 'Scan the printed presentation request QR payload with the Wallet Instance.',
+          ? 'Open the presentation request with the Wallet Instance on the same device.'
+          : 'Scan the presentation request QR payload with the Wallet Instance.',
         ...options.instructions.observation,
-        'The runner concludes automatically once the required evidence is recorded and the negative-observation window elapses without the wallet performing the forbidden step.'
+        'Keep the wallet and this command running until the scenario completes.'
       ]
     },
     missingRequiredEventPolicy: options.missingRequiredEventPolicy ?? 'inconclusive'

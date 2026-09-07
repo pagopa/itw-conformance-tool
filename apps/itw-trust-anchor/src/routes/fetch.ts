@@ -1,4 +1,5 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
+import { isInternalServiceRequest } from '@itw-conformance-tool/utils';
 
 import { createSubordinate } from '../federation/statements.js';
 
@@ -70,18 +71,24 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           metadataPolicy
         });
 
-        await app.conformanceEventSink?.emit(
-          createObservedEvent({
-            name: 'federation.fetch.requested',
-            correlationId: request.conformance?.correlation?.correlationId ?? null,
-            service: 'federation',
-            requestId: request.id,
-            diagnostic: {
-              endpoint: '/fetch',
-              sub
-            }
-          })
-        );
+        // Only a wallet resolving the Trust Chain is evidence of Trust Chain
+        // resolution. The Relying Party fetches the very same statement to
+        // inline it in a Request Object header, and adopting that call as
+        // evidence would credit the wallet with a step it never took.
+        if (!isInternalServiceRequest(request.headers)) {
+          await app.conformanceEventSink?.emit(
+            createObservedEvent({
+              name: 'federation.fetch.requested',
+              correlationId: request.conformance?.correlation?.correlationId ?? null,
+              service: 'federation',
+              requestId: request.id,
+              diagnostic: {
+                endpoint: '/fetch',
+                sub
+              }
+            })
+          );
+        }
 
         return reply.code(200).header('Content-Type', 'application/entity-statement+jwt').send(subordinateStatement);
       } catch (error) {

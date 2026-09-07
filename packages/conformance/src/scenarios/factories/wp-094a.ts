@@ -24,6 +24,9 @@ import {
  */
 export const wp094aScenario = createNegativePresentationScenario({
   id: 'WP_094a',
+  // Only an openid_federation engagement makes a wallet read the Entity
+  // Configuration this scenario's fault mutates.
+  clientIdPrefix: 'openid_federation',
   title:
     'Negative Path: Wallet Instance does not follow a redirect_uri that the Relying Party metadata does not attest',
   rpFault: { type: 'unattested-redirect-uri' },
@@ -40,6 +43,7 @@ export const wp094aScenario = createNegativePresentationScenario({
     goal: 'Verify that the Wallet Instance checks the redirect_uri it receives in the Authorization Response result against the redirect_uris attested in the Relying Party metadata, and aborts the redirect when it does not match.',
     expectedBehavior:
       'The wallet completes the presentation normally and receives a redirect_uri that is absent from openid_credential_verifier.redirect_uris. It must not redirect the user-agent to it. Successful conformance is a completed presentation followed by no redirect.',
+    summary: 'Verify rejection of an unattested redirect_uri after a valid presentation.',
     observation: [
       'Approve the disclosure of the requested attributes in the wallet so the presentation completes: this scenario needs a valid Authorization Response before the redirect_uri is returned.',
       'After the presentation completes, do not open the URI yourself, and watch the wallet: the expected outcome is that it does not redirect anywhere and reports that the flow ended.'

@@ -34,6 +34,7 @@ const reporterModulePath = path.join(packageRoot, 'packages/conformance/dist/rep
 const { ConformanceReporter } = await import(pathToFileURL(reporterModulePath).href);
 
 const conformanceTestCategory = process.env.ITWCT_CONFORMANCE_TEST_CATEGORY ?? 'all';
+const conformanceVerbose = process.env.ITWCT_CONFORMANCE_VERBOSE === '1';
 if (
   conformanceTestCategory !== 'all' &&
   conformanceTestCategory !== 'issuance' &&
@@ -58,7 +59,10 @@ export default defineConfig(() => ({
     include: ['packages/conformance/src/tests/matrix/**/*.test.ts'],
     fileParallelism: false,
     sequence: { sequencer: MatrixSequencer },
-    reporters: ['tree', new ConformanceReporter(conformanceTestCategory)],
+    reporters: [
+      conformanceVerbose ? 'tree' : ['default', { summary: false }],
+      new ConformanceReporter(conformanceTestCategory)
+    ],
     // node:sqlite requires --experimental-sqlite on Node.js 22.
     pool: 'forks',
     forks: {
