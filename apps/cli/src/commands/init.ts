@@ -7,6 +7,7 @@ import { createLocalRootCertificateAuthority, getLocalRootCaPaths } from '@itw-c
 import {
   createIntermediateCertificateFromJwk,
   createIssuerCertificateFromJwk,
+  createIssuerEncryptionCertificateFromJwk,
   createLeafCertificateFromJwk,
   createRelyingPartyFederationCertificateFromJwk,
   createRelyingPartyIntermediateCertificateFromJwk,
@@ -179,14 +180,16 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     process.stdout.write(`⚠ Issuer intermediate certificate already exists → skipped (use --force to regenerate)\n`);
   }
 
+  // Both issuer keys are certified by the issuer intermediate CA, so both leaf
+  // certificates root at the same Trust Anchor certificate the Relying Party's
+  // federation chain does. Neither survives a regenerated key or a regenerated
+  // CA above it: a leaf outliving either would certify a key the issuer no
+  // longer holds.
+  const issuerLeafCertificatesStale =
+    flags.force || issuerSigningKeysGenerated || issuerIntermediateKeysGenerated || issuerIntermediateCertGenerated;
+
   const issuerCertPath = join(issuerDirPath, 'cert.pem');
-  if (
-    !existsFileSync(issuerCertPath) ||
-    flags.force ||
-    issuerSigningKeysGenerated ||
-    issuerIntermediateKeysGenerated ||
-    issuerIntermediateCertGenerated
-  ) {
+  if (!existsFileSync(issuerCertPath) || issuerLeafCertificatesStale) {
     const signingJwks = JSON.parse(readFileSync(issuerKeysPath, 'utf8')) as Parameters<typeof selectEs256SigningJwk>[0];
     const issuerSigningJwk = selectEs256SigningJwk(signingJwks);
 
@@ -202,9 +205,33 @@ async function createFilesAndDirs(configs: InitConfig, flags: InitFlags): Promis
     );
 
     writeFileSync(issuerCertPath, issuerCertificate, { encoding: 'utf8', flag: 'w' });
-    process.stdout.write(`✓ Generated issuer certificate → ${issuerCertPath}\n`);
+    process.stdout.write(`✓ Generated issuer signing certificate → ${issuerCertPath}\n`);
   } else {
-    process.stdout.write(`⚠ Issuer certificate already exists → skipped (use --force to regenerate)\n`);
+    process.stdout.write(`⚠ Issuer signing certificate already exists → skipped (use --force to regenerate)\n`);
+  }
+
+  const issuerEncryptionCertPath = join(issuerDirPath, 'enc-cert.pem');
+  if (!existsFileSync(issuerEncryptionCertPath) || issuerLeafCertificatesStale) {
+    const encryptionJwks = JSON.parse(readFileSync(issuerKeysPath, 'utf8')) as Parameters<
+      typeof selectEcdhEsEncryptionJwk
+    >[0];
+    const issuerEncryptionJwk = selectEcdhEsEncryptionJwk(encryptionJwks);
+
+    const intermediateJwk = JSON.parse(readFileSync(intermediateKeysPath, 'utf8')) as Record<string, unknown>;
+
+    const intermediateCertificatePem = readFileSync(intermediateCertPath, 'utf8');
+
+    const issuerEncryptionCertificate = await createIssuerEncryptionCertificateFromJwk(
+      issuerEncryptionJwk,
+      intermediateJwk,
+      intermediateCertificatePem,
+      configs['credential-issuer'].url
+    );
+
+    writeFileSync(issuerEncryptionCertPath, issuerEncryptionCertificate, { encoding: 'utf8', flag: 'w' });
+    process.stdout.write(`✓ Generated issuer encryption certificate → ${issuerEncryptionCertPath}\n`);
+  } else {
+    process.stdout.write(`⚠ Issuer encryption certificate already exists → skipped (use --force to regenerate)\n`);
   }
 
   const rpKeysPath = join(rpDirPath, 'jwks.json');

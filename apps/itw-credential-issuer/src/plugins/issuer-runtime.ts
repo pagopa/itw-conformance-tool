@@ -1,3 +1,5 @@
+import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
+
 import {
   callbacks,
   getEncryptJweCallback,
@@ -56,7 +58,17 @@ interface KeyPair {
   public: unknown;
 }
 
-function keyPairFromKey(key: JwkKey): KeyPair {
+/**
+ * Splits a private JWK into the pair the rest of the service uses, attaching
+ * the certificate chain that certifies it to the public half.
+ *
+ * Attaching it here rather than at each publication site is what keeps the
+ * binding from being forgotten: the Entity Configuration, the
+ * credential-issuer metadata, the `oauth_authorization_server` JWKS and the
+ * `client_metadata` of a presentation Request Object all publish these exact
+ * objects, and each used to be free to publish a bare key.
+ */
+function keyPairFromKey(key: JwkKey, certificateChainPem: readonly string[]): KeyPair {
   if (!key?.d) {
     throw new Error('Expected a private key with d parameter in issuer JWKS');
   }
@@ -80,7 +92,7 @@ function keyPairFromKey(key: JwkKey): KeyPair {
 
   return {
     private: privateKey,
-    public: toPublicJwk(privateKey)
+    public: { ...toPublicJwk(privateKey), x5c: certificateChainPem.map(convertPemToBase64Der) }
   };
 }
 
@@ -122,8 +134,19 @@ export function makeJwksRepository(app: FastifyInstance): JwksRepository {
   const signJwk = pickSigningKey(jwkKeys);
   const encryptJwk = pickEncryptionKey(jwkKeys, signJwk);
 
-  const signKey = keyPairFromKey(signJwk);
-  const encryptKey = keyPairFromKey(encryptJwk);
+  // Both leaves are certified by the issuer intermediate CA, so both keys are
+  // published with a chain rooting at the same Trust Anchor certificate. The
+  // chain follows the key that was actually picked rather than the role it was
+  // picked for: `pickEncryptionKey` falls back to the signing key when a JWKS
+  // holds no `use=enc` key, and publishing the encryption leaf beside it would
+  // point a wallet at a key it cannot encrypt to. The `keys` plugin rejects such
+  // a JWKS at startup, so the fallback is unreachable in practice — this keeps
+  // the pairing correct rather than merely currently true.
+  const signingChain = [app.issuerKeys.issuerCertPem, app.issuerKeys.issuerIntermediateCertPem];
+  const encryptionChain = [app.issuerKeys.issuerEncryptionCertPem, app.issuerKeys.issuerIntermediateCertPem];
+
+  const signKey = keyPairFromKey(signJwk, signingChain);
+  const encryptKey = keyPairFromKey(encryptJwk, encryptJwk === signJwk ? signingChain : encryptionChain);
 
   return {
     getEncrypt: () => encryptKey as unknown as ReturnType<JwksRepository['getEncrypt']>,

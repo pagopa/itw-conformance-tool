@@ -2,6 +2,9 @@ import { X509Certificate } from '@peculiar/x509';
 import { describe, expect, it } from 'vitest';
 
 import {
+  createIntermediateCertificateFromJwk,
+  createIssuerCertificateFromJwk,
+  createIssuerEncryptionCertificateFromJwk,
   createRelyingPartyFederationCertificateFromJwk,
   createRelyingPartyIntermediateCertificateFromJwk,
   createSelfSignedCertificateFromJwk,
@@ -11,12 +14,15 @@ import {
   selectEs256SigningJwk
 } from '../utils/certificates.js';
 import {
+  createIssuerIntermediateKey,
+  createIssuerPrivateKeys,
   createRelyingPartyFederationKey,
   createRelyingPartyIntermediateKey,
   createRelyingPartyPrivateKeys,
   createTrustAnchorFederationKey
 } from '../utils/crypto.js';
 
+const CREDENTIAL_ISSUER_URL = 'https://127.0.0.1:3001';
 const RELYING_PARTY_URL = 'https://127.0.0.1:3002';
 const TRUST_ANCHOR_HOSTNAME = '127.0.0.1';
 
@@ -92,6 +98,76 @@ describe('Trust Anchor federation certificate', () => {
     // are otherwise still current.
     expect(new X509Certificate(trustAnchorCertificate).notAfter.getTime()).toBeGreaterThanOrEqual(
       new X509Certificate(intermediate).notAfter.getTime()
+    );
+  });
+});
+
+describe('Credential Issuer certificate chain', () => {
+  /** The full set `init` writes to `<data_dir>/issuer`, built from one Trust Anchor. */
+  async function createIssuerChain() {
+    const trustAnchorKey = createTrustAnchorFederationKey();
+    const trustAnchorCertificate = await createTrustAnchorCertificateFromJwk(trustAnchorKey, TRUST_ANCHOR_HOSTNAME);
+    const intermediateKey = createIssuerIntermediateKey();
+    const intermediateCertificate = await createIntermediateCertificateFromJwk(
+      intermediateKey,
+      trustAnchorKey,
+      trustAnchorCertificate
+    );
+
+    const issuerJwks = createIssuerPrivateKeys();
+    const [signingCertificate, encryptionCertificate] = await Promise.all([
+      createIssuerCertificateFromJwk(
+        selectEs256SigningJwk(issuerJwks),
+        intermediateKey,
+        intermediateCertificate,
+        CREDENTIAL_ISSUER_URL
+      ),
+      createIssuerEncryptionCertificateFromJwk(
+        selectEcdhEsEncryptionJwk(issuerJwks),
+        intermediateKey,
+        intermediateCertificate,
+        CREDENTIAL_ISSUER_URL
+      )
+    ]);
+
+    return { encryptionCertificate, intermediateCertificate, signingCertificate, trustAnchorCertificate };
+  }
+
+  it('chains both published keys up to the Trust Anchor', async () => {
+    const { encryptionCertificate, intermediateCertificate, signingCertificate, trustAnchorCertificate } =
+      await createIssuerChain();
+
+    // The Credential Issuer publishes both keys inside its Entity
+    // Configuration, so both are certified by the federation and root at the
+    // same certificate the Relying Party's federation chain does. The Relying
+    // Party's application keys are the deliberate exception, asserted above.
+    await expect(isSignedBy(signingCertificate, intermediateCertificate)).resolves.toBe(true);
+    await expect(isSignedBy(encryptionCertificate, intermediateCertificate)).resolves.toBe(true);
+    await expect(isSignedBy(intermediateCertificate, trustAnchorCertificate)).resolves.toBe(true);
+  });
+
+  it('certifies the encryption key for key agreement alone', async () => {
+    const { encryptionCertificate, signingCertificate } = await createIssuerChain();
+
+    // An ECDH-ES key derives shared secrets and signs nothing, and — unlike the
+    // Relying Party's self-signed encryption certificate — this one is signed by
+    // the intermediate CA, so it needs no digitalSignature of its own.
+    expect(keyUsages(encryptionCertificate)).toContain(KEY_USAGE.keyAgreement);
+    expect(keyUsages(encryptionCertificate)).not.toContain(KEY_USAGE.digitalSignature);
+    expect(isCertificateAuthority(encryptionCertificate)).toBe(false);
+
+    expect(keyUsages(signingCertificate)).toContain(KEY_USAGE.digitalSignature);
+    expect(keyUsages(signingCertificate)).not.toContain(KEY_USAGE.keyAgreement);
+  });
+
+  it('certifies each key with its own certificate', async () => {
+    const { encryptionCertificate, signingCertificate } = await createIssuerChain();
+
+    // Certifying one key twice would publish a certificate next to a key it does
+    // not belong to — the mismatch a wallet only discovers as a signature that
+    // will not verify, or a response encrypted to a key nobody can decrypt with.
+    expect(new X509Certificate(encryptionCertificate).publicKey.toString()).not.toBe(
+      new X509Certificate(signingCertificate).publicKey.toString()
     );
   });
 });

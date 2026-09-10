@@ -111,7 +111,8 @@ pnpm run init:force
 │   ├── jwks.json                  # issuer signing/encryption keys
 │   ├── jwks-intermediate.json     # issuer intermediate-CA key
 │   ├── intermediate-cert.pem      # issuer intermediate certificate
-│   └── cert.pem                   # issuer leaf certificate chain
+│   ├── cert.pem                   # issuer signing leaf certificate
+│   └── enc-cert.pem               # issuer encryption leaf certificate
 ├── rp/
 │   ├── jwks.json                  # relying-party application keys (Request Object signing + encryption)
 │   ├── cert.pem                   # relying-party signing certificate (self-signed)
@@ -134,6 +135,10 @@ pnpm run init:force
 ```
 
 The Credential Issuer, Wallet Provider, and Relying Party all use the local Trust Anchor as their root. Each holds an intermediate CA whose certificate is signed by `trust-anchor/federation-cert.pem`, and each publishes an `x5c` of `[leaf, intermediate]` — the root is left out, since a verifier is expected to hold it already. For the Wallet Provider, `cert.pem` is the Wallet Instance Attestation leaf certificate and that same chain appears both in the attestation JWT `x5c` header and on the key its Entity Configuration publishes.
+
+The Trust Anchor repeats those chains in the subordinate statements it serves from `/fetch`. Each statement carries two keys — the subject's federation key and the Trust Anchor's own signing key — and each is published with the `x5c` certifying it, so a wallet resolving a Trust Chain gets both bindings from the statement rather than having to fetch the subject's and the Trust Anchor's Entity Configurations to find them. The Trust Anchor reads the subject's certificates from that service's own directory and refuses to start if a leaf does not certify the key it is about to publish it beside.
+
+The Credential Issuer publishes both of its keys — the ES256 key it signs with and the ECDH-ES key a wallet encrypts an Authorization Response to — inside its Entity Configuration, so each is certified by its own leaf (`cert.pem`, `enc-cert.pem`) under the same intermediate CA, and each is published with that chain as its `x5c`. Every key in every JWKS the Credential Issuer publishes therefore carries the certificate binding it to the Trust Anchor.
 
 The Relying Party is the one service whose federation key is distinct from the keys it uses at runtime, so its two roles are certified separately:
 

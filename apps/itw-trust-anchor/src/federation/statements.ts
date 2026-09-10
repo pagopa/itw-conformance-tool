@@ -1,7 +1,7 @@
 import { createItWalletEntityConfiguration, itWalletMetadataV1_3 } from '@pagopa/io-wallet-oid-federation';
 import { ValidationError } from '@pagopa/io-wallet-utils';
-import { calculateJwkThumbprint, type JWK } from 'jose';
 
+import { assertPublishableJwk, stripPrivateParams, withCertificateChain } from './public-jwk.js';
 import { signJwtCallback } from './signer.js';
 
 import type { JwkKey } from '../plugins/keys.js';
@@ -18,63 +18,11 @@ const ENTITY_STATEMENT_TYP = 'entity-statement+jwt';
 const RELYING_PARTY_TRUST_MARK_TYPE = 'trust_marks/presentation/relying_party';
 const CREDENTIAL_ISSUER_TRUST_MARK_TYPE = 'trust_marks/issuance/credential_issuer';
 
-/** Identifies which leaf entity a subordinate statement is being produced for, so the
- * correct public-JWK derivation (see {@link toRpPublicJwk}) can be selected. */
-export type SubordinateEntityKind = 'issuer' | 'rp' | 'wallet-provider';
-
-/** Strips private key material from a stored federation JWK, preserving every other
- * member (including `kid`) unchanged.
- *
- * This matches the issuer's own derivation (packages/issuer/src/crypto.ts `toPublicJwk`)
- * and is also correct for the Trust Anchor's own key: neither the issuer nor the Trust
- * Anchor ever recompute their `kid`, so the stored `kid` is exactly what each entity
- * advertises in its own entity configuration.
- */
-function stripPrivateParams(jwk: JwkKey): JsonWebKey {
-  const { d, key_ops, ...publicJwk } = jwk;
-  void d;
-  void key_ops;
-
-  if (typeof publicJwk.kty !== 'string' || publicJwk.kty.length === 0) {
-    throw new Error('Federation JWK is missing a valid "kty"');
-  }
-  if (typeof publicJwk.kid !== 'string' || publicJwk.kid.length === 0) {
-    throw new Error('Federation JWK is missing a valid "kid"');
-  }
-
-  return publicJwk as JsonWebKey;
-}
-
-/** Derives a leaf's public federation JWK as the corresponding service advertises it:
- * the stored `kid` is discarded and replaced with an RFC 7638 JWK thumbprint computed
- * over the key.
- *
- * RFC 7638 thumbprints only cover a key's canonical required members (e.g. `kty`, `crv`,
- * `x`, `y` for EC) and ignore other stored members, including `d` and the original `kid`.
- * The subordinate statement must use the same identifier as the leaf Entity Configuration
- * so verifiers can resolve the leaf signing key through the trust chain.
- */
-async function toThumbprintPublicJwk(jwk: JwkKey): Promise<JsonWebKey> {
-  const { d, key_ops, kid: _storedKid, ...publicJwk } = jwk;
-  void d;
-  void key_ops;
-  void _storedKid;
-
-  if (typeof publicJwk.kty !== 'string' || publicJwk.kty.length === 0) {
-    throw new Error('Federation JWK is missing a valid "kty"');
-  }
-
-  const kid = await calculateJwkThumbprint(jwk as unknown as JWK);
-
-  return { ...publicJwk, kid } as JsonWebKey;
-}
-
 /** Merges a resolved, non-empty `kid`/`kty` back onto the full stored private JWK
  * (private key material included) so it satisfies the SDK's `SignCallback` input type,
  * which requires both fields as non-optional strings. The stored `JwkKey` type keeps them
  * optional since not every persisted key is guaranteed populated; the caller is
- * responsible for resolving and validating both beforehand (see {@link stripPrivateParams}
- * and {@link toRpPublicJwk}).
+ * responsible for resolving and validating both beforehand (see {@link stripPrivateParams}).
  */
 function toSigningJwk(privateJwk: JwkKey, publicJwk: JsonWebKey): JsonWebKey {
   return { ...privateJwk, kid: publicJwk.kid, kty: publicJwk.kty } as JsonWebKey;
@@ -104,10 +52,7 @@ export async function createTrustAnchorEntityConfiguration(options: {
   const { federationCertificateChain, federationPrivateJwk, issuerEntityId, relyingPartyEntityId, trustAnchorBaseUrl } =
     options;
   const publicJwk = stripPrivateParams(federationPrivateJwk);
-  const publishedJwk =
-    federationCertificateChain && federationCertificateChain.length > 0
-      ? { ...publicJwk, x5c: federationCertificateChain }
-      : publicJwk;
+  const publishedJwk = withCertificateChain(publicJwk, federationCertificateChain);
   const issuedAt = Math.floor(Date.now() / 1000);
 
   const metadata: ItWalletMetadataV1_3 = {
@@ -149,34 +94,57 @@ export async function createTrustAnchorEntityConfiguration(options: {
   });
 }
 
-/** Builds a Trust Anchor-signed subordinate statement about a leaf entity (the issuer or
- * the RP), for use behind `GET /fetch?sub=<entity-id>`.
+/** Builds a Trust Anchor-signed subordinate statement about a leaf entity (the issuer,
+ * the RP or the Wallet Provider), for use behind `GET /fetch?sub=<entity-id>`.
  */
 export async function createSubordinate(options: {
+  /**
+   * The Trust Anchor's own self-signed certificate, DER-encoded, published as
+   * the `x5c` of the Trust Anchor key below. Optional so a caller holding no
+   * certificate still produces a valid statement, just without the binding.
+   */
+  federationCertificateChain?: string[];
   federationPrivateJwk: JwkKey;
   subjectEntityId: string;
-  subjectKind: SubordinateEntityKind;
-  subjectPrivateJwk: JwkKey;
+  /**
+   * The subject's federation key exactly as it is to be published: `kid` already
+   * resolved the way the subject itself advertises it, and the certifying `x5c`
+   * already attached. The `keys` plugin derives it once at startup — see
+   * `TrustAnchorKeys` — so this builder never sees the subject's private key
+   * material, which it has no use for.
+   */
+  subjectPublicJwk: JsonWebKey;
   trustAnchorBaseUrl: string;
   metadataPolicy?: Record<string, Record<string, MetadataPolicyOperator>> | undefined;
 }): Promise<string> {
-  const { federationPrivateJwk, subjectEntityId, subjectKind, subjectPrivateJwk, trustAnchorBaseUrl, metadataPolicy } =
-    options;
+  const {
+    federationCertificateChain,
+    federationPrivateJwk,
+    subjectEntityId,
+    subjectPublicJwk,
+    trustAnchorBaseUrl,
+    metadataPolicy
+  } = options;
 
+  assertPublishableJwk(subjectPublicJwk);
   const trustAnchorPublicJwk = stripPrivateParams(federationPrivateJwk);
-  const subjectPublicJwk =
-    subjectKind === 'wallet-provider'
-      ? await toThumbprintPublicJwk(subjectPrivateJwk)
-      : stripPrivateParams(subjectPrivateJwk);
 
   // The subject's federation public key must be present so a verifier can validate the
   // entity configuration the subject signs for itself. The Trust Anchor's own signing key
   // must ALSO be resolvable from this same array by `header.kid` (required internally by
   // `createItWalletEntityConfiguration`), so it is appended whenever it doesn't already
   // share the subject's `kid`.
+  //
+  // Each carries the chain certifying it, so the statement answers "which key"
+  // and "certified by whom" in one artifact: a wallet resolving a Trust Chain
+  // reads the subject's chain here without fetching the subject's own Entity
+  // Configuration, and reads the certificate for the key that signed this
+  // statement without fetching the Trust Anchor's. The Trust Anchor's chain is
+  // attached here rather than at load time because a fault publishes this key
+  // without one.
   const keys = [subjectPublicJwk];
   if (trustAnchorPublicJwk.kid !== subjectPublicJwk.kid) {
-    keys.push(trustAnchorPublicJwk);
+    keys.push(withCertificateChain(trustAnchorPublicJwk, federationCertificateChain));
   }
 
   const issuedAt = Math.floor(Date.now() / 1000);

@@ -37,22 +37,25 @@ import { init } from '../commands/init.js';
  * test binds nothing and needs no TLS.
  */
 
-/** How a service is booted and which certificate files it must publish. */
+/** How a service is booted and which certificates certify its federation key. */
 type FederationEntity = {
   /** The app bootstrap, registered into a bare Fastify instance. */
   bootstrap: Parameters<typeof fp>[0];
+  /**
+   * The certificates, relative to the data directory, that certify the key the
+   * service signs its Entity Configuration with. The Trust Anchor publishes
+   * this chain as the key's `x5c` in every subordinate statement, whether or
+   * not the service publishes it itself.
+   */
+  federationChain: { intermediate: string; leaf: string };
   name: string;
   /**
-   * The certificates, relative to the data directory, that the service publishes
-   * as the `x5c` of its federation key. Absent for a service that publishes the
-   * bare key: its chain still exists on disk, but nothing in its Entity
-   * Configuration points at it, so there is no published binding to check.
+   * Whether the service publishes `federationChain` as the `x5c` of the key in
+   * its own Entity Configuration. False for a service that publishes the bare
+   * key: its chain still exists on disk and in the Trust Anchor's statement
+   * about it, but nothing in its own Entity Configuration points at it.
    */
-  publishedChain?: { intermediate: string; leaf: string };
-};
-
-type ChainPublishingEntity = FederationEntity & {
-  publishedChain: NonNullable<FederationEntity['publishedChain']>;
+  publishesFederationChain: boolean;
 };
 
 /**
@@ -71,29 +74,34 @@ const SUBORDINATE_ENTITIES: FederationEntity[] = [
   {
     name: 'credential-issuer',
     bootstrap: issuerBootstrap,
-    publishedChain: {
+    federationChain: {
       leaf: join('issuer', 'cert.pem'),
       intermediate: join('issuer', 'intermediate-cert.pem')
-    }
+    },
+    publishesFederationChain: true
   },
   {
     name: 'relying-party',
     bootstrap: relyingPartyBootstrap,
-    publishedChain: {
+    federationChain: {
       leaf: join('rp', 'federation-cert.pem'),
       intermediate: join('rp', 'intermediate-cert.pem')
-    }
+    },
+    publishesFederationChain: true
   },
   {
     name: 'wallet-provider',
-    bootstrap: walletProviderBootstrap
+    bootstrap: walletProviderBootstrap,
+    federationChain: {
+      leaf: join('wallet-provider', 'cert.pem'),
+      intermediate: join('wallet-provider', 'intermediate-cert.pem')
+    },
+    publishesFederationChain: false
   }
 ];
 
 /** The subordinate entities that publish a certificate chain beside their key. */
-const CHAIN_PUBLISHING_ENTITIES = SUBORDINATE_ENTITIES.filter(
-  (entity): entity is ChainPublishingEntity => entity.publishedChain !== undefined
-);
+const CHAIN_PUBLISHING_ENTITIES = SUBORDINATE_ENTITIES.filter((entity) => entity.publishesFederationChain);
 
 const TRUST_ANCHOR_FEDERATION_CERTIFICATE = join('trust-anchor', 'federation-cert.pem');
 
@@ -348,6 +356,69 @@ describe.each(SUBORDINATE_ENTITIES)('$name Entity Configuration', (entity) => {
   });
 });
 
+describe.each(SUBORDINATE_ENTITIES)('$name subordinate statement', (entity) => {
+  /** The keys the Trust Anchor's statement about this entity publishes. */
+  function attestedKeys(): PublishedJwk[] {
+    return claims(subordinateStatements.get(entity.name) as string).jwks.keys;
+  }
+
+  it('publishes the subject chain beside the subject key', async () => {
+    const { crv, kty, x, y } = federationJwk(entity.name);
+    const subjectKey = attestedKeys().find((key) => key.crv === crv && key.kty === kty && key.x === x && key.y === y);
+    if (!subjectKey) throw new Error(`the Trust Anchor does not attest ${entity.name}'s federation key`);
+
+    // Read from the Trust Anchor's own copy of the entity's certificate files,
+    // which is a second, independent answer to "which certificate certifies
+    // this key" — and, for the Wallet Provider, the only place the chain is
+    // published beside the key at all: its own Entity Configuration carries the
+    // bare key.
+    expect(subjectKey.x5c).toEqual([
+      publishedForm(entity.federationChain.leaf),
+      publishedForm(entity.federationChain.intermediate)
+    ]);
+    await expectLeafCertifies(subjectKey);
+  });
+
+  it('publishes the Trust Anchor chain beside the key that signed the statement', async () => {
+    const statement = subordinateStatements.get(entity.name) as string;
+    const signingKid = decodeProtectedHeader(statement).kid;
+    const signingKey = attestedKeys().find((key) => key.kid === signingKid);
+    if (!signingKey) throw new Error(`${entity.name}'s statement does not publish the key that signed it`);
+
+    // The statement is self-contained: a verifier holding it can check the
+    // signature and the certificate behind the signing key without fetching the
+    // Trust Anchor's own Entity Configuration first.
+    expect(signingKey.x5c).toEqual([publishedForm(TRUST_ANCHOR_FEDERATION_CERTIFICATE)]);
+    await expectLeafCertifies(signingKey);
+    await expect(jwtVerify(statement, createLocalJWKSet({ keys: [signingKey] }))).resolves.toBeDefined();
+  });
+
+  it('publishes chains that validate up to the Trust Anchor', async () => {
+    const trustAnchorForm = publishedForm(TRUST_ANCHOR_FEDERATION_CERTIFICATE);
+    const trustAnchorCertificate = toDer(trustAnchorForm);
+
+    for (const jwk of attestedKeys()) {
+      const published = jwk.x5c as string[];
+      // Every key in the statement, the Trust Anchor's own included. Its chain
+      // is the root itself, so the root a verifier supplies is already the last
+      // link rather than one to append — appending it would hand the walk the
+      // same certificate twice.
+      const x5chain = [
+        ...published.map(toDer),
+        ...(published[published.length - 1] === trustAnchorForm ? [] : [trustAnchorCertificate])
+      ];
+
+      await expect(
+        validateCertificateChain({
+          trustedCertificates: [trustAnchorCertificate],
+          x5chain: x5chain as [ArrayBuffer, ...ArrayBuffer[]]
+        }),
+        `${jwk.kid} must chain to the Trust Anchor`
+      ).resolves.toBeUndefined();
+    }
+  });
+});
+
 describe.each(CHAIN_PUBLISHING_ENTITIES)('$name published certificate chain', (entity) => {
   it('publishes the leaf and intermediate certificates for its federation key', async () => {
     const jwk = federationJwk(entity.name);
@@ -356,8 +427,8 @@ describe.each(CHAIN_PUBLISHING_ENTITIES)('$name published certificate chain', (e
     // the root already, so publishing it would add a certificate the verifier
     // must ignore rather than one it can use.
     expect(jwk.x5c).toEqual([
-      publishedForm(entity.publishedChain.leaf),
-      publishedForm(entity.publishedChain.intermediate)
+      publishedForm(entity.federationChain.leaf),
+      publishedForm(entity.federationChain.intermediate)
     ]);
     await expectLeafCertifies(jwk);
   });
@@ -394,6 +465,68 @@ describe.each(CHAIN_PUBLISHING_ENTITIES)('$name published certificate chain', (e
     const leafConstraints = certificateConstraints(leaf);
     expect(leafConstraints.isCertificateAuthority).toBe(false);
     expect(leafConstraints.usages & KeyUsageFlags.digitalSignature).toBeTruthy();
+  });
+});
+
+describe('Credential Issuer published keys', () => {
+  const ISSUER_SIGNING_CHAIN = [join('issuer', 'cert.pem'), join('issuer', 'intermediate-cert.pem')];
+  const ISSUER_ENCRYPTION_CHAIN = [join('issuer', 'enc-cert.pem'), join('issuer', 'intermediate-cert.pem')];
+
+  /** Every metadata JWKS the Credential Issuer's Entity Configuration carries. */
+  function publishedMetadataKeys(): PublishedJwk[] {
+    return ['oauth_authorization_server', 'openid_credential_issuer', 'openid_credential_verifier'].flatMap(
+      (entityType) => metadataJwks('credential-issuer', entityType)
+    );
+  }
+
+  it('publishes a certificate chain beside every key in its metadata', async () => {
+    // The signing key is published in three separate metadata blocks and the
+    // encryption key in one, each of which used to be free to publish a bare
+    // key: only the top-level federation JWKS attached a chain. A wallet reading
+    // a key out of any of them now receives the certificate binding it to the
+    // Credential Issuer.
+    const publishedKeys = publishedMetadataKeys();
+    expect(publishedKeys.length).toBeGreaterThan(0);
+
+    for (const jwk of publishedKeys) {
+      const expectedChain = jwk.use === 'enc' ? ISSUER_ENCRYPTION_CHAIN : ISSUER_SIGNING_CHAIN;
+
+      expect(jwk.x5c, `${jwk.kid} must publish its certificate chain`).toEqual(expectedChain.map(publishedForm));
+      await expectLeafCertifies(jwk);
+    }
+  });
+
+  it('certifies its encryption key separately from its signing key', async () => {
+    const [signingJwk, encryptionJwk] = ['sig', 'enc'].map((use) => {
+      const jwk = metadataJwks('credential-issuer', 'openid_credential_verifier').find((key) => key.use === use);
+      if (!jwk) throw new Error(`the Credential Issuer publishes no ${use} key`);
+      return jwk;
+    });
+
+    // Two keys, two leaves, one intermediate. Publishing the signing leaf beside
+    // the encryption key would point a wallet at a key it cannot encrypt to.
+    expect(signingJwk.x5c).toEqual(ISSUER_SIGNING_CHAIN.map(publishedForm));
+    expect(encryptionJwk.x5c).toEqual(ISSUER_ENCRYPTION_CHAIN.map(publishedForm));
+    await expectLeafCertifies(encryptionJwk);
+  });
+
+  it('roots every published key at the certificate the Relying Party chain roots at', async () => {
+    const trustAnchorCertificate = toDer((federationJwk('trust-anchor').x5c as string[])[0]);
+
+    for (const jwk of publishedMetadataKeys()) {
+      const publishedChain = (jwk.x5c as string[]).map(toDer);
+
+      // The same root, reached by the same walk, as the Relying Party's
+      // federation chain — the Credential Issuer publishes both of its keys
+      // inside the federation, so neither is certified outside it.
+      await expect(
+        validateCertificateChain({
+          trustedCertificates: [trustAnchorCertificate],
+          x5chain: [...publishedChain, trustAnchorCertificate] as [ArrayBuffer, ...ArrayBuffer[]]
+        }),
+        `${jwk.kid} must chain to the Trust Anchor`
+      ).resolves.toBeUndefined();
+    }
   });
 });
 

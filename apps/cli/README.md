@@ -80,7 +80,7 @@ When executed, it:
 - generates issuer signing keys and an issuer intermediate CA signing key
 - generates the trust-anchor federation key and self-signed federation certificate
 - generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
-- generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
+- generates the issuer leaf certificates (`cert.pem`, `enc-cert.pem`), chained to the issuer intermediate CA certificate and bound respectively to the issuer's ES256 signing key and ECDH-ES encryption key in `jwks.json`
 - generates the wallet provider intermediate CA certificate, chained to the trust-anchor federation certificate
 - generates the wallet provider leaf certificate (`cert.pem`), chained to the wallet provider intermediate CA certificate and bound to the Wallet Instance Attestation ES256 signing key in `jwks.json`
 - generates relying party application keys (ES256 signing, ECDH-ES encryption) and a self-signed certificate for each
@@ -95,7 +95,8 @@ Generated structure:
 - `<data_dir>/issuer/jwks.json` — issuer signing keys (ES256 for signing, ECDH-ES for encryption); the ES256 private key is the sole key used to produce issuer signatures
 - `<data_dir>/issuer/jwks-intermediate.json` — issuer intermediate CA signing key, used only to sign `intermediate-cert.pem`
 - `<data_dir>/issuer/intermediate-cert.pem` — issuer intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
-- `<data_dir>/issuer/cert.pem` — issuer leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
+- `<data_dir>/issuer/cert.pem` — issuer signing leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
+- `<data_dir>/issuer/enc-cert.pem` — issuer encryption leaf certificate; its public key corresponds to the ECDH-ES key in `jwks.json`, and it asserts `keyAgreement` rather than `digitalSignature`. Both leaves share `intermediate-cert.pem`, so `[leaf, intermediate]` is published as the `x5c` of every key in every JWKS the Credential Issuer serves
 - `<data_dir>/rp/jwks.json` — relying party application keys: one ES256 key signing Request Objects, one ECDH-ES key encrypting them and decrypting the Authorization Response. The federation key is deliberately not here
 - `<data_dir>/rp/cert.pem` — self-signed certificate for the ES256 application key; published in the Request Object `x5c` header and hashed into the `x509_hash` client_id
 - `<data_dir>/rp/enc-cert.pem` — self-signed certificate for the ECDH-ES application key

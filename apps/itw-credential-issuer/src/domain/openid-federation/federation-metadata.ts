@@ -1,4 +1,3 @@
-import { convertPemToBase64Der } from '@itw-conformance-tool/crypto';
 import { createItWalletEntityConfiguration } from '@pagopa/io-wallet-oid-federation';
 import { IoWalletSdkConfig } from '@pagopa/io-wallet-utils';
 import { importJWK, SignJWT, type JWK } from 'jose';
@@ -76,14 +75,9 @@ export const getFederationMetadata = async (options: GetFederationMetadataOption
       exp: issuedAt + ENTITY_STATEMENT_TTL_SECONDS,
       iat: issuedAt,
       iss: options.baseURL,
-      jwks: {
-        keys: [
-          {
-            ...options.jwksRepository.getSign().public,
-            x5c: options.jwksRepository.issuerCertificateChain().map(convertPemToBase64Der)
-          }
-        ]
-      },
+      // The signing key already carries its own `x5c` (see `JwksRepository`), so
+      // the chain is not attached again here.
+      jwks: { keys: [jwk.public] },
       metadata: getEntityConfigurationClaimsMetadata(options.baseURL, options.jwksRepository, options.config),
       sub: options.baseURL,
       trust_marks: [

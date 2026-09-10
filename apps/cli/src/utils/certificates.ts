@@ -51,6 +51,12 @@ type IssuerChainCertificateOptions = {
 type IssuerCertificateOptions = {
   altNames?: string[];
   commonName?: string;
+  /**
+   * Key usages asserted for the subject key. Defaults to `digitalSignature`,
+   * which is what a signing leaf needs; the Credential Issuer encryption leaf
+   * overrides it with `keyAgreement`.
+   */
+  keyUsageFlags?: number;
   organizationName?: string;
 };
 
@@ -293,7 +299,12 @@ export async function createLeafCertificateFromJwk(
   intermediateJwk: Jwk,
   intermediateCertificatePem: string,
   entityUrl: string,
-  { altNames = [], commonName, organizationName = 'ITW Conformance Tool' }: IssuerCertificateOptions = {}
+  {
+    altNames = [],
+    commonName,
+    keyUsageFlags = KeyUsageFlags.digitalSignature,
+    organizationName = 'ITW Conformance Tool'
+  }: IssuerCertificateOptions = {}
 ): Promise<string> {
   const { publicKey: entityPublicKey } = await importEcKeyPairFromJwk(signingJwk);
   const { privateKey: intermediatePrivateKey, publicKey: intermediatePublicKey } =
@@ -317,7 +328,7 @@ export async function createLeafCertificateFromJwk(
     signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
     extensions: [
       new BasicConstraintsExtension(false, undefined, true),
-      new KeyUsagesExtension(KeyUsageFlags.digitalSignature, true),
+      new KeyUsagesExtension(keyUsageFlags, true),
       new SubjectAlternativeNameExtension(
         uniqueAltNames.map((name) => ({ type: isIP(name) ? 'ip' : 'dns', value: name }))
       ),
@@ -428,5 +439,42 @@ export async function createSelfSignedEncryptionCertificateFromJwk(
   return createSelfSignedCertificateFromJwk(encryptionJwk, {
     ...options,
     keyUsageFlags: KeyUsageFlags.keyAgreement | KeyUsageFlags.digitalSignature
+  });
+}
+
+/** Creates the issuer encryption leaf certificate (`issuer/enc-cert.pem`).
+ *
+ * Its subject public key is the ECDH-ES key in `issuer/jwks.json`, the key a
+ * wallet encrypts an Authorization Response to when the Credential Issuer acts
+ * as a verifier. Like the issuer signing leaf, it is certified by the issuer
+ * intermediate CA and so roots at the same Trust Anchor certificate as every
+ * other federation chain: the Credential Issuer publishes both of its keys
+ * inside its Entity Configuration, so both are certified by the federation
+ * rather than outside it. The Relying Party's application keys are the
+ * deliberate exception — they are self-signed because `x509_hash` commits to
+ * the certificate itself.
+ *
+ * `keyAgreement` is asserted instead of `digitalSignature`: an ECDH-ES key
+ * derives shared secrets and signs nothing. It needs no `digitalSignature`
+ * precisely because the intermediate CA — not the subject — signs this
+ * certificate, which is what a self-signed encryption certificate cannot avoid.
+ *
+ * @param encryptionJwk - The issuer's private ECDH-ES JWK; its public key becomes the certificate's subject key.
+ * @param intermediateJwk - The intermediate CA's private ES256 JWK, used to sign the certificate.
+ * @param intermediateCertificatePem - The intermediate CA certificate, used for the issuer DN.
+ * @param credentialIssuerUrl - The configured credential-issuer URL, used to derive the subject CN and SAN.
+ * @param options - Optional subject overrides.
+ * @returns A PEM-encoded issuer encryption leaf certificate.
+ */
+export async function createIssuerEncryptionCertificateFromJwk(
+  encryptionJwk: Jwk,
+  intermediateJwk: Jwk,
+  intermediateCertificatePem: string,
+  credentialIssuerUrl: string,
+  options: Omit<IssuerCertificateOptions, 'keyUsageFlags'> = {}
+): Promise<string> {
+  return createLeafCertificateFromJwk(encryptionJwk, intermediateJwk, intermediateCertificatePem, credentialIssuerUrl, {
+    ...options,
+    keyUsageFlags: KeyUsageFlags.keyAgreement
   });
 }
