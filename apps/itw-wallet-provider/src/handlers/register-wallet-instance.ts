@@ -8,7 +8,7 @@ const INTEGRITY_FAILURE_SENTINELS = new Set(['integrity_check_error', 'device_in
 const INVALID_REQUEST_SENTINELS = new Set(['invalid_request', 'invalid_key_attestation']);
 
 export const walletInstanceRegistrationRequestSchema = z.strictObject({
-  nonce: z.string().min(1).describe('Nonce obtained from the Wallet Provider nonce endpoint.'),
+  challenge: z.string().min(1).describe('Nonce obtained from the Wallet Provider nonce endpoint.'),
   hardware_key_tag: z.string().min(1).describe('Base64url-encoded Cryptographic Hardware Key tag.'),
   key_attestation: z.string().min(1).describe('Device key attestation bound to the nonce and hardware key tag.')
 });
@@ -106,7 +106,7 @@ export const registerWalletInstanceHandler = async (
     return sendWalletInstanceRegistrationError(reply, semanticError);
   }
 
-  if (!request.server.walletNonces.consume(body.nonce)) {
+  if (!request.server.walletNonces.consume(body.challenge)) {
     return sendWalletInstanceRegistrationError(
       reply,
       walletInstanceRegistrationError(
@@ -119,7 +119,7 @@ export const registerWalletInstanceHandler = async (
 
   request.server.registeredWalletInstances.set(body.hardware_key_tag, {
     keyAttestation: body.key_attestation,
-    nonce: body.nonce,
+    nonce: body.challenge,
     registeredAt: new Date().toISOString(),
     status: 'ACTIVE'
   });
