@@ -26,6 +26,7 @@ const federationRoute: FastifyPluginAsync = async (app) => {
           ? app.trustAnchorFaultKeys.entityConfigurationNonmatchingSigningPrivateJwk
           : app.trustAnchorKeys.federationPrivateJwk;
         const entityConfiguration = await createTrustAnchorEntityConfiguration({
+          ...(useFaultKey ? {} : { federationCertificateChain: app.trustAnchorKeys.federationCertificateChain }),
           federationPrivateJwk,
           issuerEntityId: app.config.issuerEntityId,
           relyingPartyEntityId: app.config.rpEntityId,

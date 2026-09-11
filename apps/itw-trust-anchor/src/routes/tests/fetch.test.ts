@@ -7,12 +7,14 @@ import { describe, expect, it } from 'vitest';
 import fetchRoute from '../fetch.js';
 
 import type { JwkKey } from '../../plugins/keys.js';
+import type { JsonWebKey } from '@pagopa/io-wallet-oid-federation';
 import type { FastifyInstance } from 'fastify';
 
 const TRUST_ANCHOR_BASE_URL = 'https://ta.example.org';
 const ISSUER_ENTITY_ID = 'https://issuer.example.org';
 const RP_ENTITY_ID = 'https://rp.example.org';
 const WALLET_PROVIDER_ENTITY_ID = 'https://127.0.0.1:3003';
+const TRUST_ANCHOR_CERTIFICATE = 'trust-anchor-federation-certificate';
 const WP_050A_METADATA_POLICY_EXCLUDED_CREDENTIAL_CONFIGURATION_ID = 'mso_mdoc_PersonIdentificationData';
 const METADATA_POLICY_ALLOWED_CREDENTIAL_CONFIGURATION_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
 
@@ -31,6 +33,23 @@ function generateFederationJwk(kid: string): JwkKey {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const jwk = privateKey.export({ format: 'jwk' }) as JwkKey;
   return { ...jwk, alg: 'ES256', kid, use: 'sig' };
+}
+
+/** Stands in for the chain the `keys` plugin reads off disk; the route only
+ * forwards it, so a recognisable placeholder is enough to assert it lands on the
+ * right key. */
+function certificateChain(name: string): string[] {
+  return [`${name}-leaf`, `${name}-intermediate`];
+}
+
+/** A subordinate's key as the `keys` plugin hands it over: public, with its `kid`
+ * already resolved and its chain already attached. */
+function publishedJwk(privateJwk: JwkKey, name: string): JsonWebKey {
+  const { d, key_ops, ...publicJwk } = privateJwk;
+  void d;
+  void key_ops;
+
+  return { ...publicJwk, x5c: certificateChain(name) } as JsonWebKey;
 }
 
 // Boots a minimal Fastify instance decorated only with what the route under test needs,
@@ -52,17 +71,27 @@ async function buildApp(options: {
   });
 
   app.decorate('trustAnchorKeys', {
+    federationCertificateChain: [TRUST_ANCHOR_CERTIFICATE],
     federationPrivateJwk: generateFederationJwk('trust-anchor-federation-key'),
-    issuerFederationJwk: options.issuerFederationJwk,
-    rpFederationJwk: options.rpFederationJwk,
-    walletProviderFederationJwk:
-      options.walletProviderFederationJwk ?? generateFederationJwk('wallet-provider-signing-key')
+    subordinatePublicJwks: {
+      issuer: publishedJwk(options.issuerFederationJwk, 'issuer'),
+      rp: publishedJwk(options.rpFederationJwk, 'rp'),
+      walletProvider: publishedJwk(
+        options.walletProviderFederationJwk ?? generateFederationJwk('wallet-provider-signing-key'),
+        'wallet-provider'
+      )
+    }
   });
 
   await app.register(fetchRoute);
   await app.ready();
 
   return app;
+}
+
+/** The keys a subordinate statement publishes, as a verifier reads them. */
+function publishedKeys(statement: string): Array<{ kid?: string; x5c?: string[] }> {
+  return (decodeJwt(statement) as unknown as { jwks: { keys: Array<{ kid?: string; x5c?: string[] }> } }).jwks.keys;
 }
 
 describe('GET /fetch', () => {
@@ -137,6 +166,32 @@ describe('GET /fetch', () => {
 
     expect(response.statusCode).toBe(200);
     expect(decodeJwt(response.body).sub).toBe(WALLET_PROVIDER_ENTITY_ID);
+
+    await app.close();
+  });
+
+  it.each([
+    { entityId: ISSUER_ENTITY_ID, name: 'issuer', subjectChain: 'issuer' },
+    { entityId: RP_ENTITY_ID, name: 'rp', subjectChain: 'rp' },
+    { entityId: WALLET_PROVIDER_ENTITY_ID, name: 'wallet provider', subjectChain: 'wallet-provider' }
+  ])('publishes a certificate chain beside every key in the $name statement', async ({ entityId, subjectChain }) => {
+    const app = await buildApp({
+      issuerFederationJwk: generateFederationJwk('issuer-signing-key'),
+      rpFederationJwk: generateFederationJwk('federation-key')
+    });
+
+    const response = await app.inject({ method: 'GET', url: `/fetch?sub=${encodeURIComponent(entityId)}` });
+
+    expect(response.statusCode).toBe(200);
+    const keys = publishedKeys(response.body);
+
+    // Two keys, two chains, and each is the chain for the key it accompanies:
+    // the subject's own, and the Trust Anchor's for the key that signed the
+    // statement. A wallet resolving a Trust Chain reads both here rather than
+    // fetching two more Entity Configurations to find them.
+    expect(keys).toHaveLength(2);
+    expect(keys[0].x5c).toEqual(certificateChain(subjectChain));
+    expect(keys[1].x5c).toEqual([TRUST_ANCHOR_CERTIFICATE]);
 
     await app.close();
   });

@@ -4,11 +4,20 @@ import FastifyAutoLoad from '@fastify/autoload';
 import Fastify, { type FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
+/**
+ * Test files sit beside the code they cover. They are stripped from the built
+ * output, so autoload never meets them in production — but a test that boots
+ * this app from source would otherwise have them registered as plugins, and a
+ * test file is not one.
+ */
+const TEST_FILE_PATTERN = /(?:^|\/)tests(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]s$/;
+
 const bootstrap: FastifyPluginAsync = async (app, opts) => {
   // Auto-load plugins
   await app.register(FastifyAutoLoad, {
     dir: path.join(import.meta.dirname, 'plugins'),
     dirNameRoutePrefix: false,
+    ignorePattern: TEST_FILE_PATTERN,
     options: { ...opts }
   });
 
@@ -18,6 +27,7 @@ const bootstrap: FastifyPluginAsync = async (app, opts) => {
     autoHooks: true,
     autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
     cascadeHooks: true,
+    ignorePattern: TEST_FILE_PATTERN,
     options: { ...opts }
   });
 
