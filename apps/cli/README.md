@@ -80,10 +80,13 @@ When executed, it:
 - generates issuer signing keys and an issuer intermediate CA signing key
 - generates the trust-anchor federation key and self-signed federation certificate
 - generates the issuer intermediate CA certificate, chained to the trust-anchor federation certificate
-- generates the issuer leaf certificate (`cert.pem`), chained to the issuer intermediate CA certificate and bound to the issuer's ES256 signing key in `jwks.json`
+- generates the issuer leaf certificates (`cert.pem`, `enc-cert.pem`), chained to the issuer intermediate CA certificate and bound respectively to the issuer's ES256 signing key and ECDH-ES encryption key in `jwks.json`
 - generates the wallet provider intermediate CA certificate, chained to the trust-anchor federation certificate
 - generates the wallet provider leaf certificate (`cert.pem`), chained to the wallet provider intermediate CA certificate and bound to the Wallet Instance Attestation ES256 signing key in `jwks.json`
-- generates relying party authentication keys and a self-signed certificate
+- generates relying party application keys (ES256 signing, ECDH-ES encryption) and a self-signed certificate for each
+- generates the relying party federation key and intermediate CA signing key
+- generates the relying party intermediate CA certificate, chained to the trust-anchor federation certificate
+- generates the relying party federation certificate, chained to the relying party intermediate CA certificate and bound to the federation key
 - generates wallet provider runtime and intermediate signing keys
 - creates or overwrites the config file when needed
 
@@ -92,17 +95,21 @@ Generated structure:
 - `<data_dir>/issuer/jwks.json` — issuer signing keys (ES256 for signing, ECDH-ES for encryption); the ES256 private key is the sole key used to produce issuer signatures
 - `<data_dir>/issuer/jwks-intermediate.json` — issuer intermediate CA signing key, used only to sign `intermediate-cert.pem`
 - `<data_dir>/issuer/intermediate-cert.pem` — issuer intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
-- `<data_dir>/issuer/cert.pem` — issuer leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
-- `<data_dir>/rp/auth-request-key.jwk.json`
-- `<data_dir>/rp/auth-response-key.jwk.json`
-- `<data_dir>/rp/federation-key.jwk.json`
-- `<data_dir>/rp/cert.pem` — self-signed X.509 certificate chain used in the JWT `x5c` header
+- `<data_dir>/issuer/cert.pem` — issuer signing leaf certificate; its public key corresponds to the ES256 signing key in `jwks.json` and is attached to every issuer-produced signature (`x5c`/certificate-chain header)
+- `<data_dir>/issuer/enc-cert.pem` — issuer encryption leaf certificate; its public key corresponds to the ECDH-ES key in `jwks.json`, and it asserts `keyAgreement` rather than `digitalSignature`. Both leaves share `intermediate-cert.pem`, so `[leaf, intermediate]` is published as the `x5c` of every key in every JWKS the Credential Issuer serves
+- `<data_dir>/rp/jwks.json` — relying party application keys: one ES256 key signing Request Objects, one ECDH-ES key encrypting them and decrypting the Authorization Response. The federation key is deliberately not here
+- `<data_dir>/rp/cert.pem` — self-signed certificate for the ES256 application key; published in the Request Object `x5c` header and hashed into the `x509_hash` client_id
+- `<data_dir>/rp/enc-cert.pem` — self-signed certificate for the ECDH-ES application key
+- `<data_dir>/rp/federation-key.jwk.json` — relying party federation key; signs the Entity Configuration and the Relying Party Trust Mark, and nothing else
+- `<data_dir>/rp/jwks-intermediate.json` — relying party intermediate CA signing key, used only to sign `federation-cert.pem`
+- `<data_dir>/rp/intermediate-cert.pem` — relying party intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
+- `<data_dir>/rp/federation-cert.pem` — relying party federation leaf certificate; its public key corresponds to `federation-key.jwk.json`, and `[federation-cert, intermediate-cert]` is published as the `x5c` of the key in the Entity Configuration's top-level `jwks`
 - `<data_dir>/wallet-provider/jwks.json` — wallet provider signing key used for Wallet Instance Attestations
 - `<data_dir>/wallet-provider/jwks-intermediate.json` — wallet provider intermediate CA signing key, used only to sign `cert.pem`
 - `<data_dir>/wallet-provider/intermediate-cert.pem` — wallet provider intermediate CA certificate, chained to `trust-anchor/federation-cert.pem`
 - `<data_dir>/wallet-provider/cert.pem` — wallet provider leaf certificate; its public key corresponds to the Wallet Instance Attestation ES256 signing key in `jwks.json`
 - `<data_dir>/trust-anchor/federation-key.jwk.json`
-- `<data_dir>/trust-anchor/federation-cert.pem` — self-signed X.509 certificate generated from the federation key
+- `<data_dir>/trust-anchor/federation-cert.pem` — self-signed CA certificate generated from the federation key; the root every service's federation `x5c` chain terminates at, and published as the `x5c` of the key in the Trust Anchor's own Entity Configuration
 - `<data_dir>/tls-cert.pem` — generated only when `https = true` (self-signed, RSA 2048, 825-day validity, `localhost`)
 - `<data_dir>/tls-key.pem` — generated only when `https = true`
 

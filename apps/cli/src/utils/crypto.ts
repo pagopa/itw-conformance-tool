@@ -43,6 +43,19 @@ export function createIssuerPrivateKeys() {
   return { keys: [signing, encryption] };
 }
 
+/** Generates the Relying Party's application JWKS: the ES256 key that signs
+ * Request Objects and the ECDH-ES key that encrypts them and decrypts the
+ * Authorization Response.
+ *
+ * The federation key is deliberately absent — it lives in its own
+ * `rp/federation-key.jwk.json` (see `createRelyingPartyFederationKey`). Both
+ * roles used to share this file as two `use=sig` entries told apart only by
+ * their position in the array, which meant reordering them silently swapped the
+ * key that signs a Request Object with the key that signs the Entity
+ * Configuration. Separate files make the roles impossible to confuse.
+ *
+ * @returns A JWKS containing the Relying Party application keys.
+ */
 export function createRelyingPartyPrivateKeys() {
   const signing = createEcPrivateJwk({
     use: 'sig',
@@ -56,13 +69,41 @@ export function createRelyingPartyPrivateKeys() {
     keyOps: ['deriveBits']
   });
 
-  const federation = createEcPrivateJwk({
+  return { keys: [signing, encryption] };
+}
+
+/** Generates the Relying Party's OpenID Federation signing key.
+ *
+ * It signs the Relying Party Entity Configuration and its Trust Mark, and
+ * nothing else: Request Objects are signed with the application key from
+ * `createRelyingPartyPrivateKeys`. Mirrors `createTrustAnchorFederationKey`,
+ * which keeps the Trust Anchor's federation key in a single-JWK file too.
+ *
+ * @returns The Relying Party federation private JWK.
+ */
+export function createRelyingPartyFederationKey() {
+  return createEcPrivateJwk({
     use: 'sig',
     alg: 'ES256',
     keyOps: ['sign']
   });
+}
 
-  return { keys: [signing, encryption, federation] };
+/** Generates and returns an EC P-256 private ES256 signing key for the
+ * Relying Party intermediate CA.
+ *
+ * The intermediate CA's private key signs `rp/federation-cert.pem` and its
+ * public key is embedded in `rp/intermediate-cert.pem`, which the Trust Anchor
+ * federation key signs in turn.
+ *
+ * @returns The Relying Party intermediate CA private JWK.
+ */
+export function createRelyingPartyIntermediateKey() {
+  return createEcPrivateJwk({
+    use: 'sig',
+    alg: 'ES256',
+    keyOps: ['sign']
+  });
 }
 
 /** Generates a JWKS containing the Wallet Provider attestation signing key. */

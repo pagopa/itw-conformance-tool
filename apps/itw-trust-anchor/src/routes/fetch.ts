@@ -3,9 +3,7 @@ import { isInternalServiceRequest } from '@itw-conformance-tool/utils';
 
 import { createSubordinate } from '../federation/statements.js';
 
-import type { SubordinateEntityKind } from '../federation/statements.js';
-import type { JwkKey } from '../plugins/keys.js';
-import type { MetadataPolicyOperator } from '@pagopa/io-wallet-oid-federation';
+import type { JsonWebKey, MetadataPolicyOperator } from '@pagopa/io-wallet-oid-federation';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 
 interface FetchQuerystring {
@@ -31,13 +29,13 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
       const { sub } = request.query;
       const { baseUrl, issuerEntityId, rpEntityId, walletProviderEntityId } = app.config;
 
-      let subjectKind: SubordinateEntityKind;
-      let subjectPrivateJwk: JwkKey;
+      // Already carrying its `kid` and its certifying `x5c`, as the `keys`
+      // plugin derived it at startup.
+      let subjectPublicJwk: JsonWebKey;
       let metadataPolicy: Record<string, Record<string, MetadataPolicyOperator>> | undefined;
 
       if (sub === issuerEntityId) {
-        subjectKind = 'issuer';
-        subjectPrivateJwk = app.trustAnchorKeys.issuerFederationJwk;
+        subjectPublicJwk = app.trustAnchorKeys.subordinatePublicJwks.issuer;
         metadataPolicy = {
           openid_credential_issuer: {
             credential_configurations_supported: {
@@ -52,21 +50,19 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
           }
         };
       } else if (sub === rpEntityId) {
-        subjectKind = 'rp';
-        subjectPrivateJwk = app.trustAnchorKeys.rpFederationJwk;
+        subjectPublicJwk = app.trustAnchorKeys.subordinatePublicJwks.rp;
       } else if (sub === walletProviderEntityId) {
-        subjectKind = 'wallet-provider';
-        subjectPrivateJwk = app.trustAnchorKeys.walletProviderFederationJwk;
+        subjectPublicJwk = app.trustAnchorKeys.subordinatePublicJwks.walletProvider;
       } else {
         return reply.code(404).send({ error: 'not_found' });
       }
 
       try {
         const subordinateStatement = await createSubordinate({
+          federationCertificateChain: app.trustAnchorKeys.federationCertificateChain,
           federationPrivateJwk: app.trustAnchorKeys.federationPrivateJwk,
           subjectEntityId: sub,
-          subjectKind,
-          subjectPrivateJwk,
+          subjectPublicJwk,
           trustAnchorBaseUrl: baseUrl,
           metadataPolicy
         });

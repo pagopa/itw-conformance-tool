@@ -30,12 +30,21 @@ function sendWalletInstanceManagementError(
   });
 }
 
+/**
+ * Test files sit beside the code they cover. They are stripped from the built
+ * output, so autoload never meets them in production — but a test that boots
+ * this app from source would otherwise have them registered as plugins, and a
+ * test file is not one.
+ */
+const TEST_FILE_PATTERN = /(?:^|\/)tests(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]s$/;
+
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   app.register(FastifyAutoLoad, {
     dir: path.join(import.meta.dirname, 'plugins'),
     autoHooks: true,
     autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
     cascadeHooks: true,
+    ignorePattern: TEST_FILE_PATTERN,
     options: { ...opts }
   });
 
@@ -44,6 +53,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
     autoHooks: true,
     autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
     cascadeHooks: true,
+    ignorePattern: TEST_FILE_PATTERN,
     options: { ...opts }
   });
 

@@ -12,6 +12,14 @@ import swaggerPlugin from './plugins/external/swagger.js';
 import keysPlugin from './plugins/keys.js';
 import trustAnchorFaultsPlugin from './plugins/trust-anchor-faults.js';
 
+/**
+ * Test files sit beside the code they cover. They are stripped from the built
+ * output, so autoload never meets them in production — but a test that boots
+ * this app from source would otherwise have them registered as plugins, and a
+ * test file is not one.
+ */
+const TEST_FILE_PATTERN = /(?:^|\/)tests(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]s$/;
+
 export default async function bootstrap(app: FastifyInstance, opts: FastifyPluginOptions) {
   await app.register(configPlugin);
   await app.register(keysPlugin);
@@ -29,6 +37,7 @@ export default async function bootstrap(app: FastifyInstance, opts: FastifyPlugi
     autoHooks: true,
     autoHooksPattern: /\.hook(?:\.ts|\.js|\.cjs|\.mjs)$/i,
     cascadeHooks: true,
+    ignorePattern: TEST_FILE_PATTERN,
     options: { ...opts }
   });
 

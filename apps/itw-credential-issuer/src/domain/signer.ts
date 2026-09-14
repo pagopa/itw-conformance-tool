@@ -15,7 +15,19 @@ export interface JwksRepository {
 
 interface JwkKeyPair<A> {
   readonly private: { readonly kty: A } & JwkPrivateKey & Required<Pick<ECPrivateKey, 'kid'>>;
-  readonly public: { readonly kty: A } & JwkPublicKey & Required<Pick<ECKey, 'kid'>>;
+  /**
+   * The public half, carrying the chain that certifies it in `x5c`.
+   *
+   * The chain travels on the public JWK because that is the half that gets
+   * published — in the Entity Configuration, in the credential-issuer metadata,
+   * and in the `client_metadata` of a Request Object — so a wallet reading a key
+   * out of any of those also receives the certificate binding it to its issuer,
+   * without each publication site having to remember to attach one.
+   *
+   * Base64 DER, leaf first, the Trust Anchor root left out: a verifier is
+   * expected to hold the root already.
+   */
+  readonly public: { readonly kty: A } & JwkPublicKey & Required<Pick<ECKey, 'kid'>> & { x5c: string[] };
 }
 
 /**
