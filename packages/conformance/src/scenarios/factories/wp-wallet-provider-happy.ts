@@ -49,7 +49,7 @@ export const wpWalletProviderHappyScenario: ProtocolObservedScenarioDefinition =
       event: 'wallet_attestation.requested',
       service: 'wallet-provider',
       correlation: 'allow-uncorrelated-post-start',
-      match: { endpoint: '/wallet-instance-attestation', method: 'POST', outcome: 'success' }
+      match: { endpoint: '/wallet-instance-attestations', method: 'POST', outcome: 'success' }
     }
   ],
   timeouts: {
@@ -61,7 +61,7 @@ export const wpWalletProviderHappyScenario: ProtocolObservedScenarioDefinition =
   instructions: {
     goal: 'Verify that the Wallet Instance discovers the Wallet Provider, resolves its Trust Anchor subordinate statement, requests fresh nonces for registration and attestation issuance, registers, and obtains a Wallet Instance Attestation.',
     expectedBehavior:
-      'The wallet must request the Wallet Provider Entity Configuration, fetch the Wallet Provider subordinate statement from the Trust Anchor, request a fresh nonce before POST /wallet-instances, successfully register, request another fresh nonce, and then successfully request POST /wallet-instance-attestation.',
+      'The wallet must request the Wallet Provider Entity Configuration, fetch the Wallet Provider subordinate statement from the Trust Anchor, request a fresh nonce before POST /wallet-instances, successfully register, request another fresh nonce, and then successfully request POST /wallet-instance-attestations.',
     summary: 'Verify Wallet Instance registration and attestation issuance.',
     prerequisites: [
       'The wallet app or client under test can start Wallet Instance activation against a Wallet Provider URL.',

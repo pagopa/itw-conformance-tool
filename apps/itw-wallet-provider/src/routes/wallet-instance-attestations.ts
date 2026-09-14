@@ -3,7 +3,6 @@ import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
 import {
   issueWalletInstanceAttestationHandler,
   walletInstanceAttestationErrorSchema,
-  walletInstanceAttestationRequestSchema,
   walletInstanceAttestationResponseSchema
 } from '../handlers/issue-wallet-instance-attestation.js';
 
@@ -11,17 +10,19 @@ import type { FastifyPluginAsync } from 'fastify';
 
 const walletInstanceAttestationRoute: FastifyPluginAsync = async (app) => {
   app.route({
-    url: '/wallet-instance-attestation',
+    url: '/wallet-instance-attestations',
     method: 'POST',
     schema: {
-      operationId: 'issueWalletInstanceAttestation',
+      operationId: 'createWalletInstanceAttestation',
       summary: 'Issue a Wallet Instance Attestation',
       description:
         'Validates a signed Wallet Instance Attestation request and returns a provider-signed attestation JWT.',
       tags: ['Wallet Instance Attestation'],
-      consumes: ['application/json'],
+      // The request body is the bare compact JWT (text/plain); the JSON envelope
+      // `{ assertion }` is accepted too. Both are validated inside the handler,
+      // so no body schema is declared here.
+      consumes: ['text/plain', 'application/json'],
       produces: ['application/json'],
-      body: toFastifyJsonSchema(walletInstanceAttestationRequestSchema),
       response: {
         200: {
           description: 'Provider-signed Wallet Instance Attestation JWT.',

@@ -53,23 +53,24 @@ describe('Test Cases for Wallet Instance', async () => {
     const walletInstancesUrl = trimTrailingSlash(walletProviderUrl) + '/wallet-instances';
     malformedRegistration = await postWalletInstanceRegistration(walletInstancesUrl, {});
     validationErrorRegistration = await postWalletInstanceRegistration(walletInstancesUrl, {
-      nonce: 'd2JhY2NhbG91cmVqdWFuZGFt',
+      challenge: 'd2JhY2NhbG91cmVqdWFuZGFt',
       hardware_key_tag: 'not base64url!',
       key_attestation: 'well_formed_key_attestation'
     });
     integrityCheckErrorRegistration = await postWalletInstanceRegistration(walletInstancesUrl, {
-      nonce: 'd2JhY2NhbG91cmVqdWFuZGFt',
+      challenge: 'd2JhY2NhbG91cmVqdWFuZGFt',
       hardware_key_tag: 'WQhyDymFKsP95iFqpzdEDWW4l7aVna2Fn4JCeWHYtbU=',
       key_attestation: 'integrity_check_error'
     });
 
-    const walletInstanceUrl =
+    const walletInstanceStatusUrl =
       trimTrailingSlash(walletProviderUrl) +
       '/wallet-instances/' +
-      encodeURIComponent(SYNTACTICALLY_VALID_WALLET_INSTANCE_ID);
-    unauthenticatedStatusRetrieval = await captureJsonResponse(walletInstanceUrl, { method: 'GET' });
-    unauthenticatedRevocation = await captureJsonResponse(walletInstanceUrl, {
-      method: 'PATCH',
+      encodeURIComponent(SYNTACTICALLY_VALID_WALLET_INSTANCE_ID) +
+      '/status';
+    unauthenticatedStatusRetrieval = await captureJsonResponse(walletInstanceStatusUrl, { method: 'GET' });
+    unauthenticatedRevocation = await captureJsonResponse(walletInstanceStatusUrl, {
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -114,7 +115,7 @@ describe('Test Cases for Wallet Instance', async () => {
           throw new Error('Missing wallet_attestation.requested evidence');
         }
 
-        expect(requiredDiagnosticString(attestationEvent, 'endpoint')).toBe('/wallet-instance-attestation');
+        expect(requiredDiagnosticString(attestationEvent, 'endpoint')).toBe('/wallet-instance-attestations');
         expect(requiredDiagnosticString(attestationEvent, 'method')).toBe('POST');
         expect(requiredDiagnosticString(attestationEvent, 'outcome')).toBe('success');
         expect(requiredDiagnosticString(attestationEvent, 'assertionAlg')).toBeOneOf(
@@ -147,7 +148,7 @@ describe('Test Cases for Wallet Instance', async () => {
   });
 
   test('WP_019a: Wallet Provider rejects an attestation request from a Wallet Instance that fails authenticity, integrity, or genuineness checks', async () => {
-    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
+    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestations';
 
     const assertion =
       'eyJhbGciOiJFUzI1NiIsInR5cCI6IldBTExFVC1JTlNUQU5DRS1BVFRFU1RBVElPTitKV1QifQ.eyJpc3MiOiJpbnZhbGlkIiwic3ViIjoiaW52YWxpZCIsImF1ZCI6ImludmFsaWQifQ.invalid_signature';
@@ -155,9 +156,9 @@ describe('Test Cases for Wallet Instance', async () => {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'text/plain'
       },
-      body: JSON.stringify({ assertion }),
+      body: assertion,
       signal: AbortSignal.timeout(10_000)
     });
 
@@ -173,15 +174,15 @@ describe('Test Cases for Wallet Instance', async () => {
   });
 
   test('WP_027: Wallet Provider verifies the device meets its minimum security requirements and is free of known security flaws; if not, the Wallet Attestation Request is rejected', async () => {
-    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestation';
-    const assertion = await createWalletInstanceAttestationRequestAssertion(walletProviderUrl, 'invalid');
+    const endpoint = trimTrailingSlash(walletProviderUrl) + '/wallet-instance-attestations';
+    const assertion = await createWalletInstanceAttestationRequestAssertion('valid_hardware_key_tag', 'invalid');
 
     const integrityCheckErrorAttestation = await captureJsonResponse(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'text/plain'
       },
-      body: JSON.stringify({ assertion })
+      body: assertion
     });
 
     expect(
@@ -360,7 +361,7 @@ function requiredDiagnosticString(event: ObservedEvent, key: string): string {
 }
 
 async function createWalletInstanceAttestationRequestAssertion(
-  walletProviderUrl: string,
+  hardwareKeyTag: string,
   integrityAssertion: string
 ): Promise<string> {
   const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
@@ -369,13 +370,13 @@ async function createWalletInstanceAttestationRequestAssertion(
   const now = Math.floor(Date.now() / 1_000);
 
   return new SignJWT({
-    iss: trimTrailingSlash(walletProviderUrl),
+    iss: hardwareKeyTag,
     exp: now + 300,
     iat: now,
     nonce: 'valid_nonce',
     hardware_signature: 'valid_hardware_signature',
     integrity_assertion: integrityAssertion,
-    hardware_key_tag: 'valid_hardware_key_tag',
+    hardware_key_tag: hardwareKeyTag,
     cnf: {
       jwk: publicJwk
     },

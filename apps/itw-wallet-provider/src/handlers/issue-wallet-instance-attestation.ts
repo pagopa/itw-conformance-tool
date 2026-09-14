@@ -15,24 +15,36 @@ import { CLOCK_SKEW_TOLERANCE_SECONDS, calculateJwkThumbprint, verifyJwtIatOrThr
 import { SignJWT, importJWK, jwtVerify, type JWK, type JWTPayload } from 'jose';
 import z from 'zod';
 
+import { sendWalletProviderError, walletProviderErrorSchema } from '../utils/errors.js';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const ATTESTATION_TTL_SECONDS = 3600;
 const REQUEST_JWT_TYPE = 'wia-request+jwt';
 const ATTESTATION_STATUS_LIST_INDEX = 0;
 const WIA_REQUEST_ALLOWED_ALGORITHMS = ['ES256', 'ES384', 'ES512'] as const;
-export const walletInstanceAttestationRequestSchema = z.object({
-  assertion: z.string().min(1).describe('Signed Wallet Instance Attestation request JWT.')
-});
+/**
+ * `io-react-native-wallet` POSTs the bare compact JWT with `Content-Type: text/plain`
+ * (`src/wallet-instance-attestation/v1.4.6/issuing.ts`). The JSON envelope is the shape
+ * the production Wallet Provider receives once API Management has added the user
+ * identity, and is accepted here so both callers work.
+ */
+export const walletInstanceAttestationRequestSchema = z.union([
+  z.string().min(1).describe('Signed Wallet Instance Attestation request JWT.'),
+  z.object({
+    assertion: z.string().min(1).describe('Signed Wallet Instance Attestation request JWT.')
+  })
+]);
 
 export const walletInstanceAttestationResponseSchema = z.object({
   wallet_instance_attestation: z.string().describe('Provider-signed Wallet Instance Attestation JWT.')
 });
 
-export const walletInstanceAttestationErrorSchema = z.object({
-  error: z.enum(['bad_request', 'integrity_check_error', 'invalid_request']),
-  error_description: z.string().min(1)
-});
+export const walletInstanceAttestationErrorSchema = walletProviderErrorSchema([
+  'bad_request',
+  'integrity_check_error',
+  'invalid_request'
+]);
 
 const wiaRequestJwtHeaderSchema = z.strictObject({
   alg: z.enum(WIA_REQUEST_ALLOWED_ALGORITHMS),
@@ -203,7 +215,7 @@ async function issueWalletInstanceAttestation(
     status: {
       status_list: {
         idx: ATTESTATION_STATUS_LIST_INDEX,
-        uri: `${options.config.BASE_URL}/wallet-instance-attestation/status-list`
+        uri: `${options.config.BASE_URL}/wallet-instance-attestations/status-list`
       }
     },
     walletLink: options.config.BASE_URL,
@@ -212,17 +224,35 @@ async function issueWalletInstanceAttestation(
 }
 
 function sendError(reply: FastifyReply, error: AttestationError): FastifyReply {
-  return reply.code(error.statusCode).type('application/json').send({
-    error: error.error,
-    error_description: error.description
-  });
+  return sendWalletProviderError(reply, error.statusCode, error.error, error.description);
+}
+
+function extractAssertion(body: unknown): string | undefined {
+  if (typeof body === 'string') {
+    return body.trim().length === 0 ? undefined : body.trim();
+  }
+
+  if (typeof body === 'object' && body !== null && 'assertion' in body) {
+    const { assertion } = body as { assertion: unknown };
+    return typeof assertion === 'string' && assertion.length > 0 ? assertion : undefined;
+  }
+
+  return undefined;
 }
 
 export const issueWalletInstanceAttestationHandler = async (
   request: FastifyRequest<{ Body: AttestationRequestBody }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  const { assertion } = request.body;
+  const assertion = extractAssertion(request.body);
+
+  if (assertion === undefined) {
+    return sendError(reply, {
+      description: 'The request body must carry the Wallet Instance Attestation request JWT.',
+      error: 'bad_request',
+      statusCode: 400
+    });
+  }
 
   const decodedAssertion = await toResult(decodeJwt({ jwt: assertion }));
   if (!decodedAssertion.ok) {
@@ -242,8 +272,11 @@ export const issueWalletInstanceAttestationHandler = async (
   const issuedAtError = validateIssuedAt(payload);
   if (issuedAtError) return sendError(reply, issuedAtError);
 
-  if (payload.iss !== request.server.config.BASE_URL) {
-    return sendError(reply, invalidRequest('The assertion iss claim does not match the Wallet Provider identifier.'));
+  // The Wallet Instance identifies itself by its Cryptographic Hardware Key tag:
+  // `io-react-native-wallet` sets `iss` to the hardware key tag, and the production
+  // Wallet Provider rejects the request unless the two match.
+  if (payload.iss !== payload.hardware_key_tag) {
+    return sendError(reply, invalidRequest('The assertion iss claim must match the hardware_key_tag claim.'));
   }
 
   const jwkThumbprint = await toResult(calculateAssertionJwkThumbprint(payload.cnf.jwk));
@@ -260,7 +293,7 @@ export const issueWalletInstanceAttestationHandler = async (
   }
 
   try {
-    await verifyAssertionSignature(assertion, header, payload, request.server.config.BASE_URL);
+    await verifyAssertionSignature(assertion, header, payload, payload.hardware_key_tag);
   } catch {
     return sendError(reply, invalidRequest('The assertion signature cannot be verified with cnf.jwk.'));
   }
@@ -297,7 +330,7 @@ export const issueWalletInstanceAttestationHandler = async (
         cnfJwkAsymmetric: payload.cnf.jwk.kty !== 'oct',
         cnfJwkPublicOnly: !hasPrivateOrSymmetricKeyMaterial(payload.cnf.jwk),
         cnfJwkThumbprint: jwkThumbprint.value,
-        endpoint: '/wallet-instance-attestation',
+        endpoint: '/wallet-instance-attestations',
         method: 'POST',
         outcome: 'success',
         proofVerifiedWithCnfJwk: true,

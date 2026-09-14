@@ -1,6 +1,8 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
+import { sendWalletProviderError, walletProviderErrorSchema } from '../utils/errors.js';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const BASE64URL_WITH_OPTIONAL_PADDING = /^[A-Za-z0-9_-]+={0,2}$/;
@@ -10,25 +12,31 @@ const INVALID_REQUEST_SENTINELS = new Set(['invalid_request', 'invalid_key_attes
 export const walletInstanceRegistrationRequestSchema = z.strictObject({
   challenge: z.string().min(1).describe('Nonce obtained from the Wallet Provider nonce endpoint.'),
   hardware_key_tag: z.string().min(1).describe('Base64url-encoded Cryptographic Hardware Key tag.'),
+  is_renewal: z.boolean().optional().describe('Whether the Wallet Instance replaces an existing one.'),
   key_attestation: z.string().min(1).describe('Device key attestation bound to the nonce and hardware key tag.')
 });
 
-export const walletInstanceRegistrationErrorSchema = z.object({
-  error: z.string().describe('Machine-readable error code.'),
-  error_description: z.string().describe('Human-readable error description.')
-});
+export const walletInstanceRegistrationErrorSchema = walletProviderErrorSchema([
+  'bad_request',
+  'integrity_check_error',
+  'invalid_request',
+  'server_error',
+  'temporarily_unavailable',
+  'validation_error'
+]);
 
 type WalletInstanceRegistrationBody = z.infer<typeof walletInstanceRegistrationRequestSchema>;
+type WalletInstanceRegistrationErrorCode = z.infer<typeof walletInstanceRegistrationErrorSchema>['error'];
 
 type WalletInstanceRegistrationError = {
-  error: string;
+  error: WalletInstanceRegistrationErrorCode;
   error_description: string;
   statusCode: number;
 };
 
 function walletInstanceRegistrationError(
   statusCode: number,
-  error: string,
+  error: WalletInstanceRegistrationErrorCode,
   error_description: string
 ): WalletInstanceRegistrationError {
   return { error, error_description, statusCode };
@@ -42,7 +50,7 @@ function sendWalletInstanceRegistrationError(
   reply: FastifyReply,
   { error, error_description, statusCode }: WalletInstanceRegistrationError
 ): FastifyReply {
-  return reply.code(statusCode).header('cache-control', 'no-store').send({ error, error_description });
+  return sendWalletProviderError(reply, statusCode, error, error_description);
 }
 
 function validateRequestBody(body: unknown): WalletInstanceRegistrationBody | WalletInstanceRegistrationError {
@@ -62,7 +70,7 @@ function validateRequestBody(body: unknown): WalletInstanceRegistrationBody | Wa
 
 function validateRegistrationSemantics(
   body: WalletInstanceRegistrationBody
-): WalletInstanceRegistrationError | undefined {
+): undefined | WalletInstanceRegistrationError {
   if (!BASE64URL_WITH_OPTIONAL_PADDING.test(body.hardware_key_tag)) {
     return walletInstanceRegistrationError(
       422,
@@ -117,7 +125,10 @@ export const registerWalletInstanceHandler = async (
     );
   }
 
+  const isRenewal = body.is_renewal ?? false;
+
   request.server.registeredWalletInstances.set(body.hardware_key_tag, {
+    isRenewal,
     keyAttestation: body.key_attestation,
     nonce: body.challenge,
     registeredAt: new Date().toISOString(),
@@ -132,6 +143,7 @@ export const registerWalletInstanceHandler = async (
       requestId: request.id,
       diagnostic: {
         endpoint: '/wallet-instances',
+        isRenewal,
         method: 'POST',
         outcome: 'success',
         statusCode: 204

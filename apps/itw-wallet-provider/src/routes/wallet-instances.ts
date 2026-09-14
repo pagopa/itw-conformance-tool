@@ -1,6 +1,7 @@
 import { toFastifyJsonSchema } from '@itw-conformance-tool/utils';
 
 import {
+  getCurrentWalletInstanceStatusHandler,
   getWalletInstanceStatusHandler,
   walletInstanceStatusErrorSchema,
   walletInstanceStatusParamsSchema,
@@ -22,12 +23,43 @@ import type { FastifyPluginAsync } from 'fastify';
 
 const walletInstancesRoute: FastifyPluginAsync = async (app) => {
   app.route({
-    url: '/wallet-instances/:walletInstanceId',
+    url: '/wallet-instances/current/status',
+    method: 'GET',
+    schema: {
+      operationId: 'getCurrentWalletInstanceStatus',
+      summary: 'Retrieve the current Wallet Instance status',
+      description: 'Returns status and revocation metadata for the Wallet Instance of the authenticated user.',
+      tags: ['Wallet Instance Management'],
+      produces: ['application/json'],
+      response: {
+        200: {
+          description: 'Wallet Instance status information.',
+          ...toFastifyJsonSchema(walletInstanceStatusResponseSchema)
+        },
+        401: {
+          description: 'The request lacks valid authentication credentials.',
+          ...toFastifyJsonSchema(walletInstanceStatusErrorSchema)
+        },
+        500: {
+          description: 'Internal server error while retrieving Wallet Instance status.',
+          ...toFastifyJsonSchema(walletInstanceStatusErrorSchema)
+        },
+        503: {
+          description: 'Wallet Instance status retrieval service is temporarily unavailable.',
+          ...toFastifyJsonSchema(walletInstanceStatusErrorSchema)
+        }
+      }
+    },
+    handler: getCurrentWalletInstanceStatusHandler
+  });
+
+  app.route({
+    url: '/wallet-instances/:walletInstanceId/status',
     method: 'GET',
     schema: {
       operationId: 'getWalletInstanceStatus',
       summary: 'Retrieve Wallet Instance status',
-      description: 'Returns status and registration metadata for a Wallet Instance visible to the authenticated user.',
+      description: 'Returns status and revocation metadata for a Wallet Instance visible to the authenticated user.',
       tags: ['Wallet Instance Management'],
       produces: ['application/json'],
       params: toFastifyJsonSchema(walletInstanceStatusParamsSchema),
@@ -70,12 +102,13 @@ const walletInstancesRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.route({
-    url: '/wallet-instances/:walletInstanceId',
-    method: 'PATCH',
+    url: '/wallet-instances/:walletInstanceId/status',
+    method: 'PUT',
     schema: {
-      operationId: 'revokeWalletInstance',
+      operationId: 'setWalletInstanceStatus',
       summary: 'Revoke a Wallet Instance',
-      description: 'Revokes an active Wallet Instance visible to the authenticated user.',
+      description:
+        'Revokes the Wallet Instance associated with the authenticated user. Revoking an already revoked Wallet Instance succeeds.',
       tags: ['Wallet Instance Management'],
       consumes: ['application/json'],
       produces: ['application/json'],
@@ -119,7 +152,7 @@ const walletInstancesRoute: FastifyPluginAsync = async (app) => {
     url: '/wallet-instances',
     method: 'POST',
     schema: {
-      operationId: 'registerWalletInstance',
+      operationId: 'createWalletInstance',
       summary: 'Register a Wallet Instance',
       description:
         'Initializes a Wallet Instance by validating the nonce, Key Attestation, and Cryptographic Hardware Key tag.',

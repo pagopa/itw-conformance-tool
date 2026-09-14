@@ -1,9 +1,12 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
+import { sendWalletProviderError, walletProviderErrorSchema } from '../utils/errors.js';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const BASE64URL_WITH_OPTIONAL_PADDING = /^[A-Za-z0-9_-]+={0,2}$/;
+const REVOCATION_ENDPOINT = '/wallet-instances/:walletInstanceId/status';
 
 export const walletInstanceRevocationParamsSchema = z.strictObject({
   walletInstanceId: z.string().min(1).describe('Wallet Instance identifier.')
@@ -13,18 +16,15 @@ export const walletInstanceRevocationRequestSchema = z.strictObject({
   status: z.literal('REVOKED').describe('Requested Wallet Instance lifecycle status.')
 });
 
-export const walletInstanceRevocationErrorSchema = z.object({
-  error: z.enum([
-    'bad_request',
-    'invalid_request',
-    'not_found',
-    'server_error',
-    'temporarily_unavailable',
-    'unauthorized',
-    'validation_error'
-  ]),
-  error_description: z.string().min(1)
-});
+export const walletInstanceRevocationErrorSchema = walletProviderErrorSchema([
+  'bad_request',
+  'invalid_request',
+  'not_found',
+  'server_error',
+  'temporarily_unavailable',
+  'unauthorized',
+  'validation_error'
+]);
 
 type WalletInstanceRevocationParams = z.infer<typeof walletInstanceRevocationParamsSchema>;
 type WalletInstanceRevocationBody = z.infer<typeof walletInstanceRevocationRequestSchema>;
@@ -48,7 +48,7 @@ function sendRevocationError(
   reply: FastifyReply,
   { error, error_description, statusCode }: WalletInstanceRevocationError
 ): FastifyReply {
-  return reply.code(statusCode).header('cache-control', 'no-store').send({ error, error_description });
+  return sendWalletProviderError(reply, statusCode, error, error_description);
 }
 
 function validateRevocationBody(body: unknown): WalletInstanceRevocationBody | WalletInstanceRevocationError {
@@ -76,7 +76,7 @@ async function emitRevocationEvent(
       correlationId: request.conformance?.correlation?.correlationId ?? null,
       service: 'wallet-provider',
       requestId: request.id,
-      diagnostic: { endpoint: '/wallet-instances/:walletInstanceId', ...diagnostic }
+      diagnostic: { endpoint: REVOCATION_ENDPOINT, method: 'PUT', ...diagnostic }
     })
   );
 }
@@ -90,7 +90,12 @@ export const revokeWalletInstanceHandler = async (
   const body = validateRevocationBody(request.body);
 
   if ('statusCode' in body) {
-    await emitRevocationEvent(request, { error: body.error, statusCode: body.statusCode, walletInstanceId });
+    await emitRevocationEvent(request, {
+      error: body.error,
+      outcome: 'error',
+      statusCode: body.statusCode,
+      walletInstanceId
+    });
     return sendRevocationError(reply, body);
   }
 
@@ -100,7 +105,12 @@ export const revokeWalletInstanceHandler = async (
       'validation_error',
       'The walletInstanceId path parameter must be base64url encoded.'
     );
-    await emitRevocationEvent(request, { error: error.error, statusCode: error.statusCode, walletInstanceId });
+    await emitRevocationEvent(request, {
+      error: error.error,
+      outcome: 'error',
+      statusCode: error.statusCode,
+      walletInstanceId
+    });
     return sendRevocationError(reply, error);
   }
 
@@ -108,15 +118,26 @@ export const revokeWalletInstanceHandler = async (
 
   if (walletInstance === undefined) {
     const error = revocationError(404, 'not_found', 'The Wallet Instance was not found.');
-    await emitRevocationEvent(request, { error: error.error, statusCode: error.statusCode, walletInstanceId });
+    await emitRevocationEvent(request, {
+      error: error.error,
+      outcome: 'error',
+      statusCode: error.statusCode,
+      walletInstanceId
+    });
     return sendRevocationError(reply, error);
   }
 
-  walletInstance.status = body.status;
+  // Revoking an already revoked Wallet Instance succeeds and preserves the original reason.
+  if (walletInstance.status !== 'REVOKED') {
+    walletInstance.status = body.status;
+    walletInstance.revocationReason = 'REVOKED_BY_USER';
+  }
 
   await emitRevocationEvent(request, {
+    outcome: 'success',
     statusCode: 204,
     walletInstanceId,
+    walletInstanceRevocationReason: walletInstance.revocationReason,
     walletInstanceStatus: walletInstance.status
   });
 

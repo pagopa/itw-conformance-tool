@@ -1,6 +1,9 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
+import { sendWalletProviderError, walletProviderErrorSchema } from '../utils/errors.js';
+
+import type { RegisteredWalletInstance } from '../plugins/wallet-instance-registry.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const BASE64URL_WITH_OPTIONAL_PADDING = /^[A-Za-z0-9_-]+={0,2}$/;
@@ -9,24 +12,33 @@ export const walletInstanceStatusParamsSchema = z.strictObject({
   walletInstanceId: z.string().min(1).describe('Wallet Instance identifier.')
 });
 
-export const walletInstanceStatusResponseSchema = z.strictObject({
-  wallet_instance_id: z.string().min(1).describe('Unique Wallet Instance identifier.'),
-  status: z.enum(['ACTIVE', 'REVOKED']).describe('Current Wallet Instance lifecycle status.'),
-  issuance_date: z.string().min(1).describe('ISO 8601 date-time when the Wallet Instance was registered.')
+/**
+ * `WalletInstanceData` as consumed by `io-react-native-wallet`
+ * (`WalletInstanceApi.getWalletInstanceStatus` / `getCurrentWalletInstanceStatus`).
+ */
+export const walletInstanceStatusResponseSchema = z.object({
+  id: z.string().min(1).describe('Unique Wallet Instance identifier.'),
+  is_revoked: z.boolean().describe('Whether the Wallet Instance has been revoked.'),
+  revocation_reason: z
+    .enum([
+      'CERTIFICATE_REVOKED_BY_ISSUER',
+      'NEW_WALLET_INSTANCE_CREATED',
+      'REVOKED_BY_USER',
+      'WALLET_INSTANCE_RENEWAL'
+    ])
+    .optional()
+    .describe('Reason the Wallet Instance was revoked. Present only for revoked Wallet Instances.')
 });
 
-export const walletInstanceStatusErrorSchema = z.object({
-  error: z.enum([
-    'bad_request',
-    'forbidden',
-    'not_found',
-    'server_error',
-    'temporarily_unavailable',
-    'unauthorized',
-    'validation_error'
-  ]),
-  error_description: z.string().min(1)
-});
+export const walletInstanceStatusErrorSchema = walletProviderErrorSchema([
+  'bad_request',
+  'forbidden',
+  'not_found',
+  'server_error',
+  'temporarily_unavailable',
+  'unauthorized',
+  'validation_error'
+]);
 
 type WalletInstanceStatusParams = z.infer<typeof walletInstanceStatusParamsSchema>;
 type WalletInstanceStatusErrorCode = z.infer<typeof walletInstanceStatusErrorSchema>['error'];
@@ -46,11 +58,22 @@ function statusError(
 }
 
 function sendStatusError(reply: FastifyReply, { error, error_description, statusCode }: WalletInstanceStatusError) {
-  return reply.code(statusCode).header('cache-control', 'no-store').send({ error, error_description });
+  return sendWalletProviderError(reply, statusCode, error, error_description);
+}
+
+function toWalletInstanceData(walletInstanceId: string, walletInstance: RegisteredWalletInstance) {
+  const isRevoked = walletInstance.status === 'REVOKED';
+
+  return {
+    id: walletInstanceId,
+    is_revoked: isRevoked,
+    ...(isRevoked && walletInstance.revocationReason ? { revocation_reason: walletInstance.revocationReason } : {})
+  };
 }
 
 async function emitStatusRetrievalEvent(
-  request: FastifyRequest<{ Params: WalletInstanceStatusParams }>,
+  request: FastifyRequest,
+  endpoint: string,
   diagnostic: Record<string, unknown>
 ): Promise<void> {
   await request.server.conformanceEventSink?.emit(
@@ -59,10 +82,13 @@ async function emitStatusRetrievalEvent(
       correlationId: request.conformance?.correlation?.correlationId ?? null,
       service: 'wallet-provider',
       requestId: request.id,
-      diagnostic: { endpoint: '/wallet-instances/:walletInstanceId', ...diagnostic }
+      diagnostic: { endpoint, method: 'GET', ...diagnostic }
     })
   );
 }
+
+const STATUS_ENDPOINT = '/wallet-instances/:walletInstanceId/status';
+const CURRENT_STATUS_ENDPOINT = '/wallet-instances/current/status';
 
 export const getWalletInstanceStatusHandler = async (
   request: FastifyRequest<{ Params: WalletInstanceStatusParams }>,
@@ -76,7 +102,12 @@ export const getWalletInstanceStatusHandler = async (
       'validation_error',
       'The walletInstanceId path parameter must be base64url encoded.'
     );
-    await emitStatusRetrievalEvent(request, { error: error.error, statusCode: error.statusCode, walletInstanceId });
+    await emitStatusRetrievalEvent(request, STATUS_ENDPOINT, {
+      error: error.error,
+      outcome: 'error',
+      statusCode: error.statusCode,
+      walletInstanceId
+    });
     return sendStatusError(reply, error);
   }
 
@@ -84,19 +115,48 @@ export const getWalletInstanceStatusHandler = async (
 
   if (walletInstance === undefined) {
     const error = statusError(404, 'not_found', 'The Wallet Instance was not found.');
-    await emitStatusRetrievalEvent(request, { error: error.error, statusCode: error.statusCode, walletInstanceId });
+    await emitStatusRetrievalEvent(request, STATUS_ENDPOINT, {
+      error: error.error,
+      outcome: 'error',
+      statusCode: error.statusCode,
+      walletInstanceId
+    });
     return sendStatusError(reply, error);
   }
 
-  await emitStatusRetrievalEvent(request, {
+  await emitStatusRetrievalEvent(request, STATUS_ENDPOINT, {
+    outcome: 'success',
     statusCode: 200,
     walletInstanceId,
     walletInstanceStatus: walletInstance.status
   });
 
-  return reply.code(200).header('cache-control', 'no-store').send({
-    wallet_instance_id: walletInstanceId,
-    status: walletInstance.status,
-    issuance_date: walletInstance.registeredAt
+  return reply
+    .code(200)
+    .header('cache-control', 'no-store')
+    .send(toWalletInstanceData(walletInstanceId, walletInstance));
+};
+
+/**
+ * A deployed Wallet Provider resolves "the current Wallet Instance" from the
+ * authenticated user. This fixture has no user session, so the endpoint answers
+ * for a fixed placeholder Wallet Instance.
+ */
+const CURRENT_WALLET_INSTANCE_ID = 'current-wallet-instance';
+
+export const getCurrentWalletInstanceStatusHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  await emitStatusRetrievalEvent(request, CURRENT_STATUS_ENDPOINT, {
+    outcome: 'success',
+    statusCode: 200,
+    walletInstanceId: CURRENT_WALLET_INSTANCE_ID,
+    walletInstanceStatus: 'ACTIVE'
   });
+
+  return reply
+    .code(200)
+    .header('cache-control', 'no-store')
+    .send({ id: CURRENT_WALLET_INSTANCE_ID, is_revoked: false });
 };

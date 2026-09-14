@@ -3,6 +3,8 @@ import path from 'node:path';
 import FastifyAutoLoad from '@fastify/autoload';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions, type FastifyReply } from 'fastify';
 
+import { sendWalletProviderError } from './utils/errors.js';
+
 function isWalletInstanceManagementRequest(url: string): boolean {
   const path = url.split('?', 1)[0];
   return path === '/wallet-instances' || path.startsWith('/wallet-instances/');
@@ -24,10 +26,7 @@ function sendWalletInstanceManagementError(
   error: string,
   errorDescription: string
 ) {
-  return reply.code(statusCode).header('cache-control', 'no-store').send({
-    error,
-    error_description: errorDescription
-  });
+  return sendWalletProviderError(reply, statusCode, error, errorDescription);
 }
 
 /**
