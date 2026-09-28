@@ -11,7 +11,10 @@ const getStatusRoute: FastifyPluginAsync = async (app) => {
     schema: {
       operationId: 'getAuthorizationStatus',
       summary: 'Poll the wallet session status',
-      description: 'Returns the current relying-party redirect target for the provided authorization state.',
+      description:
+        'Returns the current relying-party redirect target for the provided authorization state. ' +
+        'Answered only for the browser that created the authorization request, which is identified by ' +
+        'the session cookie it was issued; any other caller receives 404.',
       tags: ['Status'],
       params: toFastifyJsonSchema(getStatusParamsSchema),
       response: {

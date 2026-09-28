@@ -1,6 +1,8 @@
 import { createObservedEvent } from '@itw-conformance-tool/conformance';
 import z from 'zod';
 
+import { isSameUserSession, USER_AGENT_SESSION_COOKIE } from '../utils/user-agent-session.js';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 /**
@@ -34,13 +36,7 @@ export const getCallbackHandler = async (
   const { response_code, state } = req.query;
   const requestObjectRepository = req.server.repository.requestObject;
 
-  const requestObject = (() => {
-    try {
-      return requestObjectRepository.get(state);
-    } catch {
-      return undefined;
-    }
-  })();
+  const requestObject = requestObjectRepository.find(state);
 
   // Only a genuine follow of the RP-issued redirect_uri counts: the presentation
   // must be verified and the opaque response_code must match the one embedded in
@@ -52,6 +48,24 @@ export const getCallbackHandler = async (
   if (!isValidFollow) {
     return reply.redirect('/error.html');
   }
+
+  // IT Wallet 1.4 completes the transaction only when the Same Device redirect
+  // returns in the user-agent session that started the flow, and requires the
+  // presentation to be rejected otherwise.
+  //
+  // Deliberately kept out of `isValidFollow` above: that condition gates the
+  // `rp.redirect.followed` emission, which WP_094 requires as evidence and
+  // WP_094a requires as a forbidden continuation. Folding the session check into
+  // it would suppress the event and silently break both — and a wallet that
+  // opens the redirect in an in-app webview rather than the original browser
+  // carries no cookie, which is a fact about the wallet worth observing, not a
+  // reason to stop observing. So the follow is always recorded; only the
+  // Relying Party's own verdict below depends on the session matching.
+  const sameUserSession = isSameUserSession({
+    cookieSessionId: req.cookies[USER_AGENT_SESSION_COOKIE],
+    flowType: requestObject.flowType,
+    storedSessionId: requestObject.userAgentSessionId
+  });
 
   // WP_094: the wallet followed the RP-supplied redirect_uri, landing the
   // user-agent back on the Relying Party. Correlation is disabled, so the event
@@ -77,6 +91,17 @@ export const getCallbackHandler = async (
       }
     })
   );
+
+  if (!sameUserSession) {
+    requestObjectRepository.update(state, 'rejected');
+    return reply.redirect('/error.html');
+  }
+
+  // The redirect came back in the session that started the flow, which is what
+  // IT Wallet 1.4 requires before a transaction counts as complete. Until this
+  // point the row is `verified` — the VP token checked out — and `/status`
+  // withholds the presented values from a Same Device poll on that alone.
+  requestObjectRepository.update(state, 'completed');
 
   return reply.redirect('/success.html');
 };

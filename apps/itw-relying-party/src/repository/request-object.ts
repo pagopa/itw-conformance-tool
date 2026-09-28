@@ -1,7 +1,17 @@
+import { USER_AGENT_SESSION_TTL_SECONDS } from '../utils/user-agent-session.js';
+
 import type { DatabaseClient } from '@itw-conformance-tool/database';
 
 type FlowType = 'same-device' | 'cross-device';
-type RequestObjectStatus = 'checking' | 'denied' | 'expired' | 'pending' | 'rejected' | 'verified';
+
+/**
+ * `verified` means the presented VP token checked out; `completed` means the
+ * transaction is finished. They coincide in Cross Device, where the wallet never
+ * redirects back, but not in Same Device: there the spec completes a transaction
+ * only once the redirect returns in the session that started it, so `/callback`
+ * is what moves a row from `verified` to `completed`.
+ */
+type RequestObjectStatus = 'checking' | 'completed' | 'denied' | 'expired' | 'pending' | 'rejected' | 'verified';
 
 export interface RequestObject {
   expiresAt: number;
@@ -11,6 +21,8 @@ export interface RequestObject {
   sessionId: string;
   redirectUri?: string;
   status: RequestObjectStatus;
+  /** Browser session that created the request; bound to the user-agent cookie. */
+  userAgentSessionId?: string;
   values?: Record<string, null | string>[];
 }
 
@@ -22,6 +34,7 @@ type RequestObjectRow = {
   redirect_uri: string | null;
   session_id: string;
   status: RequestObjectStatus;
+  user_agent_session_id: string | null;
   values_json: string | null;
 };
 
@@ -34,6 +47,7 @@ function toRequestObject(row: RequestObjectRow): RequestObject {
     sessionId: row.session_id,
     ...(row.redirect_uri ? { redirectUri: row.redirect_uri } : {}),
     status: row.status,
+    ...(row.user_agent_session_id ? { userAgentSessionId: row.user_agent_session_id } : {}),
     ...(row.values_json ? { values: JSON.parse(row.values_json) as Record<string, null | string>[] } : {})
   };
 }
@@ -57,14 +71,28 @@ export class RequestObjectRepository {
   }
 
   public get(requestObjectId: string): RequestObject {
-    const requestObject = this.db.get<RequestObjectRow>('SELECT * FROM relying_party_request_objects WHERE id = ?', [
-      requestObjectId
-    ]);
+    const requestObject = this.find(requestObjectId);
     if (!requestObject) {
       throw new Error(`Request object ${requestObjectId} not found`);
     }
 
-    return toRequestObject(requestObject);
+    return requestObject;
+  }
+
+  /**
+   * Lookup that reports absence by returning `undefined` rather than throwing.
+   *
+   * The endpoints reachable with a caller-supplied `state` treat an unknown one
+   * as a nominal outcome, so they need to tell it apart from a database failure.
+   * Catching around `get` cannot: it would swallow I/O errors and malformed
+   * stored JSON as well, reporting an outage as an unknown session.
+   */
+  public find(requestObjectId: string): RequestObject | undefined {
+    const requestObject = this.db.get<RequestObjectRow>('SELECT * FROM relying_party_request_objects WHERE id = ?', [
+      requestObjectId
+    ]);
+
+    return requestObject ? toRequestObject(requestObject) : undefined;
   }
 
   public getBySessionId(sessionId: string): RequestObject {
@@ -83,17 +111,19 @@ export class RequestObjectRepository {
     flowType,
     sessionId,
     id,
-    jwt
+    jwt,
+    userAgentSessionId
   }: {
     flowType: FlowType;
     sessionId: string;
     id: string;
     jwt: string;
+    userAgentSessionId: string;
   }): void {
     this.db.run(
-      `INSERT INTO relying_party_request_objects (id, expires_at, flow_type, jwt, session_id, status)
-       VALUES (?, ?, ?, ?, ?, 'pending')`,
-      [id, Date.now() + 5 * 60 * 1000, flowType, jwt, sessionId]
+      `INSERT INTO relying_party_request_objects (id, expires_at, flow_type, jwt, session_id, user_agent_session_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+      [id, Date.now() + USER_AGENT_SESSION_TTL_SECONDS * 1000, flowType, jwt, sessionId, userAgentSessionId]
     );
   }
 
