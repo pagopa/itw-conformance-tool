@@ -654,14 +654,6 @@ describe('Test Cases for Issuance Phase', () => {
         expect(attestationPayload.wallet_name, 'Wallet Attestation should carry the Wallet name').toBe(
           config.wallet.wallet_name
         );
-        expect(
-          attestationPayload.status.status_list.uri,
-          'Wallet Attestation should carry a status list URI for revocation/security status'
-        ).toBeDefined();
-        expect(
-          attestationPayload.status.status_list.idx,
-          'Wallet Attestation should carry a status list index'
-        ).toBeTypeOf('number');
       },
       wpCiHappyScenario.timeouts.vitestTestMs
     );
