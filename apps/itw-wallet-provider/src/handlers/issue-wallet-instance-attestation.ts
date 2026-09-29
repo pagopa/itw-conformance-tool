@@ -19,7 +19,6 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 const ATTESTATION_TTL_SECONDS = 3600;
 const REQUEST_JWT_TYPE = 'wia-request+jwt';
-const ATTESTATION_STATUS_LIST_INDEX = 0;
 const WIA_REQUEST_ALLOWED_ALGORITHMS = ['ES256', 'ES384', 'ES512'] as const;
 export const walletInstanceAttestationRequestSchema = z.object({
   assertion: z.string().min(1).describe('Signed Wallet Instance Attestation request JWT.')
@@ -199,12 +198,6 @@ async function issueWalletInstanceAttestation(
       kid: signingPublicJwk.kid,
       method: 'x5c',
       x5c: options.config.WALLET_PROVIDER_X509_CHAIN
-    },
-    status: {
-      status_list: {
-        idx: ATTESTATION_STATUS_LIST_INDEX,
-        uri: `${options.config.BASE_URL}/wallet-instance-attestation/status-list`
-      }
     },
     walletLink: options.config.BASE_URL,
     walletName: options.config.WALLET_NAME
