@@ -2,7 +2,7 @@ import { ItWalletSpecsVersion } from '@pagopa/io-wallet-utils';
 
 import { DISABILITY_CARD_SCOPE, DISABILITY_CARD_VCT } from '../../z-credential.js';
 
-export const pidIdentification = 'PersonIdentificationData';
+export const pidIdentification = 'pid';
 
 /**
  * The `credential_configurations_supported` keys exposed by the issuer,
@@ -13,7 +13,7 @@ export const pidIdentification = 'PersonIdentificationData';
  */
 export const SUPPORTED_CREDENTIAL_CONFIGURATION_IDS = [
   'dc_sd_jwt_EuropeanDisabilityCard',
-  'dc_sd_jwt_PersonIdentificationData',
+  'dc_sd_jwt_pid',
   'mso_mdoc_PersonIdentificationData',
   'org.iso.18013.5.1.mDL'
 ] as const;
@@ -22,7 +22,7 @@ const PID_MDOC_DOCTYPE = 'eu.europa.ec.eudi.pid.1';
 const PID_MDOC_NAMESPACE = 'eu.europa.ec.eudi.pid.1';
 const PID_MDOC_IT_NAMESPACE = 'eu.europa.ec.eudi.pid.it.1';
 
-export const dc_sd_jwt_PersonIdentificationData = (baseURL: string, specVersion: ItWalletSpecsVersion) => ({
+export const dc_sd_jwt_pid = (baseURL: string, specVersion: ItWalletSpecsVersion) => ({
   claims: [
     {
       display: [

@@ -17,6 +17,7 @@ const WALLET_PROVIDER_ENTITY_ID = 'https://127.0.0.1:3003';
 const TRUST_ANCHOR_CERTIFICATE = 'trust-anchor-federation-certificate';
 const WP_050A_METADATA_POLICY_EXCLUDED_CREDENTIAL_CONFIGURATION_ID = 'mso_mdoc_PersonIdentificationData';
 const METADATA_POLICY_ALLOWED_CREDENTIAL_CONFIGURATION_ID = 'dc_sd_jwt_EuropeanDisabilityCard';
+const PID_CREDENTIAL_CONFIGURATION_ID = 'dc_sd_jwt_pid';
 
 interface IssuerMetadataPolicyPayload {
   metadata_policy?: {
@@ -133,6 +134,7 @@ describe('GET /fetch', () => {
     }
 
     expect(subsetOf).toContain(METADATA_POLICY_ALLOWED_CREDENTIAL_CONFIGURATION_ID);
+    expect(subsetOf).toContain(PID_CREDENTIAL_CONFIGURATION_ID);
     expect(subsetOf).not.toContain(WP_050A_METADATA_POLICY_EXCLUDED_CREDENTIAL_CONFIGURATION_ID);
 
     await app.close();

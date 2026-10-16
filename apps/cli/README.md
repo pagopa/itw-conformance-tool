@@ -158,7 +158,7 @@ Example (`config.ini`):
 
 ```ini
 [credential-issuer]
-credential_identifiers = dc_sd_jwt_PersonIdentificationData,mso_mdoc_PersonIdentificationData
+credential_identifiers = dc_sd_jwt_pid,mso_mdoc_PersonIdentificationData
 ```
 
 #### Trusted Wallet Provider issuers

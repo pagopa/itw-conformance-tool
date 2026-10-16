@@ -3,7 +3,7 @@ import { ItWalletSpecsVersion, ValidationError } from '@pagopa/io-wallet-utils';
 
 import {
   dc_sd_jwt_EuropeanDisabilityCard,
-  dc_sd_jwt_PersonIdentificationData,
+  dc_sd_jwt_pid,
   mso_mdoc_PersonIdentificationData,
   mso_mdoc_mDL
 } from '../shared/credential-configurations.js';
@@ -19,7 +19,7 @@ export const createCredentialIssuerMetadataV1_0 = (
     batch_credential_issuance: { batch_size: 30 },
     credential_configurations_supported: {
       dc_sd_jwt_EuropeanDisabilityCard: dc_sd_jwt_EuropeanDisabilityCard(baseURL),
-      dc_sd_jwt_PersonIdentificationData: dc_sd_jwt_PersonIdentificationData(baseURL, ItWalletSpecsVersion.V1_0),
+      dc_sd_jwt_pid: dc_sd_jwt_pid(baseURL, ItWalletSpecsVersion.V1_0),
       mso_mdoc_PersonIdentificationData: mso_mdoc_PersonIdentificationData(baseURL, ItWalletSpecsVersion.V1_0),
       'org.iso.18013.5.1.mDL': mso_mdoc_mDL(baseURL)
     },

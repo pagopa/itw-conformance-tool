@@ -409,7 +409,7 @@ export class CredentialService {
       | DigitalCredentialTrustChainFaultMutationEvidence
       | MdocSignatureFaultMutationEvidence;
   }> {
-    if (credentialIdentifier === 'dc_sd_jwt_PersonIdentificationData') {
+    if (credentialIdentifier === 'dc_sd_jwt_pid') {
       if (activeFaultProfile) {
         throw new CreateCredentialError(
           `The ${activeFaultProfile.type} fault only applies to ${DISABILITY_CARD_ID}, not ${credentialIdentifier}`

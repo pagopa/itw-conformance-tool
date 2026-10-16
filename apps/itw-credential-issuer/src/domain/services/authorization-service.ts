@@ -77,7 +77,7 @@ export class AuthorizationService {
 
     const credentialConfigurationId = firstDetail.credential_configuration_id;
 
-    if (credentialConfigurationId === 'dc_sd_jwt_PersonIdentificationData') {
+    if (credentialConfigurationId === 'dc_sd_jwt_pid') {
       return await this.#authorizePid(parRequest, options);
     }
 

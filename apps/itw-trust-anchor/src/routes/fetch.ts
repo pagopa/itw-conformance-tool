@@ -39,12 +39,7 @@ const fetchRoute: FastifyPluginAsync = async (app) => {
         metadataPolicy = {
           openid_credential_issuer: {
             credential_configurations_supported: {
-              subset_of: [
-                'dc_sd_jwt_EuropeanDisabilityCard',
-                'dc_sd_jwt_PersonIdentificationData',
-                'mso_mdoc_mDL',
-                'org.iso.18013.5.1.mDL'
-              ],
+              subset_of: ['dc_sd_jwt_EuropeanDisabilityCard', 'dc_sd_jwt_pid', 'mso_mdoc_mDL', 'org.iso.18013.5.1.mDL'],
               essential: true
             }
           }

@@ -13,7 +13,7 @@ export type SupportedCredentialsType =
 
 export const SupportedCredentialsId = z.union([
   z.literal('dc_sd_jwt_EuropeanDisabilityCard'),
-  z.literal('dc_sd_jwt_PersonIdentificationData'),
+  z.literal('dc_sd_jwt_pid'),
   z.literal('mso_mdoc_CompanyBadge'),
   z.literal('mso_mdoc_PersonIdentificationData'),
   z.literal('mso_mdoc_mDL'),
