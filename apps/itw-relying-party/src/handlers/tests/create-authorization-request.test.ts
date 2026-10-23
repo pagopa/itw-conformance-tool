@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { createServer, type Server } from 'node:https';
 import { type AddressInfo } from 'node:net';
 
+import FastifyCookie from '@fastify/cookie';
 import FastifySensible from '@fastify/sensible';
 import {
   convertPemToBase64Der,
@@ -19,6 +20,12 @@ import { describe, expect, it } from 'vitest';
 import { createRpFaultStore } from '../../faults/rp-fault-store.js';
 import authorizationRequestRoute from '../../routes/authorization-request.js';
 import { callbacks as partialCallbacks, getEncryptJweCallback, getSignJwtCallback } from '../../utils/crypto.js';
+import {
+  USER_AGENT_SESSION_COOKIE,
+  USER_AGENT_SESSION_COOKIE_TTL_SECONDS,
+  USER_AGENT_SESSION_TTL_SECONDS,
+  userAgentSessionCookieOptions
+} from '../../utils/user-agent-session.js';
 
 import type { RpFaultProfile } from '@itw-conformance-tool/faults';
 import type { Jwk } from '@pagopa/io-wallet-oauth2';
@@ -177,7 +184,7 @@ async function buildApp(
   const signingJwk = generateJwk('sig');
   const encryptionJwk = generateJwk('enc');
   const federationJwk = options.federationJwk ?? generateFederationJwk(FEDERATION_KID);
-  const storedRequestObjects: { id: string; jwt: string }[] = [];
+  const storedRequestObjects: { id: string; jwt: string; userAgentSessionId: string }[] = [];
 
   // The SDK parses the `x5c` entry it is handed, so the certificate has to be a
   // real one for this key.
@@ -204,7 +211,7 @@ async function buildApp(
   app.decorate('repository', {
     nonce: { insert: () => undefined },
     requestObject: {
-      insert: (entry: { id: string; jwt: string }) => storedRequestObjects.push(entry)
+      insert: (entry: { id: string; jwt: string; userAgentSessionId: string }) => storedRequestObjects.push(entry)
     }
   });
   app.decorate('rpFaultStore', rpFaultStore);
@@ -212,6 +219,9 @@ async function buildApp(
   // The handler answers malformed queries and an unreachable Trust Anchor with
   // sensible's HTTP error helpers, exactly as the booted app does.
   await app.register(FastifySensible);
+  // The handler binds the engagement to the browser session by setting a
+  // cookie, so `reply.setCookie` has to be decorated here as it is in the app.
+  await app.register(FastifyCookie);
   await app.register(authorizationRequestRoute);
   await app.ready();
 
@@ -444,5 +454,78 @@ describe('POST /create-authorization-request', () => {
 
     expect(engagementClientId).toMatch(/^x509_hash:[A-Za-z0-9_-]+$/);
     expect(engagementClientId).toBe(storedClientId);
+  });
+});
+
+describe('user-agent session binding', () => {
+  /** Starts a flow the way the page does, optionally as a browser already bound. */
+  async function startFlow(
+    app: Awaited<ReturnType<typeof buildApp>>['app'],
+    userAgentSessionId?: string
+  ): Promise<{ sessionCookie: string | undefined; statusCode: number }> {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/create-authorization-request',
+      payload: { dcqlQuery: DCQL_QUERY, flow_type: 'cross-device', wallet_auth_base_uri: 'openid4vp://' },
+      ...(userAgentSessionId ? { cookies: { [USER_AGENT_SESSION_COOKIE]: userAgentSessionId } } : {})
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+
+    return {
+      sessionCookie: response.cookies.find((cookie) => cookie.name === USER_AGENT_SESSION_COOKIE)?.value,
+      statusCode: response.statusCode
+    };
+  }
+
+  it('keeps the session a browser already carries, so concurrent tabs stay bound', async () => {
+    const { app, storedRequestObjects } = await buildApp();
+
+    const first = await startFlow(app);
+    expect(first.sessionCookie).toBeDefined();
+
+    // The second tab must not unbind the first: one cookie is shared by both
+    // flows, so the row each one stored still matches what the browser sends.
+    const second = await startFlow(app, first.sessionCookie);
+
+    expect(second.sessionCookie).toBe(first.sessionCookie);
+    expect(storedRequestObjects).toHaveLength(2);
+    expect(storedRequestObjects[0].userAgentSessionId).toBe(first.sessionCookie);
+    expect(storedRequestObjects[1].userAgentSessionId).toBe(first.sessionCookie);
+    expect(storedRequestObjects[0].id).not.toBe(storedRequestObjects[1].id);
+
+    await app.close();
+  });
+
+  it('mints an identifier for a browser carrying none', async () => {
+    const { app, storedRequestObjects } = await buildApp();
+
+    const { sessionCookie } = await startFlow(app);
+
+    expect(sessionCookie).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(storedRequestObjects[0].userAgentSessionId).toBe(sessionCookie);
+
+    await app.close();
+  });
+
+  it('refuses to carry over an identifier it never issued', async () => {
+    const { app, storedRequestObjects } = await buildApp();
+
+    // Reusing the incoming value unconditionally would let a caller choose what
+    // gets stored on the row, so only a well-formed identifier survives.
+    const { sessionCookie } = await startFlow(app, 'not-an-identifier');
+
+    expect(sessionCookie).not.toBe('not-an-identifier');
+    expect(storedRequestObjects[0].userAgentSessionId).toBe(sessionCookie);
+
+    await app.close();
+  });
+
+  it('lets the cookie outlive the row it binds, so an expiry is still reported', async () => {
+    // The row turns `expired` on a sweep that runs after its TTL falls due;
+    // a cookie expiring at the same instant would leave that poll unbound and
+    // answered 404 instead of the timeout redirect.
+    expect(USER_AGENT_SESSION_COOKIE_TTL_SECONDS).toBeGreaterThan(USER_AGENT_SESSION_TTL_SECONDS);
+    expect(userAgentSessionCookieOptions.maxAge).toBe(USER_AGENT_SESSION_COOKIE_TTL_SECONDS);
   });
 });
