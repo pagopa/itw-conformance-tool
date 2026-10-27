@@ -21,9 +21,6 @@ catalogs:
     vitest:
       specifier: ~4.1.10
       version: 4.1.11
-    zod:
-      specifier: ^4.3.6
-      version: 4.4.3
   fastify:
     '@fastify/autoload':
       specifier: ^6.3.1
@@ -354,7 +351,7 @@ importers:
         version: 1.5.4
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       '@types/qrcode':
         specifier: 'catalog:'
@@ -460,7 +457,7 @@ importers:
         version: 1.5.4
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       '@types/qrcode':
         specifier: 'catalog:'
@@ -596,7 +593,7 @@ importers:
         version: 6.2.4
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
 
   packages/config:
     dependencies:
@@ -608,7 +605,7 @@ importers:
         version: 2.8.1
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       '@types/ini':
         specifier: ^4.1.1
@@ -709,7 +706,7 @@ importers:
         version: 2.8.1
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       vitest:
         specifier: 'catalog:'
@@ -735,7 +732,7 @@ importers:
         version: 2.8.1
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       '@types/node':
         specifier: catalog:node
@@ -751,7 +748,7 @@ importers:
         version: link:../faults
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
 
   packages/logger:
     dependencies:
@@ -773,7 +770,7 @@ importers:
         version: 2.8.1
       zod:
         specifier: 'catalog:'
-        version: 4.4.3
+        version: 4.6.6
     devDependencies:
       vitest:
         specifier: 'catalog:'
@@ -5269,8 +5266,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
 snapshots:
 
@@ -6832,30 +6829,30 @@ snapshots:
   '@openid4vc/oauth2@0.4.3':
     dependencies:
       '@openid4vc/utils': 0.4.3
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@openid4vc/openid4vci@0.4.3':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@openid4vc/openid4vp@0.4.3':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@openid4vc/utils@0.4.3':
     dependencies:
       buffer: 6.0.3
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@owf/mdoc@0.6.0':
     dependencies:
       cbor-x: 1.6.5
-      zod: 4.4.3
-      zod-validation-error: 5.0.0(zod@4.4.3)
+      zod: 4.6.6
+      zod-validation-error: 5.0.0(zod@4.6.6)
 
   '@oxc-project/types@0.139.0': {}
 
@@ -6929,13 +6926,13 @@ snapshots:
       '@pagopa/io-wallet-oid-federation': 1.5.8
       '@pagopa/io-wallet-utils': 1.5.8
       js-base64: 3.9.2
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@pagopa/io-wallet-oid-federation@1.5.8':
     dependencies:
       '@pagopa/io-wallet-utils': 1.5.8
       buffer: 6.0.3
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@pagopa/io-wallet-oid4vci@1.5.8':
     dependencies:
@@ -6946,7 +6943,7 @@ snapshots:
       '@pagopa/io-wallet-oid-federation': 1.5.8
       '@pagopa/io-wallet-oid4vp': 1.5.8
       '@pagopa/io-wallet-utils': 1.5.8
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@pagopa/io-wallet-oid4vp@1.5.8':
     dependencies:
@@ -6956,13 +6953,13 @@ snapshots:
       '@pagopa/io-wallet-oauth2': 1.5.8
       '@pagopa/io-wallet-oid-federation': 1.5.8
       '@pagopa/io-wallet-utils': 1.5.8
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@pagopa/io-wallet-utils@1.5.8':
     dependencies:
       '@openid4vc/oauth2': 0.4.3
       '@openid4vc/utils': 0.4.3
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@panva/hkdf@1.2.1': {}
 
@@ -7215,7 +7212,7 @@ snapshots:
       '@sd-jwt/core': 0.19.0
       '@sd-jwt/jwt-status-list': 0.19.0
       '@sd-jwt/utils': 0.19.0
-      zod: 4.4.3
+      zod: 4.6.6
 
   '@sd-jwt/types@0.19.0': {}
 
@@ -10397,10 +10394,10 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod-validation-error@5.0.0(zod@4.4.3):
+  zod-validation-error@5.0.0(zod@4.6.6):
     dependencies:
-      zod: 4.4.3
+      zod: 4.6.6
 
   zod@3.25.76: {}
 
-  zod@4.4.3: {}
+  zod@4.6.6: {}
